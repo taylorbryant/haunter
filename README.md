@@ -2,7 +2,7 @@
 
 A personal notes app — Notion-style nested pages and block editor, Todoist-style
 tasks that roll up into a per-workspace "My Tasks" view, syntax-highlighted
-code/SQL blocks, and embedded tldraw canvases. Built on Beignet
+code/SQL blocks, and embedded tldraw canvases. Built on [Beignet](https://beignetjs.com)
 (contract-first, scaffolded with `@beignet/cli`).
 
 ![Haunter — a weekly page with tasks, an inline page mention, and a syntax-highlighted SQL block](docs/screenshot.png)
