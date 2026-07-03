@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
-import type { BlockJson, Page } from "@/features/pages/schemas";
+import type { BlockJson, Page, PageMeta } from "@/features/pages/schemas";
 import {
 	createPage,
 	deletePage,
@@ -74,6 +74,34 @@ export function invalidateTrash(queryClient: QueryClient) {
 
 export function invalidatePage(queryClient: QueryClient, id: string) {
 	return rq(getPage).invalidate(queryClient, { path: { id } });
+}
+
+/**
+ * Optimistically apply an icon change to every cache that renders it: the
+ * page itself and each workspace's page list (which feeds the tree, mentions,
+ * and backlinks). Writing synchronously means the change sticks even if the
+ * picker unmounts before the mutation settles and drops its callback.
+ */
+export function setPageIconInCache(
+	queryClient: QueryClient,
+	id: string,
+	icon: string | null,
+) {
+	queryClient.setQueryData<Page>(rq(getPage).key({ path: { id } }), (current) =>
+		current ? { ...current, icon } : current,
+	);
+	queryClient.setQueriesData<{ items: PageMeta[] }>(
+		rq(listPages).filter(),
+		(current) =>
+			current
+				? {
+						...current,
+						items: current.items.map((page) =>
+							page.id === id ? { ...page, icon } : page,
+						),
+					}
+				: current,
+	);
 }
 
 /**

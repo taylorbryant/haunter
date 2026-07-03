@@ -10,6 +10,7 @@ import {
 } from "@/features/pages/client/queries";
 import { setPageSaveState } from "@/features/pages/client/save-state";
 import { Backlinks } from "./backlinks";
+import { PageIconButton } from "./page-icon-picker";
 
 const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
 	ssr: false,
@@ -72,16 +73,21 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	return (
 		<div className="mx-auto w-full max-w-4xl px-8 py-10">
 			{/* BlockNote insets its content 54px (.bn-editor padding-inline) to
-			    make a gutter for the block controls; pad the title to the same
-			    column so heading and block text align, Notion-style. */}
-			<div className="mb-2 px-[54px]">
-				<input
-					className="w-full border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60"
-					value={shownTitle}
-					placeholder="Untitled"
-					onChange={(event) => handleTitleChange(event.target.value)}
-					aria-label="Page title"
-				/>
+			    make a gutter for the block controls; pad the title and its icon
+			    to the same column so they align with block text, Notion-style. */}
+			<div className="group/header">
+				<div className="mb-1 px-[54px]">
+					<PageIconButton pageId={pageId} icon={page.icon} />
+				</div>
+				<div className="mb-2 px-[54px]">
+					<input
+						className="w-full border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60"
+						value={shownTitle}
+						placeholder="Untitled"
+						onChange={(event) => handleTitleChange(event.target.value)}
+						aria-label="Page title"
+					/>
+				</div>
 			</div>
 			<HaunterEditor
 				key={pageId}

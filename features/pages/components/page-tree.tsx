@@ -11,6 +11,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -39,6 +45,7 @@ import {
 } from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
 import { cn } from "@/lib/utils";
+import { PageIconPanel } from "./page-icon-picker";
 
 type TreeNode = PageMeta & { children: TreeNode[] };
 
@@ -104,6 +111,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const { expanded, toggle } = useExpandedState(workspaceId);
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [renameValue, setRenameValue] = useState("");
+	const [iconPageId, setIconPageId] = useState<string | null>(null);
 	const [dragId, setDragId] = useState<string | null>(null);
 	const [dropTarget, setDropTarget] = useState<{
 		id: string;
@@ -392,6 +400,9 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 									>
 										Rename
 									</DropdownMenuItem>
+									<DropdownMenuItem onSelect={() => setIconPageId(node.id)}>
+										Change icon
+									</DropdownMenuItem>
 									<DropdownMenuItem
 										className="text-destructive focus:text-destructive"
 										onSelect={() => deletePage(node)}
@@ -442,6 +453,23 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					<SidebarMenu>{tree.map((node) => renderNode(node))}</SidebarMenu>
 				)}
 			</SidebarGroupContent>
+			<Dialog
+				open={iconPageId !== null}
+				onOpenChange={(open) => !open && setIconPageId(null)}
+			>
+				<DialogContent className="w-auto p-0">
+					<DialogHeader className="sr-only">
+						<DialogTitle>Change page icon</DialogTitle>
+					</DialogHeader>
+					{iconPageId ? (
+						<PageIconPanel
+							pageId={iconPageId}
+							hasIcon={nodesById.get(iconPageId)?.icon != null}
+							onDone={() => setIconPageId(null)}
+						/>
+					) : null}
+				</DialogContent>
+			</Dialog>
 		</SidebarGroup>
 	);
 }
