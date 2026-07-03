@@ -219,120 +219,30 @@ export function AppearancePanel() {
 	);
 }
 
-type PasswordValues = {
-	currentPassword: string;
-	newPassword: string;
-};
-
-export function PasswordPanel() {
-	const [saved, setSaved] = useState(false);
-	const form = useForm<PasswordValues>({
-		defaultValues: { currentPassword: "", newPassword: "" },
-	});
-
-	const onSubmit = form.handleSubmit(async (values) => {
-		form.clearErrors("root");
-		setSaved(false);
-
-		const result = await authClient.changePassword({
-			currentPassword: values.currentPassword,
-			newPassword: values.newPassword,
-			revokeOtherSessions: true,
-		});
-
-		if (result.error) {
-			form.setError(
-				"root",
-				rootFormError(
-					result.error,
-					result.error.message || "Could not change your password.",
-				),
-			);
-			return;
-		}
-
-		form.reset();
-		setSaved(true);
-	});
-
-	return (
-		<Panel>
-			<PanelHeader
-				title="Password"
-				description="Changing your password signs you out everywhere else."
-			/>
-			<form className="flex max-w-sm flex-col gap-4" onSubmit={onSubmit}>
-				<div className="flex flex-col gap-2">
-					<Label htmlFor="current-password">Current password</Label>
-					<Input
-						id="current-password"
-						type="password"
-						autoComplete="current-password"
-						required
-						{...form.register("currentPassword")}
-					/>
-				</div>
-				<div className="flex flex-col gap-2">
-					<Label htmlFor="new-password">New password</Label>
-					<Input
-						id="new-password"
-						type="password"
-						autoComplete="new-password"
-						minLength={8}
-						required
-						{...form.register("newPassword")}
-					/>
-				</div>
-				{form.formState.errors.root ? (
-					<p className="text-destructive text-sm">
-						{form.formState.errors.root.message}
-					</p>
-				) : null}
-				<div className="flex items-center gap-3">
-					<Button
-						type="submit"
-						size="sm"
-						disabled={form.formState.isSubmitting}
-					>
-						{form.formState.isSubmitting ? "Saving..." : "Change password"}
-					</Button>
-					{saved ? (
-						<p className="text-muted-foreground text-sm">Password changed.</p>
-					) : null}
-				</div>
-			</form>
-		</Panel>
-	);
-}
-
-type DeleteAccountValues = {
-	password: string;
-};
-
 export function DeleteAccountPanel() {
 	const router = useRouter();
-	const form = useForm<DeleteAccountValues>({
-		defaultValues: { password: "" },
-	});
+	const session = authClient.useSession();
+	const email = session.data?.user.email ?? "";
+	const [confirm, setConfirm] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [pending, setPending] = useState(false);
 
-	const onSubmit = form.handleSubmit(async (values) => {
-		form.clearErrors("root");
-		const result = await authClient.deleteUser({ password: values.password });
+	const matches = email !== "" && confirm.trim().toLowerCase() === email.toLowerCase();
 
+	async function onSubmit(event: React.FormEvent) {
+		event.preventDefault();
+		if (!matches || pending) return;
+		setError(null);
+		setPending(true);
+		const result = await authClient.deleteUser();
 		if (result.error) {
-			form.setError(
-				"root",
-				rootFormError(
-					result.error,
-					result.error.message || "Could not delete your account.",
-				),
-			);
+			setPending(false);
+			setError(result.error.message || "Could not delete your account.");
 			return;
 		}
-
 		router.push("/");
 		router.refresh();
-	});
+	}
 
 	return (
 		<Panel>
@@ -343,28 +253,28 @@ export function DeleteAccountPanel() {
 			/>
 			<form className="flex max-w-sm flex-col gap-4" onSubmit={onSubmit}>
 				<div className="flex flex-col gap-2">
-					<Label htmlFor="delete-password">Confirm your password</Label>
+					<Label htmlFor="delete-confirm">
+						Type{" "}
+						<span className="font-medium text-foreground">{email}</span> to
+						confirm
+					</Label>
 					<Input
-						id="delete-password"
-						type="password"
-						autoComplete="current-password"
-						required
-						{...form.register("password")}
+						id="delete-confirm"
+						autoComplete="off"
+						placeholder={email}
+						value={confirm}
+						onChange={(event) => setConfirm(event.target.value)}
 					/>
 				</div>
-				{form.formState.errors.root ? (
-					<p className="text-destructive text-sm">
-						{form.formState.errors.root.message}
-					</p>
-				) : null}
+				{error ? <p className="text-destructive text-sm">{error}</p> : null}
 				<div>
 					<Button
 						type="submit"
 						variant="destructive"
 						size="sm"
-						disabled={form.formState.isSubmitting}
+						disabled={!matches || pending}
 					>
-						{form.formState.isSubmitting ? "Deleting..." : "Delete account"}
+						{pending ? "Deleting..." : "Delete account"}
 					</Button>
 				</div>
 			</form>

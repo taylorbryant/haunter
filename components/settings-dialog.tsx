@@ -1,11 +1,10 @@
 "use client";
 
-import { KeyRoundIcon, PaletteIcon, Trash2Icon, UserIcon } from "lucide-react";
+import { PaletteIcon, Trash2Icon, UserIcon } from "lucide-react";
 import { useState } from "react";
 import {
 	AppearancePanel,
 	DeleteAccountPanel,
-	PasswordPanel,
 	ProfilePanel,
 } from "@/components/settings/panels";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -28,12 +27,6 @@ const SECTIONS = [
 		label: "Appearance",
 		icon: PaletteIcon,
 		panel: AppearancePanel,
-	},
-	{
-		id: "password",
-		label: "Password",
-		icon: KeyRoundIcon,
-		panel: PasswordPanel,
 	},
 	{
 		id: "delete",

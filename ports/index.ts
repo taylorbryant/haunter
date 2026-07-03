@@ -1,5 +1,6 @@
 import type { ErrorReporterPort } from "@beignet/core/error-reporting";
 import type { IdempotencyPort } from "@beignet/core/idempotency";
+import type { MailerPort } from "@beignet/core/mail";
 import type {
 	BoundGate,
 	GatePort,
@@ -7,6 +8,7 @@ import type {
 	StoragePort,
 	UnitOfWorkPort,
 } from "@beignet/core/ports";
+import type { ResendMailEscapeHatch } from "@beignet/provider-mail-resend";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type {
@@ -46,8 +48,10 @@ export type AppPorts = {
 	gate: GatePort<AuthorizationContext, AppPolicies>;
 	idempotency: IdempotencyPort;
 	logger: LoggerPort;
+	mailer: MailerPort;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
+	resend: ResendMailEscapeHatch;
 	tasks: TaskRepository;
 	uow: UnitOfWorkPort<AppTransactionPorts>;
 	workspaces: WorkspaceRepository;

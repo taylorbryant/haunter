@@ -35,6 +35,11 @@ export const env = createEnv({
 		BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
 		SQLITE_DB_URL: z.string().default("file:local.db"),
 		SQLITE_DB_AUTH_TOKEN: z.string().optional(),
+		// Resend delivery for sign-in codes (the @beignet/provider-mail-resend
+		// mailer). RESEND_FROM must be a verified sender in production;
+		// resend.dev's shared address works for local testing.
+		RESEND_API_KEY: z.string().optional(),
+		RESEND_FROM: z.string().default("Haunter <onboarding@resend.dev>"),
 		LOG_LEVEL: z
 			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 			.default("info"),

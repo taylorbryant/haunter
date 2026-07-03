@@ -3,6 +3,7 @@ import { createDevtoolsProvider } from "@beignet/devtools";
 import { createAuthBetterAuthProvider } from "@beignet/provider-auth-better-auth";
 import { createDrizzleSqliteProvider } from "@beignet/provider-db-drizzle/sqlite";
 import { loggerPinoProvider } from "@beignet/provider-logger-pino";
+import { mailResendProvider } from "@beignet/provider-mail-resend";
 import * as schema from "@/infra/db/schema";
 import { starterDatabaseProvider } from "@/infra/db/provider";
 import { auth } from "@/lib/better-auth";
@@ -18,4 +19,5 @@ export const providers = [
 	drizzleSqliteProvider,
 	starterDatabaseProvider,
 	createLocalStorageProvider(),
+	mailResendProvider,
 ] as const;

@@ -1,10 +1,12 @@
 import { createClient } from "@libsql/client";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { emailOTP } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/libsql";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
 import { env } from "@/lib/env";
+import { sendLoginCode } from "@/lib/mail";
 
 const client = createClient({
 	url: env.SQLITE_DB_URL,
@@ -33,8 +35,23 @@ export const auth = betterAuth({
 		provider: "sqlite",
 		schema,
 	}),
-	emailAndPassword: {
-		enabled: true,
+	plugins: [
+		// Passwordless auth: a 6-digit code emailed on sign-in (and sign-up —
+		// unknown emails create an account). The code verifies the address, so
+		// no separate email-verification step is needed.
+		emailOTP({
+			otpLength: 6,
+			expiresIn: 60 * 5,
+			async sendVerificationOTP({ email, otp }) {
+				await sendLoginCode(email, otp);
+			},
+		}),
+	],
+	// With no passwords, "fresh session" is the only re-auth signal better-auth
+	// could require for deleting an account. Treat sessions as always fresh so
+	// the type-to-confirm delete flow works session-authenticated.
+	session: {
+		freshAge: 0,
 	},
 	user: {
 		changeEmail: {
