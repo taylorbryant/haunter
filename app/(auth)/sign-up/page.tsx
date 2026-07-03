@@ -4,7 +4,9 @@ import { rootFormError } from "@beignet/react-hook-form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
+import { apiClient } from "@/client";
 import { authClient } from "@/client/auth-client";
+import { onboard } from "@/features/workspaces/contracts";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -47,7 +49,21 @@ export default function SignUpPage() {
 			return;
 		}
 
-		router.push("/");
+		// Sign-up signs the user in, so this call carries their new session.
+		// Seed a starter workspace and land on its welcome page; if seeding
+		// fails, fall back to the home route (which handles the empty state).
+		try {
+			const { workspaceId, pageId } = await apiClient
+				.endpoint(onboard)
+				.call({ body: {} });
+			router.push(
+				pageId
+					? `/w/${workspaceId}/p/${pageId}`
+					: `/w/${workspaceId}/tasks`,
+			);
+		} catch {
+			router.push("/");
+		}
 		router.refresh();
 	});
 

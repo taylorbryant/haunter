@@ -4,6 +4,8 @@ import { errors } from "@/features/shared/errors";
 import {
 	CreateWorkspaceInputSchema,
 	ListWorkspacesOutputSchema,
+	OnboardInputSchema,
+	OnboardOutputSchema,
 	UpdateWorkspaceBodySchema,
 	WorkspaceIdInputSchema,
 	WorkspaceSchema,
@@ -33,6 +35,16 @@ export const createWorkspace = workspaces
 	.errors({ Forbidden: errors.Forbidden })
 	.responses({
 		201: WorkspaceSchema,
+	});
+
+// Idempotent first-run: create the user's default workspace seeded with
+// example pages, or return their existing workspace unchanged.
+export const onboard = workspaces
+	.post("/api/onboarding")
+	.body(OnboardInputSchema)
+	.errors({ Forbidden: errors.Forbidden })
+	.responses({
+		200: OnboardOutputSchema,
 	});
 
 export const updateWorkspace = workspaces

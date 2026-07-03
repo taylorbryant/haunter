@@ -5,12 +5,14 @@ import {
 	createWorkspace,
 	deleteWorkspace,
 	listWorkspaces,
+	onboard,
 	updateWorkspace,
 } from "@/features/workspaces/contracts";
 import {
 	createWorkspaceUseCase,
 	deleteWorkspaceUseCase,
 	listWorkspacesUseCase,
+	onboardUserUseCase,
 	updateWorkspaceUseCase,
 } from "@/features/workspaces/use-cases";
 
@@ -19,6 +21,7 @@ export const workspaceRoutes = defineRouteGroup<AppContext>()({
 	routes: [
 		{ contract: listWorkspaces, useCase: listWorkspacesUseCase },
 		{ contract: createWorkspace, useCase: createWorkspaceUseCase },
+		{ contract: onboard, useCase: onboardUserUseCase },
 		{ contract: updateWorkspace, useCase: updateWorkspaceUseCase },
 		{ contract: deleteWorkspace, useCase: deleteWorkspaceUseCase },
 	],

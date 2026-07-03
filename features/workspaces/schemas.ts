@@ -33,6 +33,15 @@ export const UpdateWorkspaceInputSchema = WorkspaceIdInputSchema.merge(
 
 export const DeleteWorkspaceOutputSchema = z.void();
 
+export const OnboardInputSchema = z.object({});
+
+export const OnboardOutputSchema = z.object({
+	workspaceId: z.string().uuid(),
+	// The welcome page to land on, or null when the user was already onboarded.
+	pageId: z.string().uuid().nullable(),
+});
+
 export type Workspace = z.infer<typeof WorkspaceSchema>;
+export type OnboardOutput = z.infer<typeof OnboardOutputSchema>;
 export type CreateWorkspaceInput = z.infer<typeof CreateWorkspaceInputSchema>;
 export type UpdateWorkspaceInput = z.infer<typeof UpdateWorkspaceInputSchema>;
