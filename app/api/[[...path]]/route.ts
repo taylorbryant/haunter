@@ -1,9 +1,5 @@
-import { server } from "@/server";
+import { createApiRoute } from "@beignet/next";
+import { getServer } from "@/server";
 
-export const GET = server.api;
-export const HEAD = server.api;
-export const OPTIONS = server.api;
-export const PATCH = server.api;
-export const POST = server.api;
-export const PUT = server.api;
-export const DELETE = server.api;
+export const { GET, HEAD, OPTIONS, PATCH, POST, PUT, DELETE } =
+	createApiRoute(getServer);

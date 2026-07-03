@@ -1,4 +1,4 @@
-import { server } from "@/server";
+import { getServer } from "@/server";
 
 /**
  * Serve private storage objects back to their owner. Upload keys are
@@ -10,6 +10,7 @@ export async function GET(
 	{ params }: { params: Promise<{ key: string[] }> },
 ) {
 	const { key: segments } = await params;
+	const server = await getServer();
 	const ctx = await server.createContextFromNext();
 	const userId = ctx.auth?.user.id;
 	if (!userId) {

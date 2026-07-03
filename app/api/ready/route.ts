@@ -1,9 +1,9 @@
-import { createHealthHandler } from "@beignet/core/server";
+import { createHealthRoute } from "@beignet/next";
 import { env } from "@/lib/env";
-import { server } from "@/server";
+import { getServer } from "@/server";
 
-const readiness = createHealthHandler(
-	server.ports,
+export const { GET } = createHealthRoute(
+	getServer,
 	{
 		checks: {
 			database: (ports) => ports.db.checkHealth(),
@@ -12,15 +12,3 @@ const readiness = createHealthHandler(
 	},
 	env.NODE_ENV,
 );
-
-export async function GET(request: Request) {
-	const response = await readiness(request);
-
-	return Response.json(response.body, {
-		status: response.status,
-		headers: {
-			...response.headers,
-			"cache-control": "no-store",
-		},
-	});
-}
