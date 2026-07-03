@@ -1,9 +1,25 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckIcon, ChevronDownIcon, PlusIcon } from "lucide-react";
+import {
+	CheckIcon,
+	ChevronDownIcon,
+	PencilIcon,
+	PlusIcon,
+	Trash2Icon,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -30,8 +46,10 @@ import {
 } from "@/components/ui/sidebar";
 import {
 	createWorkspaceMutationOptions,
+	deleteWorkspaceMutationOptions,
 	invalidateWorkspaces,
 	listWorkspacesQueryOptions,
+	updateWorkspaceMutationOptions,
 } from "@/features/workspaces/client/queries";
 
 export function WorkspaceSwitcher({
@@ -43,9 +61,14 @@ export function WorkspaceSwitcher({
 	const queryClient = useQueryClient();
 	const workspacesQuery = useQuery(listWorkspacesQueryOptions());
 	const createMutation = useMutation(createWorkspaceMutationOptions());
+	const updateMutation = useMutation(updateWorkspaceMutationOptions());
+	const deleteMutation = useMutation(deleteWorkspaceMutationOptions());
 
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [name, setName] = useState("");
+	const [renameOpen, setRenameOpen] = useState(false);
+	const [renameName, setRenameName] = useState("");
+	const [deleteOpen, setDeleteOpen] = useState(false);
 
 	const workspaces = workspacesQuery.data?.items ?? [];
 	const active = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
@@ -61,6 +84,39 @@ export function WorkspaceSwitcher({
 					setDialogOpen(false);
 					await invalidateWorkspaces(queryClient);
 					router.push(`/w/${workspace.id}`);
+				},
+			},
+		);
+	}
+
+	function rename() {
+		const trimmed = renameName.trim();
+		if (!active || !trimmed || updateMutation.isPending) return;
+		updateMutation.mutate(
+			{ path: { id: active.id }, body: { name: trimmed } },
+			{
+				onSuccess: async () => {
+					setRenameOpen(false);
+					await invalidateWorkspaces(queryClient);
+				},
+			},
+		);
+	}
+
+	function confirmDelete() {
+		if (!active || deleteMutation.isPending) return;
+		const deletedId = active.id;
+		deleteMutation.mutate(
+			{ path: { id: deletedId } },
+			{
+				onSuccess: async () => {
+					setDeleteOpen(false);
+					await invalidateWorkspaces(queryClient);
+					// Leaving the deleted workspace: go to another one, or to the
+					// home route (its empty state) if that was the last workspace.
+					const next = workspaces.find((w) => w.id !== deletedId);
+					router.push(next ? `/w/${next.id}` : "/");
+					router.refresh();
 				},
 			},
 		);
@@ -86,7 +142,7 @@ export function WorkspaceSwitcher({
 						side="bottom"
 						sideOffset={4}
 						// Don't return focus to the trigger on close: it would steal
-						// focus from the New-workspace dialog's name field.
+						// focus from the dialogs opened by the items below.
 						onCloseAutoFocus={(event) => event.preventDefault()}
 					>
 						<DropdownMenuLabel className="text-muted-foreground text-xs">
@@ -106,15 +162,37 @@ export function WorkspaceSwitcher({
 								) : null}
 							</DropdownMenuItem>
 						))}
-						{workspaces.length > 0 ? <DropdownMenuSeparator /> : null}
+						<DropdownMenuSeparator />
 						<DropdownMenuItem onSelect={() => setDialogOpen(true)}>
 							<PlusIcon />
 							<span className="font-medium text-muted-foreground">
 								New workspace
 							</span>
 						</DropdownMenuItem>
+						{active ? (
+							<>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									onSelect={() => {
+										setRenameName(active.name);
+										setRenameOpen(true);
+									}}
+								>
+									<PencilIcon />
+									Rename workspace
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									className="text-destructive focus:text-destructive"
+									onSelect={() => setDeleteOpen(true)}
+								>
+									<Trash2Icon className="text-destructive" />
+									Delete workspace
+								</DropdownMenuItem>
+							</>
+						) : null}
 					</DropdownMenuContent>
 				</DropdownMenu>
+
 				<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
 					<DialogContent className="sm:max-w-sm">
 						<DialogHeader>
@@ -152,6 +230,68 @@ export function WorkspaceSwitcher({
 						</form>
 					</DialogContent>
 				</Dialog>
+
+				<Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+					<DialogContent className="sm:max-w-sm">
+						<DialogHeader>
+							<DialogTitle>Rename workspace</DialogTitle>
+							<DialogDescription>
+								Give this workspace a new name.
+							</DialogDescription>
+						</DialogHeader>
+						<form
+							className="flex flex-col gap-4"
+							onSubmit={(event) => {
+								event.preventDefault();
+								rename();
+							}}
+						>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="rename-workspace">Name</Label>
+								<Input
+									id="rename-workspace"
+									autoFocus
+									value={renameName}
+									onChange={(event) => setRenameName(event.target.value)}
+								/>
+							</div>
+							<DialogFooter>
+								<Button
+									type="submit"
+									disabled={!renameName.trim() || updateMutation.isPending}
+								>
+									{updateMutation.isPending ? "Saving…" : "Save"}
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+
+				<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>
+								Delete {active ? `"${active.name}"` : "workspace"}?
+							</AlertDialogTitle>
+							<AlertDialogDescription>
+								This permanently deletes the workspace and all of its pages,
+								tasks, and canvases. This can't be undone.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>Cancel</AlertDialogCancel>
+							<AlertDialogAction
+								className="bg-destructive text-white hover:bg-destructive/90"
+								onClick={(event) => {
+									event.preventDefault();
+									confirmDelete();
+								}}
+							>
+								{deleteMutation.isPending ? "Deleting…" : "Delete"}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 			</SidebarMenuItem>
 		</SidebarMenu>
 	);
