@@ -29,7 +29,6 @@ import {
 	FilePlusIcon,
 	FileTextIcon,
 	LightbulbIcon,
-	MinusIcon,
 	PenToolIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -131,17 +130,6 @@ function getSlashMenuItems(
 		},
 	};
 
-	const dividerItem = {
-		title: "Divider",
-		subtext: "A horizontal line to separate content",
-		aliases: ["divider", "separator", "hr", "line", "rule"],
-		group: "Basic blocks",
-		icon: <MinusIcon className="size-4.5" />,
-		onItemClick: () => {
-			insertOrUpdateBlockForSlashMenu(editor, { type: "divider" });
-		},
-	};
-
 	const pageItem = {
 		title: "Page",
 		subtext: "Create a subpage and link it here",
@@ -177,7 +165,6 @@ function getSlashMenuItems(
 		pageItem,
 		taskItem,
 		calloutItem,
-		dividerItem,
 		canvasItem,
 	);
 
