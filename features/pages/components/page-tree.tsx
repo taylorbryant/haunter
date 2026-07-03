@@ -1,0 +1,447 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	ChevronRightIcon,
+	FileTextIcon,
+	MoreHorizontalIcon,
+	PlusIcon,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+	SidebarGroup,
+	SidebarGroupAction,
+	SidebarGroupContent,
+	SidebarGroupLabel,
+	SidebarInput,
+	SidebarMenu,
+	SidebarMenuAction,
+	SidebarMenuButton,
+	SidebarMenuItem,
+	SidebarMenuSub,
+	useSidebar,
+} from "@/components/ui/sidebar";
+import {
+	createPageMutationOptions,
+	deletePageMutationOptions,
+	invalidatePages,
+	invalidateTrash,
+	listPagesQueryOptions,
+	updatePageMutationOptions,
+} from "@/features/pages/client/queries";
+import type { PageMeta } from "@/features/pages/schemas";
+import { cn } from "@/lib/utils";
+
+type TreeNode = PageMeta & { children: TreeNode[] };
+
+function buildTree(pages: PageMeta[]): TreeNode[] {
+	const nodes = new Map<string, TreeNode>(
+		pages.map((page) => [page.id, { ...page, children: [] }]),
+	);
+	const roots: TreeNode[] = [];
+
+	for (const node of nodes.values()) {
+		const parent = node.parentPageId ? nodes.get(node.parentPageId) : null;
+		if (parent) {
+			parent.children.push(node);
+		} else {
+			roots.push(node);
+		}
+	}
+
+	return roots;
+}
+
+function useExpandedState(workspaceId: string) {
+	const storageKey = `haunter.tree.${workspaceId}`;
+	const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+	useEffect(() => {
+		try {
+			const raw = localStorage.getItem(storageKey);
+			setExpanded(raw ? JSON.parse(raw) : {});
+		} catch {
+			setExpanded({});
+		}
+	}, [storageKey]);
+
+	const toggle = useCallback(
+		(pageId: string) => {
+			setExpanded((current) => {
+				const next = { ...current, [pageId]: !current[pageId] };
+				try {
+					localStorage.setItem(storageKey, JSON.stringify(next));
+				} catch {
+					// localStorage unavailable; expansion is session-only.
+				}
+				return next;
+			});
+		},
+		[storageKey],
+	);
+
+	return { expanded, toggle };
+}
+
+export function PageTree({ workspaceId }: { workspaceId: string }) {
+	const router = useRouter();
+	const pathname = usePathname();
+	const queryClient = useQueryClient();
+	const { isMobile } = useSidebar();
+	const pagesQuery = useQuery(listPagesQueryOptions(workspaceId));
+	const createMutation = useMutation(createPageMutationOptions());
+	const updateMutation = useMutation(updatePageMutationOptions());
+	const deleteMutation = useMutation(deletePageMutationOptions());
+
+	const { expanded, toggle } = useExpandedState(workspaceId);
+	const [renamingId, setRenamingId] = useState<string | null>(null);
+	const [renameValue, setRenameValue] = useState("");
+	const [dragId, setDragId] = useState<string | null>(null);
+	const [dropTarget, setDropTarget] = useState<{
+		id: string;
+		zone: "before" | "after" | "inside";
+	} | null>(null);
+
+	const pages = pagesQuery.data?.items ?? [];
+	const tree = buildTree(pages);
+	const nodesById = new Map<string, TreeNode>();
+	{
+		const stack = [...tree];
+		while (stack.length > 0) {
+			const node = stack.pop();
+			if (!node) break;
+			nodesById.set(node.id, node);
+			stack.push(...node.children);
+		}
+	}
+	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
+
+	function createPage(parentPageId: string | null) {
+		createMutation.mutate(
+			{
+				body: {
+					workspaceId,
+					title: "Untitled",
+					...(parentPageId ? { parentPageId } : {}),
+				},
+			},
+			{
+				onSuccess: async (page) => {
+					if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
+					await invalidatePages(queryClient);
+					router.push(`/w/${workspaceId}/p/${page.id}`);
+				},
+			},
+		);
+	}
+
+	function commitRename(pageId: string) {
+		const title = renameValue.trim();
+		setRenamingId(null);
+		if (!title) return;
+		updateMutation.mutate(
+			{ path: { id: pageId }, body: { title } },
+			{ onSuccess: () => invalidatePages(queryClient) },
+		);
+	}
+
+	function collectSubtreeIds(node: TreeNode): Set<string> {
+		const ids = new Set<string>([node.id]);
+		for (const child of node.children) {
+			for (const id of collectSubtreeIds(child)) {
+				ids.add(id);
+			}
+		}
+		return ids;
+	}
+
+	// Soft delete: the subtree moves to the workspace trash (restorable).
+	function deletePage(node: TreeNode) {
+		const subtree = collectSubtreeIds(node);
+		deleteMutation.mutate(
+			{ path: { id: node.id } },
+			{
+				onSuccess: async () => {
+					await Promise.all([
+						invalidatePages(queryClient),
+						invalidateTrash(queryClient),
+					]);
+					if (activePageId && subtree.has(activePageId)) {
+						router.push(`/w/${workspaceId}`);
+					}
+				},
+			},
+		);
+	}
+
+	function siblingsOf(parentId: string | null): TreeNode[] {
+		return parentId === null ? tree : (nodesById.get(parentId)?.children ?? []);
+	}
+
+	function canDropOn(targetId: string): boolean {
+		if (!dragId || dragId === targetId) return false;
+		const dragged = nodesById.get(dragId);
+		// A page cannot be dropped into its own subtree.
+		return (
+			Boolean(dragged) && !collectSubtreeIds(dragged as TreeNode).has(targetId)
+		);
+	}
+
+	function performDrop(
+		draggedId: string,
+		targetId: string,
+		zone: "before" | "after" | "inside",
+	) {
+		const dragged = nodesById.get(draggedId);
+		const target = nodesById.get(targetId);
+		if (!dragged || !target || !canDropOn(targetId)) return;
+
+		let parentPageId: string | null;
+		let position: number;
+
+		if (zone === "inside") {
+			parentPageId = target.id;
+			position =
+				target.children
+					.filter((child) => child.id !== draggedId)
+					.reduce((max, child) => Math.max(max, child.position), 0) + 1;
+		} else {
+			parentPageId = target.parentPageId;
+			const siblings = siblingsOf(parentPageId).filter(
+				(sibling) => sibling.id !== draggedId,
+			);
+			const index = siblings.findIndex((sibling) => sibling.id === targetId);
+			if (index === -1) return;
+			if (zone === "before") {
+				const prev = siblings[index - 1];
+				position = prev
+					? (prev.position + target.position) / 2
+					: target.position - 1;
+			} else {
+				const next = siblings[index + 1];
+				position = next
+					? (target.position + next.position) / 2
+					: target.position + 1;
+			}
+		}
+
+		if (
+			parentPageId === dragged.parentPageId &&
+			position === dragged.position
+		) {
+			return;
+		}
+
+		updateMutation.mutate(
+			{ path: { id: draggedId }, body: { parentPageId, position } },
+			{ onSuccess: () => invalidatePages(queryClient) },
+		);
+		if (zone === "inside" && !expanded[target.id]) toggle(target.id);
+	}
+
+	function zoneFromPointer(
+		event: React.DragEvent<HTMLLIElement>,
+	): "before" | "after" | "inside" {
+		const rect = event.currentTarget.getBoundingClientRect();
+		const ratio = (event.clientY - rect.top) / rect.height;
+		if (ratio < 0.3) return "before";
+		if (ratio > 0.7) return "after";
+		return "inside";
+	}
+
+	function renderNode(node: TreeNode) {
+		const isExpanded = Boolean(expanded[node.id]);
+		const isActive = node.id === activePageId;
+		const isRenaming = node.id === renamingId;
+		const hasChildren = node.children.length > 0;
+
+		return (
+			// The children live in a SIBLING <li>, not inside the row's
+			// SidebarMenuItem: showOnHover keys off group-hover/menu-item, and
+			// nesting would reveal the parent's actions while hovering any child.
+			<Fragment key={node.id}>
+				<SidebarMenuItem
+					draggable={!isRenaming}
+					className={cn(
+						dragId === node.id && "opacity-50",
+						dropTarget?.id === node.id &&
+							dropTarget.zone === "inside" &&
+							"rounded-md ring-2 ring-primary/60",
+						dropTarget?.id === node.id &&
+							dropTarget.zone === "before" &&
+							"shadow-[0_-2px_0_0_var(--primary)]",
+						dropTarget?.id === node.id &&
+							dropTarget.zone === "after" &&
+							"shadow-[0_2px_0_0_var(--primary)]",
+					)}
+					onDragStart={(event) => {
+						event.stopPropagation();
+						event.dataTransfer.setData("text/plain", node.id);
+						event.dataTransfer.effectAllowed = "move";
+						setDragId(node.id);
+					}}
+					onDragEnd={() => {
+						setDragId(null);
+						setDropTarget(null);
+					}}
+					onDragOver={(event) => {
+						if (!canDropOn(node.id)) return;
+						event.preventDefault();
+						event.stopPropagation();
+						event.dataTransfer.dropEffect = "move";
+						const zone = zoneFromPointer(event);
+						setDropTarget((current) =>
+							current?.id === node.id && current.zone === zone
+								? current
+								: { id: node.id, zone },
+						);
+					}}
+					onDragLeave={() => {
+						setDropTarget((current) =>
+							current?.id === node.id ? null : current,
+						);
+					}}
+					onDrop={(event) => {
+						event.preventDefault();
+						event.stopPropagation();
+						const draggedId =
+							event.dataTransfer.getData("text/plain") || dragId;
+						if (draggedId) {
+							performDrop(draggedId, node.id, zoneFromPointer(event));
+						}
+						setDragId(null);
+						setDropTarget(null);
+					}}
+				>
+					{isRenaming ? (
+						<SidebarInput
+							autoFocus
+							className="h-8"
+							value={renameValue}
+							onChange={(event) => setRenameValue(event.target.value)}
+							onKeyDown={(event) => {
+								if (event.key === "Enter") commitRename(node.id);
+								if (event.key === "Escape") setRenamingId(null);
+							}}
+							onBlur={() => commitRename(node.id)}
+						/>
+					) : (
+						<SidebarMenuButton
+							asChild
+							isActive={isActive}
+							title={node.title}
+							// Two hover actions sit on the right (••• at right-6, + at
+							// right-1); the default pr-8 clearance lets text run under
+							// them, so widen it.
+							className="group-has-data-[sidebar=menu-action]/menu-item:pr-13"
+						>
+							<Link href={`/w/${workspaceId}/p/${node.id}`}>
+								{node.icon ? (
+									<span>{node.icon}</span>
+								) : (
+									<FileTextIcon className="text-sidebar-foreground/60" />
+								)}
+								<span>{node.title || "Untitled"}</span>
+							</Link>
+						</SidebarMenuButton>
+					)}
+					{hasChildren && !isRenaming ? (
+						// On hover the chevron sits over the page icon, sidebar-10 style.
+						<SidebarMenuAction
+							showOnHover
+							className={cn(
+								"left-1 bg-sidebar-accent text-sidebar-accent-foreground transition-transform",
+								isExpanded && "rotate-90",
+							)}
+							aria-label={isExpanded ? "Collapse" : "Expand"}
+							onClick={() => toggle(node.id)}
+						>
+							<ChevronRightIcon />
+						</SidebarMenuAction>
+					) : null}
+					{!isRenaming ? (
+						<>
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<SidebarMenuAction
+										showOnHover
+										className="right-6 aria-expanded:bg-muted"
+										aria-label="Page actions"
+									>
+										<MoreHorizontalIcon />
+									</SidebarMenuAction>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent
+									className="w-48 rounded-lg"
+									side={isMobile ? "bottom" : "right"}
+									align={isMobile ? "end" : "start"}
+								>
+									<DropdownMenuItem
+										onSelect={() => {
+											setRenamingId(node.id);
+											setRenameValue(node.title);
+										}}
+									>
+										Rename
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										className="text-destructive focus:text-destructive"
+										onSelect={() => deletePage(node)}
+									>
+										Move to trash
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+							<SidebarMenuAction
+								showOnHover
+								aria-label="Add subpage"
+								onClick={() => createPage(node.id)}
+							>
+								<PlusIcon />
+							</SidebarMenuAction>
+						</>
+					) : null}
+				</SidebarMenuItem>
+				{isExpanded && hasChildren ? (
+					<li>
+						<SidebarMenuSub className="mr-0 pr-0">
+							{node.children.map((child) => renderNode(child))}
+						</SidebarMenuSub>
+					</li>
+				) : null}
+			</Fragment>
+		);
+	}
+
+	return (
+		<SidebarGroup>
+			<SidebarGroupLabel>Pages</SidebarGroupLabel>
+			<SidebarGroupAction
+				title="New page"
+				aria-label="New page"
+				onClick={() => createPage(null)}
+			>
+				<PlusIcon />
+			</SidebarGroupAction>
+			<SidebarGroupContent>
+				{pagesQuery.isPending ? (
+					<p className="px-2 text-sidebar-foreground/50 text-xs">Loading…</p>
+				) : tree.length === 0 ? (
+					<p className="px-2 text-sidebar-foreground/50 text-xs">
+						No pages yet. Create one.
+					</p>
+				) : (
+					<SidebarMenu>{tree.map((node) => renderNode(node))}</SidebarMenu>
+				)}
+			</SidebarGroupContent>
+		</SidebarGroup>
+	);
+}

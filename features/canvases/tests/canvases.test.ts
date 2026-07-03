@@ -1,0 +1,176 @@
+import { describe, expect, it } from "bun:test";
+import { createUseCaseTester } from "@beignet/core/application";
+import { createTestUserActor } from "@beignet/core/ports/testing";
+import {
+	createTestContextFactory,
+	createTestPorts,
+} from "@beignet/core/testing";
+import { createInMemoryDevtools } from "@beignet/devtools";
+import type { AppContext } from "@/app-context";
+import type { CanvasRepository } from "@/features/canvases/ports";
+import type { PageRepository } from "@/features/pages/ports";
+import {
+	createTestPageLinkRepository,
+	createTestPageRepository,
+} from "@/features/pages/tests/helpers";
+import { purgePageUseCase } from "@/features/pages/use-cases";
+import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
+import type { WorkspaceRepository } from "@/features/workspaces/ports";
+import { createTestWorkspaceRepository } from "@/features/workspaces/tests/helpers";
+import { appPorts } from "@/infra/app-ports";
+import type { AppTransactionPorts } from "@/ports";
+import {
+	createCanvasUseCase,
+	getCanvasUseCase,
+	saveCanvasSnapshotUseCase,
+} from "../use-cases";
+import { createTestCanvasRepository } from "./helpers";
+
+function createTester(
+	userId: string,
+	repos: {
+		canvases: CanvasRepository;
+		pages: PageRepository;
+		workspaces: WorkspaceRepository;
+	},
+) {
+	const tasks = createTestTaskRepository();
+	const auth = {
+		user: { id: userId, email: `${userId}@example.com`, name: "Test User" },
+		session: { id: `session_${userId}` },
+	};
+	const pageLinks = createTestPageLinkRepository({ pages: repos.pages });
+	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
+		base: appPorts,
+		overrides: {
+			gate: appPorts.gate,
+			...repos,
+			pageLinks,
+			tasks,
+			devtools: createInMemoryDevtools(),
+		},
+		transaction: {
+			ports: (ports) => ({ ...ports, ...repos, pageLinks, tasks }),
+		},
+	});
+	const createTestContext = createTestContextFactory<
+		AppContext,
+		AppContext["ports"]
+	>({
+		ports: fixture.ports,
+		actor: createTestUserActor(userId, { displayName: auth.user.name }),
+		auth,
+	});
+
+	return createUseCaseTester<AppContext>(createTestContext);
+}
+
+async function createFixture(userId = "user_test") {
+	const canvases = createTestCanvasRepository();
+	const pages = createTestPageRepository();
+	const workspaces = createTestWorkspaceRepository();
+	const workspace = await workspaces.create({
+		userId,
+		name: "Work",
+		icon: null,
+		position: 1,
+	});
+	const page = await pages.create({
+		userId,
+		workspaceId: workspace.id,
+		parentPageId: null,
+		title: "Diagrams",
+		position: 1,
+	});
+	const tester = createTester(userId, { canvases, pages, workspaces });
+	const ctx = await tester.ctx();
+
+	return { canvases, pages, workspaces, workspace, page, tester, ctx };
+}
+
+describe("canvases use cases", () => {
+	it("creates a canvas, saves snapshots, and reads them back", async () => {
+		const { workspace, page, tester, ctx } = await createFixture();
+
+		const canvas = await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, pageId: page.id },
+			{ ctx },
+		);
+		expect(canvas.snapshot).toEqual({});
+
+		const snapshot = {
+			store: { "shape:abc": { type: "geo", x: 10, y: 20 } },
+			schema: { schemaVersion: 2 },
+		};
+		const saved = await tester.run(
+			saveCanvasSnapshotUseCase,
+			{ id: canvas.id, snapshot },
+			{ ctx },
+		);
+		expect(saved.updatedAt >= canvas.updatedAt).toBe(true);
+
+		const fetched = await tester.run(
+			getCanvasUseCase,
+			{ id: canvas.id },
+			{ ctx },
+		);
+		expect(fetched.snapshot).toEqual(snapshot);
+	});
+
+	it("rejects creating a canvas on another user's page", async () => {
+		const { canvases, pages, workspaces, workspace, page } =
+			await createFixture("user_owner");
+
+		const intruder = createTester("user_intruder", {
+			canvases,
+			pages,
+			workspaces,
+		});
+		const intruderCtx = await intruder.ctx();
+
+		await expect(
+			intruder.run(
+				createCanvasUseCase,
+				{ workspaceId: workspace.id, pageId: page.id },
+				{ ctx: intruderCtx },
+			),
+		).rejects.toThrow("Only the owner can update this page.");
+	});
+
+	it("denies reading another user's canvas", async () => {
+		const { canvases, pages, workspaces, workspace, page, tester, ctx } =
+			await createFixture("user_owner");
+
+		const canvas = await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, pageId: page.id },
+			{ ctx },
+		);
+
+		const intruder = createTester("user_intruder", {
+			canvases,
+			pages,
+			workspaces,
+		});
+		const intruderCtx = await intruder.ctx();
+
+		await expect(
+			intruder.run(getCanvasUseCase, { id: canvas.id }, { ctx: intruderCtx }),
+		).rejects.toThrow("Only the owner can read this canvas.");
+	});
+
+	it("deletes a page's canvases when the page is purged", async () => {
+		const { canvases, workspace, page, tester, ctx } = await createFixture();
+
+		const canvas = await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, pageId: page.id },
+			{ ctx },
+		);
+
+		await tester.run(purgePageUseCase, { id: page.id }, { ctx });
+
+		expect(await canvases.findById(canvas.id)).toBeNull();
+	});
+});
