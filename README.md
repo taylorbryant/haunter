@@ -5,6 +5,8 @@ tasks that roll up into a per-workspace "My Tasks" view, syntax-highlighted
 code/SQL blocks, and embedded tldraw canvases. Built on Beignet
 (contract-first, scaffolded with `@beignet/cli`).
 
+![Haunter — a weekly page with tasks, an inline page mention, and a syntax-highlighted SQL block](docs/screenshot.png)
+
 ## Features
 
 - **Workspaces** separate work and personal notes; each has its own page tree
