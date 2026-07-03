@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import {
 	getPageQueryOptions,
 	invalidatePages,
+	setPageSavedAtInCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import { setPageSaveState } from "@/features/pages/client/save-state";
@@ -65,7 +66,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		titleTimeoutRef.current = setTimeout(() => {
 			updatePageMutation.mutate(
 				{ path: { id: pageId }, body: { title: next } },
-				{ onSuccess: () => invalidatePages(queryClient) },
+				{
+					onSuccess: (result) => {
+						setPageSavedAtInCache(queryClient, pageId, result.updatedAt);
+						invalidatePages(queryClient);
+					},
+				},
 			);
 		}, TITLE_SAVE_DELAY_MS);
 	}

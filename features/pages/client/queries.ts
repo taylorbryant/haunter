@@ -105,6 +105,22 @@ export function setPageIconInCache(
 }
 
 /**
+ * Reflect a save's new `updatedAt` into the getPage cache immediately so the
+ * header's "last edited" label flips to "Just now" without waiting for a
+ * refetch.
+ */
+export function setPageSavedAtInCache(
+	queryClient: QueryClient,
+	id: string,
+	updatedAt: string,
+) {
+	queryClient.setQueryData<Page>(
+		rq(getPage).key({ path: { id } }),
+		(current) => (current ? { ...current, updatedAt } : current),
+	);
+}
+
+/**
  * Mirror a just-saved document into the getPage cache so a remount between
  * the save and the next refetch never initializes the editor from stale data.
  */

@@ -43,6 +43,7 @@ import {
 	listPagesQueryOptions,
 	savePageContentMutationOptions,
 	setPageContentInCache,
+	setPageSavedAtInCache,
 } from "@/features/pages/client/queries";
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
@@ -223,8 +224,9 @@ export default function HaunterEditor({
 		saveMutation.mutate(
 			{ path: { id: pageId }, body: { content } },
 			{
-				onSuccess: () => {
+				onSuccess: (result) => {
 					if (!dirtyRef.current) reportState("saved");
+					setPageSavedAtInCache(queryClient, pageId, result.updatedAt);
 					invalidatePage(queryClient, pageId);
 					invalidateBacklinks(queryClient);
 				},
