@@ -28,6 +28,8 @@ import {
 	CheckSquareIcon,
 	FilePlusIcon,
 	FileTextIcon,
+	LightbulbIcon,
+	MinusIcon,
 	PenToolIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -118,6 +120,28 @@ function getSlashMenuItems(
 		},
 	};
 
+	const calloutItem = {
+		title: "Callout",
+		subtext: "A highlighted box for notes and tips",
+		aliases: ["callout", "note", "info", "tip", "warning", "aside"],
+		group: "Basic blocks",
+		icon: <LightbulbIcon className="size-4.5" />,
+		onItemClick: () => {
+			insertOrUpdateBlockForSlashMenu(editor, { type: "callout" });
+		},
+	};
+
+	const dividerItem = {
+		title: "Divider",
+		subtext: "A horizontal line to separate content",
+		aliases: ["divider", "separator", "hr", "line", "rule"],
+		group: "Basic blocks",
+		icon: <MinusIcon className="size-4.5" />,
+		onItemClick: () => {
+			insertOrUpdateBlockForSlashMenu(editor, { type: "divider" });
+		},
+	};
+
 	const pageItem = {
 		title: "Page",
 		subtext: "Create a subpage and link it here",
@@ -152,6 +176,8 @@ function getSlashMenuItems(
 		0,
 		pageItem,
 		taskItem,
+		calloutItem,
+		dividerItem,
 		canvasItem,
 	);
 

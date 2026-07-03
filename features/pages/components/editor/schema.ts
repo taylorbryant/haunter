@@ -5,8 +5,10 @@ import {
 	defaultInlineContentSpecs,
 } from "@blocknote/core";
 import { codeBlockOptions } from "@blocknote/code-block";
+import { calloutBlockSpec } from "./callout-block";
 import { canvasBlockSpec } from "./canvas-block";
 import { getHaunterHighlighter } from "./code-theme";
+import { dividerBlockSpec } from "./divider-block";
 import { mentionSpec } from "./mention";
 import { pageLinkBlockSpec } from "./page-link-block";
 import { taskBlockSpec } from "./task-block";
@@ -52,6 +54,8 @@ export const editorSchema = BlockNoteSchema.create({
 		task: taskBlockSpec(),
 		canvas: canvasBlockSpec(),
 		pageLink: pageLinkBlockSpec(),
+		callout: calloutBlockSpec(),
+		divider: dividerBlockSpec(),
 	},
 	inlineContentSpecs: {
 		...defaultInlineContentSpecs,
