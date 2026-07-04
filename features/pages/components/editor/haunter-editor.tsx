@@ -35,6 +35,7 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiClient } from "@/client";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { createCanvas } from "@/features/canvases/contracts";
 import {
 	invalidateBacklinks,
@@ -48,6 +49,7 @@ import {
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
+import { cn } from "@/lib/utils";
 import { CodeEditDialog } from "./code-edit-dialog";
 import { editorSchema } from "./schema";
 
@@ -188,6 +190,7 @@ export default function HaunterEditor({
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	const isMobile = useIsMobile();
 	const [saveState, setSaveState] = useState<SaveState>("saved");
 
 	const editor = useCreateBlockNote({
@@ -258,7 +261,10 @@ export default function HaunterEditor({
 	);
 
 	return (
-		<div className="haunter-editor">
+		// On mobile, `editor-flush` drops BlockNote's 54px inline gutter so
+		// content runs edge-to-edge; the block controls that live there are
+		// hidden below. Driven from JS (not CSS) to share one breakpoint.
+		<div className={cn("haunter-editor", isMobile && "editor-flush")}>
 			<BlockNoteView
 				editor={editor}
 				onChange={handleChange}
@@ -310,20 +316,24 @@ export default function HaunterEditor({
 							}));
 					}}
 				/>
-				<SideMenuController
-					sideMenu={(props) => (
-						<SideMenu
-							{...props}
-							dragHandleMenu={() => (
-								<DragHandleMenu>
-									<RemoveBlockItem>Delete</RemoveBlockItem>
-									<BlockColorsItem>Colors</BlockColorsItem>
-									<EditCodeMenuItem onOpen={setCodeDialogBlockId} />
-								</DragHandleMenu>
-							)}
-						/>
-					)}
-				/>
+				{/* The +/drag block controls are hidden on mobile: they're hard
+				    to use on touch and their gutter is reclaimed for content. */}
+				{!isMobile ? (
+					<SideMenuController
+						sideMenu={(props) => (
+							<SideMenu
+								{...props}
+								dragHandleMenu={() => (
+									<DragHandleMenu>
+										<RemoveBlockItem>Delete</RemoveBlockItem>
+										<BlockColorsItem>Colors</BlockColorsItem>
+										<EditCodeMenuItem onOpen={setCodeDialogBlockId} />
+									</DragHandleMenu>
+								)}
+							/>
+						)}
+					/>
+				) : null}
 			</BlockNoteView>
 			{codeDialogBlockId ? (
 				<CodeEditDialog

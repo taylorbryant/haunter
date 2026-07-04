@@ -43,16 +43,16 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 	if (pageQuery.isPending) {
 		return (
-			<div className="mx-auto w-full max-w-4xl px-8 py-10">
-				<div className="mx-[54px] mb-8 h-10 w-1/2 animate-pulse rounded bg-muted" />
+			<div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-10">
+				<div className="mx-0 mb-8 h-10 w-1/2 md:mx-[54px] animate-pulse rounded bg-muted" />
 			</div>
 		);
 	}
 
 	if (pageQuery.isError || !pageQuery.data) {
 		return (
-			<div className="mx-auto w-full max-w-4xl px-8 py-10 text-muted-foreground">
-				<p className="px-[54px]">This page could not be loaded.</p>
+			<div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-10 text-muted-foreground">
+				<p className="px-0 md:px-[54px]">This page could not be loaded.</p>
 			</div>
 		);
 	}
@@ -77,15 +77,15 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	}
 
 	return (
-		<div className="mx-auto w-full max-w-4xl px-8 py-10">
+		<div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-10">
 			{/* BlockNote insets its content 54px (.bn-editor padding-inline) to
 			    make a gutter for the block controls; pad the title and its icon
 			    to the same column so they align with block text, Notion-style. */}
 			<div className="group/header">
-				<div className="mb-1 px-[54px]">
+				<div className="mb-1 px-0 md:px-[54px]">
 					<PageIconButton pageId={pageId} icon={page.icon} />
 				</div>
-				<div className="mb-2 px-[54px]">
+				<div className="mb-2 px-0 md:px-[54px]">
 					<input
 						className="w-full border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60"
 						value={shownTitle}
@@ -103,7 +103,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				onSaveStateChange={setPageSaveState}
 			/>
 			{/* Same 54px inset as the editor content column. */}
-			<div className="px-[54px]">
+			<div className="px-0 md:px-[54px]">
 				<Backlinks pageId={pageId} />
 			</div>
 		</div>

@@ -222,3 +222,10 @@
 .bn-shadcn .bn-editor {
 	background-color: transparent;
 }
+
+/* Mobile: the wrapper gets `editor-flush` (JS-driven, see haunter-editor.tsx)
+   to drop BlockNote's 54px inline gutter so content runs edge-to-edge. The
+   block controls that live in that gutter are hidden on mobile too. */
+.editor-flush .bn-editor {
+	padding-inline: 0;
+}
