@@ -8,4 +8,4 @@ coverage
 .env.local
 local.db
 local.db-*
-storage
+/storage
