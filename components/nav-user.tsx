@@ -9,7 +9,6 @@ import {
 	SunIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { SettingsDialog } from "@/components/settings-dialog";
@@ -60,13 +59,15 @@ function initials(name: string): string {
 export function NavUser({ user }: { user: { name: string; email: string } }) {
 	const { isMobile } = useSidebar();
 	const { theme, setTheme } = useTheme();
-	const router = useRouter();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 
 	async function signOut() {
 		await authClient.signOut();
-		router.push("/");
-		router.refresh();
+		// Hard navigation: forces the server to re-evaluate the now-cleared
+		// session and redirect to sign-in, and drops all client state. More
+		// reliable than a client-side push after logout (which on mobile could
+		// leave you on a stale, still-"logged in"-looking page).
+		window.location.href = "/";
 	}
 
 	const userIdentity = (
