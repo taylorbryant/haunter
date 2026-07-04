@@ -116,6 +116,95 @@ export const invitation = sqliteTable("invitation", {
 		.references(() => user.id, { onDelete: "cascade" }),
 });
 
+// @better-auth/agent-auth plugin: an agent runtime (e.g. an MCP client or
+// automation host) that agents register under.
+export const agentHost = sqliteTable("agent_host", {
+	id: text("id").primaryKey(),
+	name: text("name"),
+	userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+	defaultCapabilities: text("default_capabilities"),
+	publicKey: text("public_key"),
+	kid: text("kid"),
+	jwksUrl: text("jwks_url"),
+	enrollmentTokenHash: text("enrollment_token_hash"),
+	enrollmentTokenExpiresAt: integer("enrollment_token_expires_at", {
+		mode: "timestamp",
+	}),
+	status: text("status").notNull(),
+	activatedAt: integer("activated_at", { mode: "timestamp" }),
+	expiresAt: integer("expires_at", { mode: "timestamp" }),
+	lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// An AI agent identity. Delegated agents act for userId with capability
+// grants scoped well below that user's own rights.
+export const agent = sqliteTable("agent", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+	hostId: text("host_id")
+		.notNull()
+		.references(() => agentHost.id, { onDelete: "cascade" }),
+	status: text("status").notNull(),
+	mode: text("mode").notNull(),
+	publicKey: text("public_key").notNull(),
+	kid: text("kid"),
+	jwksUrl: text("jwks_url"),
+	lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+	activatedAt: integer("activated_at", { mode: "timestamp" }),
+	expiresAt: integer("expires_at", { mode: "timestamp" }),
+	metadata: text("metadata"),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const agentCapabilityGrant = sqliteTable("agent_capability_grant", {
+	id: text("id").primaryKey(),
+	agentId: text("agent_id")
+		.notNull()
+		.references(() => agent.id, { onDelete: "cascade" }),
+	capability: text("capability").notNull(),
+	deniedBy: text("denied_by").references(() => user.id, {
+		onDelete: "cascade",
+	}),
+	grantedBy: text("granted_by").references(() => user.id, {
+		onDelete: "cascade",
+	}),
+	expiresAt: integer("expires_at", { mode: "timestamp" }),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+	status: text("status").notNull(),
+	reason: text("reason"),
+	constraints: text("constraints"),
+});
+
+export const approvalRequest = sqliteTable("approval_request", {
+	id: text("id").primaryKey(),
+	method: text("method").notNull(),
+	agentId: text("agent_id").references(() => agent.id, {
+		onDelete: "cascade",
+	}),
+	hostId: text("host_id").references(() => agentHost.id, {
+		onDelete: "cascade",
+	}),
+	userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+	capabilities: text("capabilities"),
+	status: text("status").notNull(),
+	userCodeHash: text("user_code_hash"),
+	loginHint: text("login_hint"),
+	bindingMessage: text("binding_message"),
+	clientNotificationToken: text("client_notification_token"),
+	clientNotificationEndpoint: text("client_notification_endpoint"),
+	deliveryMode: text("delivery_mode"),
+	interval: integer("interval").notNull(),
+	lastPolledAt: integer("last_polled_at", { mode: "timestamp" }),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 export const pages = sqliteTable(
 	"pages",
 	{

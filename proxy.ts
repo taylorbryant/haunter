@@ -22,6 +22,7 @@ export const config = {
 	matcher: [
 		// accept-invite handles its own signed-out state (it prompts sign-in), so
 		// invitees who aren't signed in yet must not be bounced away from it.
-		"/((?!api|_next/static|_next/image|favicon.ico|sign-in|sign-up|accept-invite|share).*)",
+		// .well-known serves anonymous protocol discovery (agent-configuration).
+		"/((?!api|_next/static|_next/image|favicon.ico|sign-in|sign-up|accept-invite|share|\\.well-known).*)",
 	],
 };

@@ -1,3 +1,4 @@
+import { agentAuth } from "@better-auth/agent-auth";
 import { createClient } from "@libsql/client";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -5,6 +6,10 @@ import { emailOTP, organization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/libsql";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
+import {
+	agentCapabilities,
+	executeAgentCapability,
+} from "@/lib/agent-capabilities";
 import { createAuthRateLimitStorage } from "@/lib/auth-rate-limit";
 import { env } from "@/lib/env";
 import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
@@ -64,6 +69,19 @@ export const auth = betterAuth({
 					acceptUrl: `${env.APP_URL}/accept-invite/${data.id}`,
 				});
 			},
+		}),
+		// AI agents as first-class collaborators (Agent Auth Protocol). Agents
+		// register, request capabilities, and execute them with their own JWT
+		// identity; execution runs through the same gate-authorized use cases
+		// as human requests. Delegated mode only — every agent acts for a real
+		// member and inherits at most that member's rights.
+		agentAuth({
+			providerName: "haunter",
+			providerDescription:
+				"Haunter notes: read, search, and append to pages in workspaces the acting user belongs to.",
+			modes: ["delegated"],
+			capabilities: agentCapabilities,
+			onExecute: executeAgentCapability,
 		}),
 	],
 	// Better Auth's own limiter is the only throttle on /api/auth/* (Beignet's
