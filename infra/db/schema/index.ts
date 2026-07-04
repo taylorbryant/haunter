@@ -33,6 +33,8 @@ export const session = sqliteTable("session", {
 	userId: text("user_id")
 		.notNull()
 		.references(() => user.id, { onDelete: "cascade" }),
+	// Better Auth organization plugin: the workspace the session is scoped to.
+	activeOrganizationId: text("active_organization_id"),
 });
 
 export const account = sqliteTable("account", {
@@ -64,6 +66,53 @@ export const verification = sqliteTable("verification", {
 	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
 	createdAt: integer("created_at", { mode: "timestamp" }),
 	updatedAt: integer("updated_at", { mode: "timestamp" }),
+});
+
+// Better Auth organization plugin tables. A "workspace" in the product is an
+// organization here; members carry the role that drives page/task/canvas
+// authorization.
+export const organization = sqliteTable("organization", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	slug: text("slug").notNull().unique(),
+	logo: text("logo"),
+	metadata: text("metadata"),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const member = sqliteTable(
+	"member",
+	{
+		id: text("id").primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		role: text("role").notNull().default("member"),
+		createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	},
+	(table) => ({
+		orgUserIdx: uniqueIndex("member_org_user_idx").on(
+			table.organizationId,
+			table.userId,
+		),
+	}),
+);
+
+export const invitation = sqliteTable("invitation", {
+	id: text("id").primaryKey(),
+	organizationId: text("organization_id")
+		.notNull()
+		.references(() => organization.id, { onDelete: "cascade" }),
+	email: text("email").notNull(),
+	role: text("role"),
+	status: text("status").notNull().default("pending"),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	inviterId: text("inviter_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
 });
 
 export const workspaces = sqliteTable(
