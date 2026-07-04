@@ -32,9 +32,10 @@ export const AttachmentUpload = defineUpload<
 		cacheControl: "private, max-age=31536000, immutable",
 	},
 	async authorize({ ctx, metadata }) {
-		if (ctx.actor.type !== "user" || !ctx.auth) return false;
+		if (ctx.actor.type !== "user" || !ctx.auth || !ctx.tenant) return false;
 		const page = await ctx.ports.pages.findMetaById(metadata.pageId);
-		return page !== null && page.userId === ctx.auth.user.id;
+		// Any member of the page's workspace may attach to it.
+		return page !== null && page.workspaceId === ctx.tenant.id;
 	},
 	key({ ctx, metadata, uploadId, file }) {
 		const user = requireUser(ctx);

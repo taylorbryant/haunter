@@ -2,7 +2,7 @@ import { definePolicy, deny } from "@beignet/core/ports";
 import type { Canvas } from "@/features/canvases/schemas";
 import {
 	type AuthorizationContext,
-	authorizeOwner,
+	authorizeTenant,
 } from "@/features/shared/authorization";
 
 export const canvasPolicy = definePolicy({
@@ -11,7 +11,7 @@ export const canvasPolicy = definePolicy({
 		return deny("You must be signed in to create canvases.");
 	},
 	"canvases.read": (ctx: AuthorizationContext, canvas: Canvas) =>
-		authorizeOwner(ctx, canvas, "read", "canvas"),
+		authorizeTenant(ctx, canvas, "read", "canvas"),
 	"canvases.update": (ctx: AuthorizationContext, canvas: Canvas) =>
-		authorizeOwner(ctx, canvas, "update", "canvas"),
+		authorizeTenant(ctx, canvas, "update", "canvas"),
 });

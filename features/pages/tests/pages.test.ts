@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
-import { createTestUserActor } from "@beignet/core/ports/testing";
+import { createTestTenant, createTestUserActor } from "@beignet/core/ports/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
@@ -10,8 +10,6 @@ import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import type { PageRepository } from "@/features/pages/ports";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
-import type { WorkspaceRepository } from "@/features/workspaces/ports";
-import { createTestWorkspaceRepository } from "@/features/workspaces/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import {
@@ -35,7 +33,7 @@ import {
 function createTester(
 	userId: string,
 	pages: PageRepository,
-	workspaces: WorkspaceRepository,
+	workspaceId: string,
 	tasks = createTestTaskRepository(),
 ) {
 	const auth = {
@@ -44,7 +42,7 @@ function createTester(
 			email: `${userId}@example.com`,
 			name: "Test User",
 		},
-		session: { id: `session_${userId}` },
+		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	};
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
@@ -57,7 +55,6 @@ function createTester(
 				pageLinks,
 				pages,
 				tasks,
-				workspaces,
 				devtools: createInMemoryDevtools(),
 			},
 			transaction: {
@@ -67,7 +64,6 @@ function createTester(
 					pageLinks,
 					pages,
 					tasks,
-					workspaces,
 				}),
 			},
 		},
@@ -81,6 +77,9 @@ function createTester(
 			displayName: auth.user.name,
 		}),
 		auth,
+		// The active workspace is the request tenant; membership in it is the
+		// authorization check.
+		tenant: createTestTenant(workspaceId),
 	});
 
 	return createUseCaseTester<AppContext>(createTestContext);
@@ -88,18 +87,12 @@ function createTester(
 
 async function createFixture(userId = "user_test") {
 	const pages = createTestPageRepository();
-	const workspaces = createTestWorkspaceRepository();
 	const tasks = createTestTaskRepository({ pages });
-	const workspace = await workspaces.create({
-		userId,
-		name: "Work",
-		icon: null,
-		position: 1,
-	});
-	const tester = createTester(userId, pages, workspaces, tasks);
+	const workspace = { id: crypto.randomUUID(), name: "Work" };
+	const tester = createTester(userId, pages, workspace.id, tasks);
 	const ctx = await tester.ctx();
 
-	return { pages, workspaces, tasks, workspace, tester, ctx };
+	return { pages, tasks, workspace, tester, ctx };
 }
 
 describe("pages use cases", () => {
@@ -185,24 +178,22 @@ describe("pages use cases", () => {
 	});
 
 	it("rejects reparenting into another workspace", async () => {
-		const { workspaces, workspace, tester, ctx } = await createFixture();
+		const { pages, workspace, tester, ctx } = await createFixture();
 
-		const other = await workspaces.create({
-			userId: "user_test",
-			name: "Personal",
-			icon: null,
-			position: 2,
-		});
 		const page = await tester.run(
 			createPageUseCase,
 			{ workspaceId: workspace.id, title: "A" },
 			{ ctx },
 		);
-		const foreign = await tester.run(
-			createPageUseCase,
-			{ workspaceId: other.id, title: "B" },
-			{ ctx },
-		);
+		// A page in a different workspace, seeded directly (the tenant guard
+		// forbids creating it through the use case from this context).
+		const foreign = await pages.create({
+			userId: "user_test",
+			workspaceId: crypto.randomUUID(),
+			parentPageId: null,
+			title: "B",
+			position: 1,
+		});
 
 		await expect(
 			tester.run(
@@ -407,8 +398,8 @@ describe("pages use cases", () => {
 		expect(listed.items.map((item) => item.id)).toEqual([sibling.id]);
 	});
 
-	it("denies reading another user's page", async () => {
-		const { pages, workspaces, workspace, tester, ctx } = await createFixture();
+	it("denies reading a page in another workspace", async () => {
+		const { pages, workspace, tester, ctx } = await createFixture();
 
 		const page = await tester.run(
 			createPageUseCase,
@@ -416,12 +407,13 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 
-		const intruder = createTester("user_intruder", pages, workspaces);
+		// A member of a different workspace (different active tenant) is denied.
+		const intruder = createTester("user_intruder", pages, crypto.randomUUID());
 		const intruderCtx = await intruder.ctx();
 
 		await expect(
 			intruder.run(getPageUseCase, { id: page.id }, { ctx: intruderCtx }),
-		).rejects.toThrow("Only the owner can read this page.");
+		).rejects.toThrow("You do not have access to this page.");
 	});
 
 	it("reconciles page links on save and lists backlinks", async () => {
@@ -585,7 +577,7 @@ describe("pages use cases", () => {
 			ctx,
 		});
 		expect(byTitle.items.map((item) => item.id)).toEqual([meeting.id]);
-		expect(byTitle.items[0]?.workspaceName).toBe("Work");
+		expect(byTitle.items[0]?.workspaceId).toBe(workspace.id);
 
 		const byBody = await tester.run(searchPagesUseCase, { q: "roadmap" }, {
 			ctx,
@@ -594,7 +586,7 @@ describe("pages use cases", () => {
 		expect(byBody.items[0]?.snippet).toContain("roadmap");
 	});
 
-	it("search skips trashed pages, other users' pages, and prop-only JSON matches", async () => {
+	it("search skips trashed pages, other workspaces' pages, and prop-only JSON matches", async () => {
 		const { pages, workspace, tester, ctx } = await createFixture();
 
 		const trashed = await tester.run(
@@ -604,9 +596,11 @@ describe("pages use cases", () => {
 		);
 		await tester.run(deletePageUseCase, { id: trashed.id }, { ctx });
 
+		// A page in a different workspace must not surface in this workspace's
+		// search, even though its title matches.
 		await pages.create({
 			userId: "user_other",
-			workspaceId: workspace.id,
+			workspaceId: crypto.randomUUID(),
 			parentPageId: null,
 			title: "Their meeting agenda",
 			position: 1,

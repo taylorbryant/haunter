@@ -35,11 +35,15 @@ export interface PageRepository {
 	findMetaById(id: string): Promise<PageMeta | null>;
 	listIdsByParent(parentPageId: string): Promise<string[]>;
 	/**
-	 * Live pages owned by the user whose title or raw content JSON contains
+	 * Live pages in the workspace whose title or raw content JSON contains
 	 * the needle (case-insensitive), newest first. Candidates only — content
 	 * matches are re-verified against extracted block text by the caller.
 	 */
-	searchByUser(userId: string, needle: string, limit: number): Promise<Page[]>;
+	searchByWorkspace(
+		workspaceId: string,
+		needle: string,
+		limit: number,
+	): Promise<Page[]>;
 	create(input: NewPage): Promise<PageMeta>;
 	update(id: string, input: UpdatePageData): Promise<PageMeta>;
 	saveContent(id: string, contentJson: string): Promise<{ updatedAt: string }>;

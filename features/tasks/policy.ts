@@ -1,7 +1,7 @@
 import { definePolicy, deny } from "@beignet/core/ports";
 import {
 	type AuthorizationContext,
-	authorizeOwner,
+	authorizeTenant,
 } from "@/features/shared/authorization";
 import type { Task } from "@/features/tasks/schemas";
 
@@ -11,7 +11,7 @@ export const taskPolicy = definePolicy({
 		return deny("You must be signed in to create tasks.");
 	},
 	"tasks.update": (ctx: AuthorizationContext, task: Task) =>
-		authorizeOwner(ctx, task, "update", "task"),
+		authorizeTenant(ctx, task, "update", "task"),
 	"tasks.delete": (ctx: AuthorizationContext, task: Task) =>
-		authorizeOwner(ctx, task, "delete", "task"),
+		authorizeTenant(ctx, task, "delete", "task"),
 });

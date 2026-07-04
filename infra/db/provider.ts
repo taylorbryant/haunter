@@ -34,7 +34,6 @@ export const starterDatabaseProvider = createProvider<{
 			| "pages"
 			| "tasks"
 			| "uow"
-			| "workspaces"
 		> = {
 			...repositories,
 			idempotency,

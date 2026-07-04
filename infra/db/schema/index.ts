@@ -115,23 +115,6 @@ export const invitation = sqliteTable("invitation", {
 		.references(() => user.id, { onDelete: "cascade" }),
 });
 
-export const workspaces = sqliteTable(
-	"workspaces",
-	{
-		id: text("id").primaryKey(),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		name: text("name").notNull(),
-		icon: text("icon"),
-		position: real("position").notNull(),
-		createdAt: text("created_at").notNull(),
-	},
-	(table) => ({
-		userIdx: index("workspaces_user_idx").on(table.userId),
-	}),
-);
-
 export const pages = sqliteTable(
 	"pages",
 	{
@@ -141,7 +124,7 @@ export const pages = sqliteTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		workspaceId: text("workspace_id")
 			.notNull()
-			.references(() => workspaces.id, { onDelete: "cascade" }),
+			.references(() => organization.id, { onDelete: "cascade" }),
 		parentPageId: text("parent_page_id").references(
 			(): AnySQLiteColumn => pages.id,
 			{ onDelete: "cascade" },
@@ -169,7 +152,7 @@ export const tasks = sqliteTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		workspaceId: text("workspace_id")
 			.notNull()
-			.references(() => workspaces.id, { onDelete: "cascade" }),
+			.references(() => organization.id, { onDelete: "cascade" }),
 		// The member a task is assigned to (null = unassigned). Drives "My Tasks"
 		// once a workspace has more than one person.
 		assigneeId: text("assignee_id").references(() => user.id, {
@@ -209,7 +192,7 @@ export const canvases = sqliteTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		workspaceId: text("workspace_id")
 			.notNull()
-			.references(() => workspaces.id, { onDelete: "cascade" }),
+			.references(() => organization.id, { onDelete: "cascade" }),
 		pageId: text("page_id")
 			.notNull()
 			.references(() => pages.id, { onDelete: "cascade" }),

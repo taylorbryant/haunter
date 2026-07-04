@@ -1,15 +1,7 @@
 import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import { errors } from "@/features/shared/errors";
-import {
-	CreateWorkspaceInputSchema,
-	ListWorkspacesOutputSchema,
-	OnboardInputSchema,
-	OnboardOutputSchema,
-	UpdateWorkspaceBodySchema,
-	WorkspaceIdInputSchema,
-	WorkspaceSchema,
-} from "@/features/workspaces/schemas";
+import { OnboardInputSchema, OnboardOutputSchema } from "@/features/workspaces/schemas";
 
 const ErrorResponseSchema = z.object({
 	code: z.string(),
@@ -24,48 +16,13 @@ const workspaces = defineContractGroup()
 		500: ErrorResponseSchema,
 	});
 
-export const listWorkspaces = workspaces.get("/api/workspaces").responses({
-	200: ListWorkspacesOutputSchema,
-});
-
-export const createWorkspace = workspaces
-	.post("/api/workspaces")
-	.body(CreateWorkspaceInputSchema)
-	.meta({ idempotency: { header: "idempotency-key", scope: "actor" } })
-	.errors({ Forbidden: errors.Forbidden })
-	.responses({
-		201: WorkspaceSchema,
-	});
-
-// Idempotent first-run: create the user's default workspace seeded with
-// example pages, or return their existing workspace unchanged.
+// Idempotent first-run: seed the active workspace (a Better Auth organization,
+// created client-side at sign-up) with example pages, or return it unchanged
+// when the user has already been onboarded.
 export const onboard = workspaces
 	.post("/api/onboarding")
 	.body(OnboardInputSchema)
 	.errors({ Forbidden: errors.Forbidden })
 	.responses({
 		200: OnboardOutputSchema,
-	});
-
-export const updateWorkspace = workspaces
-	.patch("/api/workspaces/:id")
-	.pathParams(WorkspaceIdInputSchema)
-	.body(UpdateWorkspaceBodySchema)
-	.errors({
-		Forbidden: errors.Forbidden,
-		WorkspaceNotFound: errors.WorkspaceNotFound,
-	})
-	.responses({
-		200: WorkspaceSchema,
-	});
-
-export const deleteWorkspace = workspaces
-	.delete("/api/workspaces/:id")
-	.pathParams(WorkspaceIdInputSchema)
-	.errors({
-		Forbidden: errors.Forbidden,
-		WorkspaceNotFound: errors.WorkspaceNotFound,
-	})
-	.responses({
-		204: null,
 	});

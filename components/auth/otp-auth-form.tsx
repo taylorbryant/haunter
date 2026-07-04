@@ -63,14 +63,27 @@ export function OtpAuthForm() {
 			return;
 		}
 
-		// Signed in. Seed a starter workspace (no-op for returning users) and go
-		// to the welcome page; fall back to home if seeding fails.
+		// Signed in. Ensure the user has a workspace (a Better Auth organization),
+		// make it active, then seed it (idempotent for returning users) and land
+		// on the welcome page; fall back to home if anything fails.
 		try {
-			const { workspaceId, pageId } = await apiClient
-				.endpoint(onboard)
-				.call({ body: {} });
+			const { data: orgs } = await authClient.organization.list();
+			let workspaceId = orgs?.[0]?.id ?? null;
+			if (!workspaceId) {
+				const created = await authClient.organization.create({
+					name: "Personal",
+					slug: `personal-${crypto.randomUUID().slice(0, 8)}`,
+					logo: "🏡",
+				});
+				workspaceId = created.data?.id ?? null;
+			}
+			if (!workspaceId) throw new Error("Could not create a workspace.");
+			await authClient.organization.setActive({ organizationId: workspaceId });
+			const seeded = await apiClient.endpoint(onboard).call({ body: {} });
 			router.push(
-				pageId ? `/w/${workspaceId}/p/${pageId}` : `/w/${workspaceId}/tasks`,
+				seeded.pageId
+					? `/w/${seeded.workspaceId}/p/${seeded.pageId}`
+					: `/w/${seeded.workspaceId}/tasks`,
 			);
 		} catch {
 			router.push("/");

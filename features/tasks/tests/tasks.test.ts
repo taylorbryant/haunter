@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
-import { createTestUserActor } from "@beignet/core/ports/testing";
+import { createTestTenant, createTestUserActor } from "@beignet/core/ports/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
@@ -13,7 +13,6 @@ import {
 	createTestPageLinkRepository,
 	createTestPageRepository,
 } from "@/features/pages/tests/helpers";
-import { createTestWorkspaceRepository } from "@/features/workspaces/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import {
@@ -40,14 +39,8 @@ function taskBlock(
 
 async function createFixture(userId = "user_test") {
 	const pages = createTestPageRepository();
-	const workspaces = createTestWorkspaceRepository();
 	const tasks = createTestTaskRepository({ pages });
-	const workspace = await workspaces.create({
-		userId,
-		name: "Work",
-		icon: null,
-		position: 1,
-	});
+	const workspace = { id: crypto.randomUUID(), name: "Work" };
 	const page = await pages.create({
 		userId,
 		workspaceId: workspace.id,
@@ -58,7 +51,7 @@ async function createFixture(userId = "user_test") {
 
 	const auth = {
 		user: { id: userId, email: `${userId}@example.com`, name: "Test User" },
-		session: { id: `session_${userId}` },
+		session: { id: `session_${userId}`, activeOrganizationId: workspace.id },
 	};
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
@@ -68,11 +61,10 @@ async function createFixture(userId = "user_test") {
 			pageLinks,
 			pages,
 			tasks,
-			workspaces,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, pages, tasks, workspaces }),
+			ports: (ports) => ({ ...ports, pages, tasks }),
 		},
 	});
 	const createTestContext = createTestContextFactory<
@@ -82,11 +74,12 @@ async function createFixture(userId = "user_test") {
 		ports: fixture.ports,
 		actor: createTestUserActor(auth.user.id, { displayName: auth.user.name }),
 		auth,
+		tenant: createTestTenant(workspace.id),
 	});
 	const tester = createUseCaseTester<AppContext>(createTestContext);
 	const ctx = await tester.ctx();
 
-	return { pages, workspaces, tasks, workspace, page, tester, ctx };
+	return { pages, tasks, workspace, page, tester, ctx };
 }
 
 describe("task reconciliation on page content save", () => {
@@ -329,9 +322,8 @@ describe("tasks use cases", () => {
 		expect(all.items).toHaveLength(0);
 	});
 
-	it("denies updates to another user's task", async () => {
-		const { workspace, tester, ctx, pages, tasks, workspaces } =
-			await createFixture();
+	it("denies updates to a task in another workspace", async () => {
+		const { workspace, tester, ctx, pages, tasks } = await createFixture();
 
 		const task = await tester.run(
 			createTaskUseCase,
@@ -339,13 +331,18 @@ describe("tasks use cases", () => {
 			{ ctx },
 		);
 
+		// A member whose active workspace is a different tenant is denied.
+		const intruderWorkspaceId = crypto.randomUUID();
 		const intruderAuth = {
 			user: {
 				id: "user_intruder",
 				email: "user_intruder@example.com",
 				name: "Intruder",
 			},
-			session: { id: "session_intruder" },
+			session: {
+				id: "session_intruder",
+				activeOrganizationId: intruderWorkspaceId,
+			},
 		};
 		const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 			base: appPorts,
@@ -354,11 +351,10 @@ describe("tasks use cases", () => {
 				pageLinks: createTestPageLinkRepository({ pages }),
 				pages,
 				tasks,
-				workspaces,
 				devtools: createInMemoryDevtools(),
 			},
 			transaction: {
-				ports: (ports) => ({ ...ports, pages, tasks, workspaces }),
+				ports: (ports) => ({ ...ports, pages, tasks }),
 			},
 		});
 		const intruder = createUseCaseTester<AppContext>(
@@ -368,6 +364,7 @@ describe("tasks use cases", () => {
 					displayName: "Intruder",
 				}),
 				auth: intruderAuth,
+				tenant: createTestTenant(intruderWorkspaceId),
 			}),
 		);
 		const intruderCtx = await intruder.ctx();
@@ -378,6 +375,6 @@ describe("tasks use cases", () => {
 				{ id: task.id, completed: true },
 				{ ctx: intruderCtx },
 			),
-		).rejects.toThrow("Only the owner can update this task.");
+		).rejects.toThrow("You do not have access to this task.");
 	});
 });

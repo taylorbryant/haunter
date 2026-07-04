@@ -19,12 +19,9 @@ import type { pagePolicy } from "@/features/pages/policy";
 import type { AuthorizationContext } from "@/features/shared/authorization";
 import type { TaskRepository } from "@/features/tasks/ports";
 import type { taskPolicy } from "@/features/tasks/policy";
-import type { WorkspaceRepository } from "@/features/workspaces/ports";
-import type { workspacePolicy } from "@/features/workspaces/policy";
 import type { AuthPort } from "./auth";
 
 export type AppPolicies = [
-	typeof workspacePolicy,
 	typeof pagePolicy,
 	typeof taskPolicy,
 	typeof canvasPolicy,
@@ -36,7 +33,6 @@ export type AppTransactionPorts = {
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
 	tasks: TaskRepository;
-	workspaces: WorkspaceRepository;
 };
 
 export type AppGate = BoundGate<AppPolicies>;
@@ -54,6 +50,5 @@ export type AppPorts = {
 	resend: ResendMailEscapeHatch;
 	tasks: TaskRepository;
 	uow: UnitOfWorkPort<AppTransactionPorts>;
-	workspaces: WorkspaceRepository;
 	storage: StoragePort;
 };
