@@ -229,3 +229,17 @@
 .editor-flush .bn-editor {
 	padding-inline: 0;
 }
+
+/* The inline canvas block lives inside BlockNote's contenteditable, whose
+   `[contenteditable] * { user-select: text }` cascades into tldraw at the same
+   specificity as tldraw's own `.tl-container * { user-select: none }` and wins
+   on order. On touch that turns a draw gesture into a native text selection
+   (the caret jumps to the text above the canvas, the selection loupe appears),
+   so the canvas is unusable on mobile. Restore tldraw's default with enough
+   specificity to beat the contenteditable rule. The expanded dialog canvas
+   renders in a portal outside the editor, so it is unaffected. */
+.bn-block-content[data-content-type="canvas"] .tl-container,
+.bn-block-content[data-content-type="canvas"] .tl-container * {
+	-webkit-user-select: none;
+	user-select: none;
+}
