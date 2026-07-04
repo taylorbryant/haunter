@@ -10,16 +10,34 @@ import {
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import { setPageSaveState } from "@/features/pages/client/save-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Backlinks } from "./backlinks";
 import { PageIconButton } from "./page-icon-picker";
+
+/**
+ * Body placeholder shaped like a couple of paragraphs. Uses the editor's text
+ * column inset (54px on desktop, flush on mobile) so it lines up with the real
+ * content, and is shared by the data-loading and editor-chunk-loading states
+ * so the two skeletons look identical.
+ */
+function EditorBodySkeleton() {
+	return (
+		<div className="flex flex-col gap-3 px-0 md:px-[54px]" aria-hidden>
+			<Skeleton className="h-4 w-11/12" />
+			<Skeleton className="h-4 w-4/5" />
+			<Skeleton className="h-4 w-full" />
+			<Skeleton className="mt-5 h-4 w-3/4" />
+			<Skeleton className="h-4 w-5/6" />
+			<Skeleton className="h-4 w-2/5" />
+		</div>
+	);
+}
 
 const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
 	ssr: false,
 	loading: () => (
-		<div className="flex flex-col gap-3 px-1 py-2" aria-hidden>
-			<div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-			<div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
-			<div className="h-4 w-3/5 animate-pulse rounded bg-muted" />
+		<div className="py-2">
+			<EditorBodySkeleton />
 		</div>
 	),
 });
@@ -43,8 +61,17 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 	if (pageQuery.isPending) {
 		return (
-			<div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-10">
-				<div className="mx-0 mb-8 h-10 w-1/2 md:mx-[54px] animate-pulse rounded bg-muted" />
+			<div
+				className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-10"
+				aria-hidden
+			>
+				<div className="mb-3 px-0 md:px-[54px]">
+					<Skeleton className="size-10 rounded-lg" />
+				</div>
+				<div className="mb-6 px-0 md:px-[54px]">
+					<Skeleton className="h-9 w-1/2 max-w-xs" />
+				</div>
+				<EditorBodySkeleton />
 			</div>
 		);
 	}
