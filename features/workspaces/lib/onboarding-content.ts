@@ -83,7 +83,7 @@ export function buildOnboardingPages(
 					"Type / anywhere to insert a block: tasks, callouts, code, dividers, canvases, or a link to another page.",
 				),
 				heading("Starter tasks", 3),
-				task("Check off a task — it shows up in My Tasks"),
+				task("Check off a task — it shows up in Tasks"),
 				task("Press / and insert a callout or a code block"),
 				task("Plan your week", { due: today }),
 				heading("Code and SQL", 3),

@@ -5,6 +5,8 @@ export type ExtractedTaskBlock = {
 	title: string;
 	checked: boolean;
 	due: string | null;
+	/** User id from the block's assignee prop; null when unassigned. */
+	assignee: string | null;
 };
 
 type InlineNode = {
@@ -41,11 +43,16 @@ export function extractTaskBlocks(blocks: BlockJson[]): ExtractedTaskBlock[] {
 			if (block.type === "task" && !seen.has(block.id)) {
 				seen.add(block.id);
 				const due = block.props.due;
+				const assignee = block.props.assignee;
 				found.push({
 					blockId: block.id,
 					title: inlineText(block.content),
 					checked: block.props.checked === true,
 					due: typeof due === "string" && due.length > 0 ? due : null,
+					assignee:
+						typeof assignee === "string" && assignee.length > 0
+							? assignee
+							: null,
 				});
 			}
 			if (block.children.length > 0) {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
-import { createTestUserActor } from "@beignet/core/ports/testing";
+import {
+	createTestTenant,
+	createTestUserActor,
+} from "@beignet/core/ports/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
@@ -13,7 +16,6 @@ import {
 	createTestPageLinkRepository,
 	createTestPageRepository,
 } from "@/features/pages/tests/helpers";
-import { createTestWorkspaceRepository } from "@/features/workspaces/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import {
@@ -40,14 +42,12 @@ function taskBlock(
 
 async function createFixture(userId = "user_test") {
 	const pages = createTestPageRepository();
-	const workspaces = createTestWorkspaceRepository();
 	const tasks = createTestTaskRepository({ pages });
-	const workspace = await workspaces.create({
-		userId,
+	// Better Auth org ids are nanoid-style, not UUIDs.
+	const workspace = {
+		id: crypto.randomUUID().replaceAll("-", ""),
 		name: "Work",
-		icon: null,
-		position: 1,
-	});
+	};
 	const page = await pages.create({
 		userId,
 		workspaceId: workspace.id,
@@ -58,21 +58,30 @@ async function createFixture(userId = "user_test") {
 
 	const auth = {
 		user: { id: userId, email: `${userId}@example.com`, name: "Test User" },
-		session: { id: `session_${userId}` },
+		session: { id: `session_${userId}`, activeOrganizationId: workspace.id },
 	};
 	const pageLinks = createTestPageLinkRepository({ pages });
+	// Workspace roster for assignee validation.
+	const memberIds = new Set([userId, "user_teammate"]);
+	const members = {
+		async findRole(organizationId: string, candidateId: string) {
+			return organizationId === workspace.id && memberIds.has(candidateId)
+				? "member"
+				: null;
+		},
+	};
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
 			gate: appPorts.gate,
+			members,
 			pageLinks,
 			pages,
 			tasks,
-			workspaces,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, pages, tasks, workspaces }),
+			ports: (ports) => ({ ...ports, members, pages, tasks }),
 		},
 	});
 	const createTestContext = createTestContextFactory<
@@ -82,11 +91,13 @@ async function createFixture(userId = "user_test") {
 		ports: fixture.ports,
 		actor: createTestUserActor(auth.user.id, { displayName: auth.user.name }),
 		auth,
+		tenant: createTestTenant(workspace.id),
+		extra: { membership: { role: "owner" } },
 	});
 	const tester = createUseCaseTester<AppContext>(createTestContext);
 	const ctx = await tester.ctx();
 
-	return { pages, workspaces, tasks, workspace, page, tester, ctx };
+	return { pages, tasks, workspace, page, tester, ctx };
 }
 
 describe("task reconciliation on page content save", () => {
@@ -105,7 +116,7 @@ describe("task reconciliation on page content save", () => {
 			{ ctx },
 		);
 
-		const rows = await tasks.listByWorkspace("user_test", workspace.id, "all");
+		const rows = await tasks.listByWorkspace(workspace.id, "all");
 		expect(rows).toHaveLength(2);
 
 		const shipped = rows.find((row) => row.sourceBlockId === "b1");
@@ -127,11 +138,7 @@ describe("task reconciliation on page content save", () => {
 			{ id: page.id, content: [taskBlock("b1", "Task", { checked: true })] },
 			{ ctx },
 		);
-		const [first] = await tasks.listByWorkspace(
-			"user_test",
-			workspace.id,
-			"all",
-		);
+		const [first] = await tasks.listByWorkspace(workspace.id, "all");
 		const stampedAt = first?.completedAt;
 		expect(stampedAt).not.toBeNull();
 
@@ -144,11 +151,7 @@ describe("task reconciliation on page content save", () => {
 			},
 			{ ctx },
 		);
-		const [renamed] = await tasks.listByWorkspace(
-			"user_test",
-			workspace.id,
-			"all",
-		);
+		const [renamed] = await tasks.listByWorkspace(workspace.id, "all");
 		expect(renamed?.title).toBe("Task renamed");
 		expect(renamed?.completedAt).toBe(stampedAt ?? null);
 
@@ -161,11 +164,7 @@ describe("task reconciliation on page content save", () => {
 			},
 			{ ctx },
 		);
-		const [reopened] = await tasks.listByWorkspace(
-			"user_test",
-			workspace.id,
-			"all",
-		);
+		const [reopened] = await tasks.listByWorkspace(workspace.id, "all");
 		expect(reopened?.completed).toBe(false);
 		expect(reopened?.completedAt).toBeNull();
 	});
@@ -190,7 +189,7 @@ describe("task reconciliation on page content save", () => {
 			{ ctx },
 		);
 
-		const rows = await tasks.listByWorkspace("user_test", workspace.id, "all");
+		const rows = await tasks.listByWorkspace(workspace.id, "all");
 		expect(rows.map((row) => row.id)).toEqual([standalone.id]);
 	});
 
@@ -215,7 +214,7 @@ describe("tasks use cases", () => {
 			{ id: page.id, content: [taskBlock("b1", "Toggle me")] },
 			{ ctx },
 		);
-		const [row] = await tasks.listByWorkspace("user_test", workspace.id, "all");
+		const [row] = await tasks.listByWorkspace(workspace.id, "all");
 		if (!row) throw new Error("Expected a task row.");
 
 		const updated = await tester.run(
@@ -242,7 +241,7 @@ describe("tasks use cases", () => {
 			{ id: page.id, content: [taskBlock("b1", "Page task")] },
 			{ ctx },
 		);
-		const [row] = await tasks.listByWorkspace("user_test", workspace.id, "all");
+		const [row] = await tasks.listByWorkspace(workspace.id, "all");
 		if (!row) throw new Error("Expected a task row.");
 
 		await expect(
@@ -266,7 +265,7 @@ describe("tasks use cases", () => {
 			{ id: page.id, content: [taskBlock("b1", "Soon gone")] },
 			{ ctx },
 		);
-		const [row] = await tasks.listByWorkspace("user_test", workspace.id, "all");
+		const [row] = await tasks.listByWorkspace(workspace.id, "all");
 		if (!row) throw new Error("Expected a task row.");
 
 		// Simulate the block disappearing without a reconciling save.
@@ -329,9 +328,8 @@ describe("tasks use cases", () => {
 		expect(all.items).toHaveLength(0);
 	});
 
-	it("denies updates to another user's task", async () => {
-		const { workspace, tester, ctx, pages, tasks, workspaces } =
-			await createFixture();
+	it("denies updates to a task in another workspace", async () => {
+		const { workspace, tester, ctx, pages, tasks } = await createFixture();
 
 		const task = await tester.run(
 			createTaskUseCase,
@@ -339,13 +337,18 @@ describe("tasks use cases", () => {
 			{ ctx },
 		);
 
+		// A member whose active workspace is a different tenant is denied.
+		const intruderWorkspaceId = crypto.randomUUID();
 		const intruderAuth = {
 			user: {
 				id: "user_intruder",
 				email: "user_intruder@example.com",
 				name: "Intruder",
 			},
-			session: { id: "session_intruder" },
+			session: {
+				id: "session_intruder",
+				activeOrganizationId: intruderWorkspaceId,
+			},
 		};
 		const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 			base: appPorts,
@@ -354,11 +357,10 @@ describe("tasks use cases", () => {
 				pageLinks: createTestPageLinkRepository({ pages }),
 				pages,
 				tasks,
-				workspaces,
 				devtools: createInMemoryDevtools(),
 			},
 			transaction: {
-				ports: (ports) => ({ ...ports, pages, tasks, workspaces }),
+				ports: (ports) => ({ ...ports, pages, tasks }),
 			},
 		});
 		const intruder = createUseCaseTester<AppContext>(
@@ -368,6 +370,8 @@ describe("tasks use cases", () => {
 					displayName: "Intruder",
 				}),
 				auth: intruderAuth,
+				tenant: createTestTenant(intruderWorkspaceId),
+				extra: { membership: { role: "owner" } },
 			}),
 		);
 		const intruderCtx = await intruder.ctx();
@@ -378,6 +382,137 @@ describe("tasks use cases", () => {
 				{ id: task.id, completed: true },
 				{ ctx: intruderCtx },
 			),
-		).rejects.toThrow("Only the owner can update this task.");
+		).rejects.toThrow("You do not have access to this task.");
+	});
+});
+
+describe("task assignment", () => {
+	it("quick-add assigns the creator by default; explicit null stays unassigned", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+
+		const mine = await tester.run(
+			createTaskUseCase,
+			{ workspaceId: workspace.id, title: "For me" },
+			{ ctx },
+		);
+		expect(mine.assigneeId).toBe("user_test");
+
+		const unassigned = await tester.run(
+			createTaskUseCase,
+			{ workspaceId: workspace.id, title: "For anyone", assigneeId: null },
+			{ ctx },
+		);
+		expect(unassigned.assigneeId).toBeNull();
+	});
+
+	it("rejects assigning to a non-member", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+
+		await expect(
+			tester.run(
+				createTaskUseCase,
+				{
+					workspaceId: workspace.id,
+					title: "Nope",
+					assigneeId: "user_stranger",
+				},
+				{ ctx },
+			),
+		).rejects.toThrow("not a member");
+
+		const task = await tester.run(
+			createTaskUseCase,
+			{ workspaceId: workspace.id, title: "Mine" },
+			{ ctx },
+		);
+		await expect(
+			tester.run(
+				updateTaskUseCase,
+				{ id: task.id, assigneeId: "user_stranger" },
+				{ ctx },
+			),
+		).rejects.toThrow("not a member");
+	});
+
+	it("write-through: assigning from the list updates the source block", async () => {
+		const { pages, tasks, page, tester, ctx } = await createFixture();
+
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [taskBlock("b-assign", "Shared work")] },
+			{ ctx },
+		);
+		const [row] = await tasks.listByPage(page.id);
+		expect(row.assigneeId).toBeNull();
+
+		await tester.run(
+			updateTaskUseCase,
+			{ id: row.id, assigneeId: "user_teammate" },
+			{ ctx },
+		);
+
+		const updated = await tasks.findById(row.id);
+		expect(updated?.assigneeId).toBe("user_teammate");
+		const doc = await pages.findById(page.id);
+		const block = doc?.content.find((candidate) => candidate.id === "b-assign");
+		expect(block?.props.assignee).toBe("user_teammate");
+	});
+
+	it("reconciles the assignee from block props on save", async () => {
+		const { tasks, page, tester, ctx } = await createFixture();
+
+		await tester.run(
+			savePageContentUseCase,
+			{
+				id: page.id,
+				content: [
+					taskBlock("b-owned", "Theirs", { assignee: "user_teammate" }),
+				],
+			},
+			{ ctx },
+		);
+		let [row] = await tasks.listByPage(page.id);
+		expect(row.assigneeId).toBe("user_teammate");
+
+		// Clearing the prop unassigns the row.
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [taskBlock("b-owned", "Theirs")] },
+			{ ctx },
+		);
+		[row] = await tasks.listByPage(page.id);
+		expect(row.assigneeId).toBeNull();
+	});
+
+	it("lists every member's tasks workspace-wide", async () => {
+		const { pages, workspace, tester, ctx } = await createFixture();
+
+		// A page created by a different member; its reconciled task rows carry
+		// that member as creator.
+		const theirPage = await pages.create({
+			userId: "user_teammate",
+			workspaceId: workspace.id,
+			parentPageId: null,
+			title: "Teammate notes",
+			position: 2,
+		});
+		await tester.run(
+			savePageContentUseCase,
+			{ id: theirPage.id, content: [taskBlock("b-theirs", "Their task")] },
+			{ ctx },
+		);
+		await tester.run(
+			createTaskUseCase,
+			{ workspaceId: workspace.id, title: "My quick-add" },
+			{ ctx },
+		);
+
+		const listed = await tester.run(
+			listTasksUseCase,
+			{ workspaceId: workspace.id, filter: "all" },
+			{ ctx },
+		);
+		const titles = listed.items.map((item) => item.title).sort();
+		expect(titles).toEqual(["My quick-add", "Their task"]);
 	});
 });

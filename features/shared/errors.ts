@@ -41,6 +41,11 @@ export const errors = defineErrors({
 		status: 404,
 		message: "Canvas not found",
 	},
+	ShareNotFound: {
+		code: "SHARE_NOT_FOUND",
+		status: 404,
+		message: "This shared page is no longer available",
+	},
 });
 
 export const appError = createAppError(errors);

@@ -8,6 +8,7 @@ export type NewTask = {
 	title: string;
 	completed: boolean;
 	dueDate: string | null;
+	assigneeId: string | null;
 	completedAt: string | null;
 };
 
@@ -15,12 +16,13 @@ export type UpdateTaskData = {
 	title?: string;
 	completed?: boolean;
 	dueDate?: string | null;
+	assigneeId?: string | null;
 	completedAt?: string | null;
 };
 
 export interface TaskRepository {
+	/** Every member sees the whole workspace's tasks; "mine" filters client-side. */
 	listByWorkspace(
-		userId: string,
 		workspaceId: string,
 		filter: TaskFilter,
 	): Promise<TaskWithPage[]>;

@@ -7,8 +7,6 @@ import { createTestApp, createTestRequester } from "@beignet/web/testing";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
-import type { WorkspaceRepository } from "@/features/workspaces/ports";
-import { createTestWorkspaceRepository } from "@/features/workspaces/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
 import type { AuthRequest, AuthSessionMetadata, AuthUser } from "@/ports/auth";
@@ -27,27 +25,33 @@ import {
 	createTestPageRepository,
 } from "./helpers";
 
-function createSignedInAuth(userId: string): AppPorts["auth"] {
+function createSignedInAuth(
+	userId: string,
+	workspaceId: string,
+): AppPorts["auth"] {
 	return createStaticAuth<AuthUser, AuthSessionMetadata, AuthRequest>({
 		user: { id: userId, email: `${userId}@example.com`, name: "Test User" },
-		session: { id: `session_${userId}` },
+		// The active organization is the request tenant.
+		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	});
 }
 
-async function createPagesTestApp(options: {
-	auth: AppPorts["auth"];
-	workspaces?: WorkspaceRepository;
-}) {
-	const workspaces = options.workspaces ?? createTestWorkspaceRepository();
+async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository();
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
+	// Every signed-in test user is an owner of their active workspace.
+	const members = {
+		async findRole() {
+			return "owner";
+		},
+	};
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
 			gate: appPorts.gate,
-			workspaces,
+			members,
 			pageLinks,
 			pages,
 			tasks,
@@ -58,7 +62,7 @@ async function createPagesTestApp(options: {
 		transaction: {
 			ports: (ports) => ({
 				...ports,
-				workspaces,
+				members,
 				pageLinks,
 				pages,
 				tasks,
@@ -78,21 +82,14 @@ async function createPagesTestApp(options: {
 		routes: defineRoutes<AppContext>([pageRoutes]),
 	});
 
-	return { app, workspaces };
+	return { app };
 }
 
 describe("pageRoutes", () => {
 	it("supports the full page lifecycle over HTTP", async () => {
-		const workspaces = createTestWorkspaceRepository();
-		const workspace = await workspaces.create({
-			userId: "user_test",
-			name: "Work",
-			icon: null,
-			position: 1,
-		});
+		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
 		const { app } = await createPagesTestApp({
-			auth: createSignedInAuth("user_test"),
-			workspaces,
+			auth: createSignedInAuth("user_test", workspace.id),
 		});
 		const requester = createTestRequester(app, {});
 
@@ -149,16 +146,9 @@ describe("pageRoutes", () => {
 	});
 
 	it("returns 422 for a cyclic move", async () => {
-		const workspaces = createTestWorkspaceRepository();
-		const workspace = await workspaces.create({
-			userId: "user_test",
-			name: "Work",
-			icon: null,
-			position: 1,
-		});
+		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
 		const { app } = await createPagesTestApp({
-			auth: createSignedInAuth("user_test"),
-			workspaces,
+			auth: createSignedInAuth("user_test", workspace.id),
 		});
 		const requester = createTestRequester(app, {});
 

@@ -1,0 +1,107 @@
+import { describe, expect, it } from "bun:test";
+import { createUseCaseTester } from "@beignet/core/application";
+import {
+	createTestTenant,
+	createTestUserActor,
+} from "@beignet/core/ports/testing";
+import {
+	createTestContextFactory,
+	createTestPorts,
+} from "@beignet/core/testing";
+import { createInMemoryDevtools } from "@beignet/devtools";
+import type { AppContext } from "@/app-context";
+import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import {
+	createTestPageLinkRepository,
+	createTestPageRepository,
+} from "@/features/pages/tests/helpers";
+import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
+import { appPorts } from "@/infra/app-ports";
+import type { AppTransactionPorts } from "@/ports";
+import { onboardUserUseCase } from "../use-cases";
+
+async function createFixture(role = "owner") {
+	const pages = createTestPageRepository();
+	const tasks = createTestTaskRepository({ pages });
+	// Better Auth org ids are nanoid-style, not UUIDs.
+	const workspaceId = crypto.randomUUID().replaceAll("-", "");
+	const auth = {
+		user: { id: "user_test", email: "user_test@example.com", name: "Test" },
+		session: { id: "session_test", activeOrganizationId: workspaceId },
+	};
+	const canvases = createTestCanvasRepository();
+	const pageLinks = createTestPageLinkRepository({ pages });
+	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
+		base: appPorts,
+		overrides: {
+			gate: appPorts.gate,
+			canvases,
+			pageLinks,
+			pages,
+			tasks,
+			devtools: createInMemoryDevtools(),
+		},
+		transaction: {
+			ports: (ports) => ({ ...ports, canvases, pageLinks, pages, tasks }),
+		},
+	});
+	const createTestContext = createTestContextFactory<
+		AppContext,
+		AppContext["ports"]
+	>({
+		ports: fixture.ports,
+		actor: createTestUserActor(auth.user.id, { displayName: "Test" }),
+		auth,
+		tenant: createTestTenant(workspaceId),
+		extra: { membership: { role } },
+	});
+	const tester = createUseCaseTester<AppContext>(createTestContext);
+	const ctx = await tester.ctx();
+
+	return { pages, tasks, workspaceId, tester, ctx };
+}
+
+describe("onboarding", () => {
+	it("seeds an empty workspace and is a no-op on the next call", async () => {
+		const { pages, workspaceId, tester, ctx } = await createFixture();
+
+		const first = await tester.run(onboardUserUseCase, {}, { ctx });
+		expect(first.workspaceId).toBe(workspaceId);
+		expect(first.pageId).not.toBeNull();
+
+		const seeded = await pages.listMetaByWorkspace(workspaceId);
+		expect(seeded.length).toBeGreaterThan(0);
+
+		const second = await tester.run(onboardUserUseCase, {}, { ctx });
+		expect(second.pageId).toBeNull();
+		expect(await pages.listMetaByWorkspace(workspaceId)).toHaveLength(
+			seeded.length,
+		);
+	});
+
+	it("does not re-seed a workspace whose pages are all trashed", async () => {
+		const { pages, workspaceId, tester, ctx } = await createFixture();
+
+		const first = await tester.run(onboardUserUseCase, {}, { ctx });
+		expect(first.pageId).not.toBeNull();
+
+		// Trash everything, as a user clearing out the starter content would.
+		const seeded = await pages.listMetaByWorkspace(workspaceId);
+		await pages.setDeletedByIds(
+			seeded.map((page) => page.id),
+			new Date().toISOString(),
+		);
+
+		const again = await tester.run(onboardUserUseCase, {}, { ctx });
+		expect(again.pageId).toBeNull();
+		expect(await pages.listMetaByWorkspace(workspaceId)).toHaveLength(0);
+	});
+
+	it("is a no-op for read-only members", async () => {
+		const { pages, workspaceId, tester, ctx } = await createFixture("viewer");
+
+		const result = await tester.run(onboardUserUseCase, {}, { ctx });
+		expect(result.pageId).toBeNull();
+		expect(await pages.listMetaByWorkspace(workspaceId)).toHaveLength(0);
+	});
+});

@@ -1,6 +1,5 @@
 import "@beignet/core/server-only";
-import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspace } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { ListTrashInputSchema, ListTrashOutputSchema } from "../schemas";
 
@@ -13,16 +12,7 @@ export const listTrashUseCase = useCase
 	.input(ListTrashInputSchema)
 	.output(ListTrashOutputSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
-
-		const workspace = await ctx.ports.workspaces.findById(input.workspaceId);
-		if (!workspace) {
-			throw appError("WorkspaceNotFound", {
-				details: { id: input.workspaceId },
-			});
-		}
-
-		await ctx.gate.authorize("workspaces.read", workspace);
+		requireActiveWorkspace(ctx, input.workspaceId);
 
 		const trashed = await ctx.ports.pages.listTrashedMetaByWorkspace(
 			input.workspaceId,

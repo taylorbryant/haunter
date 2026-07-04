@@ -25,6 +25,11 @@ export const appContext = defineServerContext<AppContext, AppRuntimePorts>()({
 	request: async ({ req, ports, requestId, trace }) => {
 		const auth = await ports.auth.getSession(req);
 		const tenant = resolveRequestTenant({ auth });
+		// The caller's role in the active workspace gates content-edit rights.
+		const role =
+			auth && tenant
+				? await ports.members.findRole(tenant.id, auth.user.id)
+				: null;
 
 		return {
 			requestId,
@@ -35,6 +40,7 @@ export const appContext = defineServerContext<AppContext, AppRuntimePorts>()({
 			...trace,
 			ports,
 			...(tenant ? { tenant } : {}),
+			...(role ? { membership: { role } } : {}),
 		};
 	},
 	service: ({

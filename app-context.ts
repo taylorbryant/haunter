@@ -17,4 +17,10 @@ export type AppContext = {
 	gate: AppGate;
 	ports: AppRuntimePorts;
 	tenant?: ActivityTenant;
+	membership?: Membership;
 } & Partial<TraceContext>;
+
+/** The caller's membership in the active workspace. */
+export type Membership = {
+	role: string;
+};

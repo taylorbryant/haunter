@@ -95,7 +95,7 @@ function getSlashMenuItems(
 ) {
 	const taskItem = {
 		title: "Task",
-		subtext: "A to-do that also shows up in My Tasks",
+		subtext: "A to-do that also shows up in Tasks",
 		aliases: ["task", "todo", "checkbox", "check"],
 		group: "Basic blocks",
 		icon: <CheckSquareIcon className="size-4.5" />,
@@ -180,11 +180,13 @@ export default function HaunterEditor({
 	pageId,
 	workspaceId,
 	initialContent,
+	editable = true,
 	onSaveStateChange,
 }: {
 	pageId: string;
 	workspaceId: string;
 	initialContent: BlockJson[];
+	editable?: boolean;
 	onSaveStateChange?: (state: SaveState) => void;
 }) {
 	const { resolvedTheme } = useTheme();
@@ -267,6 +269,7 @@ export default function HaunterEditor({
 		<div className={cn("haunter-editor", isMobile && "editor-flush")}>
 			<BlockNoteView
 				editor={editor}
+				editable={editable}
 				onChange={handleChange}
 				theme={resolvedTheme === "dark" ? "dark" : "light"}
 				slashMenu={false}

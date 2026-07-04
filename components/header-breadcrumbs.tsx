@@ -52,7 +52,7 @@ export function HeaderBreadcrumbs() {
 	}
 
 	const section = pathname.endsWith("/tasks")
-		? "My Tasks"
+		? "Tasks"
 		: pathname.endsWith("/trash")
 			? "Trash"
 			: null;

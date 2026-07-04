@@ -27,7 +27,7 @@ export const PageContentSchema = z.array(BlockJsonSchema);
 export const PageMetaSchema = z.object({
 	id: z.string().uuid(),
 	userId: z.string(),
-	workspaceId: z.string().uuid(),
+	workspaceId: z.string().min(1),
 	parentPageId: z.string().uuid().nullable(),
 	title: z.string(),
 	icon: z.string().nullable(),
@@ -42,7 +42,7 @@ export const PageSchema = PageMetaSchema.extend({
 });
 
 export const ListPagesInputSchema = z.object({
-	workspaceId: z.string().uuid(),
+	workspaceId: z.string().min(1),
 });
 
 export const ListPagesOutputSchema = z.object({
@@ -54,7 +54,7 @@ export const PageIdInputSchema = z.object({
 });
 
 export const CreatePageInputSchema = z.object({
-	workspaceId: z.string().uuid(),
+	workspaceId: z.string().min(1),
 	parentPageId: z.string().uuid().optional(),
 	title: z.string().max(300),
 });
@@ -84,7 +84,7 @@ export const SavePageContentOutputSchema = z.object({
 export const DeletePageOutputSchema = z.void();
 
 export const ListTrashInputSchema = z.object({
-	workspaceId: z.string().uuid(),
+	workspaceId: z.string().min(1),
 });
 
 export const ListTrashOutputSchema = z.object({
@@ -101,8 +101,7 @@ export const SearchPagesInputSchema = z.object({
 
 export const SearchResultSchema = z.object({
 	id: z.string().uuid(),
-	workspaceId: z.string().uuid(),
-	workspaceName: z.string(),
+	workspaceId: z.string().min(1),
 	title: z.string(),
 	icon: z.string().nullable(),
 	/** Text around the first body match, or the page's opening text. */

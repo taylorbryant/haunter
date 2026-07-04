@@ -11,20 +11,19 @@ import type {
 import type { ResendMailEscapeHatch } from "@beignet/provider-mail-resend";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import type { canvasPolicy } from "@/features/canvases/policy";
+import type { MemberRepository } from "@/features/members/ports";
 import type {
 	PageLinkRepository,
 	PageRepository,
 } from "@/features/pages/ports";
 import type { pagePolicy } from "@/features/pages/policy";
 import type { AuthorizationContext } from "@/features/shared/authorization";
+import type { ShareRepository } from "@/features/shares/ports";
 import type { TaskRepository } from "@/features/tasks/ports";
 import type { taskPolicy } from "@/features/tasks/policy";
-import type { WorkspaceRepository } from "@/features/workspaces/ports";
-import type { workspacePolicy } from "@/features/workspaces/policy";
 import type { AuthPort } from "./auth";
 
 export type AppPolicies = [
-	typeof workspacePolicy,
 	typeof pagePolicy,
 	typeof taskPolicy,
 	typeof canvasPolicy,
@@ -33,10 +32,11 @@ export type AppPolicies = [
 export type AppTransactionPorts = {
 	canvases: CanvasRepository;
 	idempotency: IdempotencyPort;
+	members: MemberRepository;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
+	shares: ShareRepository;
 	tasks: TaskRepository;
-	workspaces: WorkspaceRepository;
 };
 
 export type AppGate = BoundGate<AppPolicies>;
@@ -48,12 +48,13 @@ export type AppPorts = {
 	gate: GatePort<AuthorizationContext, AppPolicies>;
 	idempotency: IdempotencyPort;
 	logger: LoggerPort;
+	members: MemberRepository;
 	mailer: MailerPort;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
 	resend: ResendMailEscapeHatch;
+	shares: ShareRepository;
 	tasks: TaskRepository;
 	uow: UnitOfWorkPort<AppTransactionPorts>;
-	workspaces: WorkspaceRepository;
 	storage: StoragePort;
 };

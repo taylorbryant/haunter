@@ -18,6 +18,8 @@ export type AuthSessionMetadata = {
 	id?: string;
 	tenantId?: string;
 	organizationId?: string;
+	// Better Auth organization plugin: the active workspace for this session.
+	activeOrganizationId?: string | null;
 };
 
 export type AuthSession = BeignetAuthSession<AuthUser, AuthSessionMetadata>;

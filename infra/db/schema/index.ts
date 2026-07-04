@@ -33,6 +33,8 @@ export const session = sqliteTable("session", {
 	userId: text("user_id")
 		.notNull()
 		.references(() => user.id, { onDelete: "cascade" }),
+	// Better Auth organization plugin: the workspace the session is scoped to.
+	activeOrganizationId: text("active_organization_id"),
 });
 
 export const account = sqliteTable("account", {
@@ -66,22 +68,53 @@ export const verification = sqliteTable("verification", {
 	updatedAt: integer("updated_at", { mode: "timestamp" }),
 });
 
-export const workspaces = sqliteTable(
-	"workspaces",
+// Better Auth organization plugin tables. A "workspace" in the product is an
+// organization here; members carry the role that drives page/task/canvas
+// authorization.
+export const organization = sqliteTable("organization", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	slug: text("slug").notNull().unique(),
+	logo: text("logo"),
+	metadata: text("metadata"),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const member = sqliteTable(
+	"member",
 	{
 		id: text("id").primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
 		userId: text("user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		name: text("name").notNull(),
-		icon: text("icon"),
-		position: real("position").notNull(),
-		createdAt: text("created_at").notNull(),
+		role: text("role").notNull().default("member"),
+		createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 	},
 	(table) => ({
-		userIdx: index("workspaces_user_idx").on(table.userId),
+		orgUserIdx: uniqueIndex("member_org_user_idx").on(
+			table.organizationId,
+			table.userId,
+		),
 	}),
 );
+
+export const invitation = sqliteTable("invitation", {
+	id: text("id").primaryKey(),
+	organizationId: text("organization_id")
+		.notNull()
+		.references(() => organization.id, { onDelete: "cascade" }),
+	email: text("email").notNull(),
+	role: text("role"),
+	status: text("status").notNull().default("pending"),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	inviterId: text("inviter_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+});
 
 export const pages = sqliteTable(
 	"pages",
@@ -92,7 +125,7 @@ export const pages = sqliteTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		workspaceId: text("workspace_id")
 			.notNull()
-			.references(() => workspaces.id, { onDelete: "cascade" }),
+			.references(() => organization.id, { onDelete: "cascade" }),
 		parentPageId: text("parent_page_id").references(
 			(): AnySQLiteColumn => pages.id,
 			{ onDelete: "cascade" },
@@ -120,7 +153,12 @@ export const tasks = sqliteTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		workspaceId: text("workspace_id")
 			.notNull()
-			.references(() => workspaces.id, { onDelete: "cascade" }),
+			.references(() => organization.id, { onDelete: "cascade" }),
+		// The member a task is assigned to (null = unassigned). Drives "My Tasks"
+		// once a workspace has more than one person.
+		assigneeId: text("assignee_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		pageId: text("page_id").references(() => pages.id, {
 			onDelete: "cascade",
 		}),
@@ -155,7 +193,7 @@ export const canvases = sqliteTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		workspaceId: text("workspace_id")
 			.notNull()
-			.references(() => workspaces.id, { onDelete: "cascade" }),
+			.references(() => organization.id, { onDelete: "cascade" }),
 		pageId: text("page_id")
 			.notNull()
 			.references(() => pages.id, { onDelete: "cascade" }),
@@ -187,5 +225,28 @@ export const pageLinks = sqliteTable(
 	(table) => ({
 		pk: primaryKey({ columns: [table.sourcePageId, table.targetPageId] }),
 		targetIdx: index("page_links_target_idx").on(table.targetPageId),
+	}),
+);
+
+// Public read-only share links. One active link per page; the row's token is
+// the capability — deleting the row revokes the link.
+export const pageShares = sqliteTable(
+	"page_shares",
+	{
+		id: text("id").primaryKey(),
+		pageId: text("page_id")
+			.notNull()
+			.references(() => pages.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		token: text("token").notNull().unique(),
+		createdBy: text("created_by")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		createdAt: text("created_at").notNull(),
+	},
+	(table) => ({
+		pageIdx: uniqueIndex("page_shares_page_idx").on(table.pageId),
 	}),
 );

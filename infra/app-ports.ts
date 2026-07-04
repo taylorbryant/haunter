@@ -4,11 +4,10 @@ import { canvasPolicy } from "@/features/canvases/policy";
 import { pagePolicy } from "@/features/pages/policy";
 import { appError } from "@/features/shared/errors";
 import { taskPolicy } from "@/features/tasks/policy";
-import { workspacePolicy } from "@/features/workspaces/policy";
 import type { AppPorts } from "@/ports";
 
 const gate = createGate({
-	policies: [workspacePolicy, pagePolicy, taskPolicy, canvasPolicy],
+	policies: [pagePolicy, taskPolicy, canvasPolicy],
 	onDeny(decision) {
 		return appError("Forbidden", {
 			message: decision.reason ?? "Forbidden",
@@ -35,12 +34,13 @@ export const appPorts = definePorts<AppPorts>()({
 		"idempotency",
 		"logger",
 		"mailer",
+		"members",
 		"pageLinks",
 		"pages",
 		"resend",
+		"shares",
 		"tasks",
 		"uow",
-		"workspaces",
 		"storage",
 	],
 });

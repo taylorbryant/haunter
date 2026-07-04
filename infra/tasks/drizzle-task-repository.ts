@@ -21,6 +21,7 @@ function toTask(row: TaskRow): Task {
 		title: row.title,
 		completed: row.completed,
 		dueDate: row.dueDate,
+		assigneeId: row.assigneeId,
 		completedAt: row.completedAt,
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
@@ -32,12 +33,10 @@ export function createDrizzleTaskRepository(
 ): TaskRepository {
 	return {
 		async listByWorkspace(
-			userId: string,
 			workspaceId: string,
 			filter: TaskFilter,
 		): Promise<TaskWithPage[]> {
 			const conditions = [
-				eq(schema.tasks.userId, userId),
 				eq(schema.tasks.workspaceId, workspaceId),
 				// Hide tasks whose source page is in the trash. Standalone tasks
 				// produce a NULL join row, which passes this check.
@@ -53,9 +52,14 @@ export function createDrizzleTaskRepository(
 				.select({
 					task: schema.tasks,
 					pageTitle: schema.pages.title,
+					// OTP sign-ups can have an empty name; fall back to the email.
+					assigneeName: sql<
+						string | null
+					>`COALESCE(NULLIF(${schema.user.name}, ''), ${schema.user.email})`,
 				})
 				.from(schema.tasks)
 				.leftJoin(schema.pages, eq(schema.tasks.pageId, schema.pages.id))
+				.leftJoin(schema.user, eq(schema.tasks.assigneeId, schema.user.id))
 				.where(and(...conditions))
 				.orderBy(
 					// Due tasks first (soonest first), then undated by creation.
@@ -67,6 +71,7 @@ export function createDrizzleTaskRepository(
 			return rows.map((row) => ({
 				...toTask(row.task),
 				pageTitle: row.pageTitle ?? null,
+				assigneeName: row.assigneeName ?? null,
 			}));
 		},
 		async listByPage(pageId: string) {
@@ -97,6 +102,7 @@ export function createDrizzleTaskRepository(
 				title: input.title,
 				completed: input.completed,
 				dueDate: input.dueDate,
+				assigneeId: input.assigneeId,
 				completedAt: input.completedAt,
 				createdAt: now,
 				updatedAt: now,

@@ -23,6 +23,8 @@ export function resolveServiceTenant(
 
 function tenantIdFromAuth(auth: AuthSession) {
 	return (
+		// Better Auth's organization plugin writes the active workspace here.
+		stringProperty(auth.session, "activeOrganizationId") ??
 		stringProperty(auth.session, "tenantId") ??
 		stringProperty(auth.session, "organizationId") ??
 		stringProperty(auth.user, "tenantId") ??

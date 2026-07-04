@@ -108,14 +108,18 @@ export function createDrizzlePageRepository(
 
 			return row ? toPageMeta(row) : null;
 		},
-		async searchByUser(userId: string, needle: string, limit: number) {
+		async searchByWorkspace(
+			workspaceId: string,
+			needle: string,
+			limit: number,
+		) {
 			const pattern = `%${needle.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 			const rows = await db
 				.select()
 				.from(schema.pages)
 				.where(
 					and(
-						eq(schema.pages.userId, userId),
+						eq(schema.pages.workspaceId, workspaceId),
 						isNull(schema.pages.deletedAt),
 						or(
 							sql`${schema.pages.title} LIKE ${pattern} ESCAPE '\\'`,

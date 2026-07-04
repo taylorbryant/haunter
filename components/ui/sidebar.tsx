@@ -191,7 +191,10 @@ function Sidebar({
 					click.stopPropagation();
 					click.preventDefault();
 				};
-				document.addEventListener("click", swallow, { capture: true, once: true });
+				document.addEventListener("click", swallow, {
+					capture: true,
+					once: true,
+				});
 				window.setTimeout(
 					() => document.removeEventListener("click", swallow, true),
 					350,

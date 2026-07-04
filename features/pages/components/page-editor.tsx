@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	getPageQueryOptions,
 	invalidatePages,
@@ -10,7 +12,7 @@ import {
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import { setPageSaveState } from "@/features/pages/client/save-state";
-import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { Backlinks } from "./backlinks";
 import { PageIconButton } from "./page-icon-picker";
 
@@ -48,6 +50,9 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const queryClient = useQueryClient();
 	const pageQuery = useQuery(getPageQueryOptions(pageId));
 	const updatePageMutation = useMutation(updatePageMutationOptions());
+	// Viewers get a read-only surface; the server denies their writes anyway,
+	// but the UI must not pretend edits will stick.
+	const readOnly = !useCanEditWorkspace();
 
 	const [title, setTitle] = useState<string | null>(null);
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,7 +114,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
 			    make a gutter for the block controls; pad the title and its icon
 			    to the same column so they align with block text, Notion-style. */}
 			<div className="group/header">
-				<div className="mb-1 px-0 md:px-[54px]">
+				<div
+					className={cn(
+						"mb-1 px-0 md:px-[54px]",
+						readOnly && "pointer-events-none",
+					)}
+				>
 					<PageIconButton pageId={pageId} icon={page.icon} />
 				</div>
 				<div className="mb-2 px-0 md:px-[54px]">
@@ -117,6 +127,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 						className="w-full border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60"
 						value={shownTitle}
 						placeholder="Untitled"
+						readOnly={readOnly}
 						onChange={(event) => handleTitleChange(event.target.value)}
 						aria-label="Page title"
 					/>
@@ -127,6 +138,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				pageId={pageId}
 				workspaceId={page.workspaceId}
 				initialContent={page.content}
+				editable={!readOnly}
 				onSaveStateChange={setPageSaveState}
 			/>
 			{/* Same 54px inset as the editor content column. */}

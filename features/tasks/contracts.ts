@@ -25,7 +25,7 @@ const tasks = defineContractGroup()
 
 export const listTasks = tasks
 	.get("/api/workspaces/:workspaceId/tasks")
-	.pathParams(z.object({ workspaceId: z.string().uuid() }))
+	.pathParams(z.object({ workspaceId: z.string().min(1) }))
 	.query(z.object({ filter: TaskFilterSchema.optional() }))
 	.errors({
 		Forbidden: errors.Forbidden,

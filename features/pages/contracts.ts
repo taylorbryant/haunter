@@ -31,7 +31,7 @@ const pages = defineContractGroup()
 
 export const listPages = pages
 	.get("/api/workspaces/:workspaceId/pages")
-	.pathParams(z.object({ workspaceId: z.string().uuid() }))
+	.pathParams(z.object({ workspaceId: z.string().min(1) }))
 	.errors({
 		Forbidden: errors.Forbidden,
 		WorkspaceNotFound: errors.WorkspaceNotFound,
@@ -123,7 +123,7 @@ export const deletePage = pages
 
 export const listTrash = pages
 	.get("/api/workspaces/:workspaceId/trash")
-	.pathParams(z.object({ workspaceId: z.string().uuid() }))
+	.pathParams(z.object({ workspaceId: z.string().min(1) }))
 	.errors({
 		Forbidden: errors.Forbidden,
 		WorkspaceNotFound: errors.WorkspaceNotFound,

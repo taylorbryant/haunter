@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
-import { createTestUserActor } from "@beignet/core/ports/testing";
+import {
+	createTestTenant,
+	createTestUserActor,
+} from "@beignet/core/ports/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
@@ -15,8 +18,6 @@ import {
 } from "@/features/pages/tests/helpers";
 import { purgePageUseCase } from "@/features/pages/use-cases";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
-import type { WorkspaceRepository } from "@/features/workspaces/ports";
-import { createTestWorkspaceRepository } from "@/features/workspaces/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import {
@@ -31,13 +32,13 @@ function createTester(
 	repos: {
 		canvases: CanvasRepository;
 		pages: PageRepository;
-		workspaces: WorkspaceRepository;
 	},
+	workspaceId: string,
 ) {
 	const tasks = createTestTaskRepository();
 	const auth = {
 		user: { id: userId, email: `${userId}@example.com`, name: "Test User" },
-		session: { id: `session_${userId}` },
+		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	};
 	const pageLinks = createTestPageLinkRepository({ pages: repos.pages });
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
@@ -60,6 +61,8 @@ function createTester(
 		ports: fixture.ports,
 		actor: createTestUserActor(userId, { displayName: auth.user.name }),
 		auth,
+		tenant: createTestTenant(workspaceId),
+		extra: { membership: { role: "owner" } },
 	});
 
 	return createUseCaseTester<AppContext>(createTestContext);
@@ -68,13 +71,11 @@ function createTester(
 async function createFixture(userId = "user_test") {
 	const canvases = createTestCanvasRepository();
 	const pages = createTestPageRepository();
-	const workspaces = createTestWorkspaceRepository();
-	const workspace = await workspaces.create({
-		userId,
+	// Better Auth org ids are nanoid-style, not UUIDs.
+	const workspace = {
+		id: crypto.randomUUID().replaceAll("-", ""),
 		name: "Work",
-		icon: null,
-		position: 1,
-	});
+	};
 	const page = await pages.create({
 		userId,
 		workspaceId: workspace.id,
@@ -82,10 +83,10 @@ async function createFixture(userId = "user_test") {
 		title: "Diagrams",
 		position: 1,
 	});
-	const tester = createTester(userId, { canvases, pages, workspaces });
+	const tester = createTester(userId, { canvases, pages }, workspace.id);
 	const ctx = await tester.ctx();
 
-	return { canvases, pages, workspaces, workspace, page, tester, ctx };
+	return { canvases, pages, workspace, page, tester, ctx };
 }
 
 describe("canvases use cases", () => {
@@ -118,15 +119,15 @@ describe("canvases use cases", () => {
 		expect(fetched.snapshot).toEqual(snapshot);
 	});
 
-	it("rejects creating a canvas on another user's page", async () => {
-		const { canvases, pages, workspaces, workspace, page } =
+	it("rejects creating a canvas on a page in another workspace", async () => {
+		const { canvases, pages, workspace, page } =
 			await createFixture("user_owner");
 
-		const intruder = createTester("user_intruder", {
-			canvases,
-			pages,
-			workspaces,
-		});
+		const intruder = createTester(
+			"user_intruder",
+			{ canvases, pages },
+			crypto.randomUUID(),
+		);
 		const intruderCtx = await intruder.ctx();
 
 		await expect(
@@ -135,11 +136,11 @@ describe("canvases use cases", () => {
 				{ workspaceId: workspace.id, pageId: page.id },
 				{ ctx: intruderCtx },
 			),
-		).rejects.toThrow("Only the owner can update this page.");
+		).rejects.toThrow("You do not have access to this page.");
 	});
 
-	it("denies reading another user's canvas", async () => {
-		const { canvases, pages, workspaces, workspace, page, tester, ctx } =
+	it("denies reading a canvas in another workspace", async () => {
+		const { canvases, pages, workspace, page, tester, ctx } =
 			await createFixture("user_owner");
 
 		const canvas = await tester.run(
@@ -148,16 +149,16 @@ describe("canvases use cases", () => {
 			{ ctx },
 		);
 
-		const intruder = createTester("user_intruder", {
-			canvases,
-			pages,
-			workspaces,
-		});
+		const intruder = createTester(
+			"user_intruder",
+			{ canvases, pages },
+			crypto.randomUUID(),
+		);
 		const intruderCtx = await intruder.ctx();
 
 		await expect(
 			intruder.run(getCanvasUseCase, { id: canvas.id }, { ctx: intruderCtx }),
-		).rejects.toThrow("Only the owner can read this canvas.");
+		).rejects.toThrow("You do not have access to this canvas.");
 	});
 
 	it("deletes a page's canvases when the page is purged", async () => {

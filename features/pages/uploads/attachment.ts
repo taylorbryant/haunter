@@ -1,7 +1,7 @@
 import { defineUpload } from "@beignet/core/uploads";
 import { z } from "zod";
 import type { AppContext } from "@/app-context";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceId, requireUser } from "@/lib/auth";
 
 export const AttachmentUploadMetadataSchema = z.object({
 	pageId: z.string().uuid(),
@@ -32,20 +32,29 @@ export const AttachmentUpload = defineUpload<
 		cacheControl: "private, max-age=31536000, immutable",
 	},
 	async authorize({ ctx, metadata }) {
-		if (ctx.actor.type !== "user" || !ctx.auth) return false;
+		if (ctx.actor.type !== "user" || !ctx.auth || !ctx.tenant) return false;
 		const page = await ctx.ports.pages.findMetaById(metadata.pageId);
-		return page !== null && page.userId === ctx.auth.user.id;
+		// Any member of the page's workspace may attach to it.
+		return page !== null && page.workspaceId === ctx.tenant.id;
 	},
 	key({ ctx, metadata, uploadId, file }) {
-		const user = requireUser(ctx);
+		// Keys are workspace-scoped so any member can read the attachment; the
+		// read route (app/api/files) checks the caller's active workspace against
+		// this segment.
+		const workspaceId = requireActiveWorkspaceId(ctx);
 		const extension = file.name.includes(".")
-			? file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "")
+			? file.name
+					.split(".")
+					.pop()
+					?.toLowerCase()
+					.replace(/[^a-z0-9]/g, "")
 			: undefined;
 		const suffix = extension ? `.${extension.slice(0, 8)}` : "";
-		return `pages/${user.id}/${metadata.pageId}/${uploadId}${suffix}`;
+		return `pages/${workspaceId}/${metadata.pageId}/${uploadId}${suffix}`;
 	},
 	storageMetadata({ ctx, metadata }) {
 		return {
+			workspaceId: requireActiveWorkspaceId(ctx),
 			userId: requireUser(ctx).id,
 			pageId: metadata.pageId,
 		};

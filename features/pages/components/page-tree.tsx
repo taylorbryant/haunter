@@ -57,6 +57,7 @@ import {
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { cn } from "@/lib/utils";
 import { PageIconPanel } from "./page-icon-picker";
 
@@ -116,6 +117,8 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const pathname = usePathname();
 	const queryClient = useQueryClient();
 	const { isMobile, setOpenMobile } = useSidebar();
+	// Viewers browse the tree but get no create/rename/move/delete controls.
+	const canEdit = useCanEditWorkspace();
 	const pagesQuery = useQuery(listPagesQueryOptions(workspaceId));
 	const createMutation = useMutation(createPageMutationOptions());
 	const updateMutation = useMutation(updatePageMutationOptions());
@@ -292,7 +295,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			// nesting would reveal the parent's actions while hovering any child.
 			<Fragment key={node.id}>
 				<SidebarMenuItem
-					draggable={!isRenaming}
+					draggable={canEdit && !isRenaming}
 					className={cn(
 						dragId === node.id && "opacity-50",
 						dropTarget?.id === node.id &&
@@ -378,11 +381,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 								    and sits over this icon slot; keep the slot but hide the
 								    glyph so the chevron doesn't overlap the emoji. */}
 								{node.icon ? (
-									<span
-										className={cn(
-											isMobile && hasChildren && "invisible",
-										)}
-									>
+									<span className={cn(isMobile && hasChildren && "invisible")}>
 										{node.icon}
 									</span>
 								) : (
@@ -411,7 +410,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							<ChevronRightIcon />
 						</SidebarMenuAction>
 					) : null}
-					{isRenaming ? null : isMobile ? (
+					{!canEdit || isRenaming ? null : isMobile ? (
 						// Mobile: one action button that opens a bottom drawer — bigger
 						// tap targets, and no "+" crowding the row.
 						<Drawer>
@@ -540,19 +539,21 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	return (
 		<SidebarGroup>
 			<SidebarGroupLabel>Pages</SidebarGroupLabel>
-			<SidebarGroupAction
-				title="New page"
-				aria-label="New page"
-				onClick={() => createPage(null)}
-			>
-				<PlusIcon />
-			</SidebarGroupAction>
+			{canEdit ? (
+				<SidebarGroupAction
+					title="New page"
+					aria-label="New page"
+					onClick={() => createPage(null)}
+				>
+					<PlusIcon />
+				</SidebarGroupAction>
+			) : null}
 			<SidebarGroupContent>
 				{pagesQuery.isPending ? (
 					<p className="px-2 text-sidebar-foreground/50 text-xs">Loading…</p>
 				) : tree.length === 0 ? (
 					<p className="px-2 text-sidebar-foreground/50 text-xs">
-						No pages yet. Create one.
+						{canEdit ? "No pages yet. Create one." : "No pages yet."}
 					</p>
 				) : (
 					<SidebarMenu>{tree.map((node) => renderNode(node))}</SidebarMenu>

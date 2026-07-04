@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileTextIcon, Trash2Icon, Undo2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	invalidatePages,
 	invalidateTrash,
@@ -16,6 +17,8 @@ import { invalidateTasks } from "@/features/tasks/client/queries";
 export function TrashList({ workspaceId }: { workspaceId: string }) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	// Viewers can see what's in the trash but not restore or purge.
+	const canEdit = useCanEditWorkspace();
 	const trashQuery = useQuery(listTrashQueryOptions(workspaceId));
 	const restoreMutation = useMutation(restorePageMutationOptions());
 	const purgeMutation = useMutation(purgePageMutationOptions());
@@ -54,49 +57,53 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 							</p>
 						) : null}
 					</div>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						disabled={restoreMutation.isPending}
-						onClick={() =>
-							restoreMutation.mutate(
-								{ path: { id: page.id } },
-								{
-									onSuccess: async (restored) => {
-										await refresh();
-										router.push(`/w/${workspaceId}/p/${restored.id}`);
-									},
-								},
-							)
-						}
-					>
-						<Undo2Icon className="size-3.5" />
-						Restore
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						className="text-destructive hover:text-destructive"
-						disabled={purgeMutation.isPending}
-						onClick={() => {
-							if (
-								!window.confirm(
-									`Permanently delete "${page.title || "Untitled"}" and everything inside it? This cannot be undone.`,
-								)
-							) {
-								return;
-							}
-							purgeMutation.mutate(
-								{ path: { id: page.id } },
-								{ onSuccess: refresh },
-							);
-						}}
-					>
-						<Trash2Icon className="size-3.5" />
-						Delete forever
-					</Button>
+					{canEdit ? (
+						<>
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								disabled={restoreMutation.isPending}
+								onClick={() =>
+									restoreMutation.mutate(
+										{ path: { id: page.id } },
+										{
+											onSuccess: async (restored) => {
+												await refresh();
+												router.push(`/w/${workspaceId}/p/${restored.id}`);
+											},
+										},
+									)
+								}
+							>
+								<Undo2Icon className="size-3.5" />
+								Restore
+							</Button>
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								className="text-destructive hover:text-destructive"
+								disabled={purgeMutation.isPending}
+								onClick={() => {
+									if (
+										!window.confirm(
+											`Permanently delete "${page.title || "Untitled"}" and everything inside it? This cannot be undone.`,
+										)
+									) {
+										return;
+									}
+									purgeMutation.mutate(
+										{ path: { id: page.id } },
+										{ onSuccess: refresh },
+									);
+								}}
+							>
+								<Trash2Icon className="size-3.5" />
+								Delete forever
+							</Button>
+						</>
+					) : null}
 				</li>
 			))}
 		</ul>

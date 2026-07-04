@@ -30,11 +30,12 @@ export const starterDatabaseProvider = createProvider<{
 			AppPorts,
 			| "canvases"
 			| "idempotency"
+			| "members"
 			| "pageLinks"
 			| "pages"
+			| "shares"
 			| "tasks"
 			| "uow"
-			| "workspaces"
 		> = {
 			...repositories,
 			idempotency,

@@ -67,12 +67,16 @@ export function createTestPageRepository(): PageRepository {
 			const page = pages.get(id);
 			return page ? toMeta(page) : null;
 		},
-		async searchByUser(userId: string, needle: string, limit: number) {
+		async searchByWorkspace(
+			workspaceId: string,
+			needle: string,
+			limit: number,
+		) {
 			const lowered = needle.toLowerCase();
 			return Array.from(pages.values())
 				.filter(
 					(page) =>
-						page.userId === userId &&
+						page.workspaceId === workspaceId &&
 						page.deletedAt === null &&
 						(page.title.toLowerCase().includes(lowered) ||
 							JSON.stringify(page.content).toLowerCase().includes(lowered)),

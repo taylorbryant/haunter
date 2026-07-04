@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	CheckIcon,
 	ChevronDownIcon,
@@ -8,9 +7,11 @@ import {
 	PlusIcon,
 	SmilePlusIcon,
 	Trash2Icon,
+	UsersIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { authClient } from "@/client/auth-client";
 import { GhostLogo } from "@/components/ghost-logo";
 import {
 	AlertDialog,
@@ -66,13 +67,19 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import {
-	createWorkspaceMutationOptions,
-	deleteWorkspaceMutationOptions,
-	invalidateWorkspaces,
-	listWorkspacesQueryOptions,
-	updateWorkspaceMutationOptions,
-} from "@/features/workspaces/client/queries";
+import { MembersDialog } from "@/features/members/components/members-dialog";
+import { canManageMembers } from "@/lib/org-access";
+
+// A "workspace" is a Better Auth organization; its emoji lives in the org's
+// `logo` field.
+function slugify(name: string) {
+	const base =
+		name
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/(^-|-$)/g, "") || "workspace";
+	return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+}
 
 export function WorkspaceSwitcher({
 	activeWorkspaceId,
@@ -81,11 +88,8 @@ export function WorkspaceSwitcher({
 }) {
 	const { isMobile } = useSidebar();
 	const router = useRouter();
-	const queryClient = useQueryClient();
-	const workspacesQuery = useQuery(listWorkspacesQueryOptions());
-	const createMutation = useMutation(createWorkspaceMutationOptions());
-	const updateMutation = useMutation(updateWorkspaceMutationOptions());
-	const deleteMutation = useMutation(deleteWorkspaceMutationOptions());
+	const organizationsQuery = authClient.useListOrganizations();
+	const [busy, setBusy] = useState(false);
 
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [name, setName] = useState("");
@@ -94,57 +98,77 @@ export function WorkspaceSwitcher({
 	const [editIcon, setEditIcon] = useState<string | null>(null);
 	const [iconPickerOpen, setIconPickerOpen] = useState(false);
 	const [deleteOpen, setDeleteOpen] = useState(false);
+	const [membersOpen, setMembersOpen] = useState(false);
 
-	const workspaces = workspacesQuery.data?.items ?? [];
+	const workspaces = organizationsQuery.data ?? [];
 	const active = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
-	function create() {
+	// Only offer management actions the caller's role allows; the server
+	// enforces this regardless (Better Auth AC: update is admin+, delete is
+	// owner-only).
+	const activeMemberQuery = authClient.useActiveMember();
+	const myRole = activeMemberQuery.data?.role ?? null;
+	const canEditWorkspace = canManageMembers(myRole);
+	const canDeleteWorkspace = myRole === "owner";
+
+	async function switchTo(id: string) {
+		if (id === activeWorkspaceId) return;
+		await authClient.organization.setActive({ organizationId: id });
+		router.push(`/w/${id}`);
+	}
+
+	async function create() {
 		const trimmed = name.trim();
-		if (!trimmed || createMutation.isPending) return;
-		createMutation.mutate(
-			{ body: { name: trimmed } },
-			{
-				onSuccess: async (workspace) => {
-					setName("");
-					setDialogOpen(false);
-					await invalidateWorkspaces(queryClient);
-					router.push(`/w/${workspace.id}`);
-				},
-			},
-		);
+		if (!trimmed || busy) return;
+		setBusy(true);
+		const { data, error } = await authClient.organization.create({
+			name: trimmed,
+			slug: slugify(trimmed),
+		});
+		if (error || !data) {
+			setBusy(false);
+			return;
+		}
+		await authClient.organization.setActive({ organizationId: data.id });
+		await organizationsQuery.refetch?.();
+		setBusy(false);
+		setName("");
+		setDialogOpen(false);
+		router.push(`/w/${data.id}`);
 	}
 
-	function saveEdit() {
+	async function saveEdit() {
 		const trimmed = editName.trim();
-		if (!active || !trimmed || updateMutation.isPending) return;
-		updateMutation.mutate(
-			{ path: { id: active.id }, body: { name: trimmed, icon: editIcon } },
-			{
-				onSuccess: async () => {
-					setEditOpen(false);
-					await invalidateWorkspaces(queryClient);
-				},
-			},
-		);
+		if (!active || !trimmed || busy) return;
+		setBusy(true);
+		await authClient.organization.update({
+			organizationId: active.id,
+			data: { name: trimmed, logo: editIcon ?? undefined },
+		});
+		await organizationsQuery.refetch?.();
+		setBusy(false);
+		setEditOpen(false);
+		router.refresh();
 	}
 
-	function confirmDelete() {
-		if (!active || deleteMutation.isPending) return;
+	async function confirmDelete() {
+		if (!active || busy) return;
 		const deletedId = active.id;
-		deleteMutation.mutate(
-			{ path: { id: deletedId } },
-			{
-				onSuccess: async () => {
-					setDeleteOpen(false);
-					await invalidateWorkspaces(queryClient);
-					// Leaving the deleted workspace: go to another one, or to the
-					// home route (its empty state) if that was the last workspace.
-					const next = workspaces.find((w) => w.id !== deletedId);
-					router.push(next ? `/w/${next.id}` : "/");
-					router.refresh();
-				},
-			},
-		);
+		setBusy(true);
+		await authClient.organization.delete({ organizationId: deletedId });
+		await organizationsQuery.refetch?.();
+		setBusy(false);
+		setDeleteOpen(false);
+		// Leaving the deleted workspace: switch to another one, or land on the
+		// home route (its empty state) if that was the last workspace.
+		const next = workspaces.find((w) => w.id !== deletedId);
+		if (next) {
+			await authClient.organization.setActive({ organizationId: next.id });
+			router.push(`/w/${next.id}`);
+		} else {
+			router.push("/");
+		}
+		router.refresh();
 	}
 
 	const trigger = (
@@ -152,7 +176,7 @@ export function WorkspaceSwitcher({
 			<GhostLogo className="size-4 shrink-0" />
 			<span className="truncate">
 				{active
-					? `${active.icon ? `${active.icon} ` : ""}${active.name}`
+					? `${active.logo ? `${active.logo} ` : ""}${active.name}`
 					: "Haunter"}
 			</span>
 			<ChevronDownIcon className="opacity-50" />
@@ -161,7 +185,7 @@ export function WorkspaceSwitcher({
 
 	const workspaceItems = workspaces.map((workspace) => ({
 		id: workspace.id,
-		label: `${workspace.icon ? `${workspace.icon} ` : ""}${workspace.name}`,
+		label: `${workspace.logo ? `${workspace.logo} ` : ""}${workspace.name}`,
 		active: workspace.id === activeWorkspaceId,
 	}));
 
@@ -184,7 +208,7 @@ export function WorkspaceSwitcher({
 										<Button
 											variant="ghost"
 											className="h-11 justify-start"
-											onClick={() => router.push(`/w/${workspace.id}`)}
+											onClick={() => switchTo(workspace.id)}
 										>
 											<span className="flex-1 truncate text-left">
 												{workspace.label}
@@ -210,26 +234,40 @@ export function WorkspaceSwitcher({
 											<Button
 												variant="ghost"
 												className="h-11 justify-start"
-												onClick={() => {
-													setEditName(active.name);
-													setEditIcon(active.icon ?? null);
-													setEditOpen(true);
-												}}
+												onClick={() => setMembersOpen(true)}
 											>
-												<PencilIcon />
-												Edit workspace
+												<UsersIcon />
+												Members
 											</Button>
 										</DrawerClose>
-										<DrawerClose asChild>
-											<Button
-												variant="ghost"
-												className="h-11 justify-start text-destructive hover:text-destructive"
-												onClick={() => setDeleteOpen(true)}
-											>
-												<Trash2Icon />
-												Delete workspace
-											</Button>
-										</DrawerClose>
+										{canEditWorkspace ? (
+											<DrawerClose asChild>
+												<Button
+													variant="ghost"
+													className="h-11 justify-start"
+													onClick={() => {
+														setEditName(active.name);
+														setEditIcon(active.logo ?? null);
+														setEditOpen(true);
+													}}
+												>
+													<PencilIcon />
+													Edit workspace
+												</Button>
+											</DrawerClose>
+										) : null}
+										{canDeleteWorkspace ? (
+											<DrawerClose asChild>
+												<Button
+													variant="ghost"
+													className="h-11 justify-start text-destructive hover:text-destructive"
+													onClick={() => setDeleteOpen(true)}
+												>
+													<Trash2Icon />
+													Delete workspace
+												</Button>
+											</DrawerClose>
+										) : null}
 									</>
 								) : null}
 							</div>
@@ -253,10 +291,10 @@ export function WorkspaceSwitcher({
 							{workspaces.map((workspace) => (
 								<DropdownMenuItem
 									key={workspace.id}
-									onSelect={() => router.push(`/w/${workspace.id}`)}
+									onSelect={() => switchTo(workspace.id)}
 								>
 									<span className="truncate">
-										{workspace.icon ? `${workspace.icon} ` : ""}
+										{workspace.logo ? `${workspace.logo} ` : ""}
 										{workspace.name}
 									</span>
 									{workspace.id === activeWorkspaceId ? (
@@ -274,23 +312,31 @@ export function WorkspaceSwitcher({
 							{active ? (
 								<>
 									<DropdownMenuSeparator />
-									<DropdownMenuItem
-										onSelect={() => {
-											setEditName(active.name);
-											setEditIcon(active.icon ?? null);
-											setEditOpen(true);
-										}}
-									>
-										<PencilIcon />
-										Edit workspace
+									<DropdownMenuItem onSelect={() => setMembersOpen(true)}>
+										<UsersIcon />
+										Members
 									</DropdownMenuItem>
-									<DropdownMenuItem
-										className="text-destructive focus:text-destructive"
-										onSelect={() => setDeleteOpen(true)}
-									>
-										<Trash2Icon className="text-destructive" />
-										Delete workspace
-									</DropdownMenuItem>
+									{canEditWorkspace ? (
+										<DropdownMenuItem
+											onSelect={() => {
+												setEditName(active.name);
+												setEditIcon(active.logo ?? null);
+												setEditOpen(true);
+											}}
+										>
+											<PencilIcon />
+											Edit workspace
+										</DropdownMenuItem>
+									) : null}
+									{canDeleteWorkspace ? (
+										<DropdownMenuItem
+											className="text-destructive focus:text-destructive"
+											onSelect={() => setDeleteOpen(true)}
+										>
+											<Trash2Icon className="text-destructive" />
+											Delete workspace
+										</DropdownMenuItem>
+									) : null}
 								</>
 							) : null}
 						</DropdownMenuContent>
@@ -324,11 +370,8 @@ export function WorkspaceSwitcher({
 								/>
 							</div>
 							<DialogFooter>
-								<Button
-									type="submit"
-									disabled={!name.trim() || createMutation.isPending}
-								>
-									{createMutation.isPending ? "Creating…" : "Create workspace"}
+								<Button type="submit" disabled={!name.trim() || busy}>
+									{busy ? "Creating…" : "Create workspace"}
 								</Button>
 							</DialogFooter>
 						</form>
@@ -412,16 +455,15 @@ export function WorkspaceSwitcher({
 								</div>
 							</div>
 							<DialogFooter>
-								<Button
-									type="submit"
-									disabled={!editName.trim() || updateMutation.isPending}
-								>
-									{updateMutation.isPending ? "Saving…" : "Save"}
+								<Button type="submit" disabled={!editName.trim() || busy}>
+									{busy ? "Saving…" : "Save"}
 								</Button>
 							</DialogFooter>
 						</form>
 					</DialogContent>
 				</Dialog>
+
+				<MembersDialog open={membersOpen} onOpenChange={setMembersOpen} />
 
 				<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
 					<AlertDialogContent>
@@ -443,7 +485,7 @@ export function WorkspaceSwitcher({
 									confirmDelete();
 								}}
 							>
-								{deleteMutation.isPending ? "Deleting…" : "Delete"}
+								{busy ? "Deleting…" : "Delete"}
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</AlertDialogContent>

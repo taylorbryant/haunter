@@ -1,12 +1,13 @@
 import { createClient } from "@libsql/client";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { emailOTP } from "better-auth/plugins";
+import { emailOTP, organization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/libsql";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
 import { env } from "@/lib/env";
-import { sendLoginCode } from "@/lib/mail";
+import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
+import { accessControl, roles } from "@/lib/org-access";
 
 const client = createClient({
 	url: env.SQLITE_DB_URL,
@@ -44,6 +45,21 @@ export const auth = betterAuth({
 			expiresIn: 60 * 5,
 			async sendVerificationOTP({ email, otp }) {
 				await sendLoginCode(email, otp);
+			},
+		}),
+		// A "workspace" in the product is an organization here. Members carry a
+		// role (owner/admin/member/viewer) that the app's gate reads to decide
+		// content-edit rights; viewers are read-only.
+		organization({
+			ac: accessControl,
+			roles,
+			async sendInvitationEmail(data) {
+				await sendWorkspaceInvite({
+					email: data.email,
+					inviterName: data.inviter.user.name,
+					workspaceName: data.organization.name,
+					acceptUrl: `${env.APP_URL}/accept-invite/${data.id}`,
+				});
 			},
 		}),
 	],

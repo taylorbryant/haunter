@@ -1,9 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { listWorkspacesQueryOptions } from "@/features/workspaces/client/queries";
+import { authClient } from "@/client/auth-client";
 
 /**
  * The homepage is My Tasks: send the user to their first workspace's task
@@ -11,16 +10,19 @@ import { listWorkspacesQueryOptions } from "@/features/workspaces/client/queries
  */
 export default function HomePage() {
 	const router = useRouter();
-	const workspacesQuery = useQuery(listWorkspacesQueryOptions());
-	const firstWorkspace = workspacesQuery.data?.items[0];
+	const organizationsQuery = authClient.useListOrganizations();
+	const firstWorkspace = organizationsQuery.data?.[0];
 
 	useEffect(() => {
-		if (firstWorkspace) {
-			router.replace(`/w/${firstWorkspace.id}/tasks`);
-		}
+		if (!firstWorkspace) return;
+		authClient.organization
+			.setActive({ organizationId: firstWorkspace.id })
+			.finally(() => {
+				router.replace(`/w/${firstWorkspace.id}/tasks`);
+			});
 	}, [firstWorkspace, router]);
 
-	if (workspacesQuery.isPending || firstWorkspace) {
+	if (organizationsQuery.isPending || firstWorkspace) {
 		return null;
 	}
 

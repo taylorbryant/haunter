@@ -25,10 +25,27 @@ export const updateTaskUseCase = useCase
 				throw appError("TaskNotEditable", { details: { id: input.id } });
 			}
 
+			// Assignees must be members of the task's workspace.
+			if (input.assigneeId !== undefined && input.assigneeId !== null) {
+				const role = await tx.members.findRole(
+					task.workspaceId,
+					input.assigneeId,
+				);
+				if (role === null) {
+					throw appError("Forbidden", {
+						message: "The assignee is not a member of this workspace.",
+						details: { assigneeId: input.assigneeId },
+					});
+				}
+			}
+
 			const now = new Date().toISOString();
 			const updated = await tx.tasks.update(task.id, {
 				...(input.title !== undefined ? { title: input.title } : {}),
 				...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
+				...(input.assigneeId !== undefined
+					? { assigneeId: input.assigneeId }
+					: {}),
 				...(input.completed !== undefined
 					? { completed: input.completed }
 					: {}),
@@ -41,7 +58,9 @@ export const updateTaskUseCase = useCase
 			if (
 				task.pageId !== null &&
 				task.sourceBlockId !== null &&
-				(input.completed !== undefined || input.dueDate !== undefined)
+				(input.completed !== undefined ||
+					input.dueDate !== undefined ||
+					input.assigneeId !== undefined)
 			) {
 				const page = await tx.pages.findById(task.pageId);
 				if (page) {
@@ -53,6 +72,9 @@ export const updateTaskUseCase = useCase
 								? { checked: input.completed }
 								: {}),
 							...(input.dueDate !== undefined ? { due: input.dueDate } : {}),
+							...(input.assigneeId !== undefined
+								? { assignee: input.assigneeId }
+								: {}),
 						},
 					);
 					// A missing block means the row is stale; the next content save

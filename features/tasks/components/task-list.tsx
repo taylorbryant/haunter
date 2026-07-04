@@ -1,11 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { authClient } from "@/client/auth-client";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
+import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import { invalidatePage } from "@/features/pages/client/queries";
 import { TaskComposer } from "@/features/tasks/components/task-composer";
 import {
@@ -34,7 +37,12 @@ function isOverdue(task: TaskWithPage): boolean {
 
 export function TaskList({ workspaceId }: { workspaceId: string }) {
 	const queryClient = useQueryClient();
+	// Viewers see the list but get no add/toggle/edit/delete controls.
+	const canEdit = useCanEditWorkspace();
+	const session = authClient.useSession();
+	const myId = session.data?.user.id ?? null;
 	const [filter, setFilter] = useState<TaskFilter>("open");
+	const [scope, setScope] = useState<"everyone" | "mine">("everyone");
 	const [composing, setComposing] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editTitle, setEditTitle] = useState("");
@@ -44,7 +52,12 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 	const updateMutation = useMutation(updateTaskMutationOptions());
 	const deleteMutation = useMutation(deleteTaskMutationOptions());
 
-	const tasks = tasksQuery.data?.items ?? [];
+	const allTasks = tasksQuery.data?.items ?? [];
+	// The list is workspace-wide; "Mine" is a pure view filter.
+	const tasks =
+		scope === "mine"
+			? allTasks.filter((task) => task.assigneeId === myId)
+			: allTasks;
 
 	async function refresh(task?: TaskWithPage) {
 		await invalidateTasks(queryClient);
@@ -92,7 +105,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 
 	return (
 		<div className="flex flex-col gap-4">
-			{composing ? (
+			{!canEdit ? null : composing ? (
 				<TaskComposer
 					onSubmit={createTask}
 					onCancel={() => setComposing(false)}
@@ -109,7 +122,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 					Add task
 				</Button>
 			)}
-			<div className="flex gap-1">
+			<div className="flex flex-wrap items-center gap-1">
 				{FILTERS.map(({ value, label }) => (
 					<Button
 						key={value}
@@ -121,12 +134,33 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 						{label}
 					</Button>
 				))}
+				<div className="mx-1 h-4 w-px bg-border" />
+				{(
+					[
+						{ value: "everyone", label: "Everyone" },
+						{ value: "mine", label: "Mine" },
+					] as const
+				).map(({ value, label }) => (
+					<Button
+						key={value}
+						type="button"
+						size="sm"
+						variant={scope === value ? "secondary" : "ghost"}
+						onClick={() => setScope(value)}
+					>
+						{label}
+					</Button>
+				))}
 			</div>
 			{tasksQuery.isPending ? (
 				<p className="text-muted-foreground text-sm">Loading…</p>
 			) : tasks.length === 0 ? (
 				<p className="text-muted-foreground text-sm">
-					{filter === "open" ? "No open tasks. Nice." : "Nothing here yet."}
+					{scope === "mine"
+						? "Nothing assigned to you."
+						: filter === "open"
+							? "No open tasks. Nice."
+							: "Nothing here yet."}
 				</p>
 			) : (
 				<ul className="flex flex-col divide-y">
@@ -135,7 +169,11 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 							<input
 								type="checkbox"
 								checked={task.completed}
-								className="size-4 shrink-0 cursor-pointer accent-primary"
+								disabled={!canEdit}
+								className={cn(
+									"size-4 shrink-0 accent-primary",
+									canEdit && "cursor-pointer",
+								)}
 								aria-label={
 									task.completed ? "Mark task open" : "Mark task done"
 								}
@@ -164,13 +202,12 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 										}}
 										onBlur={() => commitTitle(task)}
 									/>
-								) : task.sourceBlockId === null ? (
+								) : task.sourceBlockId === null && canEdit ? (
 									<button
 										type="button"
 										className={cn(
 											"block max-w-full cursor-text truncate text-left text-sm",
-											task.completed &&
-												"text-muted-foreground line-through",
+											task.completed && "text-muted-foreground line-through",
 										)}
 										onClick={() => {
 											setEditTitle(task.title);
@@ -199,27 +236,55 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 									</Link>
 								) : null}
 							</div>
-							<DueDatePicker
-								value={task.dueDate}
+							<AssigneePicker
+								value={task.assigneeId}
+								disabled={!canEdit}
 								onChange={(next) =>
 									updateMutation.mutate(
 										{
 											path: { id: task.id },
-											body: { dueDate: next },
+											body: { assigneeId: next },
 										},
 										{ onSuccess: () => refresh(task) },
 									)
 								}
-								className={cn(
-									"flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
-									task.dueDate === null
-										? "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
-										: isOverdue(task)
+							/>
+							{canEdit ? (
+								<DueDatePicker
+									value={task.dueDate}
+									onChange={(next) =>
+										updateMutation.mutate(
+											{
+												path: { id: task.id },
+												body: { dueDate: next },
+											},
+											{ onSuccess: () => refresh(task) },
+										)
+									}
+									className={cn(
+										"flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
+										task.dueDate === null
+											? "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
+											: isOverdue(task)
+												? "bg-destructive/10 text-destructive"
+												: "bg-muted text-muted-foreground",
+									)}
+								/>
+							) : task.dueDate !== null ? (
+								// Read-only due chip for viewers.
+								<span
+									className={cn(
+										"flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
+										isOverdue(task)
 											? "bg-destructive/10 text-destructive"
 											: "bg-muted text-muted-foreground",
-								)}
-							/>
-							{task.sourceBlockId === null ? (
+									)}
+								>
+									<CalendarIcon className="size-3" />
+									{task.dueDate}
+								</span>
+							) : null}
+							{task.sourceBlockId === null && canEdit ? (
 								<Button
 									type="button"
 									variant="ghost"
