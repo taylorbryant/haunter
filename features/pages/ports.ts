@@ -47,6 +47,15 @@ export interface PageRepository {
 	create(input: NewPage): Promise<PageMeta>;
 	update(id: string, input: UpdatePageData): Promise<PageMeta>;
 	saveContent(id: string, contentJson: string): Promise<{ updatedAt: string }>;
+	/**
+	 * Compare-and-set variant: persist only if the row's updatedAt still
+	 * equals `baseUpdatedAt`. Returns null when the row moved on (stale write).
+	 */
+	saveContentIf(
+		id: string,
+		contentJson: string,
+		baseUpdatedAt: string,
+	): Promise<{ updatedAt: string } | null>;
 	/** Set or clear deletedAt for the given pages. */
 	setDeletedByIds(ids: string[], deletedAt: string | null): Promise<void>;
 	deleteByIds(ids: string[]): Promise<void>;

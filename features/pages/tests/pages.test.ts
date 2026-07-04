@@ -163,6 +163,52 @@ describe("pages use cases", () => {
 		expect(fetched.content).toEqual(content);
 	});
 
+	it("rejects a stale save and accepts one based on the current version", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+
+		const page = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Contested" },
+			{ ctx },
+		);
+		const block = (text: string) => [
+			{
+				id: "block-1",
+				type: "paragraph",
+				props: {},
+				content: [{ type: "text", text, styles: {} }],
+				children: [],
+			},
+		];
+
+		// Writer A saves on top of the created version.
+		const first = await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: block("A"), baseUpdatedAt: page.updatedAt },
+			{ ctx },
+		);
+
+		// Writer B still holds the created version: their save must not clobber A.
+		await expect(
+			tester.run(
+				savePageContentUseCase,
+				{ id: page.id, content: block("B"), baseUpdatedAt: page.updatedAt },
+				{ ctx },
+			),
+		).rejects.toThrow(/changed since/);
+
+		// After rebasing on A's version, B's save lands.
+		const rebased = await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: block("B2"), baseUpdatedAt: first.updatedAt },
+			{ ctx },
+		);
+		expect(rebased.updatedAt >= first.updatedAt).toBe(true);
+
+		const fetched = await tester.run(getPageUseCase, { id: page.id }, { ctx });
+		expect(fetched.content).toEqual(block("B2"));
+	});
+
 	it("rejects moving a page under one of its descendants", async () => {
 		const { workspace, tester, ctx } = await createFixture();
 

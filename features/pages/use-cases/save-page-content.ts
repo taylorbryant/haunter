@@ -24,22 +24,33 @@ export const savePageContentUseCase = useCase
 
 			await ctx.gate.authorize("pages.update", page);
 
-			const result = await tx.pages.saveContent(
-				input.id,
-				JSON.stringify(input.content),
-			);
+			// With a precondition, refuse to clobber a newer version (another
+			// member or another tab saved since this client loaded the doc);
+			// without one (internal writes like task write-through) fall back
+			// to last-write-wins.
+			const contentJson = JSON.stringify(input.content);
+			const result = input.baseUpdatedAt
+				? await tx.pages.saveContentIf(
+						input.id,
+						contentJson,
+						input.baseUpdatedAt,
+					)
+				: await tx.pages.saveContent(input.id, contentJson);
+			if (result === null) {
+				throw appError("StaleWrite", { details: { id: input.id } });
+			}
 
 			// The saved document is the source of truth for its task blocks.
 			await reconcilePageTasks(tx.tasks, page, input.content);
 
 			// Likewise for its outgoing page links: keep only targets that
-			// still exist and belong to the same owner (purged or foreign ids
-			// would break the link table's foreign keys).
+			// still exist and live in the same workspace (purged or foreign
+			// ids would break the link table's foreign keys).
 			const targets: string[] = [];
 			for (const targetId of extractPageLinks(input.content)) {
 				if (targetId === page.id) continue;
 				const target = await tx.pages.findMetaById(targetId);
-				if (target && target.userId === page.userId) {
+				if (target && target.workspaceId === page.workspaceId) {
 					targets.push(targetId);
 				}
 			}

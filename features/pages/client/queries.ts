@@ -16,7 +16,12 @@ import {
 } from "@/features/pages/contracts";
 
 export function listPagesQueryOptions(workspaceId: string) {
-	return rq(listPages).queryOptions({ path: { workspaceId } });
+	return {
+		...rq(listPages).queryOptions({ path: { workspaceId } }),
+		// Shared workspaces: pick up other members' changes without a manual
+		// reload. Paused automatically while the tab is in the background.
+		refetchInterval: 30_000,
+	};
 }
 
 export function getPageQueryOptions(id: string) {

@@ -46,6 +46,11 @@ export const errors = defineErrors({
 		status: 404,
 		message: "This shared page is no longer available",
 	},
+	StaleWrite: {
+		code: "STALE_WRITE",
+		status: 409,
+		message: "This document changed since you loaded it",
+	},
 });
 
 export const appError = createAppError(errors);

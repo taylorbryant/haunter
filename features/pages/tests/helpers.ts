@@ -127,6 +127,26 @@ export function createTestPageRepository(): PageRepository {
 			pages.set(id, { ...page, content: JSON.parse(contentJson), updatedAt });
 			return { updatedAt };
 		},
+		async saveContentIf(
+			id: string,
+			contentJson: string,
+			baseUpdatedAt: string,
+		) {
+			const page = pages.get(id);
+			if (!page) {
+				throw new Error(`Page not found: ${id}`);
+			}
+			if (page.updatedAt !== baseUpdatedAt) {
+				return null;
+			}
+
+			// Strictly after the base version, mirroring the drizzle repo.
+			const updatedAt = new Date(
+				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
+			).toISOString();
+			pages.set(id, { ...page, content: JSON.parse(contentJson), updatedAt });
+			return { updatedAt };
+		},
 		async setDeletedByIds(ids: string[], deletedAt: string | null) {
 			for (const id of ids) {
 				const page = pages.get(id);

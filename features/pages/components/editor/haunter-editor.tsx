@@ -3,6 +3,7 @@
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 
+import { ContractError } from "@beignet/core/client";
 import {
 	type BlockNoteEditor,
 	filterSuggestionItems,
@@ -180,20 +181,28 @@ export default function HaunterEditor({
 	pageId,
 	workspaceId,
 	initialContent,
+	updatedAt,
 	editable = true,
 	onSaveStateChange,
+	onConflict,
 }: {
 	pageId: string;
 	workspaceId: string;
 	initialContent: BlockJson[];
+	/** The document version this editor was initialized from. */
+	updatedAt?: string;
 	editable?: boolean;
 	onSaveStateChange?: (state: SaveState) => void;
+	/** The server rejected a save as stale; the owner should reload the doc. */
+	onConflict?: () => void;
 }) {
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const isMobile = useIsMobile();
 	const [saveState, setSaveState] = useState<SaveState>("saved");
+	// Last server updatedAt this editor saw: the optimistic-concurrency base.
+	const baseUpdatedAtRef = useRef<string | null>(updatedAt ?? null);
 
 	const editor = useCreateBlockNote({
 		schema: editorSchema,
@@ -227,15 +236,32 @@ export default function HaunterEditor({
 		// the next refetch must not initialize the editor from a stale doc.
 		setPageContentInCache(queryClient, pageId, content);
 		saveMutation.mutate(
-			{ path: { id: pageId }, body: { content } },
+			{
+				path: { id: pageId },
+				body: {
+					content,
+					...(baseUpdatedAtRef.current
+						? { baseUpdatedAt: baseUpdatedAtRef.current }
+						: {}),
+				},
+			},
 			{
 				onSuccess: (result) => {
+					baseUpdatedAtRef.current = result.updatedAt;
 					if (!dirtyRef.current) reportState("saved");
 					setPageSavedAtInCache(queryClient, pageId, result.updatedAt);
 					invalidatePage(queryClient, pageId);
 					invalidateBacklinks(queryClient);
 				},
-				onError: () => {
+				onError: (error) => {
+					if (error instanceof ContractError && error.status === 409) {
+						// Someone else saved a newer version. Don't retry over it —
+						// hand off so the owner reloads the doc into a fresh editor.
+						dirtyRef.current = false;
+						reportState("saved");
+						onConflict?.();
+						return;
+					}
 					dirtyRef.current = true;
 					reportState("error");
 				},

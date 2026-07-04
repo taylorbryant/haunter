@@ -2,10 +2,17 @@
 
 import "tldraw/tldraw.css";
 
+import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
-import { type Editor, getSnapshot, Tldraw, type TLStoreSnapshot } from "tldraw";
+import {
+	type Editor,
+	getSnapshot,
+	loadSnapshot,
+	Tldraw,
+	type TLStoreSnapshot,
+} from "tldraw";
 import {
 	getCanvasQueryOptions,
 	saveCanvasSnapshotMutationOptions,
@@ -23,6 +30,11 @@ export default function CanvasSurface({ canvasId }: { canvasId: string }) {
 	const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const flushRef = useRef<() => void>(() => {});
+	// Last server updatedAt this client saw: the optimistic-concurrency base.
+	const baseUpdatedAtRef = useRef<string | null>(null);
+	if (canvasQuery.data && baseUpdatedAtRef.current === null) {
+		baseUpdatedAtRef.current = canvasQuery.data.updatedAt;
+	}
 
 	// Flush a pending snapshot save when the block unmounts.
 	useEffect(() => {
@@ -61,6 +73,22 @@ export default function CanvasSurface({ canvasId }: { canvasId: string }) {
 
 		let dirty = false;
 
+		// Another member (or tab) saved since we loaded: adopt the server's
+		// snapshot rather than clobbering it, and rebase future saves on it.
+		async function reloadFromServer() {
+			const fresh = await queryClient.fetchQuery({
+				...getCanvasQueryOptions(canvasId),
+				staleTime: 0,
+			});
+			baseUpdatedAtRef.current = fresh.updatedAt;
+			if (Object.keys(fresh.snapshot).length > 0) {
+				loadSnapshot(editor.store, {
+					document: fresh.snapshot as unknown as TLStoreSnapshot,
+				});
+			}
+			dirty = false;
+		}
+
 		function save() {
 			if (!dirty) return;
 			dirty = false;
@@ -73,8 +101,30 @@ export default function CanvasSurface({ canvasId }: { canvasId: string }) {
 			// the expanded dialog) never restores a stale drawing.
 			setCanvasSnapshotInCache(queryClient, canvasId, snapshot);
 			saveMutation.mutate(
-				{ path: { id: canvasId }, body: { snapshot } },
-				{ onSettled: () => setSaveState("saved") },
+				{
+					path: { id: canvasId },
+					body: {
+						snapshot,
+						...(baseUpdatedAtRef.current
+							? { baseUpdatedAt: baseUpdatedAtRef.current }
+							: {}),
+					},
+				},
+				{
+					onSuccess: (result) => {
+						baseUpdatedAtRef.current = result.updatedAt;
+					},
+					onError: (error) => {
+						if (error instanceof ContractError && error.status === 409) {
+							void reloadFromServer();
+						} else {
+							// Transient failure: keep the local changes and retry on the
+							// next edit/flush.
+							dirty = true;
+						}
+					},
+					onSettled: () => setSaveState("saved"),
+				},
 			);
 		}
 

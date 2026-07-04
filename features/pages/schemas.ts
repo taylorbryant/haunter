@@ -71,6 +71,10 @@ export const UpdatePageInputSchema =
 
 export const SavePageContentBodySchema = z.object({
 	content: PageContentSchema,
+	// Optimistic-concurrency precondition: the updatedAt the client last saw.
+	// When present and stale, the save is rejected with 409 instead of
+	// clobbering another member's (or another tab's) edits.
+	baseUpdatedAt: z.string().datetime().optional(),
 });
 
 export const SavePageContentInputSchema = PageIdInputSchema.merge(

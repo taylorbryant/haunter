@@ -84,6 +84,7 @@ export const savePageContent = pages
 	.errors({
 		Forbidden: errors.Forbidden,
 		PageNotFound: errors.PageNotFound,
+		StaleWrite: errors.StaleWrite,
 	})
 	.responses({
 		200: SavePageContentOutputSchema,
