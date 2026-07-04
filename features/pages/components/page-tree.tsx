@@ -5,17 +5,30 @@ import {
 	ChevronRightIcon,
 	FileTextIcon,
 	MoreHorizontalIcon,
+	PencilIcon,
 	PlusIcon,
+	SmilePlusIcon,
+	Trash2Icon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import {
+	Drawer,
+	DrawerClose,
+	DrawerContent,
+	DrawerDescription,
+	DrawerHeader,
+	DrawerTitle,
+	DrawerTrigger,
+} from "@/components/ui/drawer";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -398,7 +411,76 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							<ChevronRightIcon />
 						</SidebarMenuAction>
 					) : null}
-					{!isRenaming ? (
+					{isRenaming ? null : isMobile ? (
+						// Mobile: one action button that opens a bottom drawer — bigger
+						// tap targets, and no "+" crowding the row.
+						<Drawer>
+							<DrawerTrigger asChild>
+								<SidebarMenuAction
+									className="right-1 aria-expanded:bg-muted"
+									aria-label="Page actions"
+								>
+									<MoreHorizontalIcon />
+								</SidebarMenuAction>
+							</DrawerTrigger>
+							<DrawerContent>
+								<DrawerHeader className="border-b text-left">
+									<DrawerTitle className="truncate">
+										{node.icon ? `${node.icon} ` : ""}
+										{node.title || "Untitled"}
+									</DrawerTitle>
+									<DrawerDescription className="sr-only">
+										Page actions
+									</DrawerDescription>
+								</DrawerHeader>
+								<div className="flex flex-col p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+									<DrawerClose asChild>
+										<Button
+											variant="ghost"
+											className="h-11 justify-start"
+											onClick={() => createPage(node.id)}
+										>
+											<PlusIcon />
+											Add subpage
+										</Button>
+									</DrawerClose>
+									<DrawerClose asChild>
+										<Button
+											variant="ghost"
+											className="h-11 justify-start"
+											onClick={() => {
+												setRenamingId(node.id);
+												setRenameValue(node.title);
+											}}
+										>
+											<PencilIcon />
+											Rename
+										</Button>
+									</DrawerClose>
+									<DrawerClose asChild>
+										<Button
+											variant="ghost"
+											className="h-11 justify-start"
+											onClick={() => setIconPageId(node.id)}
+										>
+											<SmilePlusIcon />
+											Change icon
+										</Button>
+									</DrawerClose>
+									<DrawerClose asChild>
+										<Button
+											variant="ghost"
+											className="h-11 justify-start text-destructive hover:text-destructive"
+											onClick={() => deletePage(node)}
+										>
+											<Trash2Icon />
+											Move to trash
+										</Button>
+									</DrawerClose>
+								</div>
+							</DrawerContent>
+						</Drawer>
+					) : (
 						<>
 							<DropdownMenu>
 								<DropdownMenuTrigger asChild>
@@ -412,8 +494,8 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 								</DropdownMenuTrigger>
 								<DropdownMenuContent
 									className="w-48 rounded-lg"
-									side={isMobile ? "bottom" : "right"}
-									align={isMobile ? "end" : "start"}
+									side="right"
+									align="start"
 								>
 									<DropdownMenuItem
 										onSelect={() => {
@@ -442,7 +524,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 								<PlusIcon />
 							</SidebarMenuAction>
 						</>
-					) : null}
+					)}
 				</SidebarMenuItem>
 				{isExpanded && hasChildren ? (
 					<li>

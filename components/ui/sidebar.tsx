@@ -174,7 +174,7 @@ function Sidebar({
 	React.useEffect(() => {
 		if (!isMobile) return;
 		const POPPER_SELECTOR =
-			'[data-radix-popper-content-wrapper],[data-slot="dropdown-menu-content"],[data-slot="popover-content"]';
+			'[data-radix-popper-content-wrapper],[data-slot="dropdown-menu-content"],[data-slot="popover-content"],[data-slot="drawer-content"]';
 		const record = (event: PointerEvent) => {
 			const popper = document.querySelector(POPPER_SELECTOR);
 			popperWasOpenRef.current = Boolean(popper);

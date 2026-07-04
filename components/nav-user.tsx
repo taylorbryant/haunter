@@ -14,6 +14,16 @@ import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+	Drawer,
+	DrawerClose,
+	DrawerContent,
+	DrawerDescription,
+	DrawerHeader,
+	DrawerTitle,
+	DrawerTrigger,
+} from "@/components/ui/drawer";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -59,79 +69,127 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
 		router.refresh();
 	}
 
+	const userIdentity = (
+		<>
+			<Avatar>
+				<AvatarFallback>{initials(user.name)}</AvatarFallback>
+			</Avatar>
+			<div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+				<span className="truncate font-medium">{user.name}</span>
+				<span className="truncate font-normal text-xs">{user.email}</span>
+			</div>
+		</>
+	);
+
+	const trigger = (
+		<SidebarMenuButton
+			size="lg"
+			className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+		>
+			{userIdentity}
+			<ChevronsUpDownIcon className="ml-auto size-4" />
+		</SidebarMenuButton>
+	);
+
+	// Inline theme switcher: plain buttons (not menu/close items) so tapping one
+	// changes the theme without closing the menu or drawer.
+	const themeControl = (
+		<div className="flex items-center gap-0.5 rounded-md border p-0.5">
+			{THEME_OPTIONS.map(({ value, icon: Icon, label }) => (
+				<button
+					key={value}
+					type="button"
+					aria-label={label}
+					aria-pressed={theme === value}
+					onClick={() => setTheme(value)}
+					className={cn(
+						"flex size-7 items-center justify-center rounded-sm transition-colors",
+						theme === value
+							? "bg-muted text-foreground"
+							: "text-muted-foreground hover:text-foreground",
+					)}
+				>
+					<Icon className="size-4" />
+				</button>
+			))}
+		</div>
+	);
+
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<SidebarMenuButton
-							size="lg"
-							className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-						>
-							<Avatar>
-								<AvatarFallback>{initials(user.name)}</AvatarFallback>
-							</Avatar>
-							<div className="grid flex-1 text-left text-sm leading-tight">
-								<span className="truncate font-medium">{user.name}</span>
-								<span className="truncate text-xs">{user.email}</span>
-							</div>
-							<ChevronsUpDownIcon className="ml-auto size-4" />
-						</SidebarMenuButton>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent
-						className="w-56 rounded-lg"
-						side={isMobile ? "bottom" : "right"}
-						align="end"
-						sideOffset={4}
-					>
-						<DropdownMenuLabel className="p-0 font-normal">
-							<div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-								<Avatar>
-									<AvatarFallback>{initials(user.name)}</AvatarFallback>
-								</Avatar>
-								<div className="grid flex-1 text-left text-sm leading-tight">
-									<span className="truncate font-medium">{user.name}</span>
-									<span className="truncate text-xs">{user.email}</span>
+				{isMobile ? (
+					<Drawer>
+						<DrawerTrigger asChild>{trigger}</DrawerTrigger>
+						<DrawerContent>
+							<DrawerHeader className="border-b text-left">
+								<DrawerTitle className="flex items-center gap-2 font-normal">
+									{userIdentity}
+								</DrawerTitle>
+								<DrawerDescription className="sr-only">
+									Account menu
+								</DrawerDescription>
+							</DrawerHeader>
+							<div className="flex flex-col gap-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+								<div className="flex items-center justify-between gap-2 px-2 py-1">
+									<span className="text-muted-foreground text-sm">Theme</span>
+									{themeControl}
 								</div>
-							</div>
-						</DropdownMenuLabel>
-						<DropdownMenuSeparator />
-						{/* Inline theme switcher: plain buttons (not menu items) so
-						    tapping one changes the theme without closing the menu. */}
-						<div className="flex items-center justify-between gap-2 px-2 py-1.5">
-							<span className="text-muted-foreground text-xs">Theme</span>
-							<div className="flex items-center gap-0.5 rounded-md border p-0.5">
-								{THEME_OPTIONS.map(({ value, icon: Icon, label }) => (
-									<button
-										key={value}
-										type="button"
-										aria-label={label}
-										aria-pressed={theme === value}
-										onClick={() => setTheme(value)}
-										className={cn(
-											"flex size-6 items-center justify-center rounded-sm transition-colors",
-											theme === value
-												? "bg-muted text-foreground"
-												: "text-muted-foreground hover:text-foreground",
-										)}
+								<DrawerClose asChild>
+									<Button
+										variant="ghost"
+										className="h-11 justify-start"
+										onClick={() => setSettingsOpen(true)}
 									>
-										<Icon className="size-3.5" />
-									</button>
-								))}
+										<SettingsIcon />
+										Settings
+									</Button>
+								</DrawerClose>
+								<DrawerClose asChild>
+									<Button
+										variant="ghost"
+										className="h-11 justify-start"
+										onClick={signOut}
+									>
+										<LogOutIcon />
+										Log out
+									</Button>
+								</DrawerClose>
 							</div>
-						</div>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
-							<SettingsIcon />
-							Settings
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem onSelect={signOut}>
-							<LogOutIcon />
-							Log out
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+						</DrawerContent>
+					</Drawer>
+				) : (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+						<DropdownMenuContent
+							className="w-56 rounded-lg"
+							side="right"
+							align="end"
+							sideOffset={4}
+						>
+							<DropdownMenuLabel className="p-0 font-normal">
+								<div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+									{userIdentity}
+								</div>
+							</DropdownMenuLabel>
+							<DropdownMenuSeparator />
+							<div className="flex items-center justify-between gap-2 px-2 py-1.5">
+								<span className="text-muted-foreground text-xs">Theme</span>
+								{themeControl}
+							</div>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
+								<SettingsIcon />
+								Settings
+							</DropdownMenuItem>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem onSelect={signOut}>
+								<LogOutIcon />
+								Log out
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
 				<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 			</SidebarMenuItem>
 		</SidebarMenu>
