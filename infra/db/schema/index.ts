@@ -170,6 +170,11 @@ export const tasks = sqliteTable(
 		workspaceId: text("workspace_id")
 			.notNull()
 			.references(() => workspaces.id, { onDelete: "cascade" }),
+		// The member a task is assigned to (null = unassigned). Drives "My Tasks"
+		// once a workspace has more than one person.
+		assigneeId: text("assignee_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		pageId: text("page_id").references(() => pages.id, {
 			onDelete: "cascade",
 		}),

@@ -1,0 +1,1 @@
+ALTER TABLE `tasks` ADD `assignee_id` text REFERENCES user(id);
