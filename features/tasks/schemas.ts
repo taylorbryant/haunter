@@ -6,6 +6,7 @@ const DueDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
 
 export const TaskSchema = z.object({
 	id: z.string().uuid(),
+	/** The member who created the task — not necessarily who it's for. */
 	userId: z.string(),
 	workspaceId: z.string().min(1),
 	pageId: z.string().uuid().nullable(),
@@ -13,6 +14,8 @@ export const TaskSchema = z.object({
 	title: z.string(),
 	completed: z.boolean(),
 	dueDate: DueDateSchema.nullable(),
+	/** The member responsible for the task; null when unassigned. */
+	assigneeId: z.string().nullable(),
 	completedAt: z.string().datetime().nullable(),
 	createdAt: z.string().datetime(),
 	updatedAt: z.string().datetime(),
@@ -20,6 +23,8 @@ export const TaskSchema = z.object({
 
 export const TaskWithPageSchema = TaskSchema.extend({
 	pageTitle: z.string().nullable(),
+	/** Assignee display name, resolved at read time. */
+	assigneeName: z.string().nullable(),
 });
 
 export const TaskFilterSchema = z
@@ -43,12 +48,16 @@ export const CreateTaskInputSchema = z.object({
 	workspaceId: z.string().min(1),
 	title: z.string().min(1).max(300),
 	dueDate: DueDateSchema.optional(),
+	// Omitted = assign to the creator (quick-add is "a task for me").
+	// Explicit null = create unassigned.
+	assigneeId: z.string().nullable().optional(),
 });
 
 export const UpdateTaskBodySchema = z.object({
 	completed: z.boolean().optional(),
 	dueDate: DueDateSchema.nullable().optional(),
 	title: z.string().min(1).max(300).optional(),
+	assigneeId: z.string().nullable().optional(),
 });
 
 export const UpdateTaskInputSchema =

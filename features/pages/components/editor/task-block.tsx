@@ -3,6 +3,7 @@
 import { createExtension } from "@blocknote/core";
 import { createReactBlockSpec } from "@blocknote/react";
 import { DueDatePicker } from "@/components/due-date-picker";
+import { AssigneePicker } from "@/features/members/components/assignee-picker";
 
 export const taskBlockSpec = createReactBlockSpec(
 	{
@@ -10,18 +11,25 @@ export const taskBlockSpec = createReactBlockSpec(
 		propSchema: {
 			checked: { default: false },
 			due: { default: "" },
+			// Assigned member's user id; "" = unassigned. Reconciled into the
+			// tasks table like checked/due.
+			assignee: { default: "" },
 		},
 		content: "inline",
 	},
 	{
 		render: ({ block, editor, contentRef }) => {
-			const { checked, due } = block.props;
+			const { checked, due, assignee } = block.props;
 			// BlockNote's editable=false stops text editing, but this custom
 			// checkbox/date UI fires its own handlers — gate them too so a
 			// read-only viewer can't toggle props.
 			const readOnly = !editor.isEditable;
 
-			function update(props: { checked?: boolean; due?: string }) {
+			function update(props: {
+				checked?: boolean;
+				due?: string;
+				assignee?: string;
+			}) {
 				if (!editor.isEditable) return;
 				editor.updateBlock(block, {
 					props: { ...block.props, ...props },
@@ -49,7 +57,15 @@ export const taskBlockSpec = createReactBlockSpec(
 								: "min-w-0 flex-1"
 						}
 					/>
-					<div contentEditable={false} className="shrink-0">
+					<div
+						contentEditable={false}
+						className="flex shrink-0 items-center gap-1"
+					>
+						<AssigneePicker
+							value={assignee === "" ? null : assignee}
+							disabled={readOnly}
+							onChange={(next) => update({ assignee: next ?? "" })}
+						/>
 						{readOnly && due === "" ? null : readOnly ? (
 							<span
 								className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${

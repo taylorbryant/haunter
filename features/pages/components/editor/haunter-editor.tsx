@@ -95,7 +95,7 @@ function getSlashMenuItems(
 ) {
 	const taskItem = {
 		title: "Task",
-		subtext: "A to-do that also shows up in My Tasks",
+		subtext: "A to-do that also shows up in Tasks",
 		aliases: ["task", "todo", "checkbox", "check"],
 		group: "Basic blocks",
 		icon: <CheckSquareIcon className="size-4.5" />,

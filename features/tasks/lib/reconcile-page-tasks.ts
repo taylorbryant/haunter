@@ -33,6 +33,7 @@ export async function reconcilePageTasks(
 				title: block.title,
 				completed: block.checked,
 				dueDate: block.due,
+				assigneeId: block.assignee,
 				completedAt: block.checked ? now : null,
 			});
 			continue;
@@ -41,13 +42,15 @@ export async function reconcilePageTasks(
 		const changed =
 			current.title !== block.title ||
 			current.completed !== block.checked ||
-			current.dueDate !== block.due;
+			current.dueDate !== block.due ||
+			current.assigneeId !== block.assignee;
 
 		if (changed) {
 			await tasks.update(current.id, {
 				title: block.title,
 				completed: block.checked,
 				dueDate: block.due,
+				assigneeId: block.assignee,
 				// Stamp/clear completedAt only when the completed state flips.
 				...(current.completed !== block.checked
 					? { completedAt: block.checked ? now : null }

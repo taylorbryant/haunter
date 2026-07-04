@@ -18,11 +18,7 @@ export function createTestTaskRepository(options?: {
 	}
 
 	return {
-		async listByWorkspace(
-			userId: string,
-			workspaceId: string,
-			filter: TaskFilter,
-		) {
+		async listByWorkspace(workspaceId: string, filter: TaskFilter) {
 			const trashedPageIds = new Set<string>();
 			for (const task of tasks.values()) {
 				if (task.pageId && options?.pages) {
@@ -35,7 +31,6 @@ export function createTestTaskRepository(options?: {
 			const items = Array.from(tasks.values())
 				.filter(
 					(task) =>
-						task.userId === userId &&
 						task.workspaceId === workspaceId &&
 						matches(task, filter) &&
 						(task.pageId === null || !trashedPageIds.has(task.pageId)),
@@ -55,6 +50,8 @@ export function createTestTaskRepository(options?: {
 					pageTitle: task.pageId
 						? ((await options?.pages?.findMetaById(task.pageId))?.title ?? null)
 						: null,
+					// Name resolution needs the user table; tests assert on ids.
+					assigneeName: null,
 				})),
 			);
 		},
@@ -77,6 +74,7 @@ export function createTestTaskRepository(options?: {
 				title: input.title,
 				completed: input.completed,
 				dueDate: input.dueDate,
+				assigneeId: input.assigneeId,
 				completedAt: input.completedAt,
 				createdAt: now,
 				updatedAt: now,

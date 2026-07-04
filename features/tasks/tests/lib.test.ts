@@ -38,8 +38,15 @@ describe("extractTaskBlocks", () => {
 				title: "Nested task",
 				checked: true,
 				due: "2026-07-03",
+				assignee: null,
 			},
-			{ blockId: "t2", title: "Top level", checked: false, due: null },
+			{
+				blockId: "t2",
+				title: "Top level",
+				checked: false,
+				due: null,
+				assignee: null,
+			},
 		]);
 	});
 

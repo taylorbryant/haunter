@@ -1,9 +1,10 @@
 import "@beignet/core/server-only";
+import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspace, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { CreateTaskInputSchema, TaskSchema } from "../schemas";
 
-/** Quick-add from My Tasks: a standalone task not attached to any page. */
+/** Quick-add from the Tasks view: a standalone task not attached to any page. */
 export const createTaskUseCase = useCase
 	.command("tasks.create")
 	.input(CreateTaskInputSchema)
@@ -14,6 +15,21 @@ export const createTaskUseCase = useCase
 		requireActiveWorkspace(ctx, input.workspaceId);
 
 		return ctx.ports.uow.transaction(async (tx) => {
+			// Quick-add means "a task for me" unless the caller says otherwise;
+			// explicit null creates it unassigned.
+			const assigneeId =
+				input.assigneeId === undefined ? user.id : input.assigneeId;
+
+			if (assigneeId !== null && assigneeId !== user.id) {
+				const role = await tx.members.findRole(input.workspaceId, assigneeId);
+				if (role === null) {
+					throw appError("Forbidden", {
+						message: "The assignee is not a member of this workspace.",
+						details: { assigneeId },
+					});
+				}
+			}
+
 			return tx.tasks.create({
 				userId: user.id,
 				workspaceId: input.workspaceId,
@@ -22,6 +38,7 @@ export const createTaskUseCase = useCase
 				title: input.title,
 				completed: false,
 				dueDate: input.dueDate ?? null,
+				assigneeId,
 				completedAt: null,
 			});
 		});

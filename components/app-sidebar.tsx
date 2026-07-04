@@ -48,14 +48,14 @@ export function AppSidebar({
 								activeWorkspaceId !== null &&
 								pathname === `/w/${activeWorkspaceId}/tasks`
 							}
-							tooltip="My Tasks"
+							tooltip="Tasks"
 						>
 							<Link
 								href={activeWorkspaceId ? `/w/${activeWorkspaceId}/tasks` : "/"}
 								onClick={closeSheetOnMobile}
 							>
 								<ListTodoIcon />
-								<span>My Tasks</span>
+								<span>Tasks</span>
 							</Link>
 						</SidebarMenuButton>
 					</SidebarMenuItem>

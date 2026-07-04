@@ -355,19 +355,13 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 
-		expect(
-			await tasks.listByWorkspace("user_test", workspace.id, "all"),
-		).toHaveLength(1);
+		expect(await tasks.listByWorkspace(workspace.id, "all")).toHaveLength(1);
 
 		await tester.run(deletePageUseCase, { id: page.id }, { ctx });
-		expect(
-			await tasks.listByWorkspace("user_test", workspace.id, "all"),
-		).toHaveLength(0);
+		expect(await tasks.listByWorkspace(workspace.id, "all")).toHaveLength(0);
 
 		await tester.run(restorePageUseCase, { id: page.id }, { ctx });
-		expect(
-			await tasks.listByWorkspace("user_test", workspace.id, "all"),
-		).toHaveLength(1);
+		expect(await tasks.listByWorkspace(workspace.id, "all")).toHaveLength(1);
 	});
 
 	it("deletes a page and all of its descendants", async () => {
