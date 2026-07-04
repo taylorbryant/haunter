@@ -6,6 +6,7 @@ import {
 	ChevronDownIcon,
 	PencilIcon,
 	PlusIcon,
+	SmilePlusIcon,
 	Trash2Icon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -38,8 +39,18 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+	EmojiPicker,
+	EmojiPickerContent,
+	EmojiPickerSearch,
+} from "@/components/ui/emoji-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
 import {
 	SidebarMenu,
 	SidebarMenuButton,
@@ -67,8 +78,10 @@ export function WorkspaceSwitcher({
 
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [name, setName] = useState("");
-	const [renameOpen, setRenameOpen] = useState(false);
-	const [renameName, setRenameName] = useState("");
+	const [editOpen, setEditOpen] = useState(false);
+	const [editName, setEditName] = useState("");
+	const [editIcon, setEditIcon] = useState<string | null>(null);
+	const [iconPickerOpen, setIconPickerOpen] = useState(false);
 	const [deleteOpen, setDeleteOpen] = useState(false);
 
 	const workspaces = workspacesQuery.data?.items ?? [];
@@ -90,14 +103,14 @@ export function WorkspaceSwitcher({
 		);
 	}
 
-	function rename() {
-		const trimmed = renameName.trim();
+	function saveEdit() {
+		const trimmed = editName.trim();
 		if (!active || !trimmed || updateMutation.isPending) return;
 		updateMutation.mutate(
-			{ path: { id: active.id }, body: { name: trimmed } },
+			{ path: { id: active.id }, body: { name: trimmed, icon: editIcon } },
 			{
 				onSuccess: async () => {
-					setRenameOpen(false);
+					setEditOpen(false);
 					await invalidateWorkspaces(queryClient);
 				},
 			},
@@ -176,12 +189,13 @@ export function WorkspaceSwitcher({
 								<DropdownMenuSeparator />
 								<DropdownMenuItem
 									onSelect={() => {
-										setRenameName(active.name);
-										setRenameOpen(true);
+										setEditName(active.name);
+										setEditIcon(active.icon ?? null);
+										setEditOpen(true);
 									}}
 								>
 									<PencilIcon />
-									Rename workspace
+									Edit workspace
 								</DropdownMenuItem>
 								<DropdownMenuItem
 									className="text-destructive focus:text-destructive"
@@ -233,34 +247,86 @@ export function WorkspaceSwitcher({
 					</DialogContent>
 				</Dialog>
 
-				<Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+				<Dialog open={editOpen} onOpenChange={setEditOpen}>
 					<DialogContent className="sm:max-w-sm">
 						<DialogHeader>
-							<DialogTitle>Rename workspace</DialogTitle>
+							<DialogTitle>Edit workspace</DialogTitle>
 							<DialogDescription>
-								Give this workspace a new name.
+								Update this workspace's emoji and name.
 							</DialogDescription>
 						</DialogHeader>
 						<form
 							className="flex flex-col gap-4"
 							onSubmit={(event) => {
 								event.preventDefault();
-								rename();
+								saveEdit();
 							}}
 						>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="rename-workspace">Name</Label>
-								<Input
-									id="rename-workspace"
-									autoFocus
-									value={renameName}
-									onChange={(event) => setRenameName(event.target.value)}
-								/>
+							<div className="flex items-end gap-3">
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="edit-workspace-emoji">Emoji</Label>
+									<Popover
+										open={iconPickerOpen}
+										onOpenChange={setIconPickerOpen}
+									>
+										<PopoverTrigger asChild>
+											<Button
+												id="edit-workspace-emoji"
+												type="button"
+												variant="outline"
+												className="size-9 p-0 text-lg leading-none"
+												aria-label="Choose emoji"
+											>
+												{editIcon ?? (
+													<SmilePlusIcon className="size-4 text-muted-foreground" />
+												)}
+											</Button>
+										</PopoverTrigger>
+										<PopoverContent className="w-auto p-0" align="start">
+											<div className="flex h-[300px] w-[288px] flex-col">
+												<EmojiPicker
+													className="min-h-0 flex-1"
+													onEmojiSelect={({ emoji }) => {
+														setEditIcon(emoji);
+														setIconPickerOpen(false);
+													}}
+												>
+													<EmojiPickerSearch placeholder="Search emoji…" />
+													<EmojiPickerContent />
+												</EmojiPicker>
+												{editIcon ? (
+													<div className="border-t p-1">
+														<Button
+															type="button"
+															variant="ghost"
+															size="sm"
+															className="w-full justify-start text-muted-foreground"
+															onClick={() => {
+																setEditIcon(null);
+																setIconPickerOpen(false);
+															}}
+														>
+															Remove emoji
+														</Button>
+													</div>
+												) : null}
+											</div>
+										</PopoverContent>
+									</Popover>
+								</div>
+								<div className="flex flex-1 flex-col gap-2">
+									<Label htmlFor="edit-workspace-name">Name</Label>
+									<Input
+										id="edit-workspace-name"
+										value={editName}
+										onChange={(event) => setEditName(event.target.value)}
+									/>
+								</div>
 							</div>
 							<DialogFooter>
 								<Button
 									type="submit"
-									disabled={!renameName.trim() || updateMutation.isPending}
+									disabled={!editName.trim() || updateMutation.isPending}
 								>
 									{updateMutation.isPending ? "Saving…" : "Save"}
 								</Button>
