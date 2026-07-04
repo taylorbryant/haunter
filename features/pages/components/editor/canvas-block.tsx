@@ -1,10 +1,15 @@
 "use client";
 
 import { createReactBlockSpec } from "@blocknote/react";
-import { Maximize2Icon } from "lucide-react";
+import { Maximize2Icon, XIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogTitle,
+} from "@/components/ui/dialog";
 
 // tldraw is a ~MB chunk: load it only when a canvas block actually renders.
 const CanvasSurface = dynamic(
@@ -41,13 +46,28 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 			</button>
 			{expanded ? (
 				<Dialog open onOpenChange={(open) => !open && setExpanded(false)}>
-					<DialogContent className="h-[85vh] p-0 sm:max-w-[90vw]">
+					<DialogContent
+						showCloseButton={false}
+						className="h-[85vh] overflow-visible p-0 sm:max-w-[90vw]"
+					>
 						<DialogTitle className="sr-only">Canvas</DialogTitle>
 						{/* Only one tldraw instance per canvas at a time: the inline
 						    surface is unmounted while the dialog is open. */}
 						<div className="isolate h-full w-full overflow-hidden rounded-lg">
 							<CanvasSurface canvasId={canvasId} />
 						</div>
+						{/* Close sits just outside the card's top-right corner — over
+						    the backdrop and clear of tldraw's own top-right UI — as a
+						    semi-transparent circle. */}
+						<DialogClose asChild>
+							<button
+								type="button"
+								aria-label="Close canvas"
+								className="-top-3 -right-3 absolute z-10 flex size-9 items-center justify-center rounded-full bg-background/70 text-muted-foreground ring-1 ring-border/60 backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground"
+							>
+								<XIcon className="size-5" />
+							</button>
+						</DialogClose>
 					</DialogContent>
 				</Dialog>
 			) : null}
