@@ -18,10 +18,22 @@ import {
 	saveCanvasSnapshotMutationOptions,
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
+import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
+import { useSharedPageToken } from "@/features/shares/components/shared-page-context";
 
 const SNAPSHOT_SAVE_DELAY_MS = 1500;
 
 export default function CanvasSurface({ canvasId }: { canvasId: string }) {
+	// Inside a public share view, swap to the read-only token-scoped surface.
+	const shareToken = useSharedPageToken();
+	if (shareToken) {
+		return <SharedCanvasSurface token={shareToken} canvasId={canvasId} />;
+	}
+
+	return <MemberCanvasSurface canvasId={canvasId} />;
+}
+
+function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	const { resolvedTheme } = useTheme();
 	const queryClient = useQueryClient();
 	const canvasQuery = useQuery(getCanvasQueryOptions(canvasId));
