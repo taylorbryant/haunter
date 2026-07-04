@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Fragment } from "react";
+import { Fragment, type ReactElement } from "react";
 import {
 	Breadcrumb,
 	BreadcrumbEllipsis,
@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { listPagesQueryOptions } from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
-import { listWorkspacesQueryOptions } from "@/features/workspaces/client/queries";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 function pageTrail(pages: PageMeta[], pageId: string): PageMeta[] {
@@ -43,10 +42,6 @@ export function HeaderBreadcrumbs() {
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 
-	const workspacesQuery = useQuery({
-		...listWorkspacesQueryOptions(),
-		enabled: workspaceId !== null,
-	});
 	const pagesQuery = useQuery({
 		...listPagesQueryOptions(workspaceId ?? ""),
 		enabled: workspaceId !== null,
@@ -56,9 +51,6 @@ export function HeaderBreadcrumbs() {
 		return null;
 	}
 
-	const workspace = workspacesQuery.data?.items.find(
-		(item) => item.id === workspaceId,
-	);
 	const section = pathname.endsWith("/tasks")
 		? "My Tasks"
 		: pathname.endsWith("/trash")
@@ -81,71 +73,69 @@ export function HeaderBreadcrumbs() {
 		: trail;
 	const hiddenTrail = collapse ? trail.slice(headCount, -tailCount) : [];
 
+	// Assemble the ordered crumbs (the workspace root is intentionally omitted —
+	// it lives in the sidebar switcher). Separators are rendered between crumbs
+	// below so the first one never has a leading chevron.
+	const crumbs: ReactElement[] = [];
+	if (section) {
+		crumbs.push(
+			<BreadcrumbItem key="section">
+				<BreadcrumbPage>{section}</BreadcrumbPage>
+			</BreadcrumbItem>,
+		);
+	} else {
+		visibleTrail.forEach((page, index) => {
+			if (collapse && index === headCount) {
+				crumbs.push(
+					<BreadcrumbItem key="ellipsis">
+						<DropdownMenu>
+							<DropdownMenuTrigger
+								className="flex items-center gap-1"
+								aria-label="Show hidden pages"
+							>
+								<BreadcrumbEllipsis className="size-4" />
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="start">
+								{hiddenTrail.map((hidden) => (
+									<DropdownMenuItem key={hidden.id} asChild>
+										<Link href={`/w/${workspaceId}/p/${hidden.id}`}>
+											{hidden.title || "Untitled"}
+										</Link>
+									</DropdownMenuItem>
+								))}
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</BreadcrumbItem>,
+				);
+			}
+			crumbs.push(
+				<BreadcrumbItem key={page.id} className="min-w-0">
+					{page.id === leafId ? (
+						<BreadcrumbPage className="truncate">
+							{page.title || "Untitled"}
+						</BreadcrumbPage>
+					) : (
+						<BreadcrumbLink asChild>
+							<Link
+								href={`/w/${workspaceId}/p/${page.id}`}
+								className="truncate"
+							>
+								{page.title || "Untitled"}
+							</Link>
+						</BreadcrumbLink>
+					)}
+				</BreadcrumbItem>,
+			);
+		});
+	}
+
 	return (
 		<Breadcrumb className="min-w-0 flex-1">
 			<BreadcrumbList className="flex-nowrap">
-				<BreadcrumbItem>
-					{leafId ? (
-						<BreadcrumbLink asChild>
-							<Link href={`/w/${workspaceId}`}>
-								{workspace?.name ?? "Workspace"}
-							</Link>
-						</BreadcrumbLink>
-					) : (
-						<BreadcrumbPage>{workspace?.name ?? "Workspace"}</BreadcrumbPage>
-					)}
-				</BreadcrumbItem>
-				{section ? (
-					<>
-						<BreadcrumbSeparator />
-						<BreadcrumbItem>
-							<BreadcrumbPage>{section}</BreadcrumbPage>
-						</BreadcrumbItem>
-					</>
-				) : null}
-				{visibleTrail.map((page, index) => (
-					<Fragment key={page.id}>
-						{collapse && index === headCount ? (
-							<>
-								<BreadcrumbSeparator className="shrink-0" />
-								<BreadcrumbItem>
-									<DropdownMenu>
-										<DropdownMenuTrigger
-											className="flex items-center gap-1"
-											aria-label="Show hidden pages"
-										>
-											<BreadcrumbEllipsis className="size-4" />
-										</DropdownMenuTrigger>
-										<DropdownMenuContent align="start">
-											{hiddenTrail.map((hidden) => (
-												<DropdownMenuItem key={hidden.id} asChild>
-													<Link href={`/w/${workspaceId}/p/${hidden.id}`}>
-														{hidden.title || "Untitled"}
-													</Link>
-												</DropdownMenuItem>
-											))}
-										</DropdownMenuContent>
-									</DropdownMenu>
-								</BreadcrumbItem>
-							</>
-						) : null}
-						<BreadcrumbSeparator className="shrink-0" />
-						<BreadcrumbItem className="min-w-0">
-							{page.id === leafId ? (
-								<BreadcrumbPage className="truncate">
-									{page.title || "Untitled"}
-								</BreadcrumbPage>
-							) : (
-								<BreadcrumbLink asChild>
-									<Link
-										href={`/w/${workspaceId}/p/${page.id}`}
-										className="truncate"
-									>
-										{page.title || "Untitled"}
-									</Link>
-								</BreadcrumbLink>
-							)}
-						</BreadcrumbItem>
+				{crumbs.map((crumb, index) => (
+					<Fragment key={crumb.key}>
+						{index > 0 ? <BreadcrumbSeparator className="shrink-0" /> : null}
+						{crumb}
 					</Fragment>
 				))}
 			</BreadcrumbList>

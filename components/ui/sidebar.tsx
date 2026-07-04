@@ -164,6 +164,26 @@ function Sidebar({
 }) {
 	const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
+	// A dropdown/popover opened from inside the mobile sheet portals outside it,
+	// and its layer unmounts *synchronously* on the dismissing pointerdown — so
+	// by the time the sheet's onInteractOutside runs, the popover is already
+	// gone. Capture whether one was open at the very start of the interaction
+	// (pointerdown capture phase, before any layer reacts) and use that to keep
+	// the sheet open while the popover's own layer handles the dismiss.
+	const popperWasOpenRef = React.useRef(false);
+	React.useEffect(() => {
+		if (!isMobile) return;
+		const record = () => {
+			popperWasOpenRef.current = Boolean(
+				document.querySelector(
+					'[data-radix-popper-content-wrapper],[data-slot="dropdown-menu-content"],[data-slot="popover-content"]',
+				),
+			);
+		};
+		document.addEventListener("pointerdown", record, true);
+		return () => document.removeEventListener("pointerdown", record, true);
+	}, [isMobile]);
+
 	if (collapsible === "none") {
 		return (
 			<div
@@ -194,6 +214,13 @@ function Sidebar({
 						} as React.CSSProperties
 					}
 					side={side}
+					onInteractOutside={(event) => {
+						// If a dropdown/popover was open when this interaction began, it
+						// owns the dismiss — keep the sheet open (see popperWasOpenRef).
+						if (popperWasOpenRef.current) {
+							event.preventDefault();
+						}
+					}}
 				>
 					<SheetHeader className="sr-only">
 						<SheetTitle>Sidebar</SheetTitle>

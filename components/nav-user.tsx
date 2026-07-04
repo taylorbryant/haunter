@@ -1,6 +1,14 @@
 "use client";
 
-import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon } from "lucide-react";
+import {
+	ChevronsUpDownIcon,
+	LogOutIcon,
+	MonitorIcon,
+	MoonIcon,
+	SettingsIcon,
+	SunIcon,
+} from "lucide-react";
+import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
@@ -20,6 +28,13 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
+
+const THEME_OPTIONS = [
+	{ value: "system", icon: MonitorIcon, label: "System" },
+	{ value: "light", icon: SunIcon, label: "Light" },
+	{ value: "dark", icon: MoonIcon, label: "Dark" },
+] as const;
 
 function initials(name: string): string {
 	return (
@@ -34,6 +49,7 @@ function initials(name: string): string {
 
 export function NavUser({ user }: { user: { name: string; email: string } }) {
 	const { isMobile } = useSidebar();
+	const { theme, setTheme } = useTheme();
 	const router = useRouter();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -79,6 +95,31 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
 								</div>
 							</div>
 						</DropdownMenuLabel>
+						<DropdownMenuSeparator />
+						{/* Inline theme switcher: plain buttons (not menu items) so
+						    tapping one changes the theme without closing the menu. */}
+						<div className="flex items-center justify-between gap-2 px-2 py-1.5">
+							<span className="text-muted-foreground text-xs">Theme</span>
+							<div className="flex items-center gap-0.5 rounded-md border p-0.5">
+								{THEME_OPTIONS.map(({ value, icon: Icon, label }) => (
+									<button
+										key={value}
+										type="button"
+										aria-label={label}
+										aria-pressed={theme === value}
+										onClick={() => setTheme(value)}
+										className={cn(
+											"flex size-6 items-center justify-center rounded-sm transition-colors",
+											theme === value
+												? "bg-muted text-foreground"
+												: "text-muted-foreground hover:text-foreground",
+										)}
+									>
+										<Icon className="size-3.5" />
+									</button>
+								))}
+							</div>
+						</div>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
 							<SettingsIcon />

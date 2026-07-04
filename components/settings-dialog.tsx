@@ -7,6 +7,7 @@ import {
 	DeleteAccountPanel,
 	ProfilePanel,
 } from "@/components/settings/panels";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
 	Sidebar,
@@ -77,6 +78,23 @@ export function SettingsDialog({
 						</SidebarContent>
 					</Sidebar>
 					<main className="flex h-[560px] min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-background p-6">
+						{/* The section list is a sidebar on desktop; on mobile it's
+						    hidden, so surface the sections as a scrollable tab row. */}
+						<div className="-mx-6 flex shrink-0 gap-1 overflow-x-auto border-b px-6 pb-3 md:hidden">
+							{SECTIONS.map((item) => (
+								<Button
+									key={item.id}
+									type="button"
+									size="sm"
+									variant={item.id === active ? "secondary" : "ghost"}
+									className="shrink-0"
+									onClick={() => setActive(item.id)}
+								>
+									<item.icon />
+									{item.label}
+								</Button>
+							))}
+						</div>
 						<Panel />
 					</main>
 				</SidebarProvider>

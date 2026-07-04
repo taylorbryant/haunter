@@ -103,7 +103,7 @@ export function TaskComposer({
 						// Todoist-style highlight on the matched date phrase.
 						<div
 							aria-hidden
-							className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre font-medium text-foreground text-sm leading-6"
+							className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre font-medium text-base text-foreground leading-6 sm:text-sm"
 						>
 							{text.slice(0, activeMatch.index)}
 							{/* Padding must be cancelled by negative margin so glyphs never
@@ -124,7 +124,7 @@ export function TaskComposer({
 						placeholder="Task name, e.g. “buy groceries tomorrow”"
 						aria-label="Task name"
 						className={cn(
-							"relative w-full bg-transparent font-medium text-sm leading-6 outline-none placeholder:text-muted-foreground",
+							"relative w-full bg-transparent font-medium text-base leading-6 outline-none placeholder:text-muted-foreground sm:text-sm",
 							activeMatch && "text-transparent caret-foreground",
 						)}
 						onChange={(event) => setText(event.target.value)}
