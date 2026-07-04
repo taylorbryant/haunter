@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
 import { reconcilePageTasks } from "@/features/tasks/lib/reconcile-page-tasks";
 import { requireActiveWorkspaceId, requireUser } from "@/lib/auth";
+import { canEditContent } from "@/lib/org-access";
 import { useCase } from "@/lib/use-case";
 import { buildOnboardingPages } from "../lib/onboarding-content";
 import { OnboardInputSchema, OnboardOutputSchema } from "../schemas";
@@ -20,9 +21,22 @@ export const onboardUserUseCase = useCase
 		const user = requireUser(ctx);
 		const workspaceId = requireActiveWorkspaceId(ctx);
 
+		// Seeding writes pages, so read-only members never seed — a viewer
+		// signing into a not-yet-seeded shared workspace is a no-op, not an
+		// error (this runs on every sign-in).
+		if (!canEditContent(ctx.membership?.role)) {
+			return { workspaceId, pageId: null };
+		}
+
 		return ctx.ports.uow.transaction(async (tx) => {
-			const existing = await tx.pages.listMetaByWorkspace(workspaceId);
-			if (existing.length > 0) {
+			// "Already onboarded" must count trashed pages too: a user who
+			// trashes everything shouldn't get the welcome content re-seeded on
+			// their next sign-in.
+			const [live, trashed] = await Promise.all([
+				tx.pages.listMetaByWorkspace(workspaceId),
+				tx.pages.listTrashedMetaByWorkspace(workspaceId),
+			]);
+			if (live.length > 0 || trashed.length > 0) {
 				return { workspaceId, pageId: null };
 			}
 

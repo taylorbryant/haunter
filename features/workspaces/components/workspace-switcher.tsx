@@ -68,6 +68,7 @@ import {
 	useSidebar,
 } from "@/components/ui/sidebar";
 import { MembersDialog } from "@/features/members/components/members-dialog";
+import { canManageMembers } from "@/lib/org-access";
 
 // A "workspace" is a Better Auth organization; its emoji lives in the org's
 // `logo` field.
@@ -101,6 +102,14 @@ export function WorkspaceSwitcher({
 
 	const workspaces = organizationsQuery.data ?? [];
 	const active = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
+
+	// Only offer management actions the caller's role allows; the server
+	// enforces this regardless (Better Auth AC: update is admin+, delete is
+	// owner-only).
+	const activeMemberQuery = authClient.useActiveMember();
+	const myRole = activeMemberQuery.data?.role ?? null;
+	const canEditWorkspace = canManageMembers(myRole);
+	const canDeleteWorkspace = myRole === "owner";
 
 	async function switchTo(id: string) {
 		if (id === activeWorkspaceId) return;
@@ -231,30 +240,34 @@ export function WorkspaceSwitcher({
 												Members
 											</Button>
 										</DrawerClose>
-										<DrawerClose asChild>
-											<Button
-												variant="ghost"
-												className="h-11 justify-start"
-												onClick={() => {
-													setEditName(active.name);
-													setEditIcon(active.logo ?? null);
-													setEditOpen(true);
-												}}
-											>
-												<PencilIcon />
-												Edit workspace
-											</Button>
-										</DrawerClose>
-										<DrawerClose asChild>
-											<Button
-												variant="ghost"
-												className="h-11 justify-start text-destructive hover:text-destructive"
-												onClick={() => setDeleteOpen(true)}
-											>
-												<Trash2Icon />
-												Delete workspace
-											</Button>
-										</DrawerClose>
+										{canEditWorkspace ? (
+											<DrawerClose asChild>
+												<Button
+													variant="ghost"
+													className="h-11 justify-start"
+													onClick={() => {
+														setEditName(active.name);
+														setEditIcon(active.logo ?? null);
+														setEditOpen(true);
+													}}
+												>
+													<PencilIcon />
+													Edit workspace
+												</Button>
+											</DrawerClose>
+										) : null}
+										{canDeleteWorkspace ? (
+											<DrawerClose asChild>
+												<Button
+													variant="ghost"
+													className="h-11 justify-start text-destructive hover:text-destructive"
+													onClick={() => setDeleteOpen(true)}
+												>
+													<Trash2Icon />
+													Delete workspace
+												</Button>
+											</DrawerClose>
+										) : null}
 									</>
 								) : null}
 							</div>
@@ -303,23 +316,27 @@ export function WorkspaceSwitcher({
 										<UsersIcon />
 										Members
 									</DropdownMenuItem>
-									<DropdownMenuItem
-										onSelect={() => {
-											setEditName(active.name);
-											setEditIcon(active.logo ?? null);
-											setEditOpen(true);
-										}}
-									>
-										<PencilIcon />
-										Edit workspace
-									</DropdownMenuItem>
-									<DropdownMenuItem
-										className="text-destructive focus:text-destructive"
-										onSelect={() => setDeleteOpen(true)}
-									>
-										<Trash2Icon className="text-destructive" />
-										Delete workspace
-									</DropdownMenuItem>
+									{canEditWorkspace ? (
+										<DropdownMenuItem
+											onSelect={() => {
+												setEditName(active.name);
+												setEditIcon(active.logo ?? null);
+												setEditOpen(true);
+											}}
+										>
+											<PencilIcon />
+											Edit workspace
+										</DropdownMenuItem>
+									) : null}
+									{canDeleteWorkspace ? (
+										<DropdownMenuItem
+											className="text-destructive focus:text-destructive"
+											onSelect={() => setDeleteOpen(true)}
+										>
+											<Trash2Icon className="text-destructive" />
+											Delete workspace
+										</DropdownMenuItem>
+									) : null}
 								</>
 							) : null}
 						</DropdownMenuContent>
