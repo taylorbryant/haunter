@@ -1,7 +1,7 @@
 import { defineUpload } from "@beignet/core/uploads";
 import { z } from "zod";
 import type { AppContext } from "@/app-context";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceId, requireUser } from "@/lib/auth";
 
 export const AttachmentUploadMetadataSchema = z.object({
 	pageId: z.string().uuid(),
@@ -38,15 +38,19 @@ export const AttachmentUpload = defineUpload<
 		return page !== null && page.workspaceId === ctx.tenant.id;
 	},
 	key({ ctx, metadata, uploadId, file }) {
-		const user = requireUser(ctx);
+		// Keys are workspace-scoped so any member can read the attachment; the
+		// read route (app/api/files) checks the caller's active workspace against
+		// this segment.
+		const workspaceId = requireActiveWorkspaceId(ctx);
 		const extension = file.name.includes(".")
 			? file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "")
 			: undefined;
 		const suffix = extension ? `.${extension.slice(0, 8)}` : "";
-		return `pages/${user.id}/${metadata.pageId}/${uploadId}${suffix}`;
+		return `pages/${workspaceId}/${metadata.pageId}/${uploadId}${suffix}`;
 	},
 	storageMetadata({ ctx, metadata }) {
 		return {
+			workspaceId: requireActiveWorkspaceId(ctx),
 			userId: requireUser(ctx).id,
 			pageId: metadata.pageId,
 		};

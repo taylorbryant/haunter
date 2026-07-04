@@ -76,6 +76,7 @@ async function createFixture(userId = "user_test") {
 		actor: createTestUserActor(auth.user.id, { displayName: auth.user.name }),
 		auth,
 		tenant: createTestTenant(workspace.id),
+		extra: { membership: { role: "owner" } },
 	});
 	const tester = createUseCaseTester<AppContext>(createTestContext);
 	const ctx = await tester.ctx();
@@ -366,6 +367,7 @@ describe("tasks use cases", () => {
 				}),
 				auth: intruderAuth,
 				tenant: createTestTenant(intruderWorkspaceId),
+				extra: { membership: { role: "owner" } },
 			}),
 		);
 		const intruderCtx = await intruder.ctx();

@@ -11,6 +11,7 @@ import type {
 import type { ResendMailEscapeHatch } from "@beignet/provider-mail-resend";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import type { canvasPolicy } from "@/features/canvases/policy";
+import type { MemberRepository } from "@/features/members/ports";
 import type {
 	PageLinkRepository,
 	PageRepository,
@@ -30,6 +31,7 @@ export type AppPolicies = [
 export type AppTransactionPorts = {
 	canvases: CanvasRepository;
 	idempotency: IdempotencyPort;
+	members: MemberRepository;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
 	tasks: TaskRepository;
@@ -44,6 +46,7 @@ export type AppPorts = {
 	gate: GatePort<AuthorizationContext, AppPolicies>;
 	idempotency: IdempotencyPort;
 	logger: LoggerPort;
+	members: MemberRepository;
 	mailer: MailerPort;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;

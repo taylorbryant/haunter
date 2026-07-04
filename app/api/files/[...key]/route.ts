@@ -1,9 +1,10 @@
 import { getServer } from "@/server";
 
 /**
- * Serve private storage objects back to their owner. Upload keys are
- * namespaced pages/<userId>/..., so ownership is checked from the key
- * itself; everything else (missing, foreign, invalid) is a uniform 404.
+ * Serve private storage objects back to workspace members. Upload keys are
+ * namespaced pages/<workspaceId>/..., so access is checked by matching the
+ * caller's active workspace against the key; everything else (missing,
+ * foreign, invalid) is a uniform 404.
  */
 export async function GET(
 	_req: Request,
@@ -12,13 +13,13 @@ export async function GET(
 	const { key: segments } = await params;
 	const server = await getServer();
 	const ctx = await server.createContextFromNext();
-	const userId = ctx.auth?.user.id;
-	if (!userId) {
+	const workspaceId = ctx.tenant?.id;
+	if (!ctx.auth?.user.id || !workspaceId) {
 		return new Response(null, { status: 404 });
 	}
 
 	const key = segments.join("/");
-	if (!key.startsWith(`pages/${userId}/`)) {
+	if (!key.startsWith(`pages/${workspaceId}/`)) {
 		return new Response(null, { status: 404 });
 	}
 

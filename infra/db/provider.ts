@@ -30,6 +30,7 @@ export const starterDatabaseProvider = createProvider<{
 			AppPorts,
 			| "canvases"
 			| "idempotency"
+			| "members"
 			| "pageLinks"
 			| "pages"
 			| "tasks"

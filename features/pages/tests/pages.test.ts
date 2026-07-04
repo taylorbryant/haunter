@@ -35,6 +35,7 @@ function createTester(
 	pages: PageRepository,
 	workspaceId: string,
 	tasks = createTestTaskRepository(),
+	role = "owner",
 ) {
 	const auth = {
 		user: {
@@ -77,9 +78,10 @@ function createTester(
 			displayName: auth.user.name,
 		}),
 		auth,
-		// The active workspace is the request tenant; membership in it is the
-		// authorization check.
+		// The active workspace is the request tenant; membership in it — and the
+		// member's role — is the authorization check.
 		tenant: createTestTenant(workspaceId),
+		extra: { membership: { role } },
 	});
 
 	return createUseCaseTester<AppContext>(createTestContext);
@@ -416,6 +418,52 @@ describe("pages use cases", () => {
 		await expect(
 			intruder.run(getPageUseCase, { id: page.id }, { ctx: intruderCtx }),
 		).rejects.toThrow("You do not have access to this page.");
+	});
+
+	it("lets a viewer read but not edit or create pages", async () => {
+		const pages = createTestPageRepository();
+		const workspaceId = crypto.randomUUID().replaceAll("-", "");
+
+		// An editor seeds a page in the workspace.
+		const editor = createTester("user_owner", pages, workspaceId);
+		const editorCtx = await editor.ctx();
+		const page = await editor.run(
+			createPageUseCase,
+			{ workspaceId, title: "Shared" },
+			{ ctx: editorCtx },
+		);
+
+		// A viewer in the same workspace can read it but not write.
+		const viewer = createTester(
+			"user_viewer",
+			pages,
+			workspaceId,
+			createTestTaskRepository({ pages }),
+			"viewer",
+		);
+		const viewerCtx = await viewer.ctx();
+
+		const read = await viewer.run(
+			getPageUseCase,
+			{ id: page.id },
+			{ ctx: viewerCtx },
+		);
+		expect(read.id).toBe(page.id);
+
+		await expect(
+			viewer.run(
+				updatePageUseCase,
+				{ id: page.id, title: "Nope" },
+				{ ctx: viewerCtx },
+			),
+		).rejects.toThrow("view-only");
+		await expect(
+			viewer.run(
+				createPageUseCase,
+				{ workspaceId, title: "Nope" },
+				{ ctx: viewerCtx },
+			),
+		).rejects.toThrow("view-only");
 	});
 
 	it("reconciles page links on save and lists backlinks", async () => {

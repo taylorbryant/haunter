@@ -7,6 +7,7 @@ import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
 import { env } from "@/lib/env";
 import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
+import { accessControl, roles } from "@/lib/org-access";
 
 const client = createClient({
 	url: env.SQLITE_DB_URL,
@@ -46,10 +47,12 @@ export const auth = betterAuth({
 				await sendLoginCode(email, otp);
 			},
 		}),
-		// A "workspace" in the product is an organization here. Members carry the
-		// role (owner/admin/member for now; editor/viewer land with the
-		// authorization pass) that page/task/canvas policies read.
+		// A "workspace" in the product is an organization here. Members carry a
+		// role (owner/admin/member/viewer) that the app's gate reads to decide
+		// content-edit rights; viewers are read-only.
 		organization({
+			ac: accessControl,
+			roles,
 			async sendInvitationEmail(data) {
 				await sendWorkspaceInvite({
 					email: data.email,

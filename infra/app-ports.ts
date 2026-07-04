@@ -34,6 +34,7 @@ export const appPorts = definePorts<AppPorts>()({
 		"idempotency",
 		"logger",
 		"mailer",
+		"members",
 		"pageLinks",
 		"pages",
 		"resend",

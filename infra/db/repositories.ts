@@ -1,5 +1,6 @@
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
 import { createDrizzleCanvasRepository } from "@/infra/canvases/drizzle-canvas-repository";
+import { createDrizzleMemberRepository } from "@/infra/members/drizzle-member-repository";
 import { createDrizzlePageLinkRepository } from "@/infra/pages/drizzle-page-link-repository";
 import { createDrizzlePageRepository } from "@/infra/pages/drizzle-page-repository";
 import { createDrizzleTaskRepository } from "@/infra/tasks/drizzle-task-repository";
@@ -11,6 +12,7 @@ export function createRepositories(
 ): Omit<AppTransactionPorts, "idempotency"> {
 	return {
 		canvases: createDrizzleCanvasRepository(db),
+		members: createDrizzleMemberRepository(db),
 		pageLinks: createDrizzlePageLinkRepository(db),
 		pages: createDrizzlePageRepository(db),
 		tasks: createDrizzleTaskRepository(db),

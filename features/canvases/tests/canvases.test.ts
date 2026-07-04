@@ -59,6 +59,7 @@ function createTester(
 		actor: createTestUserActor(userId, { displayName: auth.user.name }),
 		auth,
 		tenant: createTestTenant(workspaceId),
+		extra: { membership: { role: "owner" } },
 	});
 
 	return createUseCaseTester<AppContext>(createTestContext);
