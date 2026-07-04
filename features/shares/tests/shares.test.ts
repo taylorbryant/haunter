@@ -11,14 +11,17 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
+import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import type { PageRepository } from "@/features/pages/ports";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
+import type { CanvasRepository } from "@/features/canvases/ports";
 import type { ShareRepository } from "@/features/shares/ports";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import {
 	createPageShareUseCase,
 	getPageShareUseCase,
+	getSharedCanvasUseCase,
 	getSharedPageUseCase,
 	revokePageShareUseCase,
 } from "../use-cases";
@@ -27,22 +30,25 @@ import { createTestShareRepository } from "./helpers";
 function createTester(options: {
 	pages: PageRepository;
 	shares: ShareRepository;
+	canvases?: CanvasRepository;
 	workspaceId: string | null;
 	userId?: string | null;
 	role?: string;
 }) {
 	const { pages, shares, workspaceId } = options;
+	const canvases = options.canvases ?? createTestCanvasRepository();
 	const userId = options.userId === undefined ? "user_test" : options.userId;
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
 			gate: appPorts.gate,
+			canvases,
 			pages,
 			shares,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, pages, shares }),
+			ports: (ports) => ({ ...ports, canvases, pages, shares }),
 		},
 	});
 	const createTestContext = createTestContextFactory<
@@ -72,6 +78,7 @@ function createTester(options: {
 async function createFixture(role = "owner") {
 	const pages = createTestPageRepository();
 	const shares = createTestShareRepository();
+	const canvases = createTestCanvasRepository();
 	// Better Auth org ids are nanoid-style, not UUIDs.
 	const workspaceId = crypto.randomUUID().replaceAll("-", "");
 	const page = await pages.create({
@@ -93,12 +100,13 @@ async function createFixture(role = "owner") {
 			},
 		]),
 	);
-	const tester = createTester({ pages, shares, workspaceId, role });
+	const tester = createTester({ pages, shares, canvases, workspaceId, role });
 	const ctx = await tester.ctx();
 	// A visitor with no session, tenant, or membership.
 	const anonymous = createTester({
 		pages,
 		shares,
+		canvases,
 		workspaceId: null,
 		userId: null,
 	});
@@ -107,6 +115,7 @@ async function createFixture(role = "owner") {
 	return {
 		pages,
 		shares,
+		canvases,
 		workspaceId,
 		page,
 		tester,
@@ -218,6 +227,95 @@ describe("page shares", () => {
 		await expect(
 			tester.run(revokePageShareUseCase, { pageId: page.id }, { ctx }),
 		).rejects.toThrow("view-only");
+	});
+
+	it("rewrites embedded file URLs to the share-scoped route", async () => {
+		const { pages, page, tester, ctx, anonymous, anonymousCtx } =
+			await createFixture();
+
+		await pages.saveContent(
+			page.id,
+			JSON.stringify([
+				{
+					id: "img-1",
+					type: "image",
+					props: { url: `/api/files/pages/ws/${page.id}/img.png` },
+					children: [],
+				},
+			]),
+		);
+
+		const share = await tester.run(
+			createPageShareUseCase,
+			{ pageId: page.id },
+			{ ctx },
+		);
+		const shared = await anonymous.run(
+			getSharedPageUseCase,
+			{ token: share.token },
+			{ ctx: anonymousCtx },
+		);
+
+		expect(shared.content[0]?.props.url).toBe(
+			`/api/shared/${share.token}/files/pages/ws/${page.id}/img.png`,
+		);
+	});
+
+	it("serves canvases on the shared page and refuses others", async () => {
+		const {
+			pages,
+			canvases,
+			workspaceId,
+			page,
+			tester,
+			ctx,
+			anonymous,
+			anonymousCtx,
+		} = await createFixture();
+
+		const onSharedPage = await canvases.create({
+			userId: "user_test",
+			workspaceId,
+			pageId: page.id,
+		});
+		await canvases.saveSnapshot(
+			onSharedPage.id,
+			JSON.stringify({ store: { shape: 1 } }),
+		);
+		const otherPage = await pages.create({
+			userId: "user_test",
+			workspaceId,
+			parentPageId: null,
+			title: "Not shared",
+			position: 2,
+		});
+		const elsewhere = await canvases.create({
+			userId: "user_test",
+			workspaceId,
+			pageId: otherPage.id,
+		});
+
+		const share = await tester.run(
+			createPageShareUseCase,
+			{ pageId: page.id },
+			{ ctx },
+		);
+
+		const served = await anonymous.run(
+			getSharedCanvasUseCase,
+			{ token: share.token, id: onSharedPage.id },
+			{ ctx: anonymousCtx },
+		);
+		expect(served.snapshot).toEqual({ store: { shape: 1 } });
+
+		// Same workspace, different page: the token must not reach it.
+		await expect(
+			anonymous.run(
+				getSharedCanvasUseCase,
+				{ token: share.token, id: elsewhere.id },
+				{ ctx: anonymousCtx },
+			),
+		).rejects.toThrow(/no longer available/);
 	});
 
 	it("members of another workspace cannot publish someone else's page", async () => {

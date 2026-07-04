@@ -189,6 +189,32 @@ export function createDrizzlePageRepository(
 
 			return { updatedAt };
 		},
+		async saveContentIf(
+			id: string,
+			contentJson: string,
+			baseUpdatedAt: string,
+		) {
+			// Strictly after the base version: two writes inside the same
+			// millisecond must still produce distinct versions, or the next
+			// stale write would slip past the compare-and-set.
+			const updatedAt = new Date(
+				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
+			).toISOString();
+			// The WHERE clause is the compare-and-set: no row updates when
+			// another writer already bumped updatedAt.
+			const [row] = await db
+				.update(schema.pages)
+				.set({ content: contentJson, updatedAt })
+				.where(
+					and(
+						eq(schema.pages.id, id),
+						eq(schema.pages.updatedAt, baseUpdatedAt),
+					),
+				)
+				.returning({ id: schema.pages.id });
+
+			return row ? { updatedAt } : null;
+		},
 		async setDeletedByIds(ids: string[], deletedAt: string | null) {
 			if (ids.length === 0) return;
 			await db

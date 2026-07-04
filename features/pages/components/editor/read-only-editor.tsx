@@ -7,14 +7,21 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useTheme } from "next-themes";
 import type { BlockJson } from "@/features/pages/schemas";
+import { SharedPageTokenProvider } from "@/features/shares/components/shared-page-context";
 import { editorSchema } from "./schema";
 
 /**
  * Render a page document read-only, outside the app shell — used by the
- * public share view. No autosave, menus, or queries; interactive blocks that
- * need authenticated data (canvases) show their own unavailable state.
+ * public share view. No autosave, menus, or queries. When a share token is
+ * given, embedded canvases fetch through the share-scoped public endpoints.
  */
-export default function ReadOnlyEditor({ content }: { content: BlockJson[] }) {
+export default function ReadOnlyEditor({
+	content,
+	shareToken,
+}: {
+	content: BlockJson[];
+	shareToken?: string;
+}) {
 	const { resolvedTheme } = useTheme();
 
 	const editor = useCreateBlockNote({
@@ -23,7 +30,7 @@ export default function ReadOnlyEditor({ content }: { content: BlockJson[] }) {
 		initialContent: content.length ? (content as never) : undefined,
 	});
 
-	return (
+	const view = (
 		<div className="haunter-editor">
 			<BlockNoteView
 				editor={editor}
@@ -33,5 +40,11 @@ export default function ReadOnlyEditor({ content }: { content: BlockJson[] }) {
 				sideMenu={false}
 			/>
 		</div>
+	);
+
+	return shareToken ? (
+		<SharedPageTokenProvider token={shareToken}>{view}</SharedPageTokenProvider>
+	) : (
+		view
 	);
 }

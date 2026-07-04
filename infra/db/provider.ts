@@ -33,6 +33,7 @@ export const starterDatabaseProvider = createProvider<{
 			| "members"
 			| "pageLinks"
 			| "pages"
+			| "pageVersions"
 			| "shares"
 			| "tasks"
 			| "uow"

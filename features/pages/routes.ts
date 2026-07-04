@@ -3,6 +3,9 @@ import { defineRouteGroup } from "@beignet/next";
 import type { AppContext } from "@/app-context";
 import {
 	createPage,
+	getPageVersion,
+	listPageVersions,
+	restorePageVersion,
 	deletePage,
 	getPage,
 	listBacklinks,
@@ -16,6 +19,9 @@ import {
 } from "@/features/pages/contracts";
 import {
 	createPageUseCase,
+	getPageVersionUseCase,
+	listPageVersionsUseCase,
+	restorePageVersionUseCase,
 	deletePageUseCase,
 	getPageUseCase,
 	listBacklinksUseCase,
@@ -42,5 +48,8 @@ export const pageRoutes = defineRouteGroup<AppContext>()({
 		{ contract: listTrash, useCase: listTrashUseCase },
 		{ contract: restorePage, useCase: restorePageUseCase },
 		{ contract: purgePage, useCase: purgePageUseCase },
+		{ contract: listPageVersions, useCase: listPageVersionsUseCase },
+		{ contract: getPageVersion, useCase: getPageVersionUseCase },
+		{ contract: restorePageVersion, useCase: restorePageVersionUseCase },
 	],
 });

@@ -52,6 +52,7 @@ export const saveCanvasSnapshot = canvases
 	.errors({
 		Forbidden: errors.Forbidden,
 		CanvasNotFound: errors.CanvasNotFound,
+		StaleWrite: errors.StaleWrite,
 	})
 	.responses({
 		200: SaveCanvasSnapshotOutputSchema,

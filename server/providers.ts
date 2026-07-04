@@ -6,7 +6,9 @@ import { loggerPinoProvider } from "@beignet/provider-logger-pino";
 import { mailResendProvider } from "@beignet/provider-mail-resend";
 import * as schema from "@/infra/db/schema";
 import { starterDatabaseProvider } from "@/infra/db/provider";
+import { vercelBlobStorageProvider } from "@/infra/storage/vercel-blob-storage";
 import { auth } from "@/lib/better-auth";
+import { env } from "@/lib/env";
 import type { AuthSessionMetadata, AuthUser } from "@/ports/auth";
 import { createLocalStorageProvider } from "@beignet/provider-storage-local";
 
@@ -18,6 +20,10 @@ export const providers = [
 	loggerPinoProvider,
 	drizzleSqliteProvider,
 	starterDatabaseProvider,
-	createLocalStorageProvider(),
+	// Vercel Blob in deployed environments (local disk doesn't survive
+	// serverless); the local provider keeps dev working with zero setup.
+	env.BLOB_READ_WRITE_TOKEN
+		? vercelBlobStorageProvider
+		: createLocalStorageProvider(),
 	mailResendProvider,
 ] as const;

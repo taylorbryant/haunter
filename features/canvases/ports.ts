@@ -13,5 +13,11 @@ export interface CanvasRepository {
 		id: string,
 		snapshotJson: string,
 	): Promise<{ updatedAt: string }>;
+	/** Compare-and-set variant; null when the row moved on (stale write). */
+	saveSnapshotIf(
+		id: string,
+		snapshotJson: string,
+		baseUpdatedAt: string,
+	): Promise<{ updatedAt: string } | null>;
 	deleteByPageIds(pageIds: string[]): Promise<void>;
 }

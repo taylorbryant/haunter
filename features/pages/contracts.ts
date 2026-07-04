@@ -3,6 +3,9 @@ import { z } from "zod";
 import { errors } from "@/features/shared/errors";
 import {
 	CreatePageInputSchema,
+	ListPageVersionsOutputSchema,
+	PageVersionIdInputSchema,
+	PageVersionSchema,
 	ListBacklinksOutputSchema,
 	ListPagesOutputSchema,
 	ListTrashOutputSchema,
@@ -84,6 +87,7 @@ export const savePageContent = pages
 	.errors({
 		Forbidden: errors.Forbidden,
 		PageNotFound: errors.PageNotFound,
+		StaleWrite: errors.StaleWrite,
 	})
 	.responses({
 		200: SavePageContentOutputSchema,
@@ -152,4 +156,38 @@ export const purgePage = pages
 	})
 	.responses({
 		204: null,
+	});
+
+export const listPageVersions = pages
+	.get("/api/pages/:id/versions")
+	.pathParams(PageIdInputSchema)
+	.errors({
+		Forbidden: errors.Forbidden,
+		PageNotFound: errors.PageNotFound,
+	})
+	.responses({
+		200: ListPageVersionsOutputSchema,
+	});
+
+export const getPageVersion = pages
+	.get("/api/pages/:id/versions/:versionId")
+	.pathParams(PageVersionIdInputSchema)
+	.errors({
+		Forbidden: errors.Forbidden,
+		PageNotFound: errors.PageNotFound,
+	})
+	.responses({
+		200: PageVersionSchema,
+	});
+
+export const restorePageVersion = pages
+	.post("/api/pages/:id/versions/:versionId/restore")
+	.pathParams(PageVersionIdInputSchema)
+	.body(z.object({}))
+	.errors({
+		Forbidden: errors.Forbidden,
+		PageNotFound: errors.PageNotFound,
+	})
+	.responses({
+		200: SavePageContentOutputSchema,
 	});

@@ -22,6 +22,20 @@ export const saveCanvasSnapshotUseCase = useCase
 
 			await ctx.gate.authorize("canvases.update", canvas);
 
-			return tx.canvases.saveSnapshot(input.id, JSON.stringify(input.snapshot));
+			// Refuse to clobber a newer snapshot when the client provides its
+			// last-seen updatedAt (another member or tab drew since).
+			const snapshotJson = JSON.stringify(input.snapshot);
+			const result = input.baseUpdatedAt
+				? await tx.canvases.saveSnapshotIf(
+						input.id,
+						snapshotJson,
+						input.baseUpdatedAt,
+					)
+				: await tx.canvases.saveSnapshot(input.id, snapshotJson);
+			if (result === null) {
+				throw appError("StaleWrite", { details: { id: input.id } });
+			}
+
+			return result;
 		});
 	});

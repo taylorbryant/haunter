@@ -1,4 +1,9 @@
-import type { Page, PageMeta } from "@/features/pages/schemas";
+import type {
+	Page,
+	PageMeta,
+	PageVersion,
+	PageVersionMeta,
+} from "@/features/pages/schemas";
 
 export type NewPage = {
 	userId: string;
@@ -47,8 +52,38 @@ export interface PageRepository {
 	create(input: NewPage): Promise<PageMeta>;
 	update(id: string, input: UpdatePageData): Promise<PageMeta>;
 	saveContent(id: string, contentJson: string): Promise<{ updatedAt: string }>;
+	/**
+	 * Compare-and-set variant: persist only if the row's updatedAt still
+	 * equals `baseUpdatedAt`. Returns null when the row moved on (stale write).
+	 */
+	saveContentIf(
+		id: string,
+		contentJson: string,
+		baseUpdatedAt: string,
+	): Promise<{ updatedAt: string } | null>;
 	/** Set or clear deletedAt for the given pages. */
 	setDeletedByIds(ids: string[], deletedAt: string | null): Promise<void>;
 	deleteByIds(ids: string[]): Promise<void>;
 	deleteByWorkspace(workspaceId: string): Promise<void>;
+}
+
+export type NewPageVersion = {
+	pageId: string;
+	workspaceId: string;
+	title: string;
+	icon: string | null;
+	contentJson: string;
+	cause: "checkpoint" | "restore";
+	createdBy: string;
+};
+
+export interface PageVersionRepository {
+	/** Newest first, metadata only (no content payloads). */
+	listMetaByPage(pageId: string): Promise<PageVersionMeta[]>;
+	findById(id: string): Promise<PageVersion | null>;
+	/** The newest version's createdAt, for checkpoint spacing. */
+	latestCreatedAt(pageId: string): Promise<string | null>;
+	create(input: NewPageVersion): Promise<PageVersionMeta>;
+	/** Delete all but the newest `keep` versions of a page. */
+	prune(pageId: string, keep: number): Promise<void>;
 }

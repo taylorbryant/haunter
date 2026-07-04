@@ -36,6 +36,30 @@ export function createTestCanvasRepository(): CanvasRepository {
 			});
 			return { updatedAt };
 		},
+		async saveSnapshotIf(
+			id: string,
+			snapshotJson: string,
+			baseUpdatedAt: string,
+		) {
+			const canvas = canvases.get(id);
+			if (!canvas) {
+				throw new Error(`Canvas not found: ${id}`);
+			}
+			if (canvas.updatedAt !== baseUpdatedAt) {
+				return null;
+			}
+
+			// Strictly after the base version, mirroring the drizzle repo.
+			const updatedAt = new Date(
+				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
+			).toISOString();
+			canvases.set(id, {
+				...canvas,
+				snapshot: JSON.parse(snapshotJson),
+				updatedAt,
+			});
+			return { updatedAt };
+		},
 		async deleteByPageIds(pageIds: string[]) {
 			for (const canvas of Array.from(canvases.values())) {
 				if (pageIds.includes(canvas.pageId)) {

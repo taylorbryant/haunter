@@ -5,18 +5,26 @@ import {
 	createPage,
 	deletePage,
 	getPage,
+	getPageVersion,
 	listBacklinks,
+	listPageVersions,
 	listPages,
 	listTrash,
 	purgePage,
 	restorePage,
+	restorePageVersion,
 	savePageContent,
 	searchPages,
 	updatePage,
 } from "@/features/pages/contracts";
 
 export function listPagesQueryOptions(workspaceId: string) {
-	return rq(listPages).queryOptions({ path: { workspaceId } });
+	return {
+		...rq(listPages).queryOptions({ path: { workspaceId } }),
+		// Shared workspaces: pick up other members' changes without a manual
+		// reload. Paused automatically while the tab is in the background.
+		refetchInterval: 30_000,
+	};
 }
 
 export function getPageQueryOptions(id: string) {
@@ -134,4 +142,27 @@ export function setPageContentInCache(
 		rq(getPage).key({ path: { id } }),
 		(current) => (current ? { ...current, content } : current),
 	);
+}
+
+export function listPageVersionsQueryOptions(pageId: string) {
+	return rq(listPageVersions).queryOptions({ path: { id: pageId } });
+}
+
+export function getPageVersionQueryOptions(pageId: string, versionId: string) {
+	return rq(getPageVersion).queryOptions({
+		path: { id: pageId, versionId },
+	});
+}
+
+export function restorePageVersionMutationOptions() {
+	return rq(restorePageVersion).mutationOptions();
+}
+
+export function invalidatePageVersions(
+	queryClient: QueryClient,
+	pageId: string,
+) {
+	return rq(listPageVersions).invalidate(queryClient, {
+		path: { id: pageId },
+	});
 }

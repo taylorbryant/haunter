@@ -71,6 +71,10 @@ export const UpdatePageInputSchema =
 
 export const SavePageContentBodySchema = z.object({
 	content: PageContentSchema,
+	// Optimistic-concurrency precondition: the updatedAt the client last saw.
+	// When present and stale, the save is rejected with 409 instead of
+	// clobbering another member's (or another tab's) edits.
+	baseUpdatedAt: z.string().datetime().optional(),
 });
 
 export const SavePageContentInputSchema = PageIdInputSchema.merge(
@@ -82,6 +86,31 @@ export const SavePageContentOutputSchema = z.object({
 });
 
 export const DeletePageOutputSchema = z.void();
+
+export const PageVersionMetaSchema = z.object({
+	id: z.string().uuid(),
+	pageId: z.string().uuid(),
+	title: z.string(),
+	icon: z.string().nullable(),
+	cause: z.enum(["checkpoint", "restore"]),
+	createdBy: z.string(),
+	/** Author display name, resolved at read time. */
+	createdByName: z.string().nullable(),
+	createdAt: z.string().datetime(),
+});
+
+export const PageVersionSchema = PageVersionMetaSchema.extend({
+	content: PageContentSchema,
+});
+
+export const ListPageVersionsOutputSchema = z.object({
+	items: z.array(PageVersionMetaSchema),
+});
+
+export const PageVersionIdInputSchema = z.object({
+	id: z.string().uuid(),
+	versionId: z.string().uuid(),
+});
 
 export const ListTrashInputSchema = z.object({
 	workspaceId: z.string().min(1),
@@ -119,3 +148,5 @@ export type Page = z.infer<typeof PageSchema>;
 export type CreatePageInput = z.infer<typeof CreatePageInputSchema>;
 export type UpdatePageInput = z.infer<typeof UpdatePageInputSchema>;
 export type SavePageContentInput = z.infer<typeof SavePageContentInputSchema>;
+export type PageVersionMeta = z.infer<typeof PageVersionMetaSchema>;
+export type PageVersion = z.infer<typeof PageVersionSchema>;

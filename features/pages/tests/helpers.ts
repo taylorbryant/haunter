@@ -1,10 +1,12 @@
 import type {
 	NewPage,
+	NewPageVersion,
 	PageLinkRepository,
 	PageRepository,
+	PageVersionRepository,
 	UpdatePageData,
 } from "@/features/pages/ports";
-import type { Page, PageMeta } from "@/features/pages/schemas";
+import type { Page, PageMeta, PageVersion } from "@/features/pages/schemas";
 
 export function createTestPageLinkRepository(deps: {
 	pages: PageRepository;
@@ -127,6 +129,26 @@ export function createTestPageRepository(): PageRepository {
 			pages.set(id, { ...page, content: JSON.parse(contentJson), updatedAt });
 			return { updatedAt };
 		},
+		async saveContentIf(
+			id: string,
+			contentJson: string,
+			baseUpdatedAt: string,
+		) {
+			const page = pages.get(id);
+			if (!page) {
+				throw new Error(`Page not found: ${id}`);
+			}
+			if (page.updatedAt !== baseUpdatedAt) {
+				return null;
+			}
+
+			// Strictly after the base version, mirroring the drizzle repo.
+			const updatedAt = new Date(
+				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
+			).toISOString();
+			pages.set(id, { ...page, content: JSON.parse(contentJson), updatedAt });
+			return { updatedAt };
+		},
 		async setDeletedByIds(ids: string[], deletedAt: string | null) {
 			for (const id of ids) {
 				const page = pages.get(id);
@@ -149,6 +171,51 @@ export function createTestPageRepository(): PageRepository {
 				if (page.workspaceId === workspaceId) {
 					pages.delete(page.id);
 				}
+			}
+		},
+	};
+}
+
+export function createTestPageVersionRepository(): PageVersionRepository {
+	const versions = new Map<string, PageVersion>();
+
+	function metasByPage(pageId: string): PageVersion[] {
+		return Array.from(versions.values())
+			.filter((version) => version.pageId === pageId)
+			.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+	}
+
+	return {
+		async listMetaByPage(pageId: string) {
+			return metasByPage(pageId).map(({ content: _content, ...meta }) => ({
+				...meta,
+			}));
+		},
+		async findById(id: string) {
+			return versions.get(id) ?? null;
+		},
+		async latestCreatedAt(pageId: string) {
+			return metasByPage(pageId)[0]?.createdAt ?? null;
+		},
+		async create(input: NewPageVersion) {
+			const version: PageVersion = {
+				id: crypto.randomUUID(),
+				pageId: input.pageId,
+				title: input.title,
+				icon: input.icon,
+				cause: input.cause,
+				createdBy: input.createdBy,
+				createdByName: null,
+				createdAt: new Date().toISOString(),
+				content: JSON.parse(input.contentJson),
+			};
+			versions.set(version.id, version);
+			const { content: _content, ...meta } = version;
+			return meta;
+		},
+		async prune(pageId: string, keep: number) {
+			for (const stale of metasByPage(pageId).slice(keep)) {
+				versions.delete(stale.id);
 			}
 		},
 	};

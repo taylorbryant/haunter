@@ -119,6 +119,51 @@ describe("canvases use cases", () => {
 		expect(fetched.snapshot).toEqual(snapshot);
 	});
 
+	it("rejects a stale snapshot save and accepts a rebased one", async () => {
+		const { workspace, page, tester, ctx } = await createFixture();
+
+		const canvas = await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, pageId: page.id },
+			{ ctx },
+		);
+
+		const first = await tester.run(
+			saveCanvasSnapshotUseCase,
+			{
+				id: canvas.id,
+				snapshot: { v: 1 },
+				baseUpdatedAt: canvas.updatedAt,
+			},
+			{ ctx },
+		);
+
+		// A second writer still holding the created version must not clobber.
+		await expect(
+			tester.run(
+				saveCanvasSnapshotUseCase,
+				{
+					id: canvas.id,
+					snapshot: { v: 2 },
+					baseUpdatedAt: canvas.updatedAt,
+				},
+				{ ctx },
+			),
+		).rejects.toThrow(/changed since/);
+
+		// Rebased on the current version, the save lands.
+		const rebased = await tester.run(
+			saveCanvasSnapshotUseCase,
+			{
+				id: canvas.id,
+				snapshot: { v: 3 },
+				baseUpdatedAt: first.updatedAt,
+			},
+			{ ctx },
+		);
+		expect(rebased.updatedAt > first.updatedAt).toBe(true);
+	});
+
 	it("rejects creating a canvas on a page in another workspace", async () => {
 		const { canvases, pages, workspace, page } =
 			await createFixture("user_owner");

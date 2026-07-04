@@ -40,6 +40,10 @@ export const env = createEnv({
 		// resend.dev's shared address works for local testing.
 		RESEND_API_KEY: z.string().optional(),
 		RESEND_FROM: z.string().default("Haunter <onboarding@resend.dev>"),
+		// Vercel Blob storage. When set, uploads live in Blob (private access);
+		// otherwise the local ./storage directory is used (dev only — it does
+		// not survive serverless deploys).
+		BLOB_READ_WRITE_TOKEN: z.string().optional(),
 		LOG_LEVEL: z
 			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 			.default("info"),

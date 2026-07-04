@@ -9,10 +9,15 @@ import {
 import type { TaskFilter } from "@/features/tasks/schemas";
 
 export function listTasksQueryOptions(workspaceId: string, filter: TaskFilter) {
-	return rq(listTasks).queryOptions({
-		path: { workspaceId },
-		query: { filter },
-	});
+	return {
+		...rq(listTasks).queryOptions({
+			path: { workspaceId },
+			query: { filter },
+		}),
+		// Shared workspaces: pick up other members' changes without a manual
+		// reload. Paused automatically while the tab is in the background.
+		refetchInterval: 30_000,
+	};
 }
 
 export function createTaskMutationOptions() {

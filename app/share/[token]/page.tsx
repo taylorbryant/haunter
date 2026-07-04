@@ -76,7 +76,10 @@ export default function SharedPage({
 						<h1 className="mb-2 px-0 font-bold text-3xl md:px-[54px]">
 							{pageQuery.data.title || "Untitled"}
 						</h1>
-						<ReadOnlyEditor content={pageQuery.data.content} />
+						<ReadOnlyEditor
+							content={pageQuery.data.content}
+							shareToken={token}
+						/>
 					</>
 				)}
 			</main>

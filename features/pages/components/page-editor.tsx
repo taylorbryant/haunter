@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	getPageQueryOptions,
+	invalidatePage,
 	invalidatePages,
 	setPageSavedAtInCache,
 	updatePageMutationOptions,
@@ -56,6 +57,11 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 	const [title, setTitle] = useState<string | null>(null);
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	// Bumped when a save is rejected as stale: refetches the doc and remounts
+	// the editor on the newer version instead of clobbering it.
+	const [reloadCount, setReloadCount] = useState(0);
+	const [conflictNotice, setConflictNotice] = useState(false);
+	const conflictTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Reset local title state when navigating between pages.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on page change
@@ -63,6 +69,18 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		setTitle(null);
 		setPageSaveState("saved");
 	}, [pageId]);
+
+	async function handleConflict() {
+		// Refetch first so the remounted editor initializes from the newer doc.
+		await invalidatePage(queryClient, pageId);
+		setReloadCount((count) => count + 1);
+		setConflictNotice(true);
+		if (conflictTimeoutRef.current) clearTimeout(conflictTimeoutRef.current);
+		conflictTimeoutRef.current = setTimeout(
+			() => setConflictNotice(false),
+			5000,
+		);
+	}
 
 	if (pageQuery.isPending) {
 		return (
@@ -133,13 +151,20 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					/>
 				</div>
 			</div>
+			{conflictNotice ? (
+				<p className="mb-2 px-0 text-muted-foreground text-xs md:px-[54px]">
+					This page was updated elsewhere — reloaded with the latest version.
+				</p>
+			) : null}
 			<HaunterEditor
-				key={pageId}
+				key={`${pageId}:${reloadCount}`}
 				pageId={pageId}
 				workspaceId={page.workspaceId}
 				initialContent={page.content}
+				updatedAt={page.updatedAt}
 				editable={!readOnly}
 				onSaveStateChange={setPageSaveState}
+				onConflict={handleConflict}
 			/>
 			{/* Same 54px inset as the editor content column. */}
 			<div className="px-0 md:px-[54px]">

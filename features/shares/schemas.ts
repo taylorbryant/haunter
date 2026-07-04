@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CanvasSnapshotSchema } from "@/features/canvases/schemas";
 import { PageContentSchema } from "@/features/pages/schemas";
 
 export const PageShareSchema = z.object({
@@ -29,6 +30,16 @@ export const SharedPageSchema = z.object({
 	icon: z.string().nullable(),
 	content: PageContentSchema,
 	updatedAt: z.string().datetime(),
+});
+
+export const SharedCanvasInputSchema = z.object({
+	token: z.string().min(1),
+	id: z.string().uuid(),
+});
+
+/** Snapshot-only read model for canvases embedded in a shared page. */
+export const SharedCanvasSchema = z.object({
+	snapshot: CanvasSnapshotSchema,
 });
 
 export type PageShare = z.infer<typeof PageShareSchema>;

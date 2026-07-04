@@ -5,6 +5,8 @@ import {
 	GetPageShareOutputSchema,
 	PageIdInputSchema,
 	PageShareSchema,
+	SharedCanvasInputSchema,
+	SharedCanvasSchema,
 	SharedPageSchema,
 	SharedTokenInputSchema,
 } from "@/features/shares/schemas";
@@ -66,4 +68,15 @@ export const getSharedPage = shares
 	})
 	.responses({
 		200: SharedPageSchema,
+	});
+
+// Public: a canvas embedded in a shared page, readable via the page's token.
+export const getSharedCanvas = shares
+	.get("/api/shared/:token/canvases/:id")
+	.pathParams(SharedCanvasInputSchema)
+	.errors({
+		ShareNotFound: errors.ShareNotFound,
+	})
+	.responses({
+		200: SharedCanvasSchema,
 	});

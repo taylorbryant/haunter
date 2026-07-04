@@ -37,6 +37,7 @@ export const appPorts = definePorts<AppPorts>()({
 		"members",
 		"pageLinks",
 		"pages",
+		"pageVersions",
 		"resend",
 		"shares",
 		"tasks",
