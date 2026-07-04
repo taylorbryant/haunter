@@ -32,6 +32,15 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import {
+	Drawer,
+	DrawerClose,
+	DrawerContent,
+	DrawerDescription,
+	DrawerHeader,
+	DrawerTitle,
+	DrawerTrigger,
+} from "@/components/ui/drawer";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -55,6 +64,7 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	useSidebar,
 } from "@/components/ui/sidebar";
 import {
 	createWorkspaceMutationOptions,
@@ -69,6 +79,7 @@ export function WorkspaceSwitcher({
 }: {
 	activeWorkspaceId: string | null;
 }) {
+	const { isMobile } = useSidebar();
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const workspacesQuery = useQuery(listWorkspacesQueryOptions());
@@ -136,78 +147,155 @@ export function WorkspaceSwitcher({
 		);
 	}
 
+	const trigger = (
+		<SidebarMenuButton className="w-fit px-1.5 font-medium">
+			<GhostLogo className="size-4 shrink-0" />
+			<span className="truncate">
+				{active
+					? `${active.icon ? `${active.icon} ` : ""}${active.name}`
+					: "Haunter"}
+			</span>
+			<ChevronDownIcon className="opacity-50" />
+		</SidebarMenuButton>
+	);
+
+	const workspaceItems = workspaces.map((workspace) => ({
+		id: workspace.id,
+		label: `${workspace.icon ? `${workspace.icon} ` : ""}${workspace.name}`,
+		active: workspace.id === activeWorkspaceId,
+	}));
+
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<SidebarMenuButton className="w-fit px-1.5 font-medium">
-							<GhostLogo className="size-4 shrink-0" />
-							<span className="truncate">
-								{active
-									? `${active.icon ? `${active.icon} ` : ""}${active.name}`
-									: "Haunter"}
-							</span>
-							<ChevronDownIcon className="opacity-50" />
-						</SidebarMenuButton>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent
-						className="w-56 rounded-lg"
-						align="start"
-						side="bottom"
-						sideOffset={4}
-						// Don't return focus to the trigger on close: it would steal
-						// focus from the dialogs opened by the items below.
-						onCloseAutoFocus={(event) => event.preventDefault()}
-					>
-						<DropdownMenuLabel className="text-muted-foreground text-xs">
-							Workspaces
-						</DropdownMenuLabel>
-						{workspaces.map((workspace) => (
-							<DropdownMenuItem
-								key={workspace.id}
-								onSelect={() => router.push(`/w/${workspace.id}`)}
-							>
-								<span className="truncate">
-									{workspace.icon ? `${workspace.icon} ` : ""}
-									{workspace.name}
-								</span>
-								{workspace.id === activeWorkspaceId ? (
-									<CheckIcon className="ml-auto" />
+				{isMobile ? (
+					<Drawer>
+						<DrawerTrigger asChild>{trigger}</DrawerTrigger>
+						<DrawerContent>
+							<DrawerHeader className="border-b text-left">
+								<DrawerTitle>Workspaces</DrawerTitle>
+								<DrawerDescription className="sr-only">
+									Switch or manage workspaces
+								</DrawerDescription>
+							</DrawerHeader>
+							<div className="flex flex-col gap-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+								{workspaceItems.map((workspace) => (
+									<DrawerClose asChild key={workspace.id}>
+										<Button
+											variant="ghost"
+											className="h-11 justify-start"
+											onClick={() => router.push(`/w/${workspace.id}`)}
+										>
+											<span className="flex-1 truncate text-left">
+												{workspace.label}
+											</span>
+											{workspace.active ? <CheckIcon /> : null}
+										</Button>
+									</DrawerClose>
+								))}
+								<div className="my-1 h-px bg-border" />
+								<DrawerClose asChild>
+									<Button
+										variant="ghost"
+										className="h-11 justify-start text-muted-foreground"
+										onClick={() => setDialogOpen(true)}
+									>
+										<PlusIcon />
+										New workspace
+									</Button>
+								</DrawerClose>
+								{active ? (
+									<>
+										<DrawerClose asChild>
+											<Button
+												variant="ghost"
+												className="h-11 justify-start"
+												onClick={() => {
+													setEditName(active.name);
+													setEditIcon(active.icon ?? null);
+													setEditOpen(true);
+												}}
+											>
+												<PencilIcon />
+												Edit workspace
+											</Button>
+										</DrawerClose>
+										<DrawerClose asChild>
+											<Button
+												variant="ghost"
+												className="h-11 justify-start text-destructive hover:text-destructive"
+												onClick={() => setDeleteOpen(true)}
+											>
+												<Trash2Icon />
+												Delete workspace
+											</Button>
+										</DrawerClose>
+									</>
 								) : null}
+							</div>
+						</DrawerContent>
+					</Drawer>
+				) : (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+						<DropdownMenuContent
+							className="w-56 rounded-lg"
+							align="start"
+							side="bottom"
+							sideOffset={4}
+							// Don't return focus to the trigger on close: it would steal
+							// focus from the dialogs opened by the items below.
+							onCloseAutoFocus={(event) => event.preventDefault()}
+						>
+							<DropdownMenuLabel className="text-muted-foreground text-xs">
+								Workspaces
+							</DropdownMenuLabel>
+							{workspaces.map((workspace) => (
+								<DropdownMenuItem
+									key={workspace.id}
+									onSelect={() => router.push(`/w/${workspace.id}`)}
+								>
+									<span className="truncate">
+										{workspace.icon ? `${workspace.icon} ` : ""}
+										{workspace.name}
+									</span>
+									{workspace.id === activeWorkspaceId ? (
+										<CheckIcon className="ml-auto" />
+									) : null}
+								</DropdownMenuItem>
+							))}
+							<DropdownMenuSeparator />
+							<DropdownMenuItem onSelect={() => setDialogOpen(true)}>
+								<PlusIcon />
+								<span className="font-medium text-muted-foreground">
+									New workspace
+								</span>
 							</DropdownMenuItem>
-						))}
-						<DropdownMenuSeparator />
-						<DropdownMenuItem onSelect={() => setDialogOpen(true)}>
-							<PlusIcon />
-							<span className="font-medium text-muted-foreground">
-								New workspace
-							</span>
-						</DropdownMenuItem>
-						{active ? (
-							<>
-								<DropdownMenuSeparator />
-								<DropdownMenuItem
-									onSelect={() => {
-										setEditName(active.name);
-										setEditIcon(active.icon ?? null);
-										setEditOpen(true);
-									}}
-								>
-									<PencilIcon />
-									Edit workspace
-								</DropdownMenuItem>
-								<DropdownMenuItem
-									className="text-destructive focus:text-destructive"
-									onSelect={() => setDeleteOpen(true)}
-								>
-									<Trash2Icon className="text-destructive" />
-									Delete workspace
-								</DropdownMenuItem>
-							</>
-						) : null}
-					</DropdownMenuContent>
-				</DropdownMenu>
+							{active ? (
+								<>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem
+										onSelect={() => {
+											setEditName(active.name);
+											setEditIcon(active.icon ?? null);
+											setEditOpen(true);
+										}}
+									>
+										<PencilIcon />
+										Edit workspace
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										className="text-destructive focus:text-destructive"
+										onSelect={() => setDeleteOpen(true)}
+									>
+										<Trash2Icon className="text-destructive" />
+										Delete workspace
+									</DropdownMenuItem>
+								</>
+							) : null}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
 
 				<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
 					<DialogContent className="sm:max-w-sm">
