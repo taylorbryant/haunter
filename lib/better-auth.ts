@@ -5,6 +5,7 @@ import { emailOTP, organization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/libsql";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
+import { createAuthRateLimitStorage } from "@/lib/auth-rate-limit";
 import { env } from "@/lib/env";
 import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
 import { accessControl, roles } from "@/lib/org-access";
@@ -19,6 +20,8 @@ const client = createClient({
 await ensureDatabaseReady(client);
 
 const db = drizzle(client, { schema });
+
+const authRateLimitStorage = createAuthRateLimitStorage();
 
 const trustedOrigins = [
 	env.APP_URL,
@@ -63,6 +66,16 @@ export const auth = betterAuth({
 			},
 		}),
 	],
+	// Better Auth's own limiter is the only throttle on /api/auth/* (Beignet's
+	// contract hooks don't see those routes). Its defaults already cover the
+	// abuse-prone paths — OTP send 3/min, sign-in 3/10s, both per IP — but the
+	// default memory store resets per serverless instance, so back it with
+	// Upstash when configured and force it on (default is production-only).
+	// Without Upstash, Better Auth's defaults stand: memory store, production
+	// only — best-effort, but never weaker than before.
+	rateLimit: authRateLimitStorage
+		? { enabled: true, customStorage: authRateLimitStorage }
+		: undefined,
 	// With no passwords, "fresh session" is the only re-auth signal better-auth
 	// could require for deleting an account. Treat sessions as always fresh so
 	// the type-to-confirm delete flow works session-authenticated.

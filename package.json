@@ -50,6 +50,7 @@
 		"@shikijs/langs-precompiled": "^4.3.0",
 		"@shikijs/themes": "^4.3.0",
 		"@tanstack/react-query": "^5.100.7",
+		"@upstash/redis": "^1.38.0",
 		"@vercel/blob": "^2.5.0",
 		"better-auth": "1.6.20",
 		"chrono-node": "^2.9.1",

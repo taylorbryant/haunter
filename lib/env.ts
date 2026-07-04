@@ -48,6 +48,9 @@ export const env = createEnv({
 		// limiter is used (dev only — per-instance, not durable).
 		UPSTASH_REDIS_REST_URL: z.string().optional(),
 		UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+		// Key prefix shared with @beignet/provider-rate-limit-upstash (which
+		// reads it directly); the default mirrors that provider's default.
+		UPSTASH_PREFIX: z.string().default("beignet:ratelimit"),
 		LOG_LEVEL: z
 			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 			.default("info"),
