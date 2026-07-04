@@ -1,7 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckIcon, CopyIcon, Globe2Icon, Share2Icon } from "lucide-react";
+import {
+	CheckIcon,
+	CopyIcon,
+	Globe2Icon,
+	Share2Icon,
+	XIcon,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -71,7 +77,10 @@ export function ShareButton() {
 	}
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		// modal: non-modal Radix popovers don't dismiss on outside taps in iOS
+		// Safari (taps on non-interactive page area never reach the dismiss
+		// layer). Modal mode closes reliably everywhere.
+		<Popover modal open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<Button variant="ghost" size="sm" className="text-muted-foreground">
 					<Share2Icon />
@@ -79,6 +88,18 @@ export function ShareButton() {
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent align="end" className="w-80">
+				{/* Explicit close: outside-tap dismissal has platform quirks on
+				    touch devices, so the popover always offers a visible way out. */}
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon-sm"
+					className="absolute top-1.5 right-1.5 text-muted-foreground"
+					onClick={() => setOpen(false)}
+				>
+					<XIcon />
+					<span className="sr-only">Close</span>
+				</Button>
 				{shareQuery.isPending ? (
 					<p className="text-muted-foreground text-sm">Loading…</p>
 				) : share ? (

@@ -113,7 +113,7 @@ function PageHistoryDialog({
 
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
-			<DialogContent className="flex h-[80vh] flex-col gap-3 sm:max-w-4xl">
+			<DialogContent className="flex h-[80dvh] flex-col gap-3 sm:max-w-4xl">
 				<DialogHeader>
 					<DialogTitle>Page history</DialogTitle>
 					<DialogDescription>
@@ -128,15 +128,17 @@ function PageHistoryDialog({
 						No versions yet — they appear after you've edited for a while.
 					</p>
 				) : (
-					<div className="flex min-h-0 flex-1 gap-4">
-						<div className="flex w-56 shrink-0 flex-col gap-1 overflow-y-auto">
+					<div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
+						{/* Phones get a horizontal checkpoint strip above the preview;
+						    the side-by-side list only fits from sm: up. */}
+						<div className="flex shrink-0 gap-1 overflow-x-auto sm:w-56 sm:flex-col sm:overflow-x-visible sm:overflow-y-auto">
 							{versions.map((version) => (
 								<button
 									key={version.id}
 									type="button"
 									onClick={() => setSelectedId(version.id)}
 									className={cn(
-										"flex flex-col rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted",
+										"flex shrink-0 flex-col whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted sm:shrink sm:whitespace-normal",
 										version.id === selected && "bg-muted",
 									)}
 								>
@@ -150,7 +152,7 @@ function PageHistoryDialog({
 								</button>
 							))}
 						</div>
-						<div className="flex min-w-0 flex-1 flex-col gap-2">
+						<div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
 							<div className="min-h-0 flex-1 overflow-y-auto rounded-md border p-3">
 								{previewQuery.isPending ? (
 									<Skeleton className="h-40 w-full" />
@@ -166,7 +168,7 @@ function PageHistoryDialog({
 								)}
 							</div>
 							<Button
-								className="w-fit"
+								className="w-full sm:w-fit"
 								disabled={!selected || restoreMutation.isPending}
 								onClick={restore}
 							>
