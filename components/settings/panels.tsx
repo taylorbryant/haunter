@@ -227,7 +227,8 @@ export function DeleteAccountPanel() {
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
 
-	const matches = email !== "" && confirm.trim().toLowerCase() === email.toLowerCase();
+	const matches =
+		email !== "" && confirm.trim().toLowerCase() === email.toLowerCase();
 
 	async function onSubmit(event: React.FormEvent) {
 		event.preventDefault();
@@ -254,8 +255,7 @@ export function DeleteAccountPanel() {
 			<form className="flex max-w-sm flex-col gap-4" onSubmit={onSubmit}>
 				<div className="flex flex-col gap-2">
 					<Label htmlFor="delete-confirm">
-						Type{" "}
-						<span className="font-medium text-foreground">{email}</span> to
+						Type <span className="font-medium text-foreground">{email}</span> to
 						confirm
 					</Label>
 					<Input

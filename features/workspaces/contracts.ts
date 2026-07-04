@@ -1,7 +1,10 @@
 import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import { errors } from "@/features/shared/errors";
-import { OnboardInputSchema, OnboardOutputSchema } from "@/features/workspaces/schemas";
+import {
+	OnboardInputSchema,
+	OnboardOutputSchema,
+} from "@/features/workspaces/schemas";
 
 const ErrorResponseSchema = z.object({
 	code: z.string(),

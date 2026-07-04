@@ -65,7 +65,8 @@ function CalloutView({
 	onChange: (props: { emoji?: string; color?: string }) => void;
 }) {
 	const [open, setOpen] = useState(false);
-	const colorKey: CalloutColor = color in CALLOUT_COLORS ? (color as CalloutColor) : "default";
+	const colorKey: CalloutColor =
+		color in CALLOUT_COLORS ? (color as CalloutColor) : "default";
 	const theme = CALLOUT_COLORS[colorKey];
 
 	return (

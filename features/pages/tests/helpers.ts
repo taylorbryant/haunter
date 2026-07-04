@@ -67,7 +67,11 @@ export function createTestPageRepository(): PageRepository {
 			const page = pages.get(id);
 			return page ? toMeta(page) : null;
 		},
-		async searchByWorkspace(workspaceId: string, needle: string, limit: number) {
+		async searchByWorkspace(
+			workspaceId: string,
+			needle: string,
+			limit: number,
+		) {
 			const lowered = needle.toLowerCase();
 			return Array.from(pages.values())
 				.filter(

@@ -87,8 +87,9 @@ export function setPageIconInCache(
 	id: string,
 	icon: string | null,
 ) {
-	queryClient.setQueryData<Page>(rq(getPage).key({ path: { id } }), (current) =>
-		current ? { ...current, icon } : current,
+	queryClient.setQueryData<Page>(
+		rq(getPage).key({ path: { id } }),
+		(current) => (current ? { ...current, icon } : current),
 	);
 	queryClient.setQueriesData<{ items: PageMeta[] }>(
 		rq(listPages).filter(),

@@ -79,10 +79,7 @@ export const searchPagesUseCase = useCase
 				const index = block.text.toLowerCase().indexOf(needle);
 				if (index >= 0) {
 					bodyMatches.push(
-						toResult(
-							page,
-							snippetAround(block.text, index, needle.length),
-						),
+						toResult(page, snippetAround(block.text, index, needle.length)),
 					);
 					break;
 				}

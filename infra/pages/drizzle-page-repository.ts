@@ -108,7 +108,11 @@ export function createDrizzlePageRepository(
 
 			return row ? toPageMeta(row) : null;
 		},
-		async searchByWorkspace(workspaceId: string, needle: string, limit: number) {
+		async searchByWorkspace(
+			workspaceId: string,
+			needle: string,
+			limit: number,
+		) {
 			const pattern = `%${needle.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 			const rows = await db
 				.select()

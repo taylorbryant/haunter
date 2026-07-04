@@ -16,7 +16,10 @@ const mailer = env.RESEND_API_KEY
 const isProduction = env.NODE_ENV === "production";
 
 /** Email a one-time sign-in code (and log it in development). */
-export async function sendLoginCode(email: string, code: string): Promise<void> {
+export async function sendLoginCode(
+	email: string,
+	code: string,
+): Promise<void> {
 	// Surfacing the code in dev keeps sign-in working without real delivery.
 	if (!isProduction) {
 		console.info(`[auth] Sign-in code for ${email}: ${code}`);

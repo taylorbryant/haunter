@@ -43,7 +43,11 @@ export const AttachmentUpload = defineUpload<
 		// this segment.
 		const workspaceId = requireActiveWorkspaceId(ctx);
 		const extension = file.name.includes(".")
-			? file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "")
+			? file.name
+					.split(".")
+					.pop()
+					?.toLowerCase()
+					.replace(/[^a-z0-9]/g, "")
 			: undefined;
 		const suffix = extension ? `.${extension.slice(0, 8)}` : "";
 		return `pages/${workspaceId}/${metadata.pageId}/${uploadId}${suffix}`;

@@ -378,11 +378,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 								    and sits over this icon slot; keep the slot but hide the
 								    glyph so the chevron doesn't overlap the emoji. */}
 								{node.icon ? (
-									<span
-										className={cn(
-											isMobile && hasChildren && "invisible",
-										)}
-									>
+									<span className={cn(isMobile && hasChildren && "invisible")}>
 										{node.icon}
 									</span>
 								) : (

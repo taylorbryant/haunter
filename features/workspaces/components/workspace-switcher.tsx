@@ -7,6 +7,7 @@ import {
 	PlusIcon,
 	SmilePlusIcon,
 	Trash2Icon,
+	UsersIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -66,6 +67,7 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { MembersDialog } from "@/features/members/components/members-dialog";
 
 // A "workspace" is a Better Auth organization; its emoji lives in the org's
 // `logo` field.
@@ -95,6 +97,7 @@ export function WorkspaceSwitcher({
 	const [editIcon, setEditIcon] = useState<string | null>(null);
 	const [iconPickerOpen, setIconPickerOpen] = useState(false);
 	const [deleteOpen, setDeleteOpen] = useState(false);
+	const [membersOpen, setMembersOpen] = useState(false);
 
 	const workspaces = organizationsQuery.data ?? [];
 	const active = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
@@ -222,6 +225,16 @@ export function WorkspaceSwitcher({
 											<Button
 												variant="ghost"
 												className="h-11 justify-start"
+												onClick={() => setMembersOpen(true)}
+											>
+												<UsersIcon />
+												Members
+											</Button>
+										</DrawerClose>
+										<DrawerClose asChild>
+											<Button
+												variant="ghost"
+												className="h-11 justify-start"
 												onClick={() => {
 													setEditName(active.name);
 													setEditIcon(active.logo ?? null);
@@ -286,6 +299,10 @@ export function WorkspaceSwitcher({
 							{active ? (
 								<>
 									<DropdownMenuSeparator />
+									<DropdownMenuItem onSelect={() => setMembersOpen(true)}>
+										<UsersIcon />
+										Members
+									</DropdownMenuItem>
 									<DropdownMenuItem
 										onSelect={() => {
 											setEditName(active.name);
@@ -428,6 +445,8 @@ export function WorkspaceSwitcher({
 						</form>
 					</DialogContent>
 				</Dialog>
+
+				<MembersDialog open={membersOpen} onOpenChange={setMembersOpen} />
 
 				<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
 					<AlertDialogContent>

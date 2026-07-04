@@ -42,7 +42,11 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	// Every signed-in test user is an owner of their active workspace.
-	const members = { async findRole() { return "owner"; } };
+	const members = {
+		async findRole() {
+			return "owner";
+		},
+	};
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {

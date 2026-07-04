@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
-import { createTestTenant, createTestUserActor } from "@beignet/core/ports/testing";
+import {
+	createTestTenant,
+	createTestUserActor,
+} from "@beignet/core/ports/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
@@ -92,7 +95,10 @@ async function createFixture(userId = "user_test") {
 	const tasks = createTestTaskRepository({ pages });
 	// Better Auth org ids are nanoid-style, not UUIDs — use a matching shape so
 	// schema validation is exercised realistically.
-	const workspace = { id: crypto.randomUUID().replaceAll("-", ""), name: "Work" };
+	const workspace = {
+		id: crypto.randomUUID().replaceAll("-", ""),
+		name: "Work",
+	};
 	const tester = createTester(userId, pages, workspace.id, tasks);
 	const ctx = await tester.ctx();
 
@@ -623,15 +629,23 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 
-		const byTitle = await tester.run(searchPagesUseCase, { q: "MEETING" }, {
-			ctx,
-		});
+		const byTitle = await tester.run(
+			searchPagesUseCase,
+			{ q: "MEETING" },
+			{
+				ctx,
+			},
+		);
 		expect(byTitle.items.map((item) => item.id)).toEqual([meeting.id]);
 		expect(byTitle.items[0]?.workspaceId).toBe(workspace.id);
 
-		const byBody = await tester.run(searchPagesUseCase, { q: "roadmap" }, {
-			ctx,
-		});
+		const byBody = await tester.run(
+			searchPagesUseCase,
+			{ q: "roadmap" },
+			{
+				ctx,
+			},
+		);
 		expect(byBody.items.map((item) => item.id)).toEqual([notes.id]);
 		expect(byBody.items[0]?.snippet).toContain("roadmap");
 	});
@@ -679,17 +693,25 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 
-		const meetings = await tester.run(searchPagesUseCase, { q: "meeting" }, {
-			ctx,
-		});
+		const meetings = await tester.run(
+			searchPagesUseCase,
+			{ q: "meeting" },
+			{
+				ctx,
+			},
+		);
 		expect(meetings.items).toEqual([]);
 
 		const sql = await tester.run(searchPagesUseCase, { q: "sql" }, { ctx });
 		expect(sql.items).toEqual([]);
 
-		const select = await tester.run(searchPagesUseCase, { q: "select" }, {
-			ctx,
-		});
+		const select = await tester.run(
+			searchPagesUseCase,
+			{ q: "select" },
+			{
+				ctx,
+			},
+		);
 		expect(select.items.map((item) => item.id)).toEqual([snippets.id]);
 	});
 });

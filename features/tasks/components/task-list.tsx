@@ -169,8 +169,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 										type="button"
 										className={cn(
 											"block max-w-full cursor-text truncate text-left text-sm",
-											task.completed &&
-												"text-muted-foreground line-through",
+											task.completed && "text-muted-foreground line-through",
 										)}
 										onClick={() => {
 											setEditTitle(task.title);

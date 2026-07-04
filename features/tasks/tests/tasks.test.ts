@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
-import { createTestTenant, createTestUserActor } from "@beignet/core/ports/testing";
+import {
+	createTestTenant,
+	createTestUserActor,
+} from "@beignet/core/ports/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
@@ -41,7 +44,10 @@ async function createFixture(userId = "user_test") {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository({ pages });
 	// Better Auth org ids are nanoid-style, not UUIDs.
-	const workspace = { id: crypto.randomUUID().replaceAll("-", ""), name: "Work" };
+	const workspace = {
+		id: crypto.randomUUID().replaceAll("-", ""),
+		name: "Work",
+	};
 	const page = await pages.create({
 		userId,
 		workspaceId: workspace.id,
