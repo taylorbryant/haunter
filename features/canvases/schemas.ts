@@ -9,7 +9,7 @@ export const CanvasSnapshotSchema = z.record(z.string(), z.unknown());
 export const CanvasSchema = z.object({
 	id: z.string().uuid(),
 	userId: z.string(),
-	workspaceId: z.string().uuid(),
+	workspaceId: z.string().min(1),
 	pageId: z.string().uuid(),
 	snapshot: CanvasSnapshotSchema,
 	createdAt: z.string().datetime(),
@@ -21,7 +21,7 @@ export const CanvasIdInputSchema = z.object({
 });
 
 export const CreateCanvasInputSchema = z.object({
-	workspaceId: z.string().uuid(),
+	workspaceId: z.string().min(1),
 	pageId: z.string().uuid(),
 });
 

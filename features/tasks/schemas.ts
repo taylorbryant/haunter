@@ -7,7 +7,7 @@ const DueDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
 export const TaskSchema = z.object({
 	id: z.string().uuid(),
 	userId: z.string(),
-	workspaceId: z.string().uuid(),
+	workspaceId: z.string().min(1),
 	pageId: z.string().uuid().nullable(),
 	sourceBlockId: z.string().nullable(),
 	title: z.string(),
@@ -27,7 +27,7 @@ export const TaskFilterSchema = z
 	.default("open");
 
 export const ListTasksInputSchema = z.object({
-	workspaceId: z.string().uuid(),
+	workspaceId: z.string().min(1),
 	filter: TaskFilterSchema,
 });
 
@@ -40,7 +40,7 @@ export const TaskIdInputSchema = z.object({
 });
 
 export const CreateTaskInputSchema = z.object({
-	workspaceId: z.string().uuid(),
+	workspaceId: z.string().min(1),
 	title: z.string().min(1).max(300),
 	dueDate: DueDateSchema.optional(),
 });

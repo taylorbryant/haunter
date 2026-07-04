@@ -88,7 +88,9 @@ function createTester(
 async function createFixture(userId = "user_test") {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository({ pages });
-	const workspace = { id: crypto.randomUUID(), name: "Work" };
+	// Better Auth org ids are nanoid-style, not UUIDs — use a matching shape so
+	// schema validation is exercised realistically.
+	const workspace = { id: crypto.randomUUID().replaceAll("-", ""), name: "Work" };
 	const tester = createTester(userId, pages, workspace.id, tasks);
 	const ctx = await tester.ctx();
 

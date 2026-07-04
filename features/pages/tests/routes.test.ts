@@ -79,7 +79,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 
 describe("pageRoutes", () => {
 	it("supports the full page lifecycle over HTTP", async () => {
-		const workspace = { id: crypto.randomUUID() };
+		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
 		const { app } = await createPagesTestApp({
 			auth: createSignedInAuth("user_test", workspace.id),
 		});
@@ -138,7 +138,7 @@ describe("pageRoutes", () => {
 	});
 
 	it("returns 422 for a cyclic move", async () => {
-		const workspace = { id: crypto.randomUUID() };
+		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
 		const { app } = await createPagesTestApp({
 			auth: createSignedInAuth("user_test", workspace.id),
 		});

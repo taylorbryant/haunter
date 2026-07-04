@@ -40,7 +40,8 @@ function taskBlock(
 async function createFixture(userId = "user_test") {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository({ pages });
-	const workspace = { id: crypto.randomUUID(), name: "Work" };
+	// Better Auth org ids are nanoid-style, not UUIDs.
+	const workspace = { id: crypto.randomUUID().replaceAll("-", ""), name: "Work" };
 	const page = await pages.create({
 		userId,
 		workspaceId: workspace.id,
