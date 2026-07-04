@@ -173,12 +173,30 @@ function Sidebar({
 	const popperWasOpenRef = React.useRef(false);
 	React.useEffect(() => {
 		if (!isMobile) return;
-		const record = () => {
-			popperWasOpenRef.current = Boolean(
-				document.querySelector(
-					'[data-radix-popper-content-wrapper],[data-slot="dropdown-menu-content"],[data-slot="popover-content"]',
-				),
-			);
+		const POPPER_SELECTOR =
+			'[data-radix-popper-content-wrapper],[data-slot="dropdown-menu-content"],[data-slot="popover-content"]';
+		const record = (event: PointerEvent) => {
+			const popper = document.querySelector(POPPER_SELECTOR);
+			popperWasOpenRef.current = Boolean(popper);
+			// Tapping outside an open popover dismisses it, but on touch the same
+			// tap's `click` would also fire on whatever is underneath (a page link
+			// or expand chevron), navigating or toggling by accident. Swallow that
+			// one ghost click. Taps *inside* the popover (selecting an item) are
+			// left alone.
+			const target = event.target;
+			const insidePopper =
+				target instanceof Element && target.closest(POPPER_SELECTOR);
+			if (popper && !insidePopper) {
+				const swallow = (click: MouseEvent) => {
+					click.stopPropagation();
+					click.preventDefault();
+				};
+				document.addEventListener("click", swallow, { capture: true, once: true });
+				window.setTimeout(
+					() => document.removeEventListener("click", swallow, true),
+					350,
+				);
+			}
 		};
 		document.addEventListener("pointerdown", record, true);
 		return () => document.removeEventListener("pointerdown", record, true);
