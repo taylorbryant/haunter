@@ -146,6 +146,8 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
 					await invalidatePages(queryClient);
 					router.push(`/w/${workspaceId}/p/${page.id}`);
+					// On mobile, close the sheet so the new page is visible.
+					if (isMobile) setOpenMobile(false);
 				},
 			},
 		);
