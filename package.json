@@ -35,6 +35,7 @@
 		"@beignet/provider-db-drizzle": "^0.0.27",
 		"@beignet/provider-logger-pino": "^0.0.27",
 		"@beignet/provider-mail-resend": "^0.0.27",
+		"@beignet/provider-rate-limit-upstash": "^0.0.27",
 		"@beignet/provider-storage-local": "^0.0.27",
 		"@beignet/react-hook-form": "^0.0.27",
 		"@beignet/react-query": "^0.0.27",

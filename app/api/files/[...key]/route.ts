@@ -18,6 +18,21 @@ export async function GET(
 		return new Response(null, { status: 404 });
 	}
 
+	// This route bypasses the contract hooks, so enforce the limit manually.
+	const limit = await server.ports.rateLimit.hit({
+		key: `files:${ctx.auth.user.id}`,
+		limit: 600,
+		windowSec: 60,
+	});
+	if (!limit.allowed) {
+		return new Response(null, {
+			status: 429,
+			headers: limit.retryAfterSeconds
+				? { "retry-after": String(limit.retryAfterSeconds) }
+				: {},
+		});
+	}
+
 	const key = segments.join("/");
 	if (!key.startsWith(`pages/${workspaceId}/`)) {
 		return new Response(null, { status: 404 });

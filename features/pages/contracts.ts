@@ -84,6 +84,9 @@ export const savePageContent = pages
 	.put("/api/pages/:id/content")
 	.pathParams(PageIdInputSchema)
 	.body(SavePageContentBodySchema)
+	// Autosave fires at most ~1/s per page; this is headroom, not a ceiling
+	// a normal editing session should ever meet.
+	.meta({ rateLimit: { max: 240, windowSec: 60, scope: "user" } })
 	.errors({
 		Forbidden: errors.Forbidden,
 		PageNotFound: errors.PageNotFound,
@@ -108,6 +111,7 @@ export const listBacklinks = pages
 // Quick-find across every workspace the user owns; trashed pages excluded.
 export const searchPages = pages
 	.get("/api/search")
+	.meta({ rateLimit: { max: 60, windowSec: 60, scope: "user" } })
 	.query(SearchPagesInputSchema)
 	.responses({
 		200: SearchPagesOutputSchema,

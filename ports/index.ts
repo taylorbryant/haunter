@@ -5,6 +5,7 @@ import type {
 	BoundGate,
 	GatePort,
 	LoggerPort,
+	RateLimitPort,
 	StoragePort,
 	UnitOfWorkPort,
 } from "@beignet/core/ports";
@@ -55,6 +56,7 @@ export type AppPorts = {
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
 	pageVersions: PageVersionRepository;
+	rateLimit: RateLimitPort;
 	resend: ResendMailEscapeHatch;
 	shares: ShareRepository;
 	tasks: TaskRepository;

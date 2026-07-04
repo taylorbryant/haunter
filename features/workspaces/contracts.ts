@@ -25,6 +25,7 @@ const workspaces = defineContractGroup()
 export const onboard = workspaces
 	.post("/api/onboarding")
 	.body(OnboardInputSchema)
+	.meta({ rateLimit: { max: 5, windowSec: 300, scope: "user" } })
 	.errors({ Forbidden: errors.Forbidden })
 	.responses({
 		200: OnboardOutputSchema,

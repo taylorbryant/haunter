@@ -44,6 +44,10 @@ export const env = createEnv({
 		// otherwise the local ./storage directory is used (dev only — it does
 		// not survive serverless deploys).
 		BLOB_READ_WRITE_TOKEN: z.string().optional(),
+		// Upstash Redis for durable rate limiting. When unset, an in-process
+		// limiter is used (dev only — per-instance, not durable).
+		UPSTASH_REDIS_REST_URL: z.string().optional(),
+		UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 		LOG_LEVEL: z
 			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 			.default("info"),

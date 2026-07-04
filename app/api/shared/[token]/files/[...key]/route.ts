@@ -14,6 +14,22 @@ export async function GET(
 	const { token, key: segments } = await params;
 	const server = await getServer();
 
+	// This route bypasses the contract hooks, so enforce the limit manually.
+	// Keyed by token: abuse of one leaked link can't starve other shares.
+	const limit = await server.ports.rateLimit.hit({
+		key: `share-files:${token}`,
+		limit: 300,
+		windowSec: 60,
+	});
+	if (!limit.allowed) {
+		return new Response(null, {
+			status: 429,
+			headers: limit.retryAfterSeconds
+				? { "retry-after": String(limit.retryAfterSeconds) }
+				: {},
+		});
+	}
+
 	const share = await server.ports.shares.findByToken(token);
 	if (!share) {
 		return new Response(null, { status: 404 });

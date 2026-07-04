@@ -38,6 +38,7 @@ export const createPageShare = shares
 	.post("/api/pages/:pageId/share")
 	.pathParams(PageIdInputSchema)
 	.body(z.object({}))
+	.meta({ rateLimit: { max: 30, windowSec: 60, scope: "user" } })
 	.errors({
 		Unauthorized: errors.Unauthorized,
 		Forbidden: errors.Forbidden,
@@ -63,6 +64,7 @@ export const revokePageShare = shares
 export const getSharedPage = shares
 	.get("/api/shared/:token")
 	.pathParams(SharedTokenInputSchema)
+	.meta({ rateLimit: { max: 120, windowSec: 60, scope: "ip" } })
 	.errors({
 		ShareNotFound: errors.ShareNotFound,
 	})
@@ -74,6 +76,7 @@ export const getSharedPage = shares
 export const getSharedCanvas = shares
 	.get("/api/shared/:token/canvases/:id")
 	.pathParams(SharedCanvasInputSchema)
+	.meta({ rateLimit: { max: 240, windowSec: 60, scope: "ip" } })
 	.errors({
 		ShareNotFound: errors.ShareNotFound,
 	})

@@ -3,6 +3,7 @@ import { createNextServer, createNextServerLoader } from "@beignet/next";
 import {
 	createErrorReportingHooks,
 	createIdempotencyHooks,
+	createRateLimitHooks,
 } from "@beignet/core/server";
 import type { AppContext } from "@/app-context";
 import { appPorts } from "@/infra/app-ports";
@@ -30,6 +31,12 @@ export const getServer = createNextServerLoader(() =>
 		hooks: [
 			createErrorReportingHooks<AppContext>(),
 			createIdempotencyHooks<AppContext>(),
+			// Enforces contract.meta.rateLimit. Vercel's edge normalizes
+			// x-forwarded-for (client IP first), so the first entry is trusted
+			// here; locally the header is absent and ip scopes share one bucket.
+			createRateLimitHooks<AppContext>({
+				ipSource: "x-forwarded-for-first",
+			}),
 		],
 		context: appContext,
 		routes,
