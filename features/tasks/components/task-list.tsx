@@ -36,6 +36,8 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 	const queryClient = useQueryClient();
 	const [filter, setFilter] = useState<TaskFilter>("open");
 	const [composing, setComposing] = useState(false);
+	const [editingId, setEditingId] = useState<string | null>(null);
+	const [editTitle, setEditTitle] = useState("");
 
 	const tasksQuery = useQuery(listTasksQueryOptions(workspaceId, filter));
 	const createMutation = useMutation(createTaskMutationOptions());
@@ -50,6 +52,18 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 		if (task?.pageId) {
 			await invalidatePage(queryClient, task.pageId);
 		}
+	}
+
+	// Standalone tasks are renamed here; page-sourced titles live in the page
+	// document and are edited in the editor.
+	function commitTitle(task: TaskWithPage) {
+		const trimmed = editTitle.trim();
+		setEditingId(null);
+		if (!trimmed || trimmed === task.title) return;
+		updateMutation.mutate(
+			{ path: { id: task.id }, body: { title: trimmed } },
+			{ onSuccess: () => refresh(task) },
+		);
 	}
 
 	function createTask(input: {
@@ -136,14 +150,45 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 								}
 							/>
 							<div className="min-w-0 flex-1">
-								<p
-									className={cn(
-										"truncate text-sm",
-										task.completed && "text-muted-foreground line-through",
-									)}
-								>
-									{task.title || "Untitled task"}
-								</p>
+								{editingId === task.id ? (
+									<input
+										// biome-ignore lint/a11y/noAutofocus: opened by an explicit tap on the title
+										autoFocus
+										value={editTitle}
+										aria-label="Task name"
+										className="w-full bg-transparent text-base leading-tight outline-none sm:text-sm"
+										onChange={(event) => setEditTitle(event.target.value)}
+										onKeyDown={(event) => {
+											if (event.key === "Enter") commitTitle(task);
+											if (event.key === "Escape") setEditingId(null);
+										}}
+										onBlur={() => commitTitle(task)}
+									/>
+								) : task.sourceBlockId === null ? (
+									<button
+										type="button"
+										className={cn(
+											"block max-w-full cursor-text truncate text-left text-sm",
+											task.completed &&
+												"text-muted-foreground line-through",
+										)}
+										onClick={() => {
+											setEditTitle(task.title);
+											setEditingId(task.id);
+										}}
+									>
+										{task.title || "Untitled task"}
+									</button>
+								) : (
+									<p
+										className={cn(
+											"truncate text-sm",
+											task.completed && "text-muted-foreground line-through",
+										)}
+									>
+										{task.title || "Untitled task"}
+									</p>
+								)}
 								{task.pageId ? (
 									<Link
 										href={`/w/${workspaceId}/p/${task.pageId}`}
