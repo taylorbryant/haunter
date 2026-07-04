@@ -3,6 +3,7 @@ import { createDrizzleCanvasRepository } from "@/infra/canvases/drizzle-canvas-r
 import { createDrizzleMemberRepository } from "@/infra/members/drizzle-member-repository";
 import { createDrizzlePageLinkRepository } from "@/infra/pages/drizzle-page-link-repository";
 import { createDrizzlePageRepository } from "@/infra/pages/drizzle-page-repository";
+import { createDrizzleShareRepository } from "@/infra/shares/drizzle-share-repository";
 import { createDrizzleTaskRepository } from "@/infra/tasks/drizzle-task-repository";
 import type { AppTransactionPorts } from "@/ports";
 import type * as schema from "./schema";
@@ -15,6 +16,7 @@ export function createRepositories(
 		members: createDrizzleMemberRepository(db),
 		pageLinks: createDrizzlePageLinkRepository(db),
 		pages: createDrizzlePageRepository(db),
+		shares: createDrizzleShareRepository(db),
 		tasks: createDrizzleTaskRepository(db),
 	};
 }

@@ -227,3 +227,26 @@ export const pageLinks = sqliteTable(
 		targetIdx: index("page_links_target_idx").on(table.targetPageId),
 	}),
 );
+
+// Public read-only share links. One active link per page; the row's token is
+// the capability — deleting the row revokes the link.
+export const pageShares = sqliteTable(
+	"page_shares",
+	{
+		id: text("id").primaryKey(),
+		pageId: text("page_id")
+			.notNull()
+			.references(() => pages.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		token: text("token").notNull().unique(),
+		createdBy: text("created_by")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		createdAt: text("created_at").notNull(),
+	},
+	(table) => ({
+		pageIdx: uniqueIndex("page_shares_page_idx").on(table.pageId),
+	}),
+);

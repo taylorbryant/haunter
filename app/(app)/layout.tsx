@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderBreadcrumbs } from "@/components/header-breadcrumbs";
 import { HeaderSaveIndicator } from "@/components/header-save-indicator";
+import { ShareButton } from "@/features/shares/components/share-button";
 import { Separator } from "@/components/ui/separator";
 import {
 	SidebarInset,
@@ -36,6 +37,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 					/>
 					<HeaderBreadcrumbs />
 					<HeaderSaveIndicator />
+					<ShareButton />
 				</header>
 				<div className="min-w-0 flex-1">{children}</div>
 			</SidebarInset>

@@ -18,6 +18,7 @@ import type {
 } from "@/features/pages/ports";
 import type { pagePolicy } from "@/features/pages/policy";
 import type { AuthorizationContext } from "@/features/shared/authorization";
+import type { ShareRepository } from "@/features/shares/ports";
 import type { TaskRepository } from "@/features/tasks/ports";
 import type { taskPolicy } from "@/features/tasks/policy";
 import type { AuthPort } from "./auth";
@@ -34,6 +35,7 @@ export type AppTransactionPorts = {
 	members: MemberRepository;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
+	shares: ShareRepository;
 	tasks: TaskRepository;
 };
 
@@ -51,6 +53,7 @@ export type AppPorts = {
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
 	resend: ResendMailEscapeHatch;
+	shares: ShareRepository;
 	tasks: TaskRepository;
 	uow: UnitOfWorkPort<AppTransactionPorts>;
 	storage: StoragePort;
