@@ -59,14 +59,16 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 						{/* Close sits just outside the card's top-right corner — over
 						    the backdrop and clear of tldraw's own top-right UI — as a
 						    semi-transparent circle. */}
-						<DialogClose asChild>
-							<button
-								type="button"
-								aria-label="Close canvas"
-								className="-top-3 -right-3 absolute z-10 flex size-9 items-center justify-center rounded-full bg-background/70 text-muted-foreground ring-1 ring-border/60 backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground"
-							>
-								<XIcon className="size-5" />
-							</button>
+						<DialogClose
+							render={
+								<button
+									type="button"
+									aria-label="Close canvas"
+									className="-top-3 -right-3 absolute z-10 flex size-9 items-center justify-center rounded-full bg-background/70 text-muted-foreground ring-1 ring-border/60 backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground"
+								/>
+							}
+						>
+							<XIcon className="size-5" />
 						</DialogClose>
 					</DialogContent>
 				</Dialog>

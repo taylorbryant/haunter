@@ -119,13 +119,17 @@ export default function AcceptInvitePage({
 						</>
 					) : null}
 					{status === "need-auth" ? (
-						<Button asChild>
-							<Link href="/sign-in">Sign in</Link>
+						<Button render={<Link href="/sign-in" />} nativeButton={false}>
+							Sign in
 						</Button>
 					) : null}
 					{status === "error" ? (
-						<Button asChild variant="ghost">
-							<Link href="/">Go home</Link>
+						<Button
+							variant="ghost"
+							render={<Link href="/" />}
+							nativeButton={false}
+						>
+							Go home
 						</Button>
 					) : null}
 				</CardFooter>

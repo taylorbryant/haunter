@@ -43,11 +43,13 @@ export function DueDatePicker({
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
-				<button type="button" className={className} aria-label={ariaLabel}>
-					<CalendarIcon className="size-3" />
-					{value ?? "Due"}
-				</button>
+			<PopoverTrigger
+				render={
+					<button type="button" className={className} aria-label={ariaLabel} />
+				}
+			>
+				<CalendarIcon className="size-3" />
+				{value ?? "Due"}
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-0" align="end">
 				<Calendar

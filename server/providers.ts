@@ -4,15 +4,15 @@ import { createAuthBetterAuthProvider } from "@beignet/provider-auth-better-auth
 import { createDrizzleSqliteProvider } from "@beignet/provider-db-drizzle/sqlite";
 import { loggerPinoProvider } from "@beignet/provider-logger-pino";
 import { mailResendProvider } from "@beignet/provider-mail-resend";
-import * as schema from "@/infra/db/schema";
+import { upstashRateLimitProvider } from "@beignet/provider-rate-limit-upstash";
+import { createLocalStorageProvider } from "@beignet/provider-storage-local";
 import { starterDatabaseProvider } from "@/infra/db/provider";
+import * as schema from "@/infra/db/schema";
 import { memoryRateLimitProvider } from "@/infra/rate-limit/memory-rate-limit-provider";
 import { vercelBlobStorageProvider } from "@/infra/storage/vercel-blob-storage";
 import { auth } from "@/lib/better-auth";
 import { env } from "@/lib/env";
 import type { AuthSessionMetadata, AuthUser } from "@/ports/auth";
-import { createLocalStorageProvider } from "@beignet/provider-storage-local";
-import { upstashRateLimitProvider } from "@beignet/provider-rate-limit-upstash";
 
 const drizzleSqliteProvider = createDrizzleSqliteProvider({ schema });
 

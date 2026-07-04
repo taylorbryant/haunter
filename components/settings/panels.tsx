@@ -1,10 +1,10 @@
 "use client";
 
 import { rootFormError } from "@beignet/react-hook-form";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { authClient } from "@/client/auth-client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -184,22 +184,20 @@ export function AppearancePanel() {
 					</p>
 				</div>
 				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="outline" size="sm">
-							<span
-								aria-hidden
-								className="size-3 rounded-full border"
-								style={{ backgroundColor: codeTheme.bg }}
-							/>
-							{codeTheme.label}
-							<ChevronDownIcon className="opacity-50" />
-						</Button>
+					<DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+						<span
+							aria-hidden
+							className="size-3 rounded-full border"
+							style={{ backgroundColor: codeTheme.bg }}
+						/>
+						{codeTheme.label}
+						<ChevronDownIcon className="opacity-50" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
 						{CODE_THEMES.map((theme) => (
 							<DropdownMenuItem
 								key={theme.id}
-								onSelect={() => setCodeThemeId(theme.id)}
+								onClick={() => setCodeThemeId(theme.id)}
 							>
 								<span
 									aria-hidden

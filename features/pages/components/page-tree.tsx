@@ -48,6 +48,7 @@ import {
 	SidebarMenuSub,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
@@ -57,7 +58,6 @@ import {
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
-import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { cn } from "@/lib/utils";
 import { PageIconPanel } from "./page-icon-picker";
 
@@ -361,7 +361,16 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						/>
 					) : (
 						<SidebarMenuButton
-							asChild
+							render={
+								<Link
+									href={`/w/${workspaceId}/p/${node.id}`}
+									// On mobile, tapping a page navigates and closes the
+									// sidebar sheet so the page is visible immediately.
+									onClick={() => {
+										if (isMobile) setOpenMobile(false);
+									}}
+								/>
+							}
 							isActive={isActive}
 							title={node.title}
 							// Two hover actions sit on the right (••• at right-6, + at
@@ -369,31 +378,22 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							// them, so widen it.
 							className="group-has-data-[sidebar=menu-action]/menu-item:pr-13"
 						>
-							<Link
-								href={`/w/${workspaceId}/p/${node.id}`}
-								// On mobile, tapping a page navigates and closes the
-								// sidebar sheet so the page is visible immediately.
-								onClick={() => {
-									if (isMobile) setOpenMobile(false);
-								}}
-							>
-								{/* On mobile the expand chevron is always shown (no hover)
-								    and sits over this icon slot; keep the slot but hide the
-								    glyph so the chevron doesn't overlap the emoji. */}
-								{node.icon ? (
-									<span className={cn(isMobile && hasChildren && "invisible")}>
-										{node.icon}
-									</span>
-								) : (
-									<FileTextIcon
-										className={cn(
-											"text-sidebar-foreground/60",
-											isMobile && hasChildren && "invisible",
-										)}
-									/>
-								)}
-								<span>{node.title || "Untitled"}</span>
-							</Link>
+							{/* On mobile the expand chevron is always shown (no hover)
+							    and sits over this icon slot; keep the slot but hide the
+							    glyph so the chevron doesn't overlap the emoji. */}
+							{node.icon ? (
+								<span className={cn(isMobile && hasChildren && "invisible")}>
+									{node.icon}
+								</span>
+							) : (
+								<FileTextIcon
+									className={cn(
+										"text-sidebar-foreground/60",
+										isMobile && hasChildren && "invisible",
+									)}
+								/>
+							)}
+							<span>{node.title || "Untitled"}</span>
 						</SidebarMenuButton>
 					)}
 					{hasChildren && !isRenaming ? (
@@ -414,13 +414,15 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						// Mobile: one action button that opens a bottom drawer — bigger
 						// tap targets, and no "+" crowding the row.
 						<Drawer>
-							<DrawerTrigger asChild>
-								<SidebarMenuAction
-									className="right-1 aria-expanded:bg-muted"
-									aria-label="Page actions"
-								>
-									<MoreHorizontalIcon />
-								</SidebarMenuAction>
+							<DrawerTrigger
+								render={
+									<SidebarMenuAction
+										className="right-1 aria-expanded:bg-muted"
+										aria-label="Page actions"
+									/>
+								}
+							>
+								<MoreHorizontalIcon />
 							</DrawerTrigger>
 							<DrawerContent>
 								<DrawerHeader className="border-b text-left">
@@ -433,48 +435,56 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 									</DrawerDescription>
 								</DrawerHeader>
 								<div className="flex flex-col p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-									<DrawerClose asChild>
-										<Button
-											variant="ghost"
-											className="h-11 justify-start"
-											onClick={() => createPage(node.id)}
-										>
-											<PlusIcon />
-											Add subpage
-										</Button>
+									<DrawerClose
+										render={
+											<Button
+												variant="ghost"
+												className="h-11 justify-start"
+												onClick={() => createPage(node.id)}
+											/>
+										}
+									>
+										<PlusIcon />
+										Add subpage
 									</DrawerClose>
-									<DrawerClose asChild>
-										<Button
-											variant="ghost"
-											className="h-11 justify-start"
-											onClick={() => {
-												setRenamingId(node.id);
-												setRenameValue(node.title);
-											}}
-										>
-											<PencilIcon />
-											Rename
-										</Button>
+									<DrawerClose
+										render={
+											<Button
+												variant="ghost"
+												className="h-11 justify-start"
+												onClick={() => {
+													setRenamingId(node.id);
+													setRenameValue(node.title);
+												}}
+											/>
+										}
+									>
+										<PencilIcon />
+										Rename
 									</DrawerClose>
-									<DrawerClose asChild>
-										<Button
-											variant="ghost"
-											className="h-11 justify-start"
-											onClick={() => setIconPageId(node.id)}
-										>
-											<SmilePlusIcon />
-											Change icon
-										</Button>
+									<DrawerClose
+										render={
+											<Button
+												variant="ghost"
+												className="h-11 justify-start"
+												onClick={() => setIconPageId(node.id)}
+											/>
+										}
+									>
+										<SmilePlusIcon />
+										Change icon
 									</DrawerClose>
-									<DrawerClose asChild>
-										<Button
-											variant="ghost"
-											className="h-11 justify-start text-destructive hover:text-destructive"
-											onClick={() => deletePage(node)}
-										>
-											<Trash2Icon />
-											Move to trash
-										</Button>
+									<DrawerClose
+										render={
+											<Button
+												variant="ghost"
+												className="h-11 justify-start text-destructive hover:text-destructive"
+												onClick={() => deletePage(node)}
+											/>
+										}
+									>
+										<Trash2Icon />
+										Move to trash
 									</DrawerClose>
 								</div>
 							</DrawerContent>
@@ -482,14 +492,16 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					) : (
 						<>
 							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<SidebarMenuAction
-										showOnHover
-										className="right-6 aria-expanded:bg-muted"
-										aria-label="Page actions"
-									>
-										<MoreHorizontalIcon />
-									</SidebarMenuAction>
+								<DropdownMenuTrigger
+									render={
+										<SidebarMenuAction
+											showOnHover
+											className="right-6 aria-expanded:bg-muted"
+											aria-label="Page actions"
+										/>
+									}
+								>
+									<MoreHorizontalIcon />
 								</DropdownMenuTrigger>
 								<DropdownMenuContent
 									className="w-48 rounded-lg"
@@ -497,19 +509,19 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 									align="start"
 								>
 									<DropdownMenuItem
-										onSelect={() => {
+										onClick={() => {
 											setRenamingId(node.id);
 											setRenameValue(node.title);
 										}}
 									>
 										Rename
 									</DropdownMenuItem>
-									<DropdownMenuItem onSelect={() => setIconPageId(node.id)}>
+									<DropdownMenuItem onClick={() => setIconPageId(node.id)}>
 										Change icon
 									</DropdownMenuItem>
 									<DropdownMenuItem
 										className="text-destructive focus:text-destructive"
-										onSelect={() => deletePage(node)}
+										onClick={() => deletePage(node)}
 									>
 										Move to trash
 									</DropdownMenuItem>

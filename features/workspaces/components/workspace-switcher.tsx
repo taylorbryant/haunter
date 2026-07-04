@@ -44,6 +44,7 @@ import {
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
@@ -194,7 +195,7 @@ export function WorkspaceSwitcher({
 			<SidebarMenuItem>
 				{isMobile ? (
 					<Drawer>
-						<DrawerTrigger asChild>{trigger}</DrawerTrigger>
+						<DrawerTrigger render={trigger} />
 						<DrawerContent>
 							<DrawerHeader className="border-b text-left">
 								<DrawerTitle>Workspaces</DrawerTitle>
@@ -204,68 +205,79 @@ export function WorkspaceSwitcher({
 							</DrawerHeader>
 							<div className="flex flex-col gap-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
 								{workspaceItems.map((workspace) => (
-									<DrawerClose asChild key={workspace.id}>
-										<Button
-											variant="ghost"
-											className="h-11 justify-start"
-											onClick={() => switchTo(workspace.id)}
-										>
-											<span className="flex-1 truncate text-left">
-												{workspace.label}
-											</span>
-											{workspace.active ? <CheckIcon /> : null}
-										</Button>
-									</DrawerClose>
-								))}
-								<div className="my-1 h-px bg-border" />
-								<DrawerClose asChild>
-									<Button
-										variant="ghost"
-										className="h-11 justify-start text-muted-foreground"
-										onClick={() => setDialogOpen(true)}
-									>
-										<PlusIcon />
-										New workspace
-									</Button>
-								</DrawerClose>
-								{active ? (
-									<>
-										<DrawerClose asChild>
+									<DrawerClose
+										key={workspace.id}
+										render={
 											<Button
 												variant="ghost"
 												className="h-11 justify-start"
-												onClick={() => setMembersOpen(true)}
-											>
-												<UsersIcon />
-												Members
-											</Button>
-										</DrawerClose>
-										{canEditWorkspace ? (
-											<DrawerClose asChild>
+												onClick={() => switchTo(workspace.id)}
+											/>
+										}
+									>
+										<span className="flex-1 truncate text-left">
+											{workspace.label}
+										</span>
+										{workspace.active ? <CheckIcon /> : null}
+									</DrawerClose>
+								))}
+								<div className="my-1 h-px bg-border" />
+								<DrawerClose
+									render={
+										<Button
+											variant="ghost"
+											className="h-11 justify-start text-muted-foreground"
+											onClick={() => setDialogOpen(true)}
+										/>
+									}
+								>
+									<PlusIcon />
+									New workspace
+								</DrawerClose>
+								{active ? (
+									<>
+										<DrawerClose
+											render={
 												<Button
 													variant="ghost"
 													className="h-11 justify-start"
-													onClick={() => {
-														setEditName(active.name);
-														setEditIcon(active.logo ?? null);
-														setEditOpen(true);
-													}}
-												>
-													<PencilIcon />
-													Edit workspace
-												</Button>
+													onClick={() => setMembersOpen(true)}
+												/>
+											}
+										>
+											<UsersIcon />
+											Members
+										</DrawerClose>
+										{canEditWorkspace ? (
+											<DrawerClose
+												render={
+													<Button
+														variant="ghost"
+														className="h-11 justify-start"
+														onClick={() => {
+															setEditName(active.name);
+															setEditIcon(active.logo ?? null);
+															setEditOpen(true);
+														}}
+													/>
+												}
+											>
+												<PencilIcon />
+												Edit workspace
 											</DrawerClose>
 										) : null}
 										{canDeleteWorkspace ? (
-											<DrawerClose asChild>
-												<Button
-													variant="ghost"
-													className="h-11 justify-start text-destructive hover:text-destructive"
-													onClick={() => setDeleteOpen(true)}
-												>
-													<Trash2Icon />
-													Delete workspace
-												</Button>
+											<DrawerClose
+												render={
+													<Button
+														variant="ghost"
+														className="h-11 justify-start text-destructive hover:text-destructive"
+														onClick={() => setDeleteOpen(true)}
+													/>
+												}
+											>
+												<Trash2Icon />
+												Delete workspace
 											</DrawerClose>
 										) : null}
 									</>
@@ -275,7 +287,7 @@ export function WorkspaceSwitcher({
 					</Drawer>
 				) : (
 					<DropdownMenu>
-						<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+						<DropdownMenuTrigger render={trigger} />
 						<DropdownMenuContent
 							className="w-56 rounded-lg"
 							align="start"
@@ -283,27 +295,30 @@ export function WorkspaceSwitcher({
 							sideOffset={4}
 							// Don't return focus to the trigger on close: it would steal
 							// focus from the dialogs opened by the items below.
-							onCloseAutoFocus={(event) => event.preventDefault()}
+							finalFocus={() => false}
 						>
-							<DropdownMenuLabel className="text-muted-foreground text-xs">
-								Workspaces
-							</DropdownMenuLabel>
-							{workspaces.map((workspace) => (
-								<DropdownMenuItem
-									key={workspace.id}
-									onSelect={() => switchTo(workspace.id)}
-								>
-									<span className="truncate">
-										{workspace.logo ? `${workspace.logo} ` : ""}
-										{workspace.name}
-									</span>
-									{workspace.id === activeWorkspaceId ? (
-										<CheckIcon className="ml-auto" />
-									) : null}
-								</DropdownMenuItem>
-							))}
+							{/* Base UI requires GroupLabel to live inside a Group. */}
+							<DropdownMenuGroup>
+								<DropdownMenuLabel className="text-muted-foreground text-xs">
+									Workspaces
+								</DropdownMenuLabel>
+								{workspaces.map((workspace) => (
+									<DropdownMenuItem
+										key={workspace.id}
+										onClick={() => switchTo(workspace.id)}
+									>
+										<span className="truncate">
+											{workspace.logo ? `${workspace.logo} ` : ""}
+											{workspace.name}
+										</span>
+										{workspace.id === activeWorkspaceId ? (
+											<CheckIcon className="ml-auto" />
+										) : null}
+									</DropdownMenuItem>
+								))}
+							</DropdownMenuGroup>
 							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={() => setDialogOpen(true)}>
+							<DropdownMenuItem onClick={() => setDialogOpen(true)}>
 								<PlusIcon />
 								<span className="font-medium text-muted-foreground">
 									New workspace
@@ -312,13 +327,13 @@ export function WorkspaceSwitcher({
 							{active ? (
 								<>
 									<DropdownMenuSeparator />
-									<DropdownMenuItem onSelect={() => setMembersOpen(true)}>
+									<DropdownMenuItem onClick={() => setMembersOpen(true)}>
 										<UsersIcon />
 										Members
 									</DropdownMenuItem>
 									{canEditWorkspace ? (
 										<DropdownMenuItem
-											onSelect={() => {
+											onClick={() => {
 												setEditName(active.name);
 												setEditIcon(active.logo ?? null);
 												setEditOpen(true);
@@ -331,7 +346,7 @@ export function WorkspaceSwitcher({
 									{canDeleteWorkspace ? (
 										<DropdownMenuItem
 											className="text-destructive focus:text-destructive"
-											onSelect={() => setDeleteOpen(true)}
+											onClick={() => setDeleteOpen(true)}
 										>
 											<Trash2Icon className="text-destructive" />
 											Delete workspace
@@ -400,18 +415,20 @@ export function WorkspaceSwitcher({
 										open={iconPickerOpen}
 										onOpenChange={setIconPickerOpen}
 									>
-										<PopoverTrigger asChild>
-											<Button
-												id="edit-workspace-emoji"
-												type="button"
-												variant="outline"
-												className="size-9 p-0 text-lg leading-none"
-												aria-label="Choose emoji"
-											>
-												{editIcon ?? (
-													<SmilePlusIcon className="size-4 text-muted-foreground" />
-												)}
-											</Button>
+										<PopoverTrigger
+											render={
+												<Button
+													id="edit-workspace-emoji"
+													type="button"
+													variant="outline"
+													className="size-9 p-0 text-lg leading-none"
+													aria-label="Choose emoji"
+												/>
+											}
+										>
+											{editIcon ?? (
+												<SmilePlusIcon className="size-4 text-muted-foreground" />
+											)}
 										</PopoverTrigger>
 										<PopoverContent className="w-auto p-0" align="start">
 											<div className="flex h-[300px] w-[288px] flex-col">

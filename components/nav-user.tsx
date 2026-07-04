@@ -26,6 +26,7 @@ import {
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
@@ -121,7 +122,7 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
 			<SidebarMenuItem>
 				{isMobile ? (
 					<Drawer>
-						<DrawerTrigger asChild>{trigger}</DrawerTrigger>
+						<DrawerTrigger render={trigger} />
 						<DrawerContent>
 							<DrawerHeader className="border-b text-left">
 								<DrawerTitle className="flex items-center gap-2 font-normal">
@@ -136,55 +137,62 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
 									<span className="text-muted-foreground text-sm">Theme</span>
 									{themeControl}
 								</div>
-								<DrawerClose asChild>
-									<Button
-										variant="ghost"
-										className="h-11 justify-start"
-										onClick={() => setSettingsOpen(true)}
-									>
-										<SettingsIcon />
-										Settings
-									</Button>
+								<DrawerClose
+									render={
+										<Button
+											variant="ghost"
+											className="h-11 justify-start"
+											onClick={() => setSettingsOpen(true)}
+										/>
+									}
+								>
+									<SettingsIcon />
+									Settings
 								</DrawerClose>
-								<DrawerClose asChild>
-									<Button
-										variant="ghost"
-										className="h-11 justify-start"
-										onClick={signOut}
-									>
-										<LogOutIcon />
-										Log out
-									</Button>
+								<DrawerClose
+									render={
+										<Button
+											variant="ghost"
+											className="h-11 justify-start"
+											onClick={signOut}
+										/>
+									}
+								>
+									<LogOutIcon />
+									Log out
 								</DrawerClose>
 							</div>
 						</DrawerContent>
 					</Drawer>
 				) : (
 					<DropdownMenu>
-						<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+						<DropdownMenuTrigger render={trigger} />
 						<DropdownMenuContent
 							className="w-56 rounded-lg"
 							side="right"
 							align="end"
 							sideOffset={4}
 						>
-							<DropdownMenuLabel className="p-0 font-normal">
-								<div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-									{userIdentity}
-								</div>
-							</DropdownMenuLabel>
+							{/* Base UI requires GroupLabel to live inside a Group. */}
+							<DropdownMenuGroup>
+								<DropdownMenuLabel className="p-0 font-normal">
+									<div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+										{userIdentity}
+									</div>
+								</DropdownMenuLabel>
+							</DropdownMenuGroup>
 							<DropdownMenuSeparator />
 							<div className="flex items-center justify-between gap-2 px-2 py-1.5">
 								<span className="text-muted-foreground text-xs">Theme</span>
 								{themeControl}
 							</div>
 							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
+							<DropdownMenuItem onClick={() => setSettingsOpen(true)}>
 								<SettingsIcon />
 								Settings
 							</DropdownMenuItem>
 							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={signOut}>
+							<DropdownMenuItem onClick={signOut}>
 								<LogOutIcon />
 								Log out
 							</DropdownMenuItem>

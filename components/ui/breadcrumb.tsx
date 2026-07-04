@@ -1,8 +1,8 @@
-import type * as React from "react";
-import { Slot } from "radix-ui";
-
-import { cn } from "@/lib/utils";
+import { mergeProps } from "@base-ui/react/merge-props";
+import { useRender } from "@base-ui/react/use-render";
 import { ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
+import type * as React from "react";
+import { cn } from "@/lib/utils";
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
 	return (
@@ -39,27 +39,27 @@ function BreadcrumbItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 function BreadcrumbLink({
-	asChild,
 	className,
+	render,
 	...props
-}: React.ComponentProps<"a"> & {
-	asChild?: boolean;
-}) {
-	const Comp = asChild ? Slot.Root : "a";
-
-	return (
-		<Comp
-			data-slot="breadcrumb-link"
-			className={cn("transition-colors hover:text-foreground", className)}
-			{...props}
-		/>
-	);
+}: useRender.ComponentProps<"a">) {
+	return useRender({
+		defaultTagName: "a",
+		props: mergeProps<"a">(
+			{
+				className: cn("transition-colors hover:text-foreground", className),
+			},
+			props,
+		),
+		render,
+		state: {
+			slot: "breadcrumb-link",
+		},
+	});
 }
 
 function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
 	return (
-		// biome-ignore lint/a11y/useFocusableInteractive: upstream shadcn markup — the current page is intentionally a non-focusable, disabled link
-		// biome-ignore lint/a11y/useSemanticElements: see above; aria-current conveys the state
 		<span
 			data-slot="breadcrumb-page"
 			role="link"
@@ -112,10 +112,10 @@ function BreadcrumbEllipsis({
 
 export {
 	Breadcrumb,
-	BreadcrumbList,
+	BreadcrumbEllipsis,
 	BreadcrumbItem,
 	BreadcrumbLink,
+	BreadcrumbList,
 	BreadcrumbPage,
 	BreadcrumbSeparator,
-	BreadcrumbEllipsis,
 };

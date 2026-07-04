@@ -97,10 +97,11 @@ export function HeaderBreadcrumbs() {
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="start">
 								{hiddenTrail.map((hidden) => (
-									<DropdownMenuItem key={hidden.id} asChild>
-										<Link href={`/w/${workspaceId}/p/${hidden.id}`}>
-											{hidden.title || "Untitled"}
-										</Link>
+									<DropdownMenuItem
+										key={hidden.id}
+										render={<Link href={`/w/${workspaceId}/p/${hidden.id}`} />}
+									>
+										{hidden.title || "Untitled"}
 									</DropdownMenuItem>
 								))}
 							</DropdownMenuContent>
@@ -115,13 +116,15 @@ export function HeaderBreadcrumbs() {
 							{page.title || "Untitled"}
 						</BreadcrumbPage>
 					) : (
-						<BreadcrumbLink asChild>
-							<Link
-								href={`/w/${workspaceId}/p/${page.id}`}
-								className="truncate"
-							>
-								{page.title || "Untitled"}
-							</Link>
+						<BreadcrumbLink
+							render={
+								<Link
+									href={`/w/${workspaceId}/p/${page.id}`}
+									className="truncate"
+								/>
+							}
+						>
+							{page.title || "Untitled"}
 						</BreadcrumbLink>
 					)}
 				</BreadcrumbItem>,

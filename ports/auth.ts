@@ -1,6 +1,6 @@
 import type {
-	AuthPort as BeignetAuthPort,
 	AuthRequestLike,
+	AuthPort as BeignetAuthPort,
 	AuthSession as BeignetAuthSession,
 } from "@beignet/core/ports";
 

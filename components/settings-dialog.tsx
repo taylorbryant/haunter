@@ -13,7 +13,6 @@ import {
 	DeleteAccountPanel,
 	ProfilePanel,
 } from "@/components/settings/panels";
-import { AgentsPanel } from "@/features/agents/components/agents-panel";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -32,6 +31,7 @@ import {
 	SidebarMenuItem,
 	SidebarProvider,
 } from "@/components/ui/sidebar";
+import { AgentsPanel } from "@/features/agents/components/agents-panel";
 
 const SECTIONS = [
 	{ id: "profile", label: "Profile", icon: UserIcon, panel: ProfilePanel },
@@ -121,11 +121,13 @@ export function SettingsDialog({
 									</Button>
 								))}
 							</div>
-							<DialogClose asChild>
-								<Button variant="ghost" size="icon-sm" className="shrink-0">
-									<XIcon />
-									<span className="sr-only">Close</span>
-								</Button>
+							<DialogClose
+								render={
+									<Button variant="ghost" size="icon-sm" className="shrink-0" />
+								}
+							>
+								<XIcon />
+								<span className="sr-only">Close</span>
 							</DialogClose>
 						</div>
 						<div className="flex flex-col gap-4 p-6">
@@ -135,15 +137,17 @@ export function SettingsDialog({
 				</SidebarProvider>
 				{/* Desktop close (the default corner button is disabled above);
 				    absolute to the dialog so it stays put while the panel scrolls. */}
-				<DialogClose asChild>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						className="absolute top-3 right-3 z-10 hidden md:flex"
-					>
-						<XIcon />
-						<span className="sr-only">Close</span>
-					</Button>
+				<DialogClose
+					render={
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							className="absolute top-3 right-3 z-10 hidden md:flex"
+						/>
+					}
+				>
+					<XIcon />
+					<span className="sr-only">Close</span>
 				</DialogClose>
 			</DialogContent>
 		</Dialog>

@@ -78,14 +78,16 @@ function CalloutView({
 		>
 			<div contentEditable={false} className="shrink-0">
 				<Popover open={open} onOpenChange={setOpen}>
-					<PopoverTrigger asChild>
-						<button
-							type="button"
-							aria-label="Change callout icon and color"
-							className="mt-px flex size-6 items-center justify-center rounded text-lg leading-none transition-colors hover:bg-foreground/10"
-						>
-							{emoji || "💡"}
-						</button>
+					<PopoverTrigger
+						render={
+							<button
+								type="button"
+								aria-label="Change callout icon and color"
+								className="mt-px flex size-6 items-center justify-center rounded text-lg leading-none transition-colors hover:bg-foreground/10"
+							/>
+						}
+					>
+						{emoji || "💡"}
 					</PopoverTrigger>
 					<PopoverContent align="start" className="w-auto p-0">
 						<div className="flex items-center gap-1.5 border-b p-2">

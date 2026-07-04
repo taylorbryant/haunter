@@ -1,7 +1,7 @@
 "use client";
 
-import { use, useEffect } from "react";
 import type { ReactNode } from "react";
+import { use, useEffect } from "react";
 import { authClient } from "@/client/auth-client";
 
 /**

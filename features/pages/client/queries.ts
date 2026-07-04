@@ -1,14 +1,13 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
-import type { BlockJson, Page, PageMeta } from "@/features/pages/schemas";
 import {
 	createPage,
 	deletePage,
 	getPage,
 	getPageVersion,
 	listBacklinks,
-	listPageVersions,
 	listPages,
+	listPageVersions,
 	listTrash,
 	purgePage,
 	restorePage,
@@ -17,6 +16,7 @@ import {
 	searchPages,
 	updatePage,
 } from "@/features/pages/contracts";
+import type { BlockJson, Page, PageMeta } from "@/features/pages/schemas";
 
 export function listPagesQueryOptions(workspaceId: string) {
 	return {

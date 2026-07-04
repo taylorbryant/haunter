@@ -1,11 +1,11 @@
 import { definePolicy } from "@beignet/core/ports";
+import type { PageMeta } from "@/features/pages/schemas";
 import {
 	type AuthorizationContext,
 	authorizeTenant,
 	authorizeTenantWrite,
 	requireEditorRole,
 } from "@/features/shared/authorization";
-import type { PageMeta } from "@/features/pages/schemas";
 
 export const pagePolicy = definePolicy({
 	"pages.create": (ctx: AuthorizationContext) => requireEditorRole(ctx, "page"),

@@ -95,25 +95,27 @@ export function PageIconButton({
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
-				{icon ? (
-					<button
-						type="button"
-						aria-label="Change icon"
-						className="rounded-md p-1 text-4xl leading-none transition-colors hover:bg-muted"
-					>
-						{icon}
-					</button>
-				) : (
-					<button
-						type="button"
-						className="-ml-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground text-sm opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover/header:opacity-100 aria-expanded:opacity-100"
-					>
-						<SmilePlusIcon className="size-4" />
-						Add icon
-					</button>
-				)}
-			</PopoverTrigger>
+			<PopoverTrigger
+				render={
+					icon ? (
+						<button
+							type="button"
+							aria-label="Change icon"
+							className="rounded-md p-1 text-4xl leading-none transition-colors hover:bg-muted"
+						>
+							{icon}
+						</button>
+					) : (
+						<button
+							type="button"
+							className="-ml-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground text-sm opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover/header:opacity-100 aria-expanded:opacity-100"
+						>
+							<SmilePlusIcon className="size-4" />
+							Add icon
+						</button>
+					)
+				}
+			/>
 			<PopoverContent align="start" className="w-auto p-0">
 				<PageIconPanel
 					pageId={pageId}

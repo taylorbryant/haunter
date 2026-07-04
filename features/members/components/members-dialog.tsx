@@ -1,8 +1,8 @@
 "use client";
 
 import { ChevronDownIcon, XIcon } from "lucide-react";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -257,15 +257,17 @@ function RolePicker({
 }) {
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button type="button" variant="outline" size="sm" className="gap-1">
-					{ROLE_LABEL[value] ?? value}
-					<ChevronDownIcon className="opacity-50" />
-				</Button>
+			<DropdownMenuTrigger
+				render={
+					<Button type="button" variant="outline" size="sm" className="gap-1" />
+				}
+			>
+				{ROLE_LABEL[value] ?? value}
+				<ChevronDownIcon className="opacity-50" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
 				{ASSIGNABLE_ROLES.map((role) => (
-					<DropdownMenuItem key={role} onSelect={() => onChange(role)}>
+					<DropdownMenuItem key={role} onClick={() => onChange(role)}>
 						{ROLE_LABEL[role]}
 					</DropdownMenuItem>
 				))}

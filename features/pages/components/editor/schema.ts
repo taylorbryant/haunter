@@ -1,10 +1,10 @@
+import { codeBlockOptions } from "@blocknote/code-block";
 import {
 	BlockNoteSchema,
 	createCodeBlockSpec,
 	defaultBlockSpecs,
 	defaultInlineContentSpecs,
 } from "@blocknote/core";
-import { codeBlockOptions } from "@blocknote/code-block";
 import { calloutBlockSpec } from "./callout-block";
 import { canvasBlockSpec } from "./canvas-block";
 import { getHaunterHighlighter } from "./code-theme";

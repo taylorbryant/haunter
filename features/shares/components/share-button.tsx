@@ -81,11 +81,13 @@ export function ShareButton() {
 		// Safari (taps on non-interactive page area never reach the dismiss
 		// layer). Modal mode closes reliably everywhere.
 		<Popover modal open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
-				<Button variant="ghost" size="sm" className="text-muted-foreground">
-					<Share2Icon />
-					Share
-				</Button>
+			<PopoverTrigger
+				render={
+					<Button variant="ghost" size="sm" className="text-muted-foreground" />
+				}
+			>
+				<Share2Icon />
+				Share
 			</PopoverTrigger>
 			<PopoverContent align="end" className="w-80">
 				{/* Explicit close: outside-tap dismissal has platform quirks on

@@ -52,7 +52,7 @@ export function createVercelBlobStorage(): StoragePort {
 		},
 		async get(key: string) {
 			const result = await get(key, { access: "private" });
-			if (!result || result.statusCode !== 200 || !result.stream) {
+			if (result?.statusCode !== 200 || !result.stream) {
 				return null;
 			}
 

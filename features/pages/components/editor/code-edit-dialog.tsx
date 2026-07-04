@@ -94,18 +94,18 @@ export function CodeEditDialog({
 					<div className="flex items-center gap-3">
 						<DialogTitle>Edit code</DialogTitle>
 						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button variant="outline" size="sm">
-									{supportedLanguages[language]?.name ?? language}
-									<ChevronDownIcon className="opacity-50" />
-								</Button>
+							<DropdownMenuTrigger
+								render={<Button variant="outline" size="sm" />}
+							>
+								{supportedLanguages[language]?.name ?? language}
+								<ChevronDownIcon className="opacity-50" />
 							</DropdownMenuTrigger>
 							<DropdownMenuContent
 								align="start"
 								className="max-h-64 overflow-y-auto"
 							>
 								{Object.entries(supportedLanguages).map(([id, meta]) => (
-									<DropdownMenuItem key={id} onSelect={() => setLanguage(id)}>
+									<DropdownMenuItem key={id} onClick={() => setLanguage(id)}>
 										{meta.name}
 										{id === language ? <CheckIcon className="ml-auto" /> : null}
 									</DropdownMenuItem>

@@ -4,14 +4,14 @@ import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderBreadcrumbs } from "@/components/header-breadcrumbs";
 import { HeaderSaveIndicator } from "@/components/header-save-indicator";
-import { PageHistoryButton } from "@/features/pages/components/page-history-dialog";
-import { ShareButton } from "@/features/shares/components/share-button";
 import { Separator } from "@/components/ui/separator";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { PageHistoryButton } from "@/features/pages/components/page-history-dialog";
+import { ShareButton } from "@/features/shares/components/share-button";
 import { auth } from "@/lib/better-auth";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {

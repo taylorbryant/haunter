@@ -4,10 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BotIcon, CheckIcon, XIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import {
-	getPendingAgentQueryOptions,
-	invalidateAgents,
-} from "@/features/agents/client/queries";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -21,6 +17,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+	getPendingAgentQueryOptions,
+	invalidateAgents,
+} from "@/features/agents/client/queries";
 
 type Phase = "review" | "working" | "approved" | "denied" | "failed";
 
@@ -118,8 +118,12 @@ export function ApproveAgentCard({
 					</CardDescription>
 				</CardHeader>
 				<CardFooter>
-					<Button asChild variant="outline">
-						<Link href="/">Back to Haunter</Link>
+					<Button
+						variant="outline"
+						render={<Link href="/" />}
+						nativeButton={false}
+					>
+						Back to Haunter
 					</Button>
 				</CardFooter>
 			</Card>
@@ -142,8 +146,12 @@ export function ApproveAgentCard({
 					</CardDescription>
 				</CardHeader>
 				<CardFooter>
-					<Button asChild variant="outline">
-						<Link href="/">Back to Haunter</Link>
+					<Button
+						variant="outline"
+						render={<Link href="/" />}
+						nativeButton={false}
+					>
+						Back to Haunter
 					</Button>
 				</CardFooter>
 			</Card>

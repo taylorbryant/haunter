@@ -4,7 +4,7 @@ import "tldraw/tldraw.css";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { type Editor, Tldraw, type TLStoreSnapshot } from "tldraw";
+import { type Editor, type TLStoreSnapshot, Tldraw } from "tldraw";
 import { rq } from "@/client";
 import { getSharedCanvas } from "@/features/shares/contracts";
 

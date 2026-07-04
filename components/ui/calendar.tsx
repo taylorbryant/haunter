@@ -1,20 +1,19 @@
 "use client";
 
-import * as React from "react";
 import {
-	DayPicker,
-	getDefaultClassNames,
-	type DayButton,
-	type Locale,
-} from "react-day-picker";
-
-import { cn } from "@/lib/utils";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
+	ChevronDownIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
-	ChevronDownIcon,
 } from "lucide-react";
+import * as React from "react";
+import {
+	type DayButton,
+	DayPicker,
+	getDefaultClassNames,
+	type Locale,
+} from "react-day-picker";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 function Calendar({
 	className,
@@ -203,7 +202,6 @@ function CalendarDayButton({
 
 	return (
 		<Button
-			ref={ref}
 			variant="ghost"
 			size="icon"
 			data-day={day.date.toLocaleDateString(locale?.code)}

@@ -11,10 +11,10 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
+import type { CanvasRepository } from "@/features/canvases/ports";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import type { PageRepository } from "@/features/pages/ports";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
-import type { CanvasRepository } from "@/features/canvases/ports";
 import type { ShareRepository } from "@/features/shares/ports";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";

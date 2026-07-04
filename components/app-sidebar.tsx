@@ -43,20 +43,22 @@ export function AppSidebar({
 					<SearchCommand />
 					<SidebarMenuItem>
 						<SidebarMenuButton
-							asChild
+							render={
+								<Link
+									href={
+										activeWorkspaceId ? `/w/${activeWorkspaceId}/tasks` : "/"
+									}
+									onClick={closeSheetOnMobile}
+								/>
+							}
 							isActive={
 								activeWorkspaceId !== null &&
 								pathname === `/w/${activeWorkspaceId}/tasks`
 							}
 							tooltip="Tasks"
 						>
-							<Link
-								href={activeWorkspaceId ? `/w/${activeWorkspaceId}/tasks` : "/"}
-								onClick={closeSheetOnMobile}
-							>
-								<ListTodoIcon />
-								<span>Tasks</span>
-							</Link>
+							<ListTodoIcon />
+							<span>Tasks</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				</SidebarMenu>
@@ -71,17 +73,17 @@ export function AppSidebar({
 							<SidebarMenu>
 								<SidebarMenuItem>
 									<SidebarMenuButton
-										asChild
+										render={
+											<Link
+												href={`/w/${activeWorkspaceId}/trash`}
+												onClick={closeSheetOnMobile}
+											/>
+										}
 										isActive={pathname === `/w/${activeWorkspaceId}/trash`}
 										tooltip="Trash"
 									>
-										<Link
-											href={`/w/${activeWorkspaceId}/trash`}
-											onClick={closeSheetOnMobile}
-										>
-											<Trash2Icon />
-											<span>Trash</span>
-										</Link>
+										<Trash2Icon />
+										<span>Trash</span>
 									</SidebarMenuButton>
 								</SidebarMenuItem>
 							</SidebarMenu>

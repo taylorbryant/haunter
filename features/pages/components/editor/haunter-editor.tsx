@@ -32,11 +32,10 @@ import {
 	LightbulbIcon,
 	PenToolIcon,
 } from "lucide-react";
-import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiClient } from "@/client";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { createCanvas } from "@/features/canvases/contracts";
 import {
 	invalidateBacklinks,
@@ -50,6 +49,7 @@ import {
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { CodeEditDialog } from "./code-edit-dialog";
 import { editorSchema } from "./schema";

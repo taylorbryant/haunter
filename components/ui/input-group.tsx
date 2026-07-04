@@ -1,16 +1,14 @@
 "use client";
 
-import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-
-import { cn } from "@/lib/utils";
+import type * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
 	return (
-		// biome-ignore lint/a11y/useSemanticElements: upstream shadcn markup; a fieldset would change layout semantics
 		<div
 			data-slot="input-group"
 			role="group"
@@ -50,8 +48,6 @@ function InputGroupAddon({
 	...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
 	return (
-		// biome-ignore lint/a11y/useSemanticElements: upstream shadcn markup; a fieldset would change layout semantics
-		// biome-ignore lint/a11y/useKeyWithClickEvents: click only forwards focus to the input, which stays keyboard-reachable
 		<div
 			role="group"
 			data-slot="input-group-addon"
@@ -92,8 +88,10 @@ function InputGroupButton({
 	variant = "ghost",
 	size = "xs",
 	...props
-}: Omit<React.ComponentProps<typeof Button>, "size"> &
-	VariantProps<typeof inputGroupButtonVariants>) {
+}: Omit<React.ComponentProps<typeof Button>, "size" | "type"> &
+	VariantProps<typeof inputGroupButtonVariants> & {
+		type?: "button" | "submit" | "reset";
+	}) {
 	return (
 		<Button
 			type={type}
@@ -153,7 +151,7 @@ export {
 	InputGroup,
 	InputGroupAddon,
 	InputGroupButton,
-	InputGroupText,
 	InputGroupInput,
+	InputGroupText,
 	InputGroupTextarea,
 };

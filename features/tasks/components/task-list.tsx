@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import { invalidatePage } from "@/features/pages/client/queries";
-import { TaskComposer } from "@/features/tasks/components/task-composer";
 import {
 	createTaskMutationOptions,
 	deleteTaskMutationOptions,
@@ -18,6 +17,7 @@ import {
 	listTasksQueryOptions,
 	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
+import { TaskComposer } from "@/features/tasks/components/task-composer";
 import type { TaskFilter, TaskWithPage } from "@/features/tasks/schemas";
 import { cn } from "@/lib/utils";
 

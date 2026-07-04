@@ -68,20 +68,22 @@ export function AssigneePicker({
 
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<button
-					type="button"
-					aria-label={label ? `Assigned to ${label}` : "Assign"}
-					className={cn(
-						"flex shrink-0 cursor-pointer items-center rounded-md px-1.5 py-0.5 text-xs",
-						label
-							? "bg-muted text-muted-foreground"
-							: "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100 [.haunter-task:hover_&]:opacity-100",
-						className,
-					)}
-				>
-					{chip}
-				</button>
+			<DropdownMenuTrigger
+				render={
+					<button
+						type="button"
+						aria-label={label ? `Assigned to ${label}` : "Assign"}
+						className={cn(
+							"flex shrink-0 cursor-pointer items-center rounded-md px-1.5 py-0.5 text-xs",
+							label
+								? "bg-muted text-muted-foreground"
+								: "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100 [.haunter-task:hover_&]:opacity-100",
+							className,
+						)}
+					/>
+				}
+			>
+				{chip}
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-48">
 				{members.map((member) => {
@@ -89,7 +91,7 @@ export function AssigneePicker({
 					return (
 						<DropdownMenuItem
 							key={member.id}
-							onSelect={() => onChange(member.userId)}
+							onClick={() => onChange(member.userId)}
 						>
 							<span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-[10px] text-primary leading-none">
 								{initials(name)}
@@ -103,7 +105,7 @@ export function AssigneePicker({
 						<DropdownMenuSeparator />
 						<DropdownMenuItem
 							className="text-muted-foreground"
-							onSelect={() => onChange(null)}
+							onClick={() => onChange(null)}
 						>
 							Unassign
 						</DropdownMenuItem>

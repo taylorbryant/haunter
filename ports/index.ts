@@ -11,19 +11,19 @@ import type {
 } from "@beignet/core/ports";
 import type { ResendMailEscapeHatch } from "@beignet/provider-mail-resend";
 import type { AgentAdminRepository } from "@/features/agents/ports";
-import type { CanvasRepository } from "@/features/canvases/ports";
 import type { canvasPolicy } from "@/features/canvases/policy";
+import type { CanvasRepository } from "@/features/canvases/ports";
 import type { MemberRepository } from "@/features/members/ports";
+import type { pagePolicy } from "@/features/pages/policy";
 import type {
 	PageLinkRepository,
 	PageRepository,
 	PageVersionRepository,
 } from "@/features/pages/ports";
-import type { pagePolicy } from "@/features/pages/policy";
 import type { AuthorizationContext } from "@/features/shared/authorization";
 import type { ShareRepository } from "@/features/shares/ports";
-import type { TaskRepository } from "@/features/tasks/ports";
 import type { taskPolicy } from "@/features/tasks/policy";
+import type { TaskRepository } from "@/features/tasks/ports";
 import type { AuthPort } from "./auth";
 
 export type AppPolicies = [

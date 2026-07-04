@@ -10,8 +10,8 @@ import {
 	type Editor,
 	getSnapshot,
 	loadSnapshot,
-	Tldraw,
 	type TLStoreSnapshot,
+	Tldraw,
 } from "tldraw";
 import {
 	getCanvasQueryOptions,
