@@ -20,6 +20,8 @@ export const config = {
 	// Everything except auth pages, API routes (they return 401s themselves),
 	// and Next.js static assets.
 	matcher: [
-		"/((?!api|_next/static|_next/image|favicon.ico|sign-in|sign-up).*)",
+		// accept-invite handles its own signed-out state (it prompts sign-in), so
+		// invitees who aren't signed in yet must not be bounced away from it.
+		"/((?!api|_next/static|_next/image|favicon.ico|sign-in|sign-up|accept-invite).*)",
 	],
 };
