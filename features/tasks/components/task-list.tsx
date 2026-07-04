@@ -1,11 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { invalidatePage } from "@/features/pages/client/queries";
 import { TaskComposer } from "@/features/tasks/components/task-composer";
 import {
@@ -34,6 +35,8 @@ function isOverdue(task: TaskWithPage): boolean {
 
 export function TaskList({ workspaceId }: { workspaceId: string }) {
 	const queryClient = useQueryClient();
+	// Viewers see the list but get no add/toggle/edit/delete controls.
+	const canEdit = useCanEditWorkspace();
 	const [filter, setFilter] = useState<TaskFilter>("open");
 	const [composing, setComposing] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
@@ -92,7 +95,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 
 	return (
 		<div className="flex flex-col gap-4">
-			{composing ? (
+			{!canEdit ? null : composing ? (
 				<TaskComposer
 					onSubmit={createTask}
 					onCancel={() => setComposing(false)}
@@ -135,7 +138,11 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 							<input
 								type="checkbox"
 								checked={task.completed}
-								className="size-4 shrink-0 cursor-pointer accent-primary"
+								disabled={!canEdit}
+								className={cn(
+									"size-4 shrink-0 accent-primary",
+									canEdit && "cursor-pointer",
+								)}
 								aria-label={
 									task.completed ? "Mark task open" : "Mark task done"
 								}
@@ -164,7 +171,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 										}}
 										onBlur={() => commitTitle(task)}
 									/>
-								) : task.sourceBlockId === null ? (
+								) : task.sourceBlockId === null && canEdit ? (
 									<button
 										type="button"
 										className={cn(
@@ -198,27 +205,42 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 									</Link>
 								) : null}
 							</div>
-							<DueDatePicker
-								value={task.dueDate}
-								onChange={(next) =>
-									updateMutation.mutate(
-										{
-											path: { id: task.id },
-											body: { dueDate: next },
-										},
-										{ onSuccess: () => refresh(task) },
-									)
-								}
-								className={cn(
-									"flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
-									task.dueDate === null
-										? "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
-										: isOverdue(task)
+							{canEdit ? (
+								<DueDatePicker
+									value={task.dueDate}
+									onChange={(next) =>
+										updateMutation.mutate(
+											{
+												path: { id: task.id },
+												body: { dueDate: next },
+											},
+											{ onSuccess: () => refresh(task) },
+										)
+									}
+									className={cn(
+										"flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
+										task.dueDate === null
+											? "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
+											: isOverdue(task)
+												? "bg-destructive/10 text-destructive"
+												: "bg-muted text-muted-foreground",
+									)}
+								/>
+							) : task.dueDate !== null ? (
+								// Read-only due chip for viewers.
+								<span
+									className={cn(
+										"flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
+										isOverdue(task)
 											? "bg-destructive/10 text-destructive"
 											: "bg-muted text-muted-foreground",
-								)}
-							/>
-							{task.sourceBlockId === null ? (
+									)}
+								>
+									<CalendarIcon className="size-3" />
+									{task.dueDate}
+								</span>
+							) : null}
+							{task.sourceBlockId === null && canEdit ? (
 								<Button
 									type="button"
 									variant="ghost"

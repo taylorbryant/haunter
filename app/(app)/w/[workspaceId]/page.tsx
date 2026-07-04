@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	createPageMutationOptions,
 	invalidatePages,
@@ -20,6 +21,7 @@ export default function WorkspacePage({
 	const queryClient = useQueryClient();
 	const pagesQuery = useQuery(listPagesQueryOptions(workspaceId));
 	const createMutation = useMutation(createPageMutationOptions());
+	const canEdit = useCanEditWorkspace();
 
 	const firstRootPage = pagesQuery.data?.items.find(
 		(page) => page.parentPageId === null,
@@ -40,22 +42,24 @@ export default function WorkspacePage({
 			<p className="text-muted-foreground text-sm">
 				This workspace has no pages yet.
 			</p>
-			<Button
-				disabled={createMutation.isPending}
-				onClick={() =>
-					createMutation.mutate(
-						{ body: { workspaceId, title: "Untitled" } },
-						{
-							onSuccess: async (page) => {
-								await invalidatePages(queryClient);
-								router.push(`/w/${workspaceId}/p/${page.id}`);
+			{canEdit ? (
+				<Button
+					disabled={createMutation.isPending}
+					onClick={() =>
+						createMutation.mutate(
+							{ body: { workspaceId, title: "Untitled" } },
+							{
+								onSuccess: async (page) => {
+									await invalidatePages(queryClient);
+									router.push(`/w/${workspaceId}/p/${page.id}`);
+								},
 							},
-						},
-					)
-				}
-			>
-				Create your first page
-			</Button>
+						)
+					}
+				>
+					Create your first page
+				</Button>
+			) : null}
 		</div>
 	);
 }

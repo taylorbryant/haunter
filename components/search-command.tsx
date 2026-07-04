@@ -3,7 +3,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { FileTextIcon, SearchIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	Command,
 	CommandDialog,
@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/command";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { searchPagesQueryOptions } from "@/features/pages/client/queries";
-import type { SearchResult } from "@/features/pages/schemas";
 
 function useDebouncedValue(value: string, delayMs: number) {
 	const [debounced, setDebounced] = useState(value);
@@ -52,18 +51,6 @@ export function SearchCommand() {
 	});
 
 	const items = debounced.length > 0 ? (search.data?.items ?? []) : [];
-	const groups = useMemo(() => {
-		const byWorkspace = new Map<string, SearchResult[]>();
-		for (const item of items) {
-			const group = byWorkspace.get(item.workspaceName);
-			if (group) {
-				group.push(item);
-			} else {
-				byWorkspace.set(item.workspaceName, [item]);
-			}
-		}
-		return Array.from(byWorkspace.entries());
-	}, [items]);
 
 	function close() {
 		setOpen(false);
@@ -93,12 +80,9 @@ export function SearchCommand() {
 						onValueChange={setQuery}
 					/>
 					<CommandList>
-						{groups.map(([workspaceName, groupItems]) => (
-							<CommandGroup
-								key={workspaceName}
-								heading={workspaceName || "Workspace"}
-							>
-								{groupItems.map((item) => (
+						{items.length > 0 ? (
+							<CommandGroup heading="Pages">
+								{items.map((item) => (
 									<CommandItem
 										key={item.id}
 										value={item.id}
@@ -125,16 +109,15 @@ export function SearchCommand() {
 									</CommandItem>
 								))}
 							</CommandGroup>
-						))}
-						{items.length === 0 ? (
+						) : (
 							<div className="py-6 text-center text-muted-foreground text-sm">
 								{debounced.length === 0
-									? "Search pages in every workspace."
+									? "Search pages in this workspace."
 									: search.isFetching
 										? "Searching…"
 										: "No pages found."}
 							</div>
-						) : null}
+						)}
 					</CommandList>
 				</Command>
 			</CommandDialog>

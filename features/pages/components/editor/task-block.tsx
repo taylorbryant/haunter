@@ -16,8 +16,13 @@ export const taskBlockSpec = createReactBlockSpec(
 	{
 		render: ({ block, editor, contentRef }) => {
 			const { checked, due } = block.props;
+			// BlockNote's editable=false stops text editing, but this custom
+			// checkbox/date UI fires its own handlers — gate them too so a
+			// read-only viewer can't toggle props.
+			const readOnly = !editor.isEditable;
 
 			function update(props: { checked?: boolean; due?: string }) {
+				if (!editor.isEditable) return;
 				editor.updateBlock(block, {
 					props: { ...block.props, ...props },
 				});
@@ -31,8 +36,9 @@ export const taskBlockSpec = createReactBlockSpec(
 					<input
 						type="checkbox"
 						checked={checked}
+						disabled={readOnly}
 						onChange={(event) => update({ checked: event.target.checked })}
-						className="mt-1 size-4 shrink-0 cursor-pointer accent-primary"
+						className={`mt-1 size-4 shrink-0 accent-primary ${readOnly ? "" : "cursor-pointer"}`}
 						aria-label={checked ? "Mark task open" : "Mark task done"}
 					/>
 					<div
@@ -44,17 +50,29 @@ export const taskBlockSpec = createReactBlockSpec(
 						}
 					/>
 					<div contentEditable={false} className="shrink-0">
-						<DueDatePicker
-							value={due === "" ? null : due}
-							onChange={(next) => update({ due: next ?? "" })}
-							className={`flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${
-								due === ""
-									? "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 aria-expanded:opacity-100 [.haunter-task:hover_&]:opacity-100"
-									: overdue
+						{readOnly && due === "" ? null : readOnly ? (
+							<span
+								className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${
+									overdue
 										? "bg-destructive/10 text-destructive"
 										: "bg-muted text-muted-foreground"
-							}`}
-						/>
+								}`}
+							>
+								{due}
+							</span>
+						) : (
+							<DueDatePicker
+								value={due === "" ? null : due}
+								onChange={(next) => update({ due: next ?? "" })}
+								className={`flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${
+									due === ""
+										? "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 aria-expanded:opacity-100 [.haunter-task:hover_&]:opacity-100"
+										: overdue
+											? "bg-destructive/10 text-destructive"
+											: "bg-muted text-muted-foreground"
+								}`}
+							/>
+						)}
 					</div>
 				</div>
 			);

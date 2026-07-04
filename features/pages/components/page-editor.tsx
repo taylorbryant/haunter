@@ -3,8 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { authClient } from "@/client/auth-client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	getPageQueryOptions,
 	invalidatePages,
@@ -12,7 +12,6 @@ import {
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import { setPageSaveState } from "@/features/pages/client/save-state";
-import { canEditContent } from "@/lib/org-access";
 import { cn } from "@/lib/utils";
 import { Backlinks } from "./backlinks";
 import { PageIconButton } from "./page-icon-picker";
@@ -52,12 +51,8 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const pageQuery = useQuery(getPageQueryOptions(pageId));
 	const updatePageMutation = useMutation(updatePageMutationOptions());
 	// Viewers get a read-only surface; the server denies their writes anyway,
-	// but the UI must not pretend edits will stick. Until the role loads, stay
-	// read-only rather than flash an editable state that may be revoked.
-	const activeMemberQuery = authClient.useActiveMember();
-	const readOnly = activeMemberQuery.isPending
-		? true
-		: !canEditContent(activeMemberQuery.data?.role);
+	// but the UI must not pretend edits will stick.
+	const readOnly = !useCanEditWorkspace();
 
 	const [title, setTitle] = useState<string | null>(null);
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

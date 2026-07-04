@@ -102,7 +102,6 @@ export const SearchPagesInputSchema = z.object({
 export const SearchResultSchema = z.object({
 	id: z.string().uuid(),
 	workspaceId: z.string().min(1),
-	workspaceName: z.string(),
 	title: z.string(),
 	icon: z.string().nullable(),
 	/** Text around the first body match, or the page's opening text. */

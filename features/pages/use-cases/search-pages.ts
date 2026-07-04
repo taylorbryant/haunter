@@ -26,9 +26,6 @@ function toResult(page: Page, snippet: string): SearchResult {
 	return {
 		id: page.id,
 		workspaceId: page.workspaceId,
-		// One active workspace at a time, so the name is redundant context; the
-		// client already knows which workspace it is showing.
-		workspaceName: "",
 		title: page.title,
 		icon: page.icon,
 		snippet,
