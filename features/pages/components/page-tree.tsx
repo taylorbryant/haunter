@@ -102,7 +102,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const queryClient = useQueryClient();
-	const { isMobile } = useSidebar();
+	const { isMobile, setOpenMobile } = useSidebar();
 	const pagesQuery = useQuery(listPagesQueryOptions(workspaceId));
 	const createMutation = useMutation(createPageMutationOptions());
 	const updateMutation = useMutation(updatePageMutationOptions());
@@ -351,11 +351,32 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							// them, so widen it.
 							className="group-has-data-[sidebar=menu-action]/menu-item:pr-13"
 						>
-							<Link href={`/w/${workspaceId}/p/${node.id}`}>
+							<Link
+								href={`/w/${workspaceId}/p/${node.id}`}
+								// On mobile, tapping a page navigates and closes the
+								// sidebar sheet so the page is visible immediately.
+								onClick={() => {
+									if (isMobile) setOpenMobile(false);
+								}}
+							>
+								{/* On mobile the expand chevron is always shown (no hover)
+								    and sits over this icon slot; keep the slot but hide the
+								    glyph so the chevron doesn't overlap the emoji. */}
 								{node.icon ? (
-									<span>{node.icon}</span>
+									<span
+										className={cn(
+											isMobile && hasChildren && "invisible",
+										)}
+									>
+										{node.icon}
+									</span>
 								) : (
-									<FileTextIcon className="text-sidebar-foreground/60" />
+									<FileTextIcon
+										className={cn(
+											"text-sidebar-foreground/60",
+											isMobile && hasChildren && "invisible",
+										)}
+									/>
 								)}
 								<span>{node.title || "Untitled"}</span>
 							</Link>

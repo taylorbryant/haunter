@@ -16,6 +16,7 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 	SidebarRail,
+	useSidebar,
 } from "@/components/ui/sidebar";
 import { PageTree } from "@/features/pages/components/page-tree";
 import { WorkspaceSwitcher } from "@/features/workspaces/components/workspace-switcher";
@@ -27,6 +28,12 @@ export function AppSidebar({
 }) {
 	const pathname = usePathname();
 	const activeWorkspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
+	const { isMobile, setOpenMobile } = useSidebar();
+
+	// On mobile, navigating from the sidebar closes the overlay sheet.
+	function closeSheetOnMobile() {
+		if (isMobile) setOpenMobile(false);
+	}
 
 	return (
 		<Sidebar>
@@ -45,6 +52,7 @@ export function AppSidebar({
 						>
 							<Link
 								href={activeWorkspaceId ? `/w/${activeWorkspaceId}/tasks` : "/"}
+								onClick={closeSheetOnMobile}
 							>
 								<ListTodoIcon />
 								<span>My Tasks</span>
@@ -67,7 +75,10 @@ export function AppSidebar({
 										isActive={pathname === `/w/${activeWorkspaceId}/trash`}
 										tooltip="Trash"
 									>
-										<Link href={`/w/${activeWorkspaceId}/trash`}>
+										<Link
+											href={`/w/${activeWorkspaceId}/trash`}
+											onClick={closeSheetOnMobile}
+										>
 											<Trash2Icon />
 											<span>Trash</span>
 										</Link>

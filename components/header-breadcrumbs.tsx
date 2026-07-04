@@ -22,6 +22,7 @@ import {
 import { listPagesQueryOptions } from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
 import { listWorkspacesQueryOptions } from "@/features/workspaces/client/queries";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 function pageTrail(pages: PageMeta[], pageId: string): PageMeta[] {
 	const byId = new Map(pages.map((page) => [page.id, page]));
@@ -37,6 +38,7 @@ function pageTrail(pages: PageMeta[], pageId: string): PageMeta[] {
 }
 
 export function HeaderBreadcrumbs() {
+	const isMobile = useIsMobile();
 	const pathname = usePathname();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
@@ -65,19 +67,23 @@ export function HeaderBreadcrumbs() {
 	const trail = pageId ? pageTrail(pagesQuery.data?.items ?? [], pageId) : [];
 	const leafId = section ?? trail[trail.length - 1]?.id ?? null;
 
-	// Deep trails collapse Notion-style: root / … / parent / current, with
-	// the hidden ancestors reachable through the ellipsis menu.
-	const collapse = trail.length > 3;
+	// Deep trails collapse Notion-style, with the hidden ancestors reachable
+	// through the ellipsis menu. On mobile the header is too narrow for a
+	// multi-page trail, so collapse hard to workspace / … / current; on
+	// desktop keep root / … / parent / current.
+	const headCount = isMobile ? 0 : 1;
+	const tailCount = isMobile ? 1 : 2;
+	const collapse = trail.length > headCount + tailCount;
 	const visibleTrail = collapse
-		? [trail[0], ...trail.slice(-2)].filter(
+		? [...trail.slice(0, headCount), ...trail.slice(-tailCount)].filter(
 				(page): page is PageMeta => page !== undefined,
 			)
 		: trail;
-	const hiddenTrail = collapse ? trail.slice(1, -2) : [];
+	const hiddenTrail = collapse ? trail.slice(headCount, -tailCount) : [];
 
 	return (
-		<Breadcrumb>
-			<BreadcrumbList>
+		<Breadcrumb className="min-w-0 flex-1">
+			<BreadcrumbList className="flex-nowrap">
 				<BreadcrumbItem>
 					{leafId ? (
 						<BreadcrumbLink asChild>
@@ -99,9 +105,9 @@ export function HeaderBreadcrumbs() {
 				) : null}
 				{visibleTrail.map((page, index) => (
 					<Fragment key={page.id}>
-						{collapse && index === 1 ? (
+						{collapse && index === headCount ? (
 							<>
-								<BreadcrumbSeparator />
+								<BreadcrumbSeparator className="shrink-0" />
 								<BreadcrumbItem>
 									<DropdownMenu>
 										<DropdownMenuTrigger
@@ -123,17 +129,17 @@ export function HeaderBreadcrumbs() {
 								</BreadcrumbItem>
 							</>
 						) : null}
-						<BreadcrumbSeparator />
-						<BreadcrumbItem>
+						<BreadcrumbSeparator className="shrink-0" />
+						<BreadcrumbItem className="min-w-0">
 							{page.id === leafId ? (
-								<BreadcrumbPage className="line-clamp-1">
+								<BreadcrumbPage className="truncate">
 									{page.title || "Untitled"}
 								</BreadcrumbPage>
 							) : (
 								<BreadcrumbLink asChild>
 									<Link
 										href={`/w/${workspaceId}/p/${page.id}`}
-										className="line-clamp-1"
+										className="truncate"
 									>
 										{page.title || "Untitled"}
 									</Link>

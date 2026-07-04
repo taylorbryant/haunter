@@ -45,7 +45,7 @@ export function HeaderSaveIndicator() {
 	if (label === null) return null;
 
 	return (
-		<span className="ml-auto text-muted-foreground text-xs tabular-nums">
+		<span className="ml-auto shrink-0 whitespace-nowrap text-muted-foreground text-xs tabular-nums">
 			{label}
 		</span>
 	);
