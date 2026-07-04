@@ -84,6 +84,9 @@ export const canvasBlockSpec = createReactBlockSpec(
 		content: "none",
 	},
 	{
+		// Don't let ProseMirror node-select the block (the blue outline) when the
+		// canvas is tapped — all interaction belongs to tldraw.
+		meta: { selectable: false },
 		render: ({ block }) => {
 			const canvasId = block.props.canvasId;
 
@@ -92,7 +95,11 @@ export const canvasBlockSpec = createReactBlockSpec(
 				// z-300) inside this block so editor menus can float above it.
 				// ProseMirror treats non-editable node views as draggable — kill
 				// dragstart here so drawing strokes never drag the whole block.
-				// biome-ignore lint/a11y/noStaticElementInteractions: onDragStart only suppresses ProseMirror's block-drag; all interaction lives in the embedded tldraw canvas
+				// The pointer/mouse/touch handlers stop the events from bubbling to
+				// ProseMirror, so tapping the canvas doesn't focus the editor or
+				// place a caret (which on iOS pops the keyboard). tldraw, a
+				// descendant, still receives them.
+				// biome-ignore lint/a11y/noStaticElementInteractions: handlers only shield ProseMirror; all interaction lives in the embedded tldraw canvas
 				<div
 					className="isolate my-2 h-[480px] w-full overflow-hidden rounded-lg border"
 					contentEditable={false}
@@ -101,6 +108,9 @@ export const canvasBlockSpec = createReactBlockSpec(
 						event.preventDefault();
 						event.stopPropagation();
 					}}
+					onPointerDown={(event) => event.stopPropagation()}
+					onMouseDown={(event) => event.stopPropagation()}
+					onTouchStart={(event) => event.stopPropagation()}
 				>
 					{canvasId === "" ? (
 						<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
