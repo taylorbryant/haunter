@@ -3,7 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import { authClient } from "@/client/auth-client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cursorColorFor } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	getPageQueryOptions,
@@ -54,6 +56,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// Viewers get a read-only surface; the server denies their writes anyway,
 	// but the UI must not pretend edits will stick.
 	const readOnly = !useCanEditWorkspace();
+	// Cursor identity shown to collaborators when Liveblocks is configured.
+	const session = authClient.useSession();
+	const collabUser = session.data
+		? {
+				name: session.data.user.name || session.data.user.email || "Member",
+				color: cursorColorFor(session.data.user.id),
+			}
+		: undefined;
 
 	const [title, setTitle] = useState<string | null>(null);
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,6 +173,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				initialContent={page.content}
 				updatedAt={page.updatedAt}
 				editable={!readOnly}
+				collabUser={collabUser}
 				onSaveStateChange={setPageSaveState}
 				onConflict={handleConflict}
 			/>

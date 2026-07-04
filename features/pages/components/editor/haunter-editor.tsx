@@ -35,8 +35,15 @@ import {
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Awareness } from "y-protocols/awareness";
 import { apiClient } from "@/client";
 import { createCanvas } from "@/features/canvases/contracts";
+import {
+	type CollabRoom,
+	getCollabMode,
+	useCollabRoom,
+} from "@/features/collab/client/liveblocks";
+import { pageRoomId } from "@/features/collab/lib/room";
 import {
 	invalidateBacklinks,
 	invalidatePage,
@@ -177,25 +184,118 @@ function getSlashMenuItems(
 
 export type SaveState = "saved" | "pending" | "saving" | "error";
 
-export default function HaunterEditor({
-	pageId,
-	workspaceId,
-	initialContent,
-	updatedAt,
-	editable = true,
-	onSaveStateChange,
-	onConflict,
-}: {
+type HaunterEditorProps = {
 	pageId: string;
 	workspaceId: string;
 	initialContent: BlockJson[];
 	/** The document version this editor was initialized from. */
 	updatedAt?: string;
 	editable?: boolean;
+	/** Cursor identity shown to collaborators when collaboration is on. */
+	collabUser?: { name: string; color: string };
 	onSaveStateChange?: (state: SaveState) => void;
 	/** The server rejected a save as stale; the owner should reload the doc. */
 	onConflict?: () => void;
-}) {
+};
+
+const COLLAB_CONNECT_TIMEOUT_MS = 8000;
+
+/** Colored-initial chips for the other people currently in this page. */
+function PresenceRow({ room }: { room: CollabRoom }) {
+	const [others, setOthers] = useState<{ name: string; color: string }[]>([]);
+
+	useEffect(() => {
+		const awareness = room.provider.awareness;
+		const ownClientId = room.doc.clientID;
+		const update = () => {
+			const seen = new Map<string, { name: string; color: string }>();
+			for (const [clientId, state] of awareness.getStates()) {
+				if (clientId === ownClientId) continue;
+				const user = (
+					state as { user?: { name?: string; color?: string } } | undefined
+				)?.user;
+				if (user?.name) {
+					seen.set(user.name, {
+						name: user.name,
+						color: user.color ?? "#3b82f6",
+					});
+				}
+			}
+			setOthers([...seen.values()]);
+		};
+		awareness.on("change", update);
+		update();
+		return () => awareness.off("change", update);
+	}, [room]);
+
+	if (others.length === 0) return null;
+
+	return (
+		// The chips carry their own accessible names via title; the row itself
+		// is layout only.
+		<div className="flex justify-end gap-1 px-0 pb-1 md:px-[54px]">
+			{others.slice(0, 5).map((user) => (
+				<span
+					key={user.name}
+					title={user.name}
+					className="flex size-6 items-center justify-center rounded-full text-[10px] text-white leading-none ring-2 ring-background"
+					style={{ backgroundColor: user.color }}
+				>
+					{user.name.trim().slice(0, 2).toUpperCase()}
+				</span>
+			))}
+		</div>
+	);
+}
+
+/**
+ * Collaboration gate: when Liveblocks is configured, join the page's room
+ * and mount the editor only once the shared doc has synced (it must know
+ * whether the doc is empty before deciding to seed it from the database).
+ * If the connection doesn't sync in time, fall back to the local editor so
+ * a Liveblocks outage never blocks writing.
+ */
+export default function HaunterEditor(props: HaunterEditorProps) {
+	const mode = getCollabMode();
+	const room = useCollabRoom(pageRoomId(props.pageId), mode);
+	const [fallbackLocal, setFallbackLocal] = useState(false);
+	const synced = room?.synced === true;
+
+	useEffect(() => {
+		if (!mode || synced || fallbackLocal) return;
+		const timer = setTimeout(
+			() => setFallbackLocal(true),
+			COLLAB_CONNECT_TIMEOUT_MS,
+		);
+		return () => clearTimeout(timer);
+	}, [mode, synced, fallbackLocal]);
+
+	if (mode && !fallbackLocal) {
+		if (!synced || !room) {
+			return (
+				<div className="flex flex-col gap-3 px-0 py-2 md:px-[54px]" aria-hidden>
+					<div className="h-4 w-11/12 animate-pulse rounded-md bg-muted" />
+					<div className="h-4 w-4/5 animate-pulse rounded-md bg-muted" />
+					<div className="h-4 w-3/5 animate-pulse rounded-md bg-muted" />
+				</div>
+			);
+		}
+		return <EditorCore {...props} collab={room} />;
+	}
+	return <EditorCore {...props} collab={null} />;
+}
+
+function EditorCore({
+	pageId,
+	workspaceId,
+	initialContent,
+	updatedAt,
+	editable = true,
+	collabUser,
+	collab,
+	onSaveStateChange,
+	onConflict,
+}: HaunterEditorProps & { collab: CollabRoom | null }) {
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
 	const queryClient = useQueryClient();
@@ -204,15 +304,47 @@ export default function HaunterEditor({
 	// Last server updatedAt this editor saw: the optimistic-concurrency base.
 	const baseUpdatedAtRef = useRef<string | null>(updatedAt ?? null);
 
+	// Whether the shared doc needs seeding from the database, decided once at
+	// mount — before BlockNote binds the fragment and materializes its empty
+	// paragraph into it. The doc-level "seeded" flag keeps a second client
+	// that joins in the same instant from double-inserting.
+	const [shouldSeed] = useState(() => {
+		if (!collab) return false;
+		const fragment = collab.doc.getXmlFragment("blocknote");
+		const meta = collab.doc.getMap<boolean>("haunter-meta");
+		return fragment.length === 0 && meta.get("seeded") !== true;
+	});
+
 	const editor = useCreateBlockNote({
 		schema: editorSchema,
 		uploadFile: (file: File) => uploadPageImage(pageId, file),
-		// BlockNote rejects an empty initialContent array.
-		initialContent: initialContent.length
-			? // The server stores the document verbatim; the editor owns its shape.
-				(initialContent as never)
+		collaboration: collab
+			? {
+					fragment: collab.doc.getXmlFragment("blocknote"),
+					// Liveblocks bundles its own copy of y-protocols, so its
+					// Awareness is a structural twin of the one BlockNote expects.
+					provider: collab.provider as unknown as { awareness: Awareness },
+					user: collabUser ?? { name: "Member", color: "#3b82f6" },
+				}
 			: undefined,
+		// BlockNote rejects an empty initialContent array; with collaboration
+		// the shared doc is the source of truth instead.
+		initialContent:
+			!collab && initialContent.length
+				? // The server stores the document verbatim; the editor owns its shape.
+					(initialContent as never)
+				: undefined,
 	});
+
+	// Seed a brand-new shared doc from the database copy exactly once.
+	const seededRef = useRef(false);
+	useEffect(() => {
+		if (!collab || !shouldSeed || seededRef.current) return;
+		seededRef.current = true;
+		if (initialContent.length === 0) return;
+		collab.doc.getMap<boolean>("haunter-meta").set("seeded", true);
+		editor.replaceBlocks(editor.document, initialContent as never);
+	}, [collab, shouldSeed, editor, initialContent]);
 
 	const saveMutation = useMutation(savePageContentMutationOptions());
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -240,7 +372,10 @@ export default function HaunterEditor({
 				path: { id: pageId },
 				body: {
 					content,
-					...(baseUpdatedAtRef.current
+					// With collaboration on, Yjs already merges concurrent edits and
+					// every peer persists the same converged doc — a CAS precondition
+					// would only produce false 409s between peers.
+					...(baseUpdatedAtRef.current && !collab
 						? { baseUpdatedAt: baseUpdatedAtRef.current }
 						: {}),
 				},
@@ -270,11 +405,14 @@ export default function HaunterEditor({
 	};
 
 	const handleChange = useCallback(() => {
+		// Viewers must never autosave: with collaboration on, remote peers'
+		// edits also fire onChange here, and a viewer's save would just 403.
+		if (!editable) return;
 		dirtyRef.current = true;
 		reportState("pending");
 		if (timeoutRef.current) clearTimeout(timeoutRef.current);
 		timeoutRef.current = setTimeout(() => saveRef.current(), AUTOSAVE_DELAY_MS);
-	}, [reportState]);
+	}, [reportState, editable]);
 
 	// Flush any pending save when the page unmounts (navigation away).
 	useEffect(() => {
@@ -293,6 +431,7 @@ export default function HaunterEditor({
 		// content runs edge-to-edge; the block controls that live there are
 		// hidden below. Driven from JS (not CSS) to share one breakpoint.
 		<div className={cn("haunter-editor", isMobile && "editor-flush")}>
+			{collab ? <PresenceRow room={collab} /> : null}
 			<BlockNoteView
 				editor={editor}
 				editable={editable}
