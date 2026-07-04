@@ -10,7 +10,14 @@ export function proxy(request: NextRequest) {
 	const sessionCookie = getSessionCookie(request);
 
 	if (!sessionCookie) {
-		return NextResponse.redirect(new URL("/sign-in", request.url));
+		const signIn = new URL("/sign-in", request.url);
+		// Preserve the destination (e.g. an agent approval link) through the
+		// sign-in flow; the OTP form only follows same-origin relative paths.
+		signIn.searchParams.set(
+			"next",
+			request.nextUrl.pathname + request.nextUrl.search,
+		);
+		return NextResponse.redirect(signIn);
 	}
 
 	return NextResponse.next();

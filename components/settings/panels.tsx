@@ -25,7 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 
 /** Flat, Notion-style pane header: title + hairline, no card chrome. */
-function PanelHeader({
+export function PanelHeader({
 	title,
 	description,
 	destructive = false,
@@ -54,7 +54,7 @@ function PanelHeader({
 	);
 }
 
-function Panel({ children }: { children: ReactNode }) {
+export function Panel({ children }: { children: ReactNode }) {
 	return <div className="flex flex-col gap-5">{children}</div>;
 }
 

@@ -63,6 +63,15 @@ export function OtpAuthForm() {
 			return;
 		}
 
+		// A ?next= destination (set by the auth proxy) wins over the onboarding
+		// landing page. Same-origin relative paths only — "//host" would be a
+		// protocol-relative open redirect.
+		const nextParam = new URLSearchParams(window.location.search).get("next");
+		const nextPath =
+			nextParam?.startsWith("/") && !nextParam.startsWith("//")
+				? nextParam
+				: null;
+
 		// Signed in. Ensure the user has a workspace (a Better Auth organization),
 		// make it active, then seed it (idempotent for returning users) and land
 		// on the welcome page; fall back to home if anything fails.
@@ -81,12 +90,13 @@ export function OtpAuthForm() {
 			await authClient.organization.setActive({ organizationId: workspaceId });
 			const seeded = await apiClient.endpoint(onboard).call({ body: {} });
 			router.push(
-				seeded.pageId
-					? `/w/${seeded.workspaceId}/p/${seeded.pageId}`
-					: `/w/${seeded.workspaceId}/tasks`,
+				nextPath ??
+					(seeded.pageId
+						? `/w/${seeded.workspaceId}/p/${seeded.pageId}`
+						: `/w/${seeded.workspaceId}/tasks`),
 			);
 		} catch {
-			router.push("/");
+			router.push(nextPath ?? "/");
 		}
 		router.refresh();
 	}

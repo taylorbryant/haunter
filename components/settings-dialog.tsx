@@ -1,12 +1,19 @@
 "use client";
 
-import { PaletteIcon, Trash2Icon, UserIcon, XIcon } from "lucide-react";
+import {
+	BotIcon,
+	PaletteIcon,
+	Trash2Icon,
+	UserIcon,
+	XIcon,
+} from "lucide-react";
 import { useState } from "react";
 import {
 	AppearancePanel,
 	DeleteAccountPanel,
 	ProfilePanel,
 } from "@/components/settings/panels";
+import { AgentsPanel } from "@/features/agents/components/agents-panel";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -33,6 +40,12 @@ const SECTIONS = [
 		label: "Appearance",
 		icon: PaletteIcon,
 		panel: AppearancePanel,
+	},
+	{
+		id: "agents",
+		label: "Agents",
+		icon: BotIcon,
+		panel: AgentsPanel,
 	},
 	{
 		id: "delete",

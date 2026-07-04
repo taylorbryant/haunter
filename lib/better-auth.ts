@@ -82,6 +82,16 @@ export const auth = betterAuth({
 			modes: ["delegated"],
 			capabilities: agentCapabilities,
 			onExecute: executeAgentCapability,
+			// Lets agents self-register with an embedded key (OAuth-device-flow
+			// style) instead of requiring a pre-enrolled host. Registration
+			// alone grants nothing: delegated agents start pending with every
+			// capability pending until a signed-in user approves them with the
+			// user code at /device/capabilities.
+			allowDynamicHostRegistration: true,
+			// Passwordless app: sessions are always "fresh" (session.freshAge 0
+			// below), so the plugin's re-auth window would block every approval.
+			// The device user code is the approval's proof instead.
+			freshSessionWindow: 0,
 		}),
 	],
 	// Better Auth's own limiter is the only throttle on /api/auth/* (Beignet's

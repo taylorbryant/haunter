@@ -162,9 +162,7 @@ export async function executeAgentCapability({
 		case "search_pages": {
 			const input = SearchArgs.parse(args);
 			const ctx = await createAgentContext(ports, userId, input.workspaceId);
-			const { searchPagesUseCase } = await import(
-				"@/features/pages/use-cases"
-			);
+			const { searchPagesUseCase } = await import("@/features/pages/use-cases");
 			const result = await searchPagesUseCase.run({
 				ctx,
 				input: { q: input.query },

@@ -29,6 +29,7 @@ export const appPorts = definePorts<AppPorts>()({
 		gate,
 	},
 	deferred: [
+		"agents",
 		"auth",
 		"canvases",
 		"idempotency",

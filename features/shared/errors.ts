@@ -51,6 +51,11 @@ export const errors = defineErrors({
 		status: 409,
 		message: "This document changed since you loaded it",
 	},
+	AgentNotFound: {
+		code: "AGENT_NOT_FOUND",
+		status: 404,
+		message: "This agent request is no longer pending",
+	},
 });
 
 export const appError = createAppError(errors);

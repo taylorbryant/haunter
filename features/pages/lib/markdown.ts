@@ -80,7 +80,8 @@ function blockToMarkdown(
 
 	switch (block.type) {
 		case "heading": {
-			const level = typeof block.props.level === "number" ? block.props.level : 1;
+			const level =
+				typeof block.props.level === "number" ? block.props.level : 1;
 			return `${"#".repeat(Math.min(Math.max(level, 1), 6))} ${inline}`;
 		}
 		case "bulletListItem":
@@ -155,9 +156,7 @@ function textNode(text: string, styles: Record<string, boolean>) {
 	return {
 		type: "text",
 		text,
-		styles: Object.fromEntries(
-			Object.entries(styles).filter(([, on]) => on),
-		),
+		styles: Object.fromEntries(Object.entries(styles).filter(([, on]) => on)),
 	};
 }
 
@@ -199,7 +198,9 @@ function parseInline(
 			const end = src.indexOf("**", i + 2);
 			if (end > i + 1) {
 				flush();
-				nodes.push(...parseInline(src.slice(i + 2, end), { ...styles, bold: true }));
+				nodes.push(
+					...parseInline(src.slice(i + 2, end), { ...styles, bold: true }),
+				);
 				i = end + 2;
 				continue;
 			}
