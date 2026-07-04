@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiClient } from "@/client";
 import { authClient } from "@/client/auth-client";
+import { GhostLogo } from "@/components/ghost-logo";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -80,7 +81,10 @@ export function OtpAuthForm() {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle>{step === "email" ? "Sign in" : "Enter your code"}</CardTitle>
+				<GhostLogo className="mb-1 size-9" />
+				<CardTitle>
+					{step === "email" ? "Sign in" : "Enter your code"}
+				</CardTitle>
 				<CardDescription>
 					{step === "email"
 						? "We'll email you a 6-digit code — no password needed."

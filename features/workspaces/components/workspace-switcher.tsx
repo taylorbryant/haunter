@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { GhostLogo } from "@/components/ghost-logo";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -128,6 +129,7 @@ export function WorkspaceSwitcher({
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<SidebarMenuButton className="w-fit px-1.5 font-medium">
+							<GhostLogo className="size-4 shrink-0" />
 							<span className="truncate">
 								{active
 									? `${active.icon ? `${active.icon} ` : ""}${active.name}`

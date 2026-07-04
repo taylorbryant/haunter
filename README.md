@@ -1,4 +1,4 @@
-# haunter
+# <img src="app/icon.svg" alt="" width="28" height="28" align="top"> haunter
 
 A personal notes app — Notion-style nested pages and block editor, Todoist-style
 tasks that roll up into a per-workspace "My Tasks" view, syntax-highlighted

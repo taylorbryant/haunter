@@ -1,0 +1,19 @@
+/** Haunter's mark — a simple ghost. Inherits the surrounding text color;
+ *  size it with `className` (e.g. size-6). */
+export function GhostLogo({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			className={className}
+			role="img"
+			aria-label="Haunter"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path
+				fill="currentColor"
+				fillRule="evenodd"
+				d="M4 19.5Q6.7 22 9.3 19.5 12 22 14.7 19.5 17.3 22 20 19.5L20 10C20 5.58 16.42 2 12 2 7.58 2 4 5.58 4 10Z M8.3 10.2a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 1 0-2.2 0z M13.5 10.2a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 1 0-2.2 0z"
+			/>
+		</svg>
+	);
+}
