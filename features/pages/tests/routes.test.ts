@@ -23,6 +23,7 @@ import { pageRoutes } from "../routes";
 import {
 	createTestPageLinkRepository,
 	createTestPageRepository,
+	createTestPageVersionRepository,
 } from "./helpers";
 
 function createSignedInAuth(
@@ -41,6 +42,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const tasks = createTestTaskRepository();
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
+	const pageVersions = createTestPageVersionRepository();
 	// Every signed-in test user is an owner of their active workspace.
 	const members = {
 		async findRole() {
@@ -54,6 +56,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 			members,
 			pageLinks,
 			pages,
+			pageVersions,
 			tasks,
 			canvases,
 			devtools: createInMemoryDevtools(),
@@ -62,6 +65,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 		transaction: {
 			ports: (ports) => ({
 				...ports,
+				pageVersions,
 				members,
 				pageLinks,
 				pages,

@@ -5,11 +5,14 @@ import {
 	createPage,
 	deletePage,
 	getPage,
+	getPageVersion,
 	listBacklinks,
+	listPageVersions,
 	listPages,
 	listTrash,
 	purgePage,
 	restorePage,
+	restorePageVersion,
 	savePageContent,
 	searchPages,
 	updatePage,
@@ -139,4 +142,27 @@ export function setPageContentInCache(
 		rq(getPage).key({ path: { id } }),
 		(current) => (current ? { ...current, content } : current),
 	);
+}
+
+export function listPageVersionsQueryOptions(pageId: string) {
+	return rq(listPageVersions).queryOptions({ path: { id: pageId } });
+}
+
+export function getPageVersionQueryOptions(pageId: string, versionId: string) {
+	return rq(getPageVersion).queryOptions({
+		path: { id: pageId, versionId },
+	});
+}
+
+export function restorePageVersionMutationOptions() {
+	return rq(restorePageVersion).mutationOptions();
+}
+
+export function invalidatePageVersions(
+	queryClient: QueryClient,
+	pageId: string,
+) {
+	return rq(listPageVersions).invalidate(queryClient, {
+		path: { id: pageId },
+	});
 }

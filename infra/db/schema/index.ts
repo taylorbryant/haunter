@@ -250,3 +250,34 @@ export const pageShares = sqliteTable(
 		pageIdx: uniqueIndex("page_shares_page_idx").on(table.pageId),
 	}),
 );
+
+// Point-in-time snapshots of page documents. Written as checkpoints from the
+// content-save path (at most one per interval) and always before a restore,
+// so going back never loses the state you left.
+export const pageVersions = sqliteTable(
+	"page_versions",
+	{
+		id: text("id").primaryKey(),
+		pageId: text("page_id")
+			.notNull()
+			.references(() => pages.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		title: text("title").notNull(),
+		icon: text("icon"),
+		content: text("content").notNull(),
+		// What produced the snapshot: a periodic "checkpoint" or a "restore".
+		cause: text("cause").notNull().default("checkpoint"),
+		createdBy: text("created_by")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		createdAt: text("created_at").notNull(),
+	},
+	(table) => ({
+		pageCreatedIdx: index("page_versions_page_created_idx").on(
+			table.pageId,
+			table.createdAt,
+		),
+	}),
+);

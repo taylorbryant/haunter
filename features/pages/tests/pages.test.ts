@@ -19,7 +19,10 @@ import {
 	createPageUseCase,
 	deletePageUseCase,
 	getPageUseCase,
+	getPageVersionUseCase,
 	listBacklinksUseCase,
+	listPageVersionsUseCase,
+	restorePageVersionUseCase,
 	listPagesUseCase,
 	listTrashUseCase,
 	purgePageUseCase,
@@ -31,6 +34,7 @@ import {
 import {
 	createTestPageLinkRepository,
 	createTestPageRepository,
+	createTestPageVersionRepository,
 } from "./helpers";
 
 function createTester(
@@ -50,6 +54,7 @@ function createTester(
 	};
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
+	const pageVersions = createTestPageVersionRepository();
 	const testFixture = createTestPorts<AppContext["ports"], AppTransactionPorts>(
 		{
 			base: appPorts,
@@ -58,6 +63,7 @@ function createTester(
 				canvases,
 				pageLinks,
 				pages,
+				pageVersions,
 				tasks,
 				devtools: createInMemoryDevtools(),
 			},
@@ -67,6 +73,7 @@ function createTester(
 					canvases,
 					pageLinks,
 					pages,
+					pageVersions,
 					tasks,
 				}),
 			},
@@ -753,5 +760,178 @@ describe("pages use cases", () => {
 			},
 		);
 		expect(select.items.map((item) => item.id)).toEqual([snippets.id]);
+	});
+});
+
+describe("page versioning", () => {
+	const block = (id: string, text: string) => ({
+		id,
+		type: "paragraph",
+		props: {},
+		content: [{ type: "text", text, styles: {} }],
+		children: [],
+	});
+	const taskBlock = (id: string, text: string) => ({
+		id,
+		type: "task",
+		props: { checked: false, due: "", assignee: "" },
+		content: [{ type: "text", text, styles: {} }],
+		children: [],
+	});
+
+	it("checkpoints the pre-save state once per interval", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+		const page = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Versioned" },
+			{ ctx },
+		);
+
+		// First save: page is empty, nothing to checkpoint.
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [block("b1", "v1")] },
+			{ ctx },
+		);
+		let versions = await tester.run(
+			listPageVersionsUseCase,
+			{ id: page.id },
+			{ ctx },
+		);
+		expect(versions.items).toHaveLength(0);
+
+		// Second save checkpoints the pre-save ("v1") state...
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [block("b1", "v2")] },
+			{ ctx },
+		);
+		versions = await tester.run(
+			listPageVersionsUseCase,
+			{ id: page.id },
+			{ ctx },
+		);
+		expect(versions.items).toHaveLength(1);
+		expect(versions.items[0]?.cause).toBe("checkpoint");
+
+		// ...and further saves inside the interval don't add more.
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [block("b1", "v3")] },
+			{ ctx },
+		);
+		versions = await tester.run(
+			listPageVersionsUseCase,
+			{ id: page.id },
+			{ ctx },
+		);
+		expect(versions.items).toHaveLength(1);
+
+		const stored = await tester.run(
+			getPageVersionUseCase,
+			{ id: page.id, versionId: versions.items[0]?.id ?? "" },
+			{ ctx },
+		);
+		expect(stored.content).toEqual([block("b1", "v1")]);
+	});
+
+	it("restore snapshots the current state, applies the version, and reconciles tasks", async () => {
+		const { tasks, workspace, tester, ctx } = await createFixture();
+		const page = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Restorable" },
+			{ ctx },
+		);
+
+		// v1 has a task block; the current doc replaced it with a paragraph.
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [taskBlock("t1", "Old task")] },
+			{ ctx },
+		);
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [block("b2", "No more tasks")] },
+			{ ctx },
+		);
+		expect(await tasks.listByPage(page.id)).toHaveLength(0);
+
+		const versions = await tester.run(
+			listPageVersionsUseCase,
+			{ id: page.id },
+			{ ctx },
+		);
+		const withTask = versions.items.at(-1);
+		if (!withTask) throw new Error("Expected a checkpoint.");
+
+		await tester.run(
+			restorePageVersionUseCase,
+			{ id: page.id, versionId: withTask.id },
+			{ ctx },
+		);
+
+		// The doc is back on v1 and its task row is reconciled back into being.
+		const restored = await tester.run(getPageUseCase, { id: page.id }, { ctx });
+		expect(restored.content).toEqual([taskBlock("t1", "Old task")]);
+		expect(await tasks.listByPage(page.id)).toHaveLength(1);
+
+		// The pre-restore state was preserved as a "restore" version.
+		const after = await tester.run(
+			listPageVersionsUseCase,
+			{ id: page.id },
+			{ ctx },
+		);
+		expect(after.items.some((item) => item.cause === "restore")).toBe(true);
+	});
+
+	it("viewers can read history but not restore", async () => {
+		const { pages, workspace, tester, ctx } = await createFixture();
+		const page = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Guarded" },
+			{ ctx },
+		);
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [block("b1", "v1")] },
+			{ ctx },
+		);
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [block("b1", "v2")] },
+			{ ctx },
+		);
+
+		const viewer = createTester(
+			"user_viewer",
+			pages,
+			workspace.id,
+			createTestTaskRepository({ pages }),
+			"viewer",
+		);
+		const viewerCtx = await viewer.ctx();
+
+		// Reading history is fine... (fresh fixture repos per tester means the
+		// viewer's version repo is empty, so just assert no denial)
+		await viewer.run(
+			listPageVersionsUseCase,
+			{ id: page.id },
+			{
+				ctx: viewerCtx,
+			},
+		);
+
+		const versions = await tester.run(
+			listPageVersionsUseCase,
+			{ id: page.id },
+			{ ctx },
+		);
+		await expect(
+			viewer.run(
+				restorePageVersionUseCase,
+				{ id: page.id, versionId: versions.items[0]?.id ?? "" },
+				{ ctx: viewerCtx },
+			),
+		).rejects.toThrow("view-only");
 	});
 });

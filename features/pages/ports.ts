@@ -1,4 +1,9 @@
-import type { Page, PageMeta } from "@/features/pages/schemas";
+import type {
+	Page,
+	PageMeta,
+	PageVersion,
+	PageVersionMeta,
+} from "@/features/pages/schemas";
 
 export type NewPage = {
 	userId: string;
@@ -60,4 +65,25 @@ export interface PageRepository {
 	setDeletedByIds(ids: string[], deletedAt: string | null): Promise<void>;
 	deleteByIds(ids: string[]): Promise<void>;
 	deleteByWorkspace(workspaceId: string): Promise<void>;
+}
+
+export type NewPageVersion = {
+	pageId: string;
+	workspaceId: string;
+	title: string;
+	icon: string | null;
+	contentJson: string;
+	cause: "checkpoint" | "restore";
+	createdBy: string;
+};
+
+export interface PageVersionRepository {
+	/** Newest first, metadata only (no content payloads). */
+	listMetaByPage(pageId: string): Promise<PageVersionMeta[]>;
+	findById(id: string): Promise<PageVersion | null>;
+	/** The newest version's createdAt, for checkpoint spacing. */
+	latestCreatedAt(pageId: string): Promise<string | null>;
+	create(input: NewPageVersion): Promise<PageVersionMeta>;
+	/** Delete all but the newest `keep` versions of a page. */
+	prune(pageId: string, keep: number): Promise<void>;
 }

@@ -15,6 +15,7 @@ import type { MemberRepository } from "@/features/members/ports";
 import type {
 	PageLinkRepository,
 	PageRepository,
+	PageVersionRepository,
 } from "@/features/pages/ports";
 import type { pagePolicy } from "@/features/pages/policy";
 import type { AuthorizationContext } from "@/features/shared/authorization";
@@ -35,6 +36,7 @@ export type AppTransactionPorts = {
 	members: MemberRepository;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
+	pageVersions: PageVersionRepository;
 	shares: ShareRepository;
 	tasks: TaskRepository;
 };
@@ -52,6 +54,7 @@ export type AppPorts = {
 	mailer: MailerPort;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
+	pageVersions: PageVersionRepository;
 	resend: ResendMailEscapeHatch;
 	shares: ShareRepository;
 	tasks: TaskRepository;

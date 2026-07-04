@@ -15,6 +15,7 @@ import { savePageContentUseCase } from "@/features/pages/use-cases";
 import {
 	createTestPageLinkRepository,
 	createTestPageRepository,
+	createTestPageVersionRepository,
 } from "@/features/pages/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
@@ -61,6 +62,7 @@ async function createFixture(userId = "user_test") {
 		session: { id: `session_${userId}`, activeOrganizationId: workspace.id },
 	};
 	const pageLinks = createTestPageLinkRepository({ pages });
+	const pageVersions = createTestPageVersionRepository();
 	// Workspace roster for assignee validation.
 	const memberIds = new Set([userId, "user_teammate"]);
 	const members = {
@@ -77,11 +79,12 @@ async function createFixture(userId = "user_test") {
 			members,
 			pageLinks,
 			pages,
+			pageVersions,
 			tasks,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, members, pages, tasks }),
+			ports: (ports) => ({ ...ports, members, pages, pageVersions, tasks }),
 		},
 	});
 	const createTestContext = createTestContextFactory<
@@ -350,6 +353,7 @@ describe("tasks use cases", () => {
 				activeOrganizationId: intruderWorkspaceId,
 			},
 		};
+		const pageVersions = createTestPageVersionRepository();
 		const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 			base: appPorts,
 			overrides: {
@@ -360,7 +364,7 @@ describe("tasks use cases", () => {
 				devtools: createInMemoryDevtools(),
 			},
 			transaction: {
-				ports: (ports) => ({ ...ports, pages, tasks }),
+				ports: (ports) => ({ ...ports, pages, pageVersions, tasks }),
 			},
 		});
 		const intruder = createUseCaseTester<AppContext>(
