@@ -45,11 +45,62 @@ export type CollabRoom = {
 	synced: boolean;
 };
 
+type CachedRoom = {
+	doc: Y.Doc;
+	provider: LiveblocksYjsProvider;
+	leave: () => void;
+	refs: number;
+	linger: ReturnType<typeof setTimeout> | null;
+};
+
 /**
- * Enter a Liveblocks room and bind a fresh Y.Doc to it. Returns null until
- * the room connection exists; `synced` flips once the server state has
- * loaded, which is when the editor may mount (it must know whether the
- * shared doc is empty before deciding to seed it).
+ * Rooms are ref-counted and linger briefly after their last consumer
+ * unmounts: connecting + initial sync costs ~0.5s, so tearing the room down
+ * on every navigation made hopping between pages feel slow. Revisiting a
+ * lingering room is instant (already synced).
+ */
+const roomCache = new Map<string, CachedRoom>();
+const ROOM_LINGER_MS = 60_000;
+
+function acquireRoom(mode: CollabMode, roomId: string): CachedRoom {
+	const cached = roomCache.get(roomId);
+	if (cached) {
+		if (cached.linger) {
+			clearTimeout(cached.linger);
+			cached.linger = null;
+		}
+		cached.refs += 1;
+		return cached;
+	}
+	const { room, leave } = getLiveblocksClient(mode).enterRoom(roomId);
+	const doc = new Y.Doc();
+	const provider = new LiveblocksYjsProvider(room, doc);
+	const entry: CachedRoom = { doc, provider, leave, refs: 1, linger: null };
+	roomCache.set(roomId, entry);
+	return entry;
+}
+
+function releaseRoom(roomId: string) {
+	const entry = roomCache.get(roomId);
+	if (!entry) return;
+	entry.refs -= 1;
+	if (entry.refs > 0) return;
+	// No consumers left: drop this client from peers' presence right away
+	// (no ghost cursors while the room lingers), tear down after the linger.
+	entry.provider.awareness.setLocalState(null);
+	entry.linger = setTimeout(() => {
+		roomCache.delete(roomId);
+		entry.provider.destroy();
+		entry.leave();
+		entry.doc.destroy();
+	}, ROOM_LINGER_MS);
+}
+
+/**
+ * Enter a Liveblocks room and bind a Y.Doc to it. Returns null until the
+ * room connection exists; `synced` flips once the server state has loaded,
+ * which is when the editor may mount (it must know whether the shared doc
+ * is empty before deciding to seed it).
  */
 export function useCollabRoom(
 	roomId: string,
@@ -59,10 +110,7 @@ export function useCollabRoom(
 
 	useEffect(() => {
 		if (!mode) return;
-		const { room: liveblocksRoom, leave } =
-			getLiveblocksClient(mode).enterRoom(roomId);
-		const doc = new Y.Doc();
-		const provider = new LiveblocksYjsProvider(liveblocksRoom, doc);
+		const { doc, provider } = acquireRoom(mode, roomId);
 		const update = () =>
 			setRoom({ doc, provider, synced: provider.synced === true });
 		provider.on("synced", update);
@@ -72,10 +120,8 @@ export function useCollabRoom(
 		return () => {
 			provider.off("synced", update);
 			provider.off("sync", update);
-			provider.destroy();
-			leave();
-			doc.destroy();
 			setRoom(null);
+			releaseRoom(roomId);
 		};
 	}, [roomId, mode]);
 

@@ -156,7 +156,6 @@ export function OtpAuthForm() {
 								// Typing the last digit submits; the button stays as the
 								// fallback (verify no-ops while a request is pending).
 								onComplete={() => verify()}
-								containerClassName="justify-center"
 							>
 								<InputOTPGroup>
 									<InputOTPSlot index={0} />

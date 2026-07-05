@@ -17,19 +17,41 @@ export async function POST(req: Request) {
 		);
 	}
 
-	const server = await getServer();
+	// This endpoint gates the editor render on every page navigation, so
+	// every independent await below runs in parallel to keep it fast.
+	const [server, body] = await Promise.all([
+		getServer(),
+		req.json().catch(() => null) as Promise<{ room?: string } | null>,
+	]);
+	const target = body?.room ? parseRoomId(body.room) : null;
+	if (!body?.room || !target) {
+		return new Response(null, { status: 403 });
+	}
+
 	const ctx = await server.createContextFromNext();
 	const userId = ctx.auth?.user.id;
 	if (!userId) {
 		return new Response(null, { status: 403 });
 	}
 
-	// This route bypasses the contract hooks, so enforce the limit manually.
-	const limit = await server.ports.rateLimit.hit({
-		key: `collab-auth:${userId}`,
-		limit: 300,
-		windowSec: 60,
-	});
+	// The rate-limit hit (this route bypasses the contract hooks, so it is
+	// enforced manually) and the entity lookup don't depend on each other.
+	const [limit, workspaceId] = await Promise.all([
+		server.ports.rateLimit.hit({
+			key: `collab-auth:${userId}`,
+			limit: 300,
+			windowSec: 60,
+		}),
+		target.kind === "page"
+			? server.ports.pages
+					.findById(target.id)
+					.then((page) =>
+						page && page.deletedAt === null ? page.workspaceId : null,
+					)
+			: server.ports.canvases
+					.findById(target.id)
+					.then((canvas) => canvas?.workspaceId ?? null),
+	]);
 	if (!limit.allowed) {
 		return new Response(null, {
 			status: 429,
@@ -37,21 +59,6 @@ export async function POST(req: Request) {
 				? { "retry-after": String(limit.retryAfterSeconds) }
 				: {},
 		});
-	}
-
-	const body = (await req.json().catch(() => null)) as { room?: string } | null;
-	const target = body?.room ? parseRoomId(body.room) : null;
-	if (!body?.room || !target) {
-		return new Response(null, { status: 403 });
-	}
-
-	let workspaceId: string | null = null;
-	if (target.kind === "page") {
-		const page = await server.ports.pages.findById(target.id);
-		workspaceId = page && page.deletedAt === null ? page.workspaceId : null;
-	} else {
-		const canvas = await server.ports.canvases.findById(target.id);
-		workspaceId = canvas?.workspaceId ?? null;
 	}
 	if (!workspaceId) {
 		return new Response(null, { status: 403 });

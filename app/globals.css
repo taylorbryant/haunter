@@ -243,3 +243,9 @@
 	-webkit-user-select: none;
 	user-select: none;
 }
+
+/* Liveblocks injects a "Powered by Liveblocks" badge on free-plan rooms;
+   it floats over app UI (e.g. the mobile drawers), so hide it. */
+#liveblocks-badge {
+	display: none;
+}
