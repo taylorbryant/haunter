@@ -20,7 +20,16 @@ export function proxy(request: NextRequest) {
 		return NextResponse.redirect(signIn);
 	}
 
-	return NextResponse.next();
+	// Cookie present: let the request through, but tell the (app) layout what
+	// path was requested. If the cookie turns out to be stale (expired or
+	// revoked session), the layout's redirect can still preserve the
+	// destination — layouts cannot see the request URL on their own.
+	const requestHeaders = new Headers(request.headers);
+	requestHeaders.set(
+		"x-requested-path",
+		request.nextUrl.pathname + request.nextUrl.search,
+	);
+	return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

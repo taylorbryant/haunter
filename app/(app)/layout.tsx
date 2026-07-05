@@ -15,10 +15,19 @@ import { ShareButton } from "@/features/shares/components/share-button";
 import { auth } from "@/lib/better-auth";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-	const session = await auth.api.getSession({ headers: await headers() });
+	const headerList = await headers();
+	const session = await auth.api.getSession({ headers: headerList });
 
 	if (!session) {
-		redirect("/sign-in");
+		// Reached with a stale session cookie (the proxy only checks presence).
+		// x-requested-path is set by the proxy so the sign-in flow can return
+		// the user to where they were headed.
+		const requestedPath = headerList.get("x-requested-path");
+		redirect(
+			requestedPath
+				? `/sign-in?next=${encodeURIComponent(requestedPath)}`
+				: "/sign-in",
+		);
 	}
 
 	const cookieStore = await cookies();
