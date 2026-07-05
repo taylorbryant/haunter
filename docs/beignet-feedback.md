@@ -31,26 +31,31 @@ against the installed artifacts:
   templates; directly addresses the v2 "framework is ahead of its
   documentation" meta-ask.
 
-**Claimed by the changelog but missing from the published artifacts** —
-`@beignet/core`, `@beignet/web`, and `@beignet/next` `0.0.28` on npm appear
-to have been published from a build that predates changeset `57504c5`:
+**Claimed by the changelog but unusable in the published artifacts** —
+`@beignet/core`, `@beignet/web`, and `@beignet/next` `0.0.28` on npm were
+published with a stale `dist/`. Verified directly against the npm tarballs
+(`npm pack`, not a local cache): the core tarball's
+`src/server/server.ts` contains `rawRoute` 9 times, while
+`dist/server/server.js` and `dist/server/server.d.ts` contain it 0 times —
+and the `exports` maps point exclusively at `dist/` (no source condition),
+so every consumer gets the stale build. Concretely absent at runtime:
 
-- `server.rawRoute(...)` is not exported anywhere in the three packages'
-  dists; a runtime probe of the built server instance shows no `rawRoute`
-  key (the CLI's generated AGENTS template *does* reference it, so the docs
-  and the code disagree within one release).
-- The per-stage timing breakdown (`stages` on `afterSend` / request events)
-  is absent from the core dist and hook types.
+- `server.rawRoute(...)` — a probe of the built server instance shows no
+  such key (the CLI's generated AGENTS template *does* reference it, so
+  docs and runtime disagree within one release).
+- The per-stage timing breakdown (`stages` on `afterSend` / request
+  events).
 - `createTestApp`'s new warning for unenforceable `metadata.rateLimit` /
-  `metadata.idempotency` is absent from `@beignet/web/dist/testing.js`
-  (Haunter's route tests, which register rate-limited contracts without a
-  bound limiter, produce no warning).
+  `metadata.idempotency` (Haunter's route tests, which register
+  rate-limited contracts without a bound limiter, produce no warning).
 
-The CLI package (same changeset) did get its changes, which is what makes
-this look like a partial/stale publish of the runtime packages rather than
-an unreleased changeset. Haunter's Liveblocks route therefore still carries
-its manual rate-limit hit; it should migrate to `rawRoute` as soon as a
-release actually containing it ships.
+The CLI package from the same changeset shipped correctly, and the runtime
+packages' *sources* are current — this is a publish-pipeline issue (build
+not run, or run from a stale workspace, before `npm pack`; the classic
+missing-`prepublishOnly` failure), fixable with a rebuild-and-republish.
+Haunter's Liveblocks route therefore still carries its manual rate-limit
+hit; it should migrate to `rawRoute` as soon as a correctly built release
+ships.
 
 ## What held up
 
