@@ -13,6 +13,7 @@ import {
 	type TLStoreSnapshot,
 	Tldraw,
 } from "tldraw";
+import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
 	getCanvasQueryOptions,
 	saveCanvasSnapshotMutationOptions,
@@ -188,7 +189,11 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 
 	return (
 		<div className="relative h-full w-full">
-			<Tldraw snapshot={snapshot} onMount={handleMount} />
+			<Tldraw
+				licenseKey={TLDRAW_LICENSE_KEY}
+				snapshot={snapshot}
+				onMount={handleMount}
+			/>
 			{saveState === "saving" ? (
 				<span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-background/80 px-1.5 py-0.5 text-muted-foreground text-xs">
 					Saving…
@@ -293,7 +298,11 @@ function CollabCanvasSurface({
 
 	return (
 		<div className="relative h-full w-full">
-			<Tldraw store={storeWithStatus} onMount={handleMount} />
+			<Tldraw
+				licenseKey={TLDRAW_LICENSE_KEY}
+				store={storeWithStatus}
+				onMount={handleMount}
+			/>
 			{saveState === "saving" ? (
 				<span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-background/80 px-1.5 py-0.5 text-muted-foreground text-xs">
 					Saving…

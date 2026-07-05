@@ -14,6 +14,12 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+	InputOTP,
+	InputOTPGroup,
+	InputOTPSeparator,
+	InputOTPSlot,
+} from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { onboard } from "@/features/workspaces/contracts";
 
@@ -48,8 +54,8 @@ export function OtpAuthForm() {
 		setStep("code");
 	}
 
-	async function verify(event: React.FormEvent) {
-		event.preventDefault();
+	async function verify(event?: React.FormEvent) {
+		event?.preventDefault();
 		if (code.length < 6 || pending) return;
 		setError(null);
 		setPending(true);
@@ -139,20 +145,31 @@ export function OtpAuthForm() {
 					<form className="flex flex-col gap-4" onSubmit={verify}>
 						<div className="flex flex-col gap-2">
 							<Label htmlFor="code">6-digit code</Label>
-							<Input
+							<InputOTP
 								id="code"
+								maxLength={6}
 								inputMode="numeric"
 								autoComplete="one-time-code"
-								maxLength={6}
-								placeholder="123456"
-								required
 								autoFocus
 								value={code}
-								onChange={(event) =>
-									setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-								}
-								className="text-center text-lg tracking-[0.4em]"
-							/>
+								onChange={(next) => setCode(next.replace(/\D/g, ""))}
+								// Typing the last digit submits; the button stays as the
+								// fallback (verify no-ops while a request is pending).
+								onComplete={() => verify()}
+								containerClassName="justify-center"
+							>
+								<InputOTPGroup>
+									<InputOTPSlot index={0} />
+									<InputOTPSlot index={1} />
+									<InputOTPSlot index={2} />
+								</InputOTPGroup>
+								<InputOTPSeparator />
+								<InputOTPGroup>
+									<InputOTPSlot index={3} />
+									<InputOTPSlot index={4} />
+									<InputOTPSlot index={5} />
+								</InputOTPGroup>
+							</InputOTP>
 						</div>
 						{error ? <p className="text-destructive text-sm">{error}</p> : null}
 						<Button type="submit" disabled={code.length < 6 || pending}>

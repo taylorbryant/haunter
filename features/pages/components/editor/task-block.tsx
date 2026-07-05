@@ -62,7 +62,10 @@ export const taskBlockSpec = createReactBlockSpec(
 					/>
 					<div
 						contentEditable={false}
-						className="ml-auto flex shrink-0 items-center gap-1"
+						// Mobile: a full-width row below the title, left-aligned and
+						// indented past the checkbox (like the Tasks page). sm+: inline
+						// on the right of the title.
+						className="flex w-full shrink-0 items-center gap-1 pl-6 sm:ml-auto sm:w-auto sm:pl-0"
 					>
 						<AssigneePicker
 							value={assignee === "" ? null : assignee}

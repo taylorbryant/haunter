@@ -11,12 +11,21 @@ import {
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+	Drawer,
+	DrawerContent,
+	DrawerDescription,
+	DrawerHeader,
+	DrawerTitle,
+	DrawerTrigger,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	createPageShareMutationOptions,
@@ -28,12 +37,13 @@ import {
 /**
  * Header "Share" control: publish the current page to the web as a
  * read-only link, copy it, or revoke it. Rendered only on page routes for
- * members who can edit.
+ * members who can edit. A popover on desktop, a bottom drawer on mobile.
  */
 export function ShareButton() {
 	const pathname = usePathname();
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 	const canEdit = useCanEditWorkspace();
+	const isMobile = useIsMobile();
 	const queryClient = useQueryClient();
 	const [open, setOpen] = useState(false);
 	const [copied, setCopied] = useState(false);
@@ -76,19 +86,94 @@ export function ShareButton() {
 		setTimeout(() => setCopied(false), 1500);
 	}
 
+	const trigger = (
+		<Button variant="ghost" size="sm" className="text-muted-foreground" />
+	);
+	const triggerContent = (
+		<>
+			<Share2Icon />
+			Share
+		</>
+	);
+
+	const panel = shareQuery.isPending ? (
+		<p className="text-muted-foreground text-sm">Loading…</p>
+	) : share ? (
+		<div className="flex flex-col gap-3">
+			<div className="flex items-center gap-2">
+				<Globe2Icon className="size-4 text-muted-foreground" />
+				<div className="flex flex-col">
+					<p className="font-medium text-sm">Shared to the web</p>
+					<p className="text-muted-foreground text-xs">
+						Anyone with the link can view this page.
+					</p>
+				</div>
+			</div>
+			<div className="flex gap-2">
+				<Input readOnly value={shareUrl ?? ""} className="h-8 text-xs" />
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					onClick={copy}
+					aria-label="Copy link"
+				>
+					{copied ? <CheckIcon /> : <CopyIcon />}
+				</Button>
+			</div>
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				className="w-fit text-destructive hover:text-destructive"
+				disabled={busy}
+				onClick={revoke}
+			>
+				Revoke link
+			</Button>
+		</div>
+	) : (
+		<div className="flex flex-col gap-3">
+			<div className="flex items-center gap-2">
+				<Globe2Icon className="size-4 text-muted-foreground" />
+				<div className="flex flex-col">
+					<p className="font-medium text-sm">Share to the web</p>
+					<p className="text-muted-foreground text-xs">
+						Publish a read-only link anyone can open.
+					</p>
+				</div>
+			</div>
+			<Button type="button" size="sm" disabled={busy} onClick={publish}>
+				{busy ? "Publishing…" : "Publish"}
+			</Button>
+		</div>
+	);
+
+	if (isMobile) {
+		return (
+			<Drawer showSwipeHandle open={open} onOpenChange={setOpen}>
+				<DrawerTrigger render={trigger}>{triggerContent}</DrawerTrigger>
+				<DrawerContent>
+					<DrawerHeader>
+						<DrawerTitle>Share</DrawerTitle>
+						<DrawerDescription className="sr-only">
+							Share this page to the web
+						</DrawerDescription>
+					</DrawerHeader>
+					<div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+						{panel}
+					</div>
+				</DrawerContent>
+			</Drawer>
+		);
+	}
+
 	return (
 		// modal: non-modal Radix popovers don't dismiss on outside taps in iOS
 		// Safari (taps on non-interactive page area never reach the dismiss
 		// layer). Modal mode closes reliably everywhere.
 		<Popover modal open={open} onOpenChange={setOpen}>
-			<PopoverTrigger
-				render={
-					<Button variant="ghost" size="sm" className="text-muted-foreground" />
-				}
-			>
-				<Share2Icon />
-				Share
-			</PopoverTrigger>
+			<PopoverTrigger render={trigger}>{triggerContent}</PopoverTrigger>
 			<PopoverContent align="end" className="w-80">
 				{/* Explicit close: outside-tap dismissal has platform quirks on
 				    touch devices, so the popover always offers a visible way out. */}
@@ -102,58 +187,7 @@ export function ShareButton() {
 					<XIcon />
 					<span className="sr-only">Close</span>
 				</Button>
-				{shareQuery.isPending ? (
-					<p className="text-muted-foreground text-sm">Loading…</p>
-				) : share ? (
-					<div className="flex flex-col gap-3">
-						<div className="flex items-center gap-2">
-							<Globe2Icon className="size-4 text-muted-foreground" />
-							<div className="flex flex-col">
-								<p className="font-medium text-sm">Shared to the web</p>
-								<p className="text-muted-foreground text-xs">
-									Anyone with the link can view this page.
-								</p>
-							</div>
-						</div>
-						<div className="flex gap-2">
-							<Input readOnly value={shareUrl ?? ""} className="h-8 text-xs" />
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={copy}
-								aria-label="Copy link"
-							>
-								{copied ? <CheckIcon /> : <CopyIcon />}
-							</Button>
-						</div>
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							className="w-fit text-destructive hover:text-destructive"
-							disabled={busy}
-							onClick={revoke}
-						>
-							Revoke link
-						</Button>
-					</div>
-				) : (
-					<div className="flex flex-col gap-3">
-						<div className="flex items-center gap-2">
-							<Globe2Icon className="size-4 text-muted-foreground" />
-							<div className="flex flex-col">
-								<p className="font-medium text-sm">Share to the web</p>
-								<p className="text-muted-foreground text-xs">
-									Publish a read-only link anyone can open.
-								</p>
-							</div>
-						</div>
-						<Button type="button" size="sm" disabled={busy} onClick={publish}>
-							{busy ? "Publishing…" : "Publish"}
-						</Button>
-					</div>
-				)}
+				{panel}
 			</PopoverContent>
 		</Popover>
 	);

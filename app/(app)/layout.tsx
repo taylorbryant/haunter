@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderBreadcrumbs } from "@/components/header-breadcrumbs";
+import { HeaderPresence } from "@/components/header-presence";
 import { HeaderSaveIndicator } from "@/components/header-save-indicator";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -47,6 +48,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 					/>
 					<HeaderBreadcrumbs />
 					<HeaderSaveIndicator />
+					<HeaderPresence />
 					<PageHistoryButton />
 					<ShareButton />
 				</header>

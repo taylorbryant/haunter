@@ -5,6 +5,7 @@ import "tldraw/tldraw.css";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { type Editor, type TLStoreSnapshot, Tldraw } from "tldraw";
+import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import { rq } from "@/client";
 import { getSharedCanvas } from "@/features/shares/contracts";
 
@@ -55,7 +56,11 @@ export default function SharedCanvasSurface({
 
 	return (
 		<div className="relative h-full w-full">
-			<Tldraw snapshot={snapshot} onMount={handleMount} />
+			<Tldraw
+				licenseKey={TLDRAW_LICENSE_KEY}
+				snapshot={snapshot}
+				onMount={handleMount}
+			/>
 		</div>
 	);
 }

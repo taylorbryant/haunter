@@ -39,6 +39,7 @@ import type { Awareness } from "y-protocols/awareness";
 import { apiClient } from "@/client";
 import { createCanvas } from "@/features/canvases/contracts";
 import type { CollabRoom } from "@/features/collab/client/liveblocks";
+import { setCollabPresence } from "@/features/collab/client/presence-state";
 import {
 	invalidateBacklinks,
 	invalidatePage,
@@ -199,10 +200,11 @@ type HaunterEditorProps = {
 	onConflict?: () => void;
 };
 
-/** Colored-initial chips for the other people currently in this page. */
-function PresenceRow({ room }: { room: CollabRoom }) {
-	const [others, setOthers] = useState<{ name: string; color: string }[]>([]);
-
+/**
+ * Publishes the other people currently in this page to the presence store;
+ * the app header renders the chips (next to "Edited X ago").
+ */
+function PresencePublisher({ room }: { room: CollabRoom }) {
 	useEffect(() => {
 		const awareness = room.provider.awareness;
 		const ownClientId = room.doc.clientID;
@@ -220,31 +222,17 @@ function PresenceRow({ room }: { room: CollabRoom }) {
 					});
 				}
 			}
-			setOthers([...seen.values()]);
+			setCollabPresence([...seen.values()]);
 		};
 		awareness.on("change", update);
 		update();
-		return () => awareness.off("change", update);
+		return () => {
+			awareness.off("change", update);
+			setCollabPresence([]);
+		};
 	}, [room]);
 
-	if (others.length === 0) return null;
-
-	return (
-		// The chips carry their own accessible names via title; the row itself
-		// is layout only.
-		<div className="flex justify-end gap-1 px-0 pb-1 md:px-[54px]">
-			{others.slice(0, 5).map((user) => (
-				<span
-					key={user.name}
-					title={user.name}
-					className="flex size-6 items-center justify-center rounded-full text-[10px] text-white leading-none ring-2 ring-background"
-					style={{ backgroundColor: user.color }}
-				>
-					{user.name.trim().slice(0, 2).toUpperCase()}
-				</span>
-			))}
-		</div>
-	);
+	return null;
 }
 
 export default function HaunterEditor({
@@ -393,7 +381,7 @@ export default function HaunterEditor({
 		// content runs edge-to-edge; the block controls that live there are
 		// hidden below. Driven from JS (not CSS) to share one breakpoint.
 		<div className={cn("haunter-editor", isMobile && "editor-flush")}>
-			{collab ? <PresenceRow room={collab} /> : null}
+			{collab ? <PresencePublisher room={collab} /> : null}
 			<BlockNoteView
 				editor={editor}
 				editable={editable}

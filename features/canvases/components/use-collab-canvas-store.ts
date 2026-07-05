@@ -7,6 +7,7 @@ import {
 	createTLStore,
 	defaultBindingUtils,
 	defaultShapeUtils,
+	getSnapshot,
 	InstancePresenceRecordType,
 	loadSnapshot,
 	react,
@@ -96,8 +97,12 @@ export function useCollabCanvasStore(
 			if (meta.get("canvasSeeded") !== true) {
 				room.doc.transact(() => {
 					meta.set("canvasSeeded", true);
-					for (const record of store.allRecords()) {
-						yRecords.set(record.id, record);
+					// Document scope only: allRecords() would also leak this
+					// client's session records (instance, camera, user) into the
+					// shared map and, via saves, into everyone's DB snapshot.
+					const seeded = getSnapshot(store).document.store;
+					for (const record of Object.values(seeded)) {
+						yRecords.set(record.id, record as TLRecord);
 					}
 				});
 			}
