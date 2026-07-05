@@ -42,15 +42,13 @@ events, listener registration, jobs, and outbox wiring. After changing the Drizz
 Run after every change:
 
 ```bash
-bun run lint
-bun beignet lint
-bun beignet doctor --strict
-bun run test
-bun run typecheck
+bun beignet check
 ```
 
-`bun run lint` runs Biome's code lint. Use `bun run format` to apply formatting.
-`bun beignet lint` is Beignet's dependency-direction lint.
+One command for the whole loop: `beignet lint` (dependency-direction),
+`beignet doctor --strict`, then the app's `lint` (Biome), `typecheck`, and
+`test` scripts — every step runs even if an earlier one fails. Use
+`bun run format` to apply Biome formatting.
 
 ## Package skills
 

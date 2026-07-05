@@ -8,11 +8,49 @@ Auth with the organization and agent-auth plugins), non-HTTP entrypoints
 auth), a remote libSQL/Turso database, and one real production performance
 investigation.
 
-> **Revision note.** This is v2, revised after the framework author's
-> response to the original report. Four of the original "gaps" turned out to
+> **Revision note.** This is v3. v2 was revised after the framework author's
+> response to the original report: four of the original "gaps" turned out to
 > be existing framework APIs; Haunter has since adopted them (details below)
-> and those items now record only their accurate residuals. Several other
-> items were confirmed and are on the framework roadmap.
+> and those items now record only their accurate residuals. v3 records the
+> upgrade to 0.0.28, which shipped several roadmapped items — see the next
+> section, including one publish gap found during verification.
+
+## 0.0.28 upgrade report
+
+Haunter upgraded to `@beignet/*@0.0.28` and verified each changelog claim
+against the installed artifacts:
+
+**Landed and adopted:**
+
+- `beignet check` — works (5 steps, one command); CLAUDE.md's validation
+  loop now uses it.
+- `beignet provider` alias — works.
+- Sqlite starter: `PRAGMA foreign_keys` + `busy_timeout` scoped to local
+  files — confirmed in the CLI templates.
+- Generated AGENTS/CLAUDE capability index — confirmed in the CLI
+  templates; directly addresses the v2 "framework is ahead of its
+  documentation" meta-ask.
+
+**Claimed by the changelog but missing from the published artifacts** —
+`@beignet/core`, `@beignet/web`, and `@beignet/next` `0.0.28` on npm appear
+to have been published from a build that predates changeset `57504c5`:
+
+- `server.rawRoute(...)` is not exported anywhere in the three packages'
+  dists; a runtime probe of the built server instance shows no `rawRoute`
+  key (the CLI's generated AGENTS template *does* reference it, so the docs
+  and the code disagree within one release).
+- The per-stage timing breakdown (`stages` on `afterSend` / request events)
+  is absent from the core dist and hook types.
+- `createTestApp`'s new warning for unenforceable `metadata.rateLimit` /
+  `metadata.idempotency` is absent from `@beignet/web/dist/testing.js`
+  (Haunter's route tests, which register rate-limited contracts without a
+  bound limiter, produce no warning).
+
+The CLI package (same changeset) did get its changes, which is what makes
+this look like a partial/stale publish of the runtime packages rather than
+an unreleased changeset. Haunter's Liveblocks route therefore still carries
+its manual rate-limit hit; it should migrate to `rawRoute` as soon as a
+release actually containing it ships.
 
 ## What held up
 
