@@ -23,15 +23,11 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
+	ResponsiveDialog,
+	ResponsiveDialogFooter,
+} from "@/components/responsive-dialog";
+import { Button } from "@/components/ui/button";
 import {
 	Drawer,
 	DrawerClose,
@@ -194,7 +190,7 @@ export function WorkspaceSwitcher({
 		<SidebarMenu>
 			<SidebarMenuItem>
 				{isMobile ? (
-					<Drawer>
+					<Drawer showSwipeHandle>
 						<DrawerTrigger render={trigger} />
 						<DrawerContent>
 							<DrawerHeader className="border-b text-left">
@@ -358,127 +354,119 @@ export function WorkspaceSwitcher({
 					</DropdownMenu>
 				)}
 
-				<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-					<DialogContent className="sm:max-w-sm">
-						<DialogHeader>
-							<DialogTitle>New workspace</DialogTitle>
-							<DialogDescription>
-								Workspaces keep separate areas of your life apart, like work and
-								personal.
-							</DialogDescription>
-						</DialogHeader>
-						<form
-							className="flex flex-col gap-4"
-							onSubmit={(event) => {
-								event.preventDefault();
-								create();
-							}}
-						>
+				<ResponsiveDialog
+					open={dialogOpen}
+					onOpenChange={setDialogOpen}
+					title="New workspace"
+					description="Workspaces keep separate areas of your life apart, like work and personal."
+					className="sm:max-w-sm"
+				>
+					<form
+						className="flex flex-col gap-4"
+						onSubmit={(event) => {
+							event.preventDefault();
+							create();
+						}}
+					>
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="workspace-name">Name</Label>
+							<Input
+								id="workspace-name"
+								autoFocus
+								value={name}
+								placeholder="e.g. Work"
+								onChange={(event) => setName(event.target.value)}
+							/>
+						</div>
+						<ResponsiveDialogFooter>
+							<Button type="submit" disabled={!name.trim() || busy}>
+								{busy ? "Creating…" : "Create workspace"}
+							</Button>
+						</ResponsiveDialogFooter>
+					</form>
+				</ResponsiveDialog>
+
+				<ResponsiveDialog
+					open={editOpen}
+					onOpenChange={setEditOpen}
+					title="Edit workspace"
+					description="Update this workspace's emoji and name."
+					className="sm:max-w-sm"
+				>
+					<form
+						className="flex flex-col gap-4"
+						onSubmit={(event) => {
+							event.preventDefault();
+							saveEdit();
+						}}
+					>
+						<div className="flex items-end gap-3">
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="workspace-name">Name</Label>
+								<Label htmlFor="edit-workspace-emoji">Emoji</Label>
+								<Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
+									<PopoverTrigger
+										render={
+											<Button
+												id="edit-workspace-emoji"
+												type="button"
+												variant="outline"
+												className="size-9 p-0 text-lg leading-none"
+												aria-label="Choose emoji"
+											/>
+										}
+									>
+										{editIcon ?? (
+											<SmilePlusIcon className="size-4 text-muted-foreground" />
+										)}
+									</PopoverTrigger>
+									<PopoverContent className="w-auto p-0" align="start">
+										<div className="flex h-[300px] w-[288px] flex-col">
+											<EmojiPicker
+												className="min-h-0 flex-1"
+												onEmojiSelect={({ emoji }) => {
+													setEditIcon(emoji);
+													setIconPickerOpen(false);
+												}}
+											>
+												<EmojiPickerSearch placeholder="Search emoji…" />
+												<EmojiPickerContent />
+											</EmojiPicker>
+											{editIcon ? (
+												<div className="border-t p-1">
+													<Button
+														type="button"
+														variant="ghost"
+														size="sm"
+														className="w-full justify-start text-muted-foreground"
+														onClick={() => {
+															setEditIcon(null);
+															setIconPickerOpen(false);
+														}}
+													>
+														Remove emoji
+													</Button>
+												</div>
+											) : null}
+										</div>
+									</PopoverContent>
+								</Popover>
+							</div>
+							<div className="flex flex-1 flex-col gap-2">
+								<Label htmlFor="edit-workspace-name">Name</Label>
 								<Input
-									id="workspace-name"
-									autoFocus
-									value={name}
-									placeholder="e.g. Work"
-									onChange={(event) => setName(event.target.value)}
+									id="edit-workspace-name"
+									value={editName}
+									onChange={(event) => setEditName(event.target.value)}
 								/>
 							</div>
-							<DialogFooter>
-								<Button type="submit" disabled={!name.trim() || busy}>
-									{busy ? "Creating…" : "Create workspace"}
-								</Button>
-							</DialogFooter>
-						</form>
-					</DialogContent>
-				</Dialog>
-
-				<Dialog open={editOpen} onOpenChange={setEditOpen}>
-					<DialogContent className="sm:max-w-sm">
-						<DialogHeader>
-							<DialogTitle>Edit workspace</DialogTitle>
-							<DialogDescription>
-								Update this workspace's emoji and name.
-							</DialogDescription>
-						</DialogHeader>
-						<form
-							className="flex flex-col gap-4"
-							onSubmit={(event) => {
-								event.preventDefault();
-								saveEdit();
-							}}
-						>
-							<div className="flex items-end gap-3">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="edit-workspace-emoji">Emoji</Label>
-									<Popover
-										open={iconPickerOpen}
-										onOpenChange={setIconPickerOpen}
-									>
-										<PopoverTrigger
-											render={
-												<Button
-													id="edit-workspace-emoji"
-													type="button"
-													variant="outline"
-													className="size-9 p-0 text-lg leading-none"
-													aria-label="Choose emoji"
-												/>
-											}
-										>
-											{editIcon ?? (
-												<SmilePlusIcon className="size-4 text-muted-foreground" />
-											)}
-										</PopoverTrigger>
-										<PopoverContent className="w-auto p-0" align="start">
-											<div className="flex h-[300px] w-[288px] flex-col">
-												<EmojiPicker
-													className="min-h-0 flex-1"
-													onEmojiSelect={({ emoji }) => {
-														setEditIcon(emoji);
-														setIconPickerOpen(false);
-													}}
-												>
-													<EmojiPickerSearch placeholder="Search emoji…" />
-													<EmojiPickerContent />
-												</EmojiPicker>
-												{editIcon ? (
-													<div className="border-t p-1">
-														<Button
-															type="button"
-															variant="ghost"
-															size="sm"
-															className="w-full justify-start text-muted-foreground"
-															onClick={() => {
-																setEditIcon(null);
-																setIconPickerOpen(false);
-															}}
-														>
-															Remove emoji
-														</Button>
-													</div>
-												) : null}
-											</div>
-										</PopoverContent>
-									</Popover>
-								</div>
-								<div className="flex flex-1 flex-col gap-2">
-									<Label htmlFor="edit-workspace-name">Name</Label>
-									<Input
-										id="edit-workspace-name"
-										value={editName}
-										onChange={(event) => setEditName(event.target.value)}
-									/>
-								</div>
-							</div>
-							<DialogFooter>
-								<Button type="submit" disabled={!editName.trim() || busy}>
-									{busy ? "Saving…" : "Save"}
-								</Button>
-							</DialogFooter>
-						</form>
-					</DialogContent>
-				</Dialog>
+						</div>
+						<ResponsiveDialogFooter>
+							<Button type="submit" disabled={!editName.trim() || busy}>
+								{busy ? "Saving…" : "Save"}
+							</Button>
+						</ResponsiveDialogFooter>
+					</form>
+				</ResponsiveDialog>
 
 				<MembersDialog open={membersOpen} onOpenChange={setMembersOpen} />
 

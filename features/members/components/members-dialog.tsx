@@ -4,15 +4,9 @@ import { ChevronDownIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { ResponsiveDialog } from "@/components/responsive-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -120,131 +114,133 @@ export function MembersDialog({
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-lg">
-				<DialogHeader>
-					<DialogTitle>Members</DialogTitle>
-					<DialogDescription>
-						{canManage
-							? "Invite people and manage their access to this workspace."
-							: "People with access to this workspace."}
-					</DialogDescription>
-				</DialogHeader>
-
-				{canManage ? (
-					<form
-						className="flex items-end gap-2"
-						onSubmit={(event) => {
-							event.preventDefault();
-							invite();
-						}}
-					>
-						<div className="flex flex-1 flex-col gap-2">
-							<Label htmlFor="invite-email">Invite by email</Label>
-							<Input
-								id="invite-email"
-								type="email"
-								placeholder="teammate@example.com"
-								value={email}
-								onChange={(event) => setEmail(event.target.value)}
-							/>
-						</div>
+		<ResponsiveDialog
+			open={open}
+			onOpenChange={onOpenChange}
+			title="Members"
+			description={
+				canManage
+					? "Invite people and manage their access to this workspace."
+					: "People with access to this workspace."
+			}
+			className="sm:max-w-lg"
+		>
+			{canManage ? (
+				<form
+					// Stacks on mobile so the email field keeps a usable width.
+					className="flex flex-col gap-2 sm:flex-row sm:items-end"
+					onSubmit={(event) => {
+						event.preventDefault();
+						invite();
+					}}
+				>
+					<div className="flex flex-1 flex-col gap-2">
+						<Label htmlFor="invite-email">Invite by email</Label>
+						<Input
+							id="invite-email"
+							type="email"
+							placeholder="teammate@example.com"
+							value={email}
+							onChange={(event) => setEmail(event.target.value)}
+						/>
+					</div>
+					<div className="flex items-center justify-end gap-2">
 						<RolePicker value={inviteRole} onChange={setInviteRole} />
 						<Button type="submit" disabled={!email.trim() || busy}>
 							Invite
 						</Button>
-					</form>
-				) : null}
-				{error ? <p className="text-destructive text-sm">{error}</p> : null}
+					</div>
+				</form>
+			) : null}
+			{error ? <p className="text-destructive text-sm">{error}</p> : null}
 
+			<div className="flex flex-col gap-1">
+				{members.map((member) => {
+					const label = member.user?.name || member.user?.email || "Member";
+					const isOwner = member.role === "owner";
+					const isSelf = member.id === myMemberId;
+					const editable = canManage && !isOwner && !isSelf;
+					return (
+						<div key={member.id} className="flex items-center gap-3 py-1.5">
+							<Avatar className="size-8">
+								<AvatarFallback>{initials(label)}</AvatarFallback>
+							</Avatar>
+							<div className="flex min-w-0 flex-1 flex-col">
+								<span className="truncate text-sm">{label}</span>
+								{member.user?.email ? (
+									<span className="truncate text-muted-foreground text-xs">
+										{member.user.email}
+									</span>
+								) : null}
+							</div>
+							{editable ? (
+								<RolePicker
+									value={member.role}
+									onChange={(role) => changeRole(member.id, role)}
+								/>
+							) : (
+								<span className="text-muted-foreground text-xs">
+									{ROLE_LABEL[member.role] ?? member.role}
+								</span>
+							)}
+							{editable ? (
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									className="size-8 text-muted-foreground"
+									aria-label={`Remove ${label}`}
+									onClick={() => removeMember(member.id)}
+								>
+									<XIcon />
+								</Button>
+							) : null}
+						</div>
+					);
+				})}
+			</div>
+
+			{invitations.length > 0 ? (
 				<div className="flex flex-col gap-1">
-					{members.map((member) => {
-						const label = member.user?.name || member.user?.email || "Member";
-						const isOwner = member.role === "owner";
-						const isSelf = member.id === myMemberId;
-						const editable = canManage && !isOwner && !isSelf;
-						return (
-							<div key={member.id} className="flex items-center gap-3 py-1.5">
-								<Avatar className="size-8">
-									<AvatarFallback>{initials(label)}</AvatarFallback>
-								</Avatar>
-								<div className="flex min-w-0 flex-1 flex-col">
-									<span className="truncate text-sm">{label}</span>
-									{member.user?.email ? (
-										<span className="truncate text-muted-foreground text-xs">
-											{member.user.email}
-										</span>
-									) : null}
-								</div>
-								{editable ? (
-									<RolePicker
-										value={member.role}
-										onChange={(role) => changeRole(member.id, role)}
-									/>
-								) : (
-									<span className="text-muted-foreground text-xs">
-										{ROLE_LABEL[member.role] ?? member.role}
-									</span>
-								)}
-								{editable ? (
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										className="size-8 text-muted-foreground"
-										aria-label={`Remove ${label}`}
-										onClick={() => removeMember(member.id)}
-									>
-										<XIcon />
-									</Button>
-								) : null}
+					<p className="text-muted-foreground text-xs">Pending invitations</p>
+					{invitations.map((invite) => (
+						<div key={invite.id} className="flex items-center gap-3 py-1.5">
+							<div className="flex min-w-0 flex-1 flex-col">
+								<span className="truncate text-sm">{invite.email}</span>
+								<span className="text-muted-foreground text-xs">
+									Invited as {ROLE_LABEL[invite.role ?? "member"]}
+								</span>
 							</div>
-						);
-					})}
+							{canManage ? (
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									disabled={busy}
+									onClick={() => cancelInvitation(invite.id)}
+								>
+									Cancel
+								</Button>
+							) : null}
+						</div>
+					))}
 				</div>
+			) : null}
 
-				{invitations.length > 0 ? (
-					<div className="flex flex-col gap-1">
-						<p className="text-muted-foreground text-xs">Pending invitations</p>
-						{invitations.map((invite) => (
-							<div key={invite.id} className="flex items-center gap-3 py-1.5">
-								<div className="flex min-w-0 flex-1 flex-col">
-									<span className="truncate text-sm">{invite.email}</span>
-									<span className="text-muted-foreground text-xs">
-										Invited as {ROLE_LABEL[invite.role ?? "member"]}
-									</span>
-								</div>
-								{canManage ? (
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										disabled={busy}
-										onClick={() => cancelInvitation(invite.id)}
-									>
-										Cancel
-									</Button>
-								) : null}
-							</div>
-						))}
-					</div>
-				) : null}
-
-				{myRole && myRole !== "owner" ? (
-					<div className="border-t pt-3">
-						<Button
-							type="button"
-							variant="ghost"
-							className="text-destructive hover:text-destructive"
-							disabled={busy}
-							onClick={leave}
-						>
-							Leave workspace
-						</Button>
-					</div>
-				) : null}
-			</DialogContent>
-		</Dialog>
+			{myRole && myRole !== "owner" ? (
+				<div className="border-t pt-3">
+					<Button
+						type="button"
+						variant="ghost"
+						className="text-destructive hover:text-destructive"
+						disabled={busy}
+						onClick={leave}
+					>
+						Leave workspace
+					</Button>
+				</div>
+			) : null}
+		</ResponsiveDialog>
 	);
 }
 

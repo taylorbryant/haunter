@@ -48,7 +48,10 @@ function DialogContent({
 }) {
 	return (
 		<DialogPortal>
-			<DialogOverlay />
+			{/* Base UI skips backdrops on nested dialogs, but our dialogs open
+			    over the mobile sidebar Sheet (also a dialog) and still need the
+			    dim layer between them. */}
+			<DialogOverlay forceRender />
 			<DialogPrimitive.Popup
 				data-slot="dialog-content"
 				className={cn(

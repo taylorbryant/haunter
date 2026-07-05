@@ -165,13 +165,13 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 			) : (
 				<ul className="flex flex-col divide-y">
 					{tasks.map((task) => (
-						<li key={task.id} className="group flex items-center gap-3 py-2">
+						<li key={task.id} className="group flex items-start gap-3 py-2">
 							<input
 								type="checkbox"
 								checked={task.completed}
 								disabled={!canEdit}
 								className={cn(
-									"size-4 shrink-0 accent-primary",
+									"mt-0.5 size-4 shrink-0 accent-primary",
 									canEdit && "cursor-pointer",
 								)}
 								aria-label={
@@ -187,120 +187,128 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 									)
 								}
 							/>
-							<div className="min-w-0 flex-1">
-								{editingId === task.id ? (
-									<input
-										// biome-ignore lint/a11y/noAutofocus: opened by an explicit tap on the title
-										autoFocus
-										value={editTitle}
-										aria-label="Task name"
-										className="w-full bg-transparent text-base leading-tight outline-none sm:text-sm"
-										onChange={(event) => setEditTitle(event.target.value)}
-										onKeyDown={(event) => {
-											if (event.key === "Enter") commitTitle(task);
-											if (event.key === "Escape") setEditingId(null);
-										}}
-										onBlur={() => commitTitle(task)}
+							{/* Stacks title over the chips on mobile; sm+ lays them out
+							    side by side on one line. */}
+							<div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+								<div className="min-w-0 flex-1">
+									{editingId === task.id ? (
+										<input
+											// biome-ignore lint/a11y/noAutofocus: opened by an explicit tap on the title
+											autoFocus
+											value={editTitle}
+											aria-label="Task name"
+											className="w-full bg-transparent text-base leading-tight outline-none sm:text-sm"
+											onChange={(event) => setEditTitle(event.target.value)}
+											onKeyDown={(event) => {
+												if (event.key === "Enter") commitTitle(task);
+												if (event.key === "Escape") setEditingId(null);
+											}}
+											onBlur={() => commitTitle(task)}
+										/>
+									) : task.sourceBlockId === null && canEdit ? (
+										<button
+											type="button"
+											className={cn(
+												"block max-w-full cursor-text truncate text-left text-sm",
+												task.completed && "text-muted-foreground line-through",
+											)}
+											onClick={() => {
+												setEditTitle(task.title);
+												setEditingId(task.id);
+											}}
+										>
+											{task.title || "Untitled task"}
+										</button>
+									) : (
+										<p
+											className={cn(
+												"truncate text-sm",
+												task.completed && "text-muted-foreground line-through",
+											)}
+										>
+											{task.title || "Untitled task"}
+										</p>
+									)}
+									{task.pageId ? (
+										<Link
+											href={`/w/${workspaceId}/p/${task.pageId}`}
+											className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
+										>
+											<FileTextIcon className="size-3" />
+											{task.pageTitle || "Untitled"}
+										</Link>
+									) : null}
+								</div>
+								<div className="flex items-center gap-1 sm:shrink-0">
+									<AssigneePicker
+										value={task.assigneeId}
+										disabled={!canEdit}
+										onChange={(next) =>
+											updateMutation.mutate(
+												{
+													path: { id: task.id },
+													body: { assigneeId: next },
+												},
+												{ onSuccess: () => refresh(task) },
+											)
+										}
 									/>
-								) : task.sourceBlockId === null && canEdit ? (
-									<button
-										type="button"
-										className={cn(
-											"block max-w-full cursor-text truncate text-left text-sm",
-											task.completed && "text-muted-foreground line-through",
-										)}
-										onClick={() => {
-											setEditTitle(task.title);
-											setEditingId(task.id);
-										}}
-									>
-										{task.title || "Untitled task"}
-									</button>
-								) : (
-									<p
-										className={cn(
-											"truncate text-sm",
-											task.completed && "text-muted-foreground line-through",
-										)}
-									>
-										{task.title || "Untitled task"}
-									</p>
-								)}
-								{task.pageId ? (
-									<Link
-										href={`/w/${workspaceId}/p/${task.pageId}`}
-										className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
-									>
-										<FileTextIcon className="size-3" />
-										{task.pageTitle || "Untitled"}
-									</Link>
-								) : null}
+									{canEdit ? (
+										<DueDatePicker
+											value={task.dueDate}
+											onChange={(next) =>
+												updateMutation.mutate(
+													{
+														path: { id: task.id },
+														body: { dueDate: next },
+													},
+													{ onSuccess: () => refresh(task) },
+												)
+											}
+											className={cn(
+												"flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
+												task.dueDate === null
+													? // Touch devices have no hover to reveal the affordance,
+														// so keep it visible there (pointer-coarse).
+														"text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100 pointer-coarse:opacity-100"
+													: isOverdue(task)
+														? "bg-destructive/10 text-destructive"
+														: "bg-muted text-muted-foreground",
+											)}
+										/>
+									) : task.dueDate !== null ? (
+										// Read-only due chip for viewers.
+										<span
+											className={cn(
+												"flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
+												isOverdue(task)
+													? "bg-destructive/10 text-destructive"
+													: "bg-muted text-muted-foreground",
+											)}
+										>
+											<CalendarIcon className="size-3" />
+											{task.dueDate}
+										</span>
+									) : null}
+									{task.sourceBlockId === null && canEdit ? (
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											className="size-7 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
+											aria-label="Delete task"
+											onClick={() =>
+												deleteMutation.mutate(
+													{ path: { id: task.id } },
+													{ onSuccess: () => refresh() },
+												)
+											}
+										>
+											<Trash2Icon className="size-3.5" />
+										</Button>
+									) : null}
+								</div>
 							</div>
-							<AssigneePicker
-								value={task.assigneeId}
-								disabled={!canEdit}
-								onChange={(next) =>
-									updateMutation.mutate(
-										{
-											path: { id: task.id },
-											body: { assigneeId: next },
-										},
-										{ onSuccess: () => refresh(task) },
-									)
-								}
-							/>
-							{canEdit ? (
-								<DueDatePicker
-									value={task.dueDate}
-									onChange={(next) =>
-										updateMutation.mutate(
-											{
-												path: { id: task.id },
-												body: { dueDate: next },
-											},
-											{ onSuccess: () => refresh(task) },
-										)
-									}
-									className={cn(
-										"flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
-										task.dueDate === null
-											? "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
-											: isOverdue(task)
-												? "bg-destructive/10 text-destructive"
-												: "bg-muted text-muted-foreground",
-									)}
-								/>
-							) : task.dueDate !== null ? (
-								// Read-only due chip for viewers.
-								<span
-									className={cn(
-										"flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
-										isOverdue(task)
-											? "bg-destructive/10 text-destructive"
-											: "bg-muted text-muted-foreground",
-									)}
-								>
-									<CalendarIcon className="size-3" />
-									{task.dueDate}
-								</span>
-							) : null}
-							{task.sourceBlockId === null && canEdit ? (
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon"
-									className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
-									aria-label="Delete task"
-									onClick={() =>
-										deleteMutation.mutate(
-											{ path: { id: task.id } },
-											{ onSuccess: () => refresh() },
-										)
-									}
-								>
-									<Trash2Icon className="size-3.5" />
-								</Button>
-							) : null}
 						</li>
 					))}
 				</ul>

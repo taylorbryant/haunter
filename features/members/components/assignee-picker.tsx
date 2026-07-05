@@ -77,7 +77,9 @@ export function AssigneePicker({
 							"flex shrink-0 cursor-pointer items-center rounded-md px-1.5 py-0.5 text-xs",
 							label
 								? "bg-muted text-muted-foreground"
-								: "text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100 [.haunter-task:hover_&]:opacity-100",
+								: // Touch devices have no hover to reveal the affordance, so
+									// keep it visible there (pointer-coarse).
+									"text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100 pointer-coarse:opacity-100 [.haunter-task:hover_&]:opacity-100",
 							className,
 						)}
 					/>

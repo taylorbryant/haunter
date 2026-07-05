@@ -121,7 +121,7 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
 		<SidebarMenu>
 			<SidebarMenuItem>
 				{isMobile ? (
-					<Drawer>
+					<Drawer showSwipeHandle>
 						<DrawerTrigger render={trigger} />
 						<DrawerContent>
 							<DrawerHeader className="border-b text-left">

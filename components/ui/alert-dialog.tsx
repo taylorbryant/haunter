@@ -46,7 +46,10 @@ function AlertDialogContent({
 }) {
 	return (
 		<AlertDialogPortal>
-			<AlertDialogOverlay />
+			{/* Base UI skips backdrops on nested dialogs, but our alert dialogs
+			    open over the mobile sidebar Sheet (also a dialog) and still need
+			    the dim layer between them. */}
+			<AlertDialogOverlay forceRender />
 			<AlertDialogPrimitive.Popup
 				data-slot="alert-dialog-content"
 				data-size={size}

@@ -109,7 +109,13 @@ function DrawerContent({
 	return (
 		<DrawerPortal data-slot="drawer-portal">
 			{modal === true && (
-				<DrawerOverlay data-snap-points={hasSnapPoints ? "" : undefined} />
+				// forceRender: Base UI skips backdrops on nested dialogs, but our
+				// drawers open over the mobile sidebar Sheet (also a dialog) and
+				// still need the dim layer between them.
+				<DrawerOverlay
+					forceRender
+					data-snap-points={hasSnapPoints ? "" : undefined}
+				/>
 			)}
 			<DrawerPrimitive.Viewport
 				data-slot="drawer-viewport"

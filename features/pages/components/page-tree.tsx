@@ -13,7 +13,12 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
+import {
+	ResponsiveDialog,
+	ResponsiveDialogFooter,
+} from "@/components/responsive-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
 	Dialog,
 	DialogContent,
@@ -286,7 +291,8 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	function renderNode(node: TreeNode) {
 		const isExpanded = Boolean(expanded[node.id]);
 		const isActive = node.id === activePageId;
-		const isRenaming = node.id === renamingId;
+		// Mobile renames happen in the drawer below, not inline in the row.
+		const isRenaming = node.id === renamingId && !isMobile;
 		const hasChildren = node.children.length > 0;
 
 		return (
@@ -413,7 +419,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					{!canEdit || isRenaming ? null : isMobile ? (
 						// Mobile: one action button that opens a bottom drawer — bigger
 						// tap targets, and no "+" crowding the row.
-						<Drawer>
+						<Drawer showSwipeHandle>
 							<DrawerTrigger
 								render={
 									<SidebarMenuAction
@@ -571,6 +577,38 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					<SidebarMenu>{tree.map((node) => renderNode(node))}</SidebarMenu>
 				)}
 			</SidebarGroupContent>
+			{/* On desktop renaming is inline in the row; on mobile the row is
+			    inside the sidebar sheet, so it gets a proper drawer instead. */}
+			{isMobile ? (
+				<ResponsiveDialog
+					open={renamingId !== null}
+					onOpenChange={(open) => {
+						if (!open) setRenamingId(null);
+					}}
+					title="Rename page"
+					description="Choose a new name for this page."
+				>
+					<form
+						className="flex flex-col gap-4"
+						onSubmit={(event) => {
+							event.preventDefault();
+							if (renamingId) commitRename(renamingId);
+						}}
+					>
+						<Input
+							autoFocus
+							value={renameValue}
+							aria-label="Page title"
+							onChange={(event) => setRenameValue(event.target.value)}
+						/>
+						<ResponsiveDialogFooter>
+							<Button type="submit" disabled={!renameValue.trim()}>
+								Rename
+							</Button>
+						</ResponsiveDialogFooter>
+					</form>
+				</ResponsiveDialog>
+			) : null}
 			<Dialog
 				open={iconPageId !== null}
 				onOpenChange={(open) => !open && setIconPageId(null)}
