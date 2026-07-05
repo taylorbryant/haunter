@@ -208,7 +208,9 @@ export function PageHistoryDialog({
 									{selectedVersion ? versionSubtext(selectedVersion) : ""}
 								</DrawerDescription>
 							</DrawerHeader>
-							<div className="mt-3 min-h-0 flex-1 overflow-y-auto border-t p-4">
+							{/* editor-flush drops BlockNote's 54px inline gutter (see
+							    globals.css) so the preview uses the full drawer width. */}
+							<div className="editor-flush mt-3 min-h-0 flex-1 overflow-y-auto border-t p-4">
 								{preview}
 							</div>
 							<DrawerFooter className="pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
