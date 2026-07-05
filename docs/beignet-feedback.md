@@ -66,8 +66,16 @@ missing-`prepublishOnly` failure), fixable with a rebuild-and-republish.
 >   it immediately flagged Haunter's own pages routes test for registering
 >   rate-limited contracts without a bound limiter (now bound). Good
 >   design: the warning names the contracts and says exactly what to do.
-> - The per-stage timing types (`stages`) are present. Not yet exercised
->   from the devtools UI in this app.
+> - The per-stage timings work: a dev-only `afterSend` hook in
+>   [server/index.ts](../server/index.ts) logs one `[stages]` line per
+>   request. First measurements replaced the report's inferred "~250ms
+>   context floor" with data: warm context creation is ~40–60ms with the
+>   session cookie cache (the remaining `findRole` round trip) and
+>   ~120–230ms when the session needs a database lookup — so the original
+>   pre-fix estimate's 150–250ms range was right, with 250 at the
+>   ceiling rather than the middle. The breakdown also cleanly separates
+>   the rate-limit hook (~50ms Upstash round trip, `hooks=`) and shows
+>   raw routes participating in instrumentation.
 >
 > This closes original gap #2 entirely, and the raw-route pipeline plus
 > stage timings close most of gap #1's observability half. One note from
