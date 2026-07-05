@@ -6,8 +6,13 @@ providers, an auth provider wrapping a large third-party framework (Better
 Auth with the organization and agent-auth plugins), non-HTTP entrypoints
 (agent capabilities), custom API routes outside contracts (Liveblocks room
 auth), a remote libSQL/Turso database, and one real production performance
-investigation. This is the report: what held up, then the gaps ranked by
-how much they hurt in practice.
+investigation.
+
+> **Revision note.** This is v2, revised after the framework author's
+> response to the original report. Four of the original "gaps" turned out to
+> be existing framework APIs; Haunter has since adopted them (details below)
+> and those items now record only their accurate residuals. Several other
+> items were confirmed and are on the framework roadmap.
 
 ## What held up
 
@@ -27,9 +32,30 @@ how much they hurt in practice.
   Vercel Blob storage are one-ternary changes in
   [server/providers.ts](../server/providers.ts).
 - **In-memory repo tests keep the loop honest.** The whole suite runs in
-  ~130ms, so it actually gets run.
+  well under a second, so it actually gets run.
+- *(Added in v2)* **The route-test harness carries real weight.**
+  `@beignet/web/testing`'s `createTestApp` exercises the same request
+  parsing, hooks, and error ownership as production with no network
+  listener — Haunter's route tests, including the new hook-coverage ones,
+  run in-memory in milliseconds.
 
-## Gaps, ranked by pain
+## Confirmed gaps, now on the framework roadmap
+
+Per the author's response, these are accepted and planned; Haunter's
+mitigations stand in the meantime:
+
+- Per-stage request timings feeding the devtools waterfall (the
+  observability half of the context-latency finding below).
+- `wrapRawRoute` — reusing the hooks pipeline for non-contract routes.
+- A single `beignet check` command replacing the five-command loop.
+- Listener auto-fix in `doctor --fix`.
+- `PRAGMA foreign_keys = ON` in the sqlite starter.
+- A `provider` → `providers` CLI alias.
+- A Vercel Blob storage provider (Haunter's hand-written
+  [infra/storage/vercel-blob-storage.ts](../infra/storage/vercel-blob-storage.ts)
+  can retire when it lands).
+
+## Still-open gaps
 
 ### 1. Context creation has no performance story
 
@@ -41,123 +67,120 @@ before the use case ran, and the app "felt slow in production" until it was
 found and mitigated at the app level (Better Auth `cookieCache`, manual
 parallelization).
 
-Nothing in the framework surfaces this:
+The roadmapped devtools waterfall covers observability. Still open: a
+memoization/batching primitive for context resolvers, and guidance on
+context latency budgets for serverless + remote-DB deployments (the default
+deployment story).
 
-- No per-stage timings in dev. A request waterfall (`context: 250ms,
-  hooks: 30ms, use case: 40ms`) would have located the problem in minutes.
-  `TraceContext` exists but never produced anything actionable.
-- No memoization/batching primitive for context resolvers.
-- No guidance doc on context latency budgets for serverless + remote-DB
-  deployments (the default deployment story).
+### 2. Escape-hatch routes drop the hooks pipeline
 
-A dev-mode waterfall per request is probably the single highest-leverage
-addition to the framework.
-
-### 2. Escape-hatch routes drop the whole pipeline
-
-Real apps always have routes that can't be contracts: Liveblocks room auth,
-Better Auth's `/api/auth/*`, future webhooks. The moment one is written, it
-loses rate limiting, error mapping, and logging, and hand-rolls
-`server.createContextFromNext()` plus manual `ports.rateLimit.hit`.
+Confirmed by the author; `wrapRawRoute` is roadmapped. Sharpened scope
+after review: `@beignet/next` already ships `createWebhookRoute`,
+`createPaymentWebhookRoute`, and schedule/outbox/storage/upload route
+factories that assemble the full app context (ports, requestId, trace,
+logger) — so "raw routes start from nothing" was overstated. What none of
+them do is run the configured hooks array, which is why
 [app/api/liveblocks-auth/route.ts](../app/api/liveblocks-auth/route.ts)
-literally carries the comment "this route bypasses the contract hooks, so
-enforce the limit manually."
+still enforces its rate limit manually.
 
-Wanted: a blessed `wrapRawRoute(handler, { rateLimit, ... })` that reuses
-the hooks pipeline without requiring a contract.
+### 3. Realtime has no framework story
 
-### 3. Ports are unreachable outside app context
+The entire Liveblocks integration (room auth, env-mode gating, Y.Doc
+lifecycle, client-side room caching) was bespoke. That may be the right
+call — realtime is opinionated — but even a docs recipe would have saved
+time.
 
-The auth layer's mailer callbacks run before/outside the server, so
-[lib/mail.ts](../lib/mail.ts) instantiates its own standalone Resend client
-("this standalone instance lets the auth layer send without a bootstrap
-cycle") and logs with `console.*` because the pino `LoggerPort` isn't
-reachable there either. Frameworks-within-the-framework (Better Auth is
-essentially one) need a sanctioned way to reach mailer/logger ports — or at
-minimum a documented pattern.
+### 4. Declarative mutation→query linkage on contracts
 
-### 4. Building synthetic contexts by hand requires internals knowledge
+The residual of a corrected item (see below): `rq(contract)` already
+derives query keys, options, and `invalidate(...)` helpers from contracts,
+and Haunter uses them throughout. What doesn't exist is declaring on a
+contract which queries a mutation touches, so invalidation could be
+automatic instead of imperative in every `onSuccess`.
 
-For agent capabilities, assembling
-`ports.gate.attach({ requestId, actor, auth, tenant, membership, ports })`
-by hand meant reading framework source to get the shape right. Non-HTTP
-entrypoints (agents, cron, queues, backfills) are common enough to deserve
-a first-class API: `server.createServiceContext({ asUser, tenantId })` or
-similar impersonation builder.
+## Corrected in v2: existing APIs, since adopted
 
-### 5. The client layer is conventions, not machinery
+Each of these was originally reported as a gap. The API existed; Haunter
+now uses it. What remains under each is the accurate residual ask.
 
-`@beignet/react-query` generates query options, but every feature
-hand-rolls invalidation helpers (`invalidatePages`, `invalidatePage`,
-`setPageSavedAtInCache`, …). Contracts already know the resource graph;
-contract-derived cache keys and invalidation helpers — e.g.
-`rq.invalidate(getPage, { id })`, or declaring "this mutation touches these
-queries" on the contract — would remove the most repetitive client code in
-the app.
+### Service contexts for non-HTTP entrypoints (`createServiceContext`)
 
-### 6. Two env systems, and opaque boot failures
+The hand-rolled `ports.gate.attach({...})` in agent capabilities is gone.
+[server/context.ts](../server/context.ts) now extends the app-owned service
+input with `asUser` impersonation (verified role, synthetic session,
+mirrored request-context shape), and
+[lib/agent-capabilities.ts](../lib/agent-capabilities.ts) builds agent
+contexts with `server.createServiceContext({ asUser, tenantId })` — the
+framework owns requestId, trace, and gate attachment. Verified end to end:
+member search works, non-members still 403.
 
-`lib/env.ts` (zod) and `providerConfig` (DB credentials passed separately
-at `createNextServer`) coexist awkwardly. When `BETTER_AUTH_SECRET` was
-missing in a production build, the good error message ("[Beignet env]
-Invalid environment") surfaced as a module-evaluation stack trace pointing
-into a Turbopack chunk, rendered to the user as a bare 500. Unified env
-schema + a clean startup error would be friendlier.
+**Residual:** the framework ships no built-in impersonation input and the
+recipe (extend `ServiceInput`, mirror the request seed's shape) is
+undocumented. For scripts/seeds, `runServiceContext` is the right entry and
+also deserves a documented example.
 
-### 7. Provider preset coverage lags the packages
+### Reaching ports from the auth layer
 
-`provider add` offers nine presets, but:
+[lib/mail.ts](../lib/mail.ts) no longer maintains a standalone Resend
+client: it dynamically imports the memoized `getServer` (same
+cycle-breaking pattern as agent capabilities) and sends through
+`ports.mailer`, logging through `ports.logger`. Worst case is one server
+boot when a sign-in arrives before any contract route has run. Verified:
+OTP requests emit structured pino lines and deliver through the configured
+provider.
 
-- **pino isn't one**, even though the starter itself registers
-  `loggerPinoProvider`.
-- **Vercel Blob isn't one** — the adapter was hand-written
-  ([infra/storage/vercel-blob-storage.ts](../infra/storage/vercel-blob-storage.ts)).
-- **No realtime/collab port concept exists.** The entire Liveblocks
-  integration (room auth, env-mode gating, Y.Doc lifecycle, room caching)
-  was bespoke. That may be the right call, but even a docs recipe would
-  have saved time.
+**Residual:** no example app demonstrates wiring a Better Auth callback to
+`ports.mailer`, and the pattern is undocumented. A nicer shape might be the
+auth provider handing ports into the Better Auth config directly.
 
-Paper cut in the same area: the "provider ternaries must be inline in the
-providers array literal" constraint is surprising and cost a debugging
-session before it was understood.
+### Route-level hook testing (`@beignet/web/testing`)
 
-### 8. Registration is still a human problem
+The "missing middle" existed — in fact Haunter's route tests already used
+`createTestApp`. What was genuinely missing was **hook** coverage, for
+exactly the reason the author named: `onUnboundPorts` defaults to
+`"ignore"`, so the rate-limit hook silently no-ops unless the port is bound
+in the test app. [features/pages/tests/route-hooks.test.ts](../features/pages/tests/route-hooks.test.ts)
+now binds `createMemoryRateLimiter()` and asserts the 429 past
+`meta.rateLimit`, plus a same-key idempotent replay (same response, no
+second row).
 
-`doctor --fix` repairs most drift, but listeners are report-only, and the
-deeper question stands: the file-exists-but-never-runs failure class only
-exists because registration is manual. Options worth considering:
-convention-based discovery generated from file placement (with doctor as
-the escape valve), or making unregistered artifacts a type error.
+**Residuals:**
 
-Related: the validation loop is five commands (`bun run lint`,
-`bun beignet lint`, `bun beignet doctor --strict`, `bun run test`,
-`bun run typecheck`). A single `beignet check` would get run more often
-than the litany.
+- The unbound-ports default makes hook coverage opt-in and easy to miss —
+  a `doctor` hint or a louder harness warning would help.
+- *(New, found during adoption)* the hooks' 429 carries
+  `retryAfterSeconds` only in the error body's `details`; no `Retry-After`
+  HTTP header is set. Client backoff generally looks at the header (our
+  manual raw-route rate limit sets it). Header parity would be a small,
+  worthwhile fix.
 
-### 9. Testing has a missing middle
+### Client-side machinery (withdrawn)
 
-Use-case testers with in-memory repos are great. But there's nothing
-between that and a manual browser pass: no route-level harness that
-exercises the real hooks. Whether rate limiting actually 429s or
-idempotency actually dedupes effectively shipped untested.
+The original report claimed invalidation helpers were hand-rolled. Wrong:
+`rq(contract).queryOptions/key/filter/invalidate` are contract-derived, and
+Haunter's `features/*/client/queries.ts` files are one-line delegations to
+them — the documented recommended pattern. The real ask is the
+mutation→query linkage listed under still-open gap #4.
 
-## Small stuff
+## Withdrawn small stuff
 
-- `PRAGMA foreign_keys = ON` had to be added manually to
-  [infra/db/database-ready.ts](../infra/db/database-ready.ts); the starter
-  could ship it.
-- No starter guidance on separating dev and prod databases. Haunter's dev
-  environment pointing at the production Turso instance was an app mistake,
-  but a starter default of `SQLITE_DB_URL=file:local.db` in `.env.example`
-  with a comment would prevent it.
-- `bun beignet provider --help` errors while `providers` exists; the CLI
-  could alias or suggest harder.
+- **pino preset**: absent from `providers add` because it ships registered
+  in every starter by default — Haunter's own
+  [server/providers.ts](../server/providers.ts) came scaffolded with it.
+- **Dev/prod database separation**: the starter's `.env.example` already
+  defaults to `SQLITE_DB_URL=file:local.db` with exactly the warning
+  comment the report proposed. Haunter's dev environment pointing at the
+  production Turso instance happened despite the guardrail, not for lack of
+  one.
 
 ## Overall shape
 
-The server-side core — contracts → use cases → ports → providers — is the
-strong 80%. The gaps cluster at the **boundaries**: where requests enter
-outside contracts (#2), where code runs outside request context (#3, #4),
-where the client consumes contracts (#5), and where performance is
-invisible (#1). None of them undermine the architecture; all of them are
-places where an app under real use had to leave the paved road.
+Unchanged, but sharpened by the corrections: the server-side core —
+contracts → use cases → ports → providers — is the strong 80%, and several
+of the "boundary gaps" turned out to be **discoverability** gaps rather
+than missing APIs (`createServiceContext`, the testing harness, the rq
+client machinery, the webhook route factories all existed and went
+unfound). The residual boundary gaps that are real: hooks for raw routes,
+context-latency visibility, and a realtime recipe. If there's one meta-ask,
+it's surfacing what already exists — the framework is ahead of its
+documentation.

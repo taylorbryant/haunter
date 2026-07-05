@@ -14,6 +14,12 @@ export type AppServiceContextInput =
 	| {
 			actor?: ActivityActor;
 			tenantId?: string;
+			/**
+			 * Impersonate a user for non-HTTP entrypoints (agent capabilities,
+			 * scripts). The caller is responsible for verifying the role against
+			 * the database first — this input is trusted as already verified.
+			 */
+			asUser?: { id: string; role: string; name?: string };
 	  }
 	| undefined;
 
@@ -55,6 +61,32 @@ export const appContext = defineServerContext<AppContext, AppRuntimePorts>()({
 		trace: TraceContext;
 	}) => {
 		const tenant = resolveServiceTenant(input?.tenantId);
+
+		// Impersonation: mirror the request context's shape so gate policies
+		// (tenant match, viewer read-only) apply to agents and scripts exactly
+		// as they do to signed-in members.
+		if (input?.asUser) {
+			return {
+				requestId,
+				actor: createUserActor(input.asUser.id, {
+					...(input.asUser.name ? { displayName: input.asUser.name } : {}),
+				}),
+				// Synthetic session: requireUser() only needs the acting user's
+				// verified identity.
+				auth: {
+					user: { id: input.asUser.id },
+					session: {
+						...(input.tenantId
+							? { activeOrganizationId: input.tenantId }
+							: {}),
+					},
+				},
+				...trace,
+				ports,
+				...(tenant ? { tenant } : {}),
+				membership: { role: input.asUser.role },
+			};
+		}
 
 		return {
 			requestId,

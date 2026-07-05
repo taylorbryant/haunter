@@ -1,8 +1,10 @@
 import "@beignet/core/server-only";
-import { createTenant, createUserActor } from "@beignet/core/ports";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
 import type { AppContext, AppRuntimePorts } from "@/app-context";
+import type { getServer } from "@/server";
+
+type AppServer = Awaited<ReturnType<typeof getServer>>;
 
 /**
  * Agent Auth Protocol capabilities: what a delegated AI agent may do in
@@ -75,13 +77,17 @@ const AppendArgs = ReadPageArgs.extend({
  * Build an AppContext for an agent acting as `userId` inside `workspaceId`.
  * Membership is re-resolved from the database — the role is never taken from
  * the agent's claims — so gate policies (tenant match, viewer read-only)
- * apply to agents exactly as they do to signed-in members.
+ * apply to agents exactly as they do to signed-in members. Context assembly
+ * itself goes through `server.createServiceContext` (the framework owns
+ * requestId, trace, and gate attachment); the app's `asUser` service input
+ * carries the verified identity (see server/context.ts).
  */
 async function createAgentContext(
-	ports: AppRuntimePorts,
+	server: AppServer,
 	userId: string,
 	workspaceId: string,
 ): Promise<AppContext> {
+	const ports = server.ports as AppRuntimePorts;
 	const role = await ports.members.findRole(workspaceId, userId);
 	if (!role) {
 		// APIError so the plugin surfaces a 403 instead of a generic 500.
@@ -90,21 +96,10 @@ async function createAgentContext(
 		});
 	}
 
-	// attach() adds the live bound `gate` property the same way the request
-	// context blueprint does.
-	return ports.gate.attach({
-		requestId: crypto.randomUUID(),
-		actor: createUserActor(userId),
-		// Synthetic session: requireUser() only needs the acting user's
-		// identity, which the agent JWT has already proven via the plugin.
-		auth: {
-			user: { id: userId },
-			session: { activeOrganizationId: workspaceId },
-		},
-		ports,
-		tenant: createTenant(workspaceId),
-		membership: { role },
-	}) as AppContext;
+	return server.createServiceContext({
+		asUser: { id: userId, role },
+		tenantId: workspaceId,
+	});
 }
 
 type ExecuteInput = {
@@ -156,12 +151,11 @@ export async function executeAgentCapability({
 
 	const { getServer } = await import("@/server");
 	const server = await getServer();
-	const ports = server.ports as AppRuntimePorts;
 
 	switch (capability) {
 		case "search_pages": {
 			const input = SearchArgs.parse(args);
-			const ctx = await createAgentContext(ports, userId, input.workspaceId);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
 			const { searchPagesUseCase } = await import("@/features/pages/use-cases");
 			const result = await searchPagesUseCase.run({
 				ctx,
@@ -176,7 +170,7 @@ export async function executeAgentCapability({
 		}
 		case "read_page": {
 			const input = ReadPageArgs.parse(args);
-			const ctx = await createAgentContext(ports, userId, input.workspaceId);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
 			const { getPageUseCase } = await import("@/features/pages/use-cases");
 			const { blocksToMarkdown } = await import(
 				"@/features/pages/lib/markdown"
@@ -194,7 +188,7 @@ export async function executeAgentCapability({
 		}
 		case "append_to_page": {
 			const input = AppendArgs.parse(args);
-			const ctx = await createAgentContext(ports, userId, input.workspaceId);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
 			const { getPageUseCase, savePageContentUseCase } = await import(
 				"@/features/pages/use-cases"
 			);

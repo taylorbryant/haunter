@@ -1,44 +1,46 @@
 import "@beignet/core/server-only";
-import { createResendMailer } from "@beignet/provider-mail-resend";
-import { Resend } from "resend";
 import { env } from "./env";
 
-// Beignet's Resend mailer. The app is also registered with the full Resend
-// provider (server/providers.ts); this standalone instance lets the auth layer
-// — which runs outside the app context — send without a bootstrap cycle.
-const mailer = env.RESEND_API_KEY
-	? createResendMailer({
-			client: new Resend(env.RESEND_API_KEY),
-			from: env.RESEND_FROM,
-		})
-	: null;
-
 const isProduction = env.NODE_ENV === "production";
+
+/**
+ * The auth layer's mail goes through the app's mailer/logger ports rather
+ * than a parallel untracked client. The dynamic import breaks the module
+ * cycle (the server's providers import lib/better-auth.ts, which imports
+ * this file for its OTP/invite callbacks). getServer is memoized, so the
+ * worst case is one server boot when a sign-in arrives before any contract
+ * route has run — after that it's a cached promise.
+ */
+async function appPorts() {
+	const { getServer } = await import("@/server");
+	const { ports } = await getServer();
+	return ports;
+}
 
 /** Email a one-time sign-in code (and log it in development). */
 export async function sendLoginCode(
 	email: string,
 	code: string,
 ): Promise<void> {
+	const ports = await appPorts();
+
 	// Surfacing the code in dev keeps sign-in working without real delivery.
 	if (!isProduction) {
-		console.info(`[auth] Sign-in code for ${email}: ${code}`);
+		ports.logger.info(`[auth] Sign-in code for ${email}: ${code}`);
 	}
 
-	if (!mailer) return;
-
 	try {
-		await mailer.send({
+		await ports.mailer.send({
 			to: email,
 			subject: "Your Haunter sign-in code",
 			text: `Your Haunter sign-in code is ${code}. It expires in 5 minutes. If you didn't request this, you can ignore this email.`,
 			html: `<p>Your Haunter sign-in code is <strong style="font-size:1.25rem;letter-spacing:0.1em">${code}</strong>.</p><p>It expires in 5 minutes. If you didn't request this, you can ignore this email.</p>`,
 		});
 	} catch (error) {
-		// In dev the code is in the console, so a delivery hiccup shouldn't
+		// In dev the code is in the log, so a delivery hiccup shouldn't
 		// block sign-in; in production the failure must surface.
 		if (isProduction) throw error;
-		console.warn("[auth] Failed to send sign-in email:", error);
+		ports.logger.warn("Failed to send sign-in email", { error });
 	}
 }
 
@@ -50,17 +52,16 @@ export async function sendWorkspaceInvite(params: {
 	acceptUrl: string;
 }): Promise<void> {
 	const { email, inviterName, workspaceName, acceptUrl } = params;
+	const ports = await appPorts();
 
 	if (!isProduction) {
-		console.info(
+		ports.logger.info(
 			`[invite] ${inviterName} invited ${email} to "${workspaceName}": ${acceptUrl}`,
 		);
 	}
 
-	if (!mailer) return;
-
 	try {
-		await mailer.send({
+		await ports.mailer.send({
 			to: email,
 			subject: `${inviterName} invited you to ${workspaceName} on Haunter`,
 			text: `${inviterName} invited you to join the "${workspaceName}" workspace on Haunter. Accept the invitation: ${acceptUrl}`,
@@ -68,6 +69,6 @@ export async function sendWorkspaceInvite(params: {
 		});
 	} catch (error) {
 		if (isProduction) throw error;
-		console.warn("[invite] Failed to send invitation email:", error);
+		ports.logger.warn("Failed to send invitation email", { error });
 	}
 }
