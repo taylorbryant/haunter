@@ -14,11 +14,18 @@ import * as Y from "yjs";
  *   Anyone holding the (bundled) public key can join any room, so this is
  *   only as private as the room ids; switch to "auth" before inviting
  *   anyone you don't trust.
- * - null: collaboration off; the editor runs exactly as before.
+ * - null: collaboration off; editors, titles, and canvases run the original
+ *   local paths (CAS-protected saves, no rooms, no presence).
+ *
+ * Collaboration is opt-in: NEXT_PUBLIC_ENABLE_COLLABORATION must be "true"
+ * (in addition to the Liveblocks keys) or everything runs local-only.
+ * NEXT_PUBLIC_ vars are inlined at build time, so flipping the switch takes
+ * a rebuild/redeploy.
  */
 export type CollabMode = "auth" | "public";
 
 export function getCollabMode(): CollabMode | null {
+	if (process.env.NEXT_PUBLIC_ENABLE_COLLABORATION !== "true") return null;
 	if (process.env.NEXT_PUBLIC_LIVEBLOCKS_AUTH === "true") return "auth";
 	if (process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY) return "public";
 	return null;
