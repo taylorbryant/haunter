@@ -104,8 +104,8 @@ export default function AcceptInvitePage({
 				<CardContent>
 					{status === "need-auth" ? (
 						<p className="text-muted-foreground text-sm">
-							Sign in with the email this invitation was sent to, then open the
-							invitation link again.
+							Sign in with the email this invitation was sent to — you'll come
+							right back here.
 						</p>
 					) : null}
 				</CardContent>
@@ -119,7 +119,16 @@ export default function AcceptInvitePage({
 						</>
 					) : null}
 					{status === "need-auth" ? (
-						<Button render={<Link href="/sign-in" />} nativeButton={false}>
+						// ?next= brings the user straight back to this invitation after
+						// the OTP flow instead of dropping them in their own workspace.
+						<Button
+							render={
+								<Link
+									href={`/sign-in?next=${encodeURIComponent(`/accept-invite/${id}`)}`}
+								/>
+							}
+							nativeButton={false}
+						>
 							Sign in
 						</Button>
 					) : null}
