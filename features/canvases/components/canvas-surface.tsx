@@ -18,8 +18,10 @@ import {
 	saveCanvasSnapshotMutationOptions,
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
+import { authClient } from "@/client/auth-client";
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
 import {
+	type CanvasCollabUser,
 	isLoadableSnapshot,
 	useCollabCanvasStore,
 } from "@/features/canvases/components/use-collab-canvas-store";
@@ -27,7 +29,7 @@ import {
 	type CollabRoom,
 	useCollabSession,
 } from "@/features/collab/client/liveblocks";
-import { canvasRoomId } from "@/features/collab/lib/room";
+import { canvasRoomId, cursorColorFor } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { useSharedPageToken } from "@/features/shares/components/shared-page-context";
 
@@ -216,7 +218,16 @@ function CollabCanvasSurface({
 	const { resolvedTheme } = useTheme();
 	const queryClient = useQueryClient();
 	const saveMutation = useMutation(saveCanvasSnapshotMutationOptions());
-	const storeWithStatus = useCollabCanvasStore(room, snapshot);
+	// Cursor identity shown to the other people on this canvas.
+	const session = authClient.useSession();
+	const collabUser: CanvasCollabUser | undefined = session.data
+		? {
+				id: session.data.user.id,
+				name: session.data.user.name || session.data.user.email || "Member",
+				color: cursorColorFor(session.data.user.id),
+			}
+		: undefined;
+	const storeWithStatus = useCollabCanvasStore(room, snapshot, collabUser);
 
 	const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

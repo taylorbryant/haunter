@@ -2,16 +2,35 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+	atom,
+	createPresenceStateDerivation,
 	createTLStore,
 	defaultBindingUtils,
 	defaultShapeUtils,
+	InstancePresenceRecordType,
 	loadSnapshot,
+	react,
+	type TLInstancePresence,
 	type TLRecord,
 	type TLStoreSnapshot,
 	type TLStoreWithStatus,
+	type TLUser,
 } from "tldraw";
 import type { Transaction, YMapEvent } from "yjs";
 import type { CollabRoom } from "@/features/collab/client/liveblocks";
+
+export type CanvasCollabUser = { id: string; name: string; color: string };
+
+function toTLUser(user: CanvasCollabUser): TLUser {
+	return {
+		typeName: "user",
+		id: `user:${user.id}` as TLUser["id"],
+		name: user.name,
+		color: user.color,
+		imageUrl: "",
+		meta: {},
+	};
+}
 
 /**
  * A stored canvas snapshot tldraw can actually load. Legacy/empty rows
@@ -33,12 +52,15 @@ export function isLoadableSnapshot(
  * Two-way binding between a tldraw store and a shared Y.Map of records —
  * every local document change lands in the map, every remote map change
  * lands in the store (via mergeRemoteChanges so it doesn't echo back).
- * tldraw presence (remote cursors) is intentionally not synced yet; this
- * is document collaboration only.
+ * Presence (remote cursors/selections) travels through the room's
+ * awareness: the local TLInstancePresence derivation is pushed as an
+ * awareness field, and peers' presence records are put into the store,
+ * where tldraw renders them as live collaborator cursors.
  */
 export function useCollabCanvasStore(
 	room: CollabRoom,
 	snapshot: Record<string, unknown>,
+	user?: CanvasCollabUser,
 ): TLStoreWithStatus {
 	const [storeWithStatus, setStoreWithStatus] = useState<TLStoreWithStatus>({
 		status: "loading",
@@ -46,6 +68,12 @@ export function useCollabCanvasStore(
 	// The DB snapshot is only the seed for a brand-new room; a refetch must
 	// not rebuild the store.
 	const seedSnapshotRef = useRef(snapshot);
+	// The user signal outlives the binding effect: identity can arrive after
+	// mount (session load) without rebuilding the store.
+	const userSignalRef = useRef(atom<TLUser | null>("canvas-collab-user", null));
+	useEffect(() => {
+		userSignalRef.current.set(user ? toTLUser(user) : null);
+	}, [user]);
 
 	useEffect(() => {
 		const store = createTLStore({
@@ -111,13 +139,76 @@ export function useCollabCanvasStore(
 		};
 		yRecords.observe(observer);
 
+		// --- Presence: remote cursors -----------------------------------
+		const awareness = room.provider.awareness;
+		const ownClientId = room.doc.clientID;
+		// Ids derive from awareness client ids so a departing peer's record
+		// can be removed without knowing anything else about them.
+		const presenceId = InstancePresenceRecordType.createId(String(ownClientId));
+		const presenceDerivation = createPresenceStateDerivation(
+			userSignalRef.current,
+			{ instanceId: presenceId },
+		)(store);
+		const stopPresencePush = react("push canvas presence", () => {
+			// TLInstancePresence is plain JSON at runtime; the cast bridges
+			// tldraw's branded types to Liveblocks' JsonObject.
+			awareness.setLocalStateField(
+				"tldraw",
+				presenceDerivation.get() as unknown as Record<string, never> | null,
+			);
+		});
+
+		const applyPeerPresence = (update: {
+			added: number[];
+			updated: number[];
+			removed: number[];
+		}) => {
+			const states = awareness.getStates();
+			const toPut: TLInstancePresence[] = [];
+			const toRemove: TLInstancePresence["id"][] = [];
+			for (const clientId of [...update.added, ...update.updated]) {
+				if (clientId === ownClientId) continue;
+				const presence = (
+					states.get(clientId) as
+						| { tldraw?: TLInstancePresence | null }
+						| undefined
+				)?.tldraw;
+				if (presence) toPut.push(presence);
+			}
+			for (const clientId of update.removed) {
+				toRemove.push(InstancePresenceRecordType.createId(String(clientId)));
+			}
+			if (toPut.length === 0 && toRemove.length === 0) return;
+			store.mergeRemoteChanges(() => {
+				if (toRemove.length > 0) store.remove(toRemove);
+				if (toPut.length > 0) store.put(toPut);
+			});
+		};
+		awareness.on("update", applyPeerPresence);
+		// Collaborators who were already here before this client joined.
+		applyPeerPresence({
+			added: [...awareness.getStates().keys()],
+			updated: [],
+			removed: [],
+		});
+
 		setStoreWithStatus({
 			status: "synced-remote",
 			connectionStatus: "online",
 			store,
 		});
 
+		if (process.env.NODE_ENV === "development") {
+			// Dev-only handle for inspecting presence flow from the console.
+			(
+				window as unknown as { __canvasCollabDebug?: unknown }
+			).__canvasCollabDebug = { store, awareness, presenceDerivation };
+		}
+
 		return () => {
+			stopPresencePush();
+			awareness.off("update", applyPeerPresence);
+			awareness.setLocalStateField("tldraw", null);
 			yRecords.unobserve(observer);
 			unsubscribe();
 			setStoreWithStatus({ status: "loading" });
