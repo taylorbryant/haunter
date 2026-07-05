@@ -1,0 +1,64 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index a704646b232e1fcf84e5e6cb24d092a92cff1e18..439d33b379ce538295887166465e260db4bd629f 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -4094,7 +4094,12 @@ var MarkView = class {
+     if (mutation.type === "selection") {
+       return false;
+     }
+-    if (this.dom.contains(mutation.target) && mutation.type === "childList" && (isiOS() || isAndroid()) && this.editor.isFocused) {
++    // Haunter patch (BlockNote #2804 / PR #2830): scope the mobile IME
++    // mutation heuristic to the editable content area. React node views
++    // mutate DOM outside contentDOM on every render; treating those as
++    // document edits sends ProseMirror's DOMObserver into an infinite
++    // flush loop and hard-freezes the editor on iOS/Android.
++    if (this.contentDOM.contains(mutation.target) && mutation.type === "childList" && (isiOS() || isAndroid()) && this.editor.isFocused) {
+       const changedNodes = [
+         ...Array.from(mutation.addedNodes),
+         ...Array.from(mutation.removedNodes)
+@@ -7282,7 +7287,12 @@ var NodeView = class {
+     if (mutation.type === "selection") {
+       return false;
+     }
+-    if (this.dom.contains(mutation.target) && mutation.type === "childList" && (isiOS() || isAndroid()) && this.editor.isFocused) {
++    // Haunter patch (BlockNote #2804 / PR #2830): scope the mobile IME
++    // mutation heuristic to the editable content area. React node views
++    // mutate DOM outside contentDOM on every render; treating those as
++    // document edits sends ProseMirror's DOMObserver into an infinite
++    // flush loop and hard-freezes the editor on iOS/Android.
++    if (this.contentDOM.contains(mutation.target) && mutation.type === "childList" && (isiOS() || isAndroid()) && this.editor.isFocused) {
+       const changedNodes = [
+         ...Array.from(mutation.addedNodes),
+         ...Array.from(mutation.removedNodes)
+diff --git a/dist/index.js b/dist/index.js
+index 7cc633c66630573562c670379f566403e75c739f..a58680036e986824b8ff4df4990f2b7feccfb297 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -3955,7 +3955,12 @@ var MarkView = class {
+     if (mutation.type === "selection") {
+       return false;
+     }
+-    if (this.dom.contains(mutation.target) && mutation.type === "childList" && (isiOS() || isAndroid()) && this.editor.isFocused) {
++    // Haunter patch (BlockNote #2804 / PR #2830): scope the mobile IME
++    // mutation heuristic to the editable content area. React node views
++    // mutate DOM outside contentDOM on every render; treating those as
++    // document edits sends ProseMirror's DOMObserver into an infinite
++    // flush loop and hard-freezes the editor on iOS/Android.
++    if (this.contentDOM.contains(mutation.target) && mutation.type === "childList" && (isiOS() || isAndroid()) && this.editor.isFocused) {
+       const changedNodes = [
+         ...Array.from(mutation.addedNodes),
+         ...Array.from(mutation.removedNodes)
+@@ -7143,7 +7148,12 @@ var NodeView = class {
+     if (mutation.type === "selection") {
+       return false;
+     }
+-    if (this.dom.contains(mutation.target) && mutation.type === "childList" && (isiOS() || isAndroid()) && this.editor.isFocused) {
++    // Haunter patch (BlockNote #2804 / PR #2830): scope the mobile IME
++    // mutation heuristic to the editable content area. React node views
++    // mutate DOM outside contentDOM on every render; treating those as
++    // document edits sends ProseMirror's DOMObserver into an infinite
++    // flush loop and hard-freezes the editor on iOS/Android.
++    if (this.contentDOM.contains(mutation.target) && mutation.type === "childList" && (isiOS() || isAndroid()) && this.editor.isFocused) {
+       const changedNodes = [
+         ...Array.from(mutation.addedNodes),
+         ...Array.from(mutation.removedNodes)
