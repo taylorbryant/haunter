@@ -53,9 +53,28 @@ The CLI package from the same changeset shipped correctly, and the runtime
 packages' *sources* are current — this is a publish-pipeline issue (build
 not run, or run from a stale workspace, before `npm pack`; the classic
 missing-`prepublishOnly` failure), fixable with a rebuild-and-republish.
-Haunter's Liveblocks route therefore still carries its manual rate-limit
-hit; it should migrate to `rawRoute` as soon as a correctly built release
-ships.
+
+> **Resolved in 0.0.29.** The republish carries a correctly built `dist/`.
+> Verified and adopted:
+>
+> - The Liveblocks auth route now runs through `server.rawRoute(...)` with
+>   its rate limit as `metadata` — the manual `ports.rateLimit.hit` is
+>   gone, and the route's responses now carry the pipeline's
+>   `x-request-id` instrumentation header. Verified live: members get
+>   tokens, invalid rooms 403, the editor connects.
+> - `createTestApp`'s unenforceable-metadata warning fires as designed —
+>   it immediately flagged Haunter's own pages routes test for registering
+>   rate-limited contracts without a bound limiter (now bound). Good
+>   design: the warning names the contracts and says exactly what to do.
+> - The per-stage timing types (`stages`) are present. Not yet exercised
+>   from the devtools UI in this app.
+>
+> This closes original gap #2 entirely, and the raw-route pipeline plus
+> stage timings close most of gap #1's observability half. One note from
+> the migration: moving the rate limit from a hand-parallelized
+> `Promise.all` into the hook serializes it ahead of the handler — correct
+> ordering, slightly less overlap; the per-request cost is one limiter
+> round trip, acceptable.
 
 ## What held up
 

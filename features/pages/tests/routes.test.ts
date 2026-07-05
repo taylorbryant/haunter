@@ -1,6 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { createStaticAuth } from "@beignet/core/ports";
-import { createIdempotencyHooks, defineRoutes } from "@beignet/core/server";
+import {
+	createMemoryRateLimiter,
+	createStaticAuth,
+} from "@beignet/core/ports";
+import {
+	createIdempotencyHooks,
+	createRateLimitHooks,
+	defineRoutes,
+} from "@beignet/core/server";
 import { createTestPorts } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import { createTestApp, createTestRequester } from "@beignet/web/testing";
@@ -61,6 +68,9 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 			canvases,
 			devtools: createInMemoryDevtools(),
 			auth: options.auth,
+			// Bound so the harness's unenforceable-metadata warning stays quiet;
+			// the 429 behavior itself is asserted in route-hooks.test.ts.
+			rateLimit: createMemoryRateLimiter(),
 		},
 		transaction: {
 			ports: (ports) => ({
@@ -82,7 +92,10 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	>({
 		ports: fixture.ports,
 		context: appContext,
-		hooks: [createIdempotencyHooks<AppContext>()],
+		hooks: [
+			createIdempotencyHooks<AppContext>(),
+			createRateLimitHooks<AppContext>({ ipSource: "none" }),
+		],
 		routes: defineRoutes<AppContext>([pageRoutes]),
 	});
 
