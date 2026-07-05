@@ -60,7 +60,11 @@ type CachedRoom = {
  * lingering room is instant (already synced).
  */
 const roomCache = new Map<string, CachedRoom>();
-const ROOM_LINGER_MS = 60_000;
+// Five minutes: the cold websocket upgrade to Liveblocks costs 1-2s
+// (server-side), so lingering rooms longer keeps typical hop-between-pages
+// sessions instant. Lingering docs are small; memory is not a concern at
+// this scale.
+const ROOM_LINGER_MS = 5 * 60_000;
 
 function acquireRoom(mode: CollabMode, roomId: string): CachedRoom {
 	const cached = roomCache.get(roomId);

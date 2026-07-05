@@ -49,6 +49,19 @@ const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
 	),
 });
 
+// Shown while the collab room connects: the Liveblocks websocket upgrade
+// takes 1-2s on cold rooms (server-side; measured, not our stack), and the
+// page content is already fetched — so paint it read-only immediately
+// instead of a skeleton. The live editor swaps in when the room is ready.
+const ReadOnlyEditor = dynamic(() => import("./editor/read-only-editor"), {
+	ssr: false,
+	loading: () => (
+		<div className="py-2">
+			<EditorBodySkeleton />
+		</div>
+	),
+});
+
 const TITLE_SAVE_DELAY_MS = 500;
 
 export function PageEditor({ pageId }: { pageId: string }) {
@@ -196,8 +209,8 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				</p>
 			) : null}
 			{collabSession.status === "connecting" ? (
-				<div className="py-2">
-					<EditorBodySkeleton />
+				<div className="py-2" aria-busy>
+					<ReadOnlyEditor content={page.content} />
 				</div>
 			) : (
 				<HaunterEditor
