@@ -29,7 +29,7 @@ import {
 import {
 	type CollabRoom,
 	useCollabSession,
-} from "@/features/collab/client/liveblocks";
+} from "@/features/collab/client/session";
 import { canvasRoomId, cursorColorFor } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { useSharedPageToken } from "@/features/shares/components/shared-page-context";

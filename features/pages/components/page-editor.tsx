@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCollabSession } from "@/features/collab/client/liveblocks";
+import { useCollabSession } from "@/features/collab/client/session";
 import { cursorColorFor, pageRoomId } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {

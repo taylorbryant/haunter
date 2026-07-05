@@ -18,7 +18,7 @@ import {
 	type TLUser,
 } from "tldraw";
 import type { Transaction, YMapEvent } from "yjs";
-import type { CollabRoom } from "@/features/collab/client/liveblocks";
+import type { CollabRoom } from "@/features/collab/client/session";
 
 export type CanvasCollabUser = { id: string; name: string; color: string };
 

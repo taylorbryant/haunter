@@ -38,7 +38,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Awareness } from "y-protocols/awareness";
 import { apiClient } from "@/client";
 import { createCanvas } from "@/features/canvases/contracts";
-import type { CollabRoom } from "@/features/collab/client/liveblocks";
+import type { CollabRoom } from "@/features/collab/client/session";
 import { setCollabPresence } from "@/features/collab/client/presence-state";
 import {
 	invalidateBacklinks,

@@ -18,12 +18,15 @@ export const getSharedCanvasUseCase = useCase
 			throw appError("ShareNotFound");
 		}
 
-		const page = await ctx.ports.pages.findMetaById(share.pageId);
+		// Both lookups depend only on the share row, so run them together.
+		const [page, canvas] = await Promise.all([
+			ctx.ports.pages.findMetaById(share.pageId),
+			ctx.ports.canvases.findById(input.id),
+		]);
 		if (!page || page.deletedAt !== null) {
 			throw appError("ShareNotFound");
 		}
 
-		const canvas = await ctx.ports.canvases.findById(input.id);
 		if (!canvas || canvas.pageId !== share.pageId) {
 			throw appError("ShareNotFound");
 		}
