@@ -124,9 +124,14 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
 					<Drawer showSwipeHandle>
 						<DrawerTrigger render={trigger} />
 						<DrawerContent>
-							<DrawerHeader className="border-b text-left">
-								<DrawerTitle className="flex items-center gap-2 font-normal">
-									{userIdentity}
+							<DrawerHeader>
+								<DrawerTitle className="flex items-center justify-center font-normal">
+									{/* userIdentity's text column is flex-1 (it fills the
+									    sidebar button); the shrink-to-content wrapper keeps
+									    it centered here like other drawer titles. */}
+									<span className="flex max-w-full items-center gap-2">
+										{userIdentity}
+									</span>
 								</DrawerTitle>
 								<DrawerDescription className="sr-only">
 									Account menu

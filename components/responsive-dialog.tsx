@@ -50,7 +50,7 @@ export function ResponsiveDialog({
 		return (
 			<Drawer showSwipeHandle open={open} onOpenChange={onOpenChange}>
 				<DrawerContent>
-					<DrawerHeader className="border-b text-left">
+					<DrawerHeader>
 						<DrawerTitle>{title}</DrawerTitle>
 						<DrawerDescription>{description}</DrawerDescription>
 					</DrawerHeader>

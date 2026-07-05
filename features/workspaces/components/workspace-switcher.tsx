@@ -193,7 +193,7 @@ export function WorkspaceSwitcher({
 					<Drawer showSwipeHandle>
 						<DrawerTrigger render={trigger} />
 						<DrawerContent>
-							<DrawerHeader className="border-b text-left">
+							<DrawerHeader>
 								<DrawerTitle>Workspaces</DrawerTitle>
 								<DrawerDescription className="sr-only">
 									Switch or manage workspaces

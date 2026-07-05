@@ -431,7 +431,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 								<MoreHorizontalIcon />
 							</DrawerTrigger>
 							<DrawerContent>
-								<DrawerHeader className="border-b text-left">
+								<DrawerHeader>
 									<DrawerTitle className="truncate">
 										{node.icon ? `${node.icon} ` : ""}
 										{node.title || "Untitled"}
