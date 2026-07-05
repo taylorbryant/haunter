@@ -17,7 +17,6 @@ import {
 	DrawerDescription,
 	DrawerHeader,
 	DrawerTitle,
-	DrawerTrigger,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,7 +24,6 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	createPageShareMutationOptions,
@@ -35,27 +33,26 @@ import {
 } from "@/features/shares/client/queries";
 
 /**
- * Header "Share" control: publish the current page to the web as a
- * read-only link, copy it, or revoke it. Rendered only on page routes for
- * members who can edit. A popover on desktop, a bottom drawer on mobile.
+ * The share controls for one page: publish a read-only web link, copy it,
+ * revoke it. Hosted by the desktop popover and the mobile drawer.
  */
-export function ShareButton() {
-	const pathname = usePathname();
-	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
-	const canEdit = useCanEditWorkspace();
-	const isMobile = useIsMobile();
+export function SharePanel({
+	pageId,
+	active,
+}: {
+	pageId: string;
+	/** Defer fetching until the hosting surface is open. */
+	active: boolean;
+}) {
 	const queryClient = useQueryClient();
-	const [open, setOpen] = useState(false);
 	const [copied, setCopied] = useState(false);
 
 	const shareQuery = useQuery({
-		...getPageShareQueryOptions(pageId ?? ""),
-		enabled: open && pageId !== null,
+		...getPageShareQueryOptions(pageId),
+		enabled: active,
 	});
 	const createMutation = useMutation(createPageShareMutationOptions());
 	const revokeMutation = useMutation(revokePageShareMutationOptions());
-
-	if (!pageId || !canEdit) return null;
 
 	const share = shareQuery.data?.share ?? null;
 	const shareUrl = share
@@ -64,7 +61,7 @@ export function ShareButton() {
 	const busy = createMutation.isPending || revokeMutation.isPending;
 
 	function publish() {
-		if (!pageId || busy) return;
+		if (busy) return;
 		createMutation.mutate(
 			{ path: { pageId }, body: {} },
 			{ onSuccess: () => invalidatePageShare(queryClient, pageId) },
@@ -72,7 +69,7 @@ export function ShareButton() {
 	}
 
 	function revoke() {
-		if (!pageId || busy) return;
+		if (busy) return;
 		revokeMutation.mutate(
 			{ path: { pageId } },
 			{ onSuccess: () => invalidatePageShare(queryClient, pageId) },
@@ -86,53 +83,49 @@ export function ShareButton() {
 		setTimeout(() => setCopied(false), 1500);
 	}
 
-	const trigger = (
-		<Button variant="ghost" size="sm" className="text-muted-foreground" />
-	);
-	const triggerContent = (
-		<>
-			<Share2Icon />
-			Share
-		</>
-	);
+	if (shareQuery.isPending) {
+		return <p className="text-muted-foreground text-sm">Loading…</p>;
+	}
 
-	const panel = shareQuery.isPending ? (
-		<p className="text-muted-foreground text-sm">Loading…</p>
-	) : share ? (
-		<div className="flex flex-col gap-3">
-			<div className="flex items-center gap-2">
-				<Globe2Icon className="size-4 text-muted-foreground" />
-				<div className="flex flex-col">
-					<p className="font-medium text-sm">Shared to the web</p>
-					<p className="text-muted-foreground text-xs">
-						Anyone with the link can view this page.
-					</p>
+	if (share) {
+		return (
+			<div className="flex flex-col gap-3">
+				<div className="flex items-center gap-2">
+					<Globe2Icon className="size-4 text-muted-foreground" />
+					<div className="flex flex-col">
+						<p className="font-medium text-sm">Shared to the web</p>
+						<p className="text-muted-foreground text-xs">
+							Anyone with the link can view this page.
+						</p>
+					</div>
 				</div>
-			</div>
-			<div className="flex gap-2">
-				<Input readOnly value={shareUrl ?? ""} className="h-8 text-xs" />
+				<div className="flex gap-2">
+					<Input readOnly value={shareUrl ?? ""} className="h-8 text-xs" />
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={copy}
+						aria-label="Copy link"
+					>
+						{copied ? <CheckIcon /> : <CopyIcon />}
+					</Button>
+				</div>
 				<Button
 					type="button"
-					variant="outline"
+					variant="ghost"
 					size="sm"
-					onClick={copy}
-					aria-label="Copy link"
+					className="w-fit text-destructive hover:text-destructive"
+					disabled={busy}
+					onClick={revoke}
 				>
-					{copied ? <CheckIcon /> : <CopyIcon />}
+					Revoke link
 				</Button>
 			</div>
-			<Button
-				type="button"
-				variant="ghost"
-				size="sm"
-				className="w-fit text-destructive hover:text-destructive"
-				disabled={busy}
-				onClick={revoke}
-			>
-				Revoke link
-			</Button>
-		</div>
-	) : (
+		);
+	}
+
+	return (
 		<div className="flex flex-col gap-3">
 			<div className="flex items-center gap-2">
 				<Globe2Icon className="size-4 text-muted-foreground" />
@@ -148,32 +141,63 @@ export function ShareButton() {
 			</Button>
 		</div>
 	);
+}
 
-	if (isMobile) {
-		return (
-			<Drawer showSwipeHandle open={open} onOpenChange={setOpen}>
-				<DrawerTrigger render={trigger}>{triggerContent}</DrawerTrigger>
-				<DrawerContent>
-					<DrawerHeader>
-						<DrawerTitle>Share</DrawerTitle>
-						<DrawerDescription className="sr-only">
-							Share this page to the web
-						</DrawerDescription>
-					</DrawerHeader>
-					<div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-						{panel}
-					</div>
-				</DrawerContent>
-			</Drawer>
-		);
-	}
+/**
+ * Mobile share surface: a bottom drawer, opened from the header's page
+ * actions menu (no trigger of its own).
+ */
+export function ShareDrawer({
+	pageId,
+	open,
+	onOpenChange,
+}: {
+	pageId: string;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+}) {
+	return (
+		<Drawer showSwipeHandle open={open} onOpenChange={onOpenChange}>
+			<DrawerContent>
+				<DrawerHeader>
+					<DrawerTitle>Share</DrawerTitle>
+					<DrawerDescription className="sr-only">
+						Share this page to the web
+					</DrawerDescription>
+				</DrawerHeader>
+				<div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+					<SharePanel pageId={pageId} active={open} />
+				</div>
+			</DrawerContent>
+		</Drawer>
+	);
+}
+
+/**
+ * Desktop header "Share" control (a popover). On mobile the share surface
+ * lives inside the header's page actions menu instead.
+ */
+export function ShareButton() {
+	const pathname = usePathname();
+	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
+	const canEdit = useCanEditWorkspace();
+	const [open, setOpen] = useState(false);
+
+	if (!pageId || !canEdit) return null;
 
 	return (
 		// modal: non-modal Radix popovers don't dismiss on outside taps in iOS
 		// Safari (taps on non-interactive page area never reach the dismiss
 		// layer). Modal mode closes reliably everywhere.
 		<Popover modal open={open} onOpenChange={setOpen}>
-			<PopoverTrigger render={trigger}>{triggerContent}</PopoverTrigger>
+			<PopoverTrigger
+				render={
+					<Button variant="ghost" size="sm" className="text-muted-foreground" />
+				}
+			>
+				<Share2Icon />
+				Share
+			</PopoverTrigger>
 			<PopoverContent align="end" className="w-80">
 				{/* Explicit close: outside-tap dismissal has platform quirks on
 				    touch devices, so the popover always offers a visible way out. */}
@@ -187,7 +211,7 @@ export function ShareButton() {
 					<XIcon />
 					<span className="sr-only">Close</span>
 				</Button>
-				{panel}
+				<SharePanel pageId={pageId} active={open} />
 			</PopoverContent>
 		</Popover>
 	);

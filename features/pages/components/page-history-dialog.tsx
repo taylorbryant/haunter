@@ -41,9 +41,10 @@ function formatWhen(iso: string) {
 }
 
 /**
- * Header "History" control: browse a page's checkpoints, preview any of
- * them read-only, and restore. Rendered on page routes for members who can
- * edit (restores are editor-gated server-side regardless).
+ * Desktop header "History" control: browse a page's checkpoints, preview
+ * any of them read-only, and restore. Rendered on page routes for members
+ * who can edit (restores are editor-gated server-side regardless). On
+ * mobile the dialog opens from the header's page actions menu instead.
  */
 export function PageHistoryButton() {
 	const pathname = usePathname();
@@ -71,7 +72,7 @@ export function PageHistoryButton() {
 	);
 }
 
-function PageHistoryDialog({
+export function PageHistoryDialog({
 	pageId,
 	onOpenChange,
 }: {

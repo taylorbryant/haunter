@@ -11,8 +11,7 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { PageHistoryButton } from "@/features/pages/components/page-history-dialog";
-import { ShareButton } from "@/features/shares/components/share-button";
+import { HeaderPageActions } from "@/components/header-page-actions";
 import { auth } from "@/lib/better-auth";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -49,8 +48,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 					<HeaderBreadcrumbs />
 					<HeaderSaveIndicator />
 					<HeaderPresence />
-					<PageHistoryButton />
-					<ShareButton />
+					<HeaderPageActions />
 				</header>
 				<div className="min-w-0 flex-1">{children}</div>
 			</SidebarInset>
