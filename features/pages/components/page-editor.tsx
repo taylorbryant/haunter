@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cursorColorFor } from "@/features/collab/lib/room";
+import { useCollabSession } from "@/features/collab/client/liveblocks";
+import { cursorColorFor, pageRoomId } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	getPageQueryOptions,
@@ -15,6 +16,7 @@ import {
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import { setPageSaveState } from "@/features/pages/client/save-state";
+import { useSharedTitle } from "@/features/pages/client/use-shared-title";
 import { cn } from "@/lib/utils";
 import { Backlinks } from "./backlinks";
 import { PageIconButton } from "./page-icon-picker";
@@ -64,6 +66,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				color: cursorColorFor(session.data.user.id),
 			}
 		: undefined;
+	// One shared room per page carries both the document and the title.
+	const collabSession = useCollabSession(pageRoomId(pageId));
+	const collabRoom =
+		collabSession.status === "ready" ? collabSession.room : null;
+	const { sharedTitle, pushTitle } = useSharedTitle(
+		collabRoom,
+		pageQuery.data?.title ?? null,
+	);
 
 	const [title, setTitle] = useState<string | null>(null);
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -79,6 +89,18 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		setTitle(null);
 		setPageSaveState("saved");
 	}, [pageId]);
+
+	// A collaborator renamed the page: refresh the sidebar/breadcrumb lists
+	// (their PATCH already persisted it). Debounced — remote keystrokes
+	// arrive one by one.
+	const sidebarRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(() => {
+		if (sharedTitle === null) return;
+		if (sidebarRefreshRef.current) clearTimeout(sidebarRefreshRef.current);
+		sidebarRefreshRef.current = setTimeout(() => {
+			invalidatePages(queryClient);
+		}, 1000);
+	}, [sharedTitle, queryClient]);
 
 	async function handleConflict() {
 		// Refetch first so the remounted editor initializes from the newer doc.
@@ -118,10 +140,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	}
 
 	const page = pageQuery.data;
-	const shownTitle = title ?? page.title;
+	// Local typing wins while in flight; otherwise the shared live title;
+	// otherwise the database copy.
+	const shownTitle = title ?? sharedTitle ?? page.title;
 
 	function handleTitleChange(next: string) {
 		setTitle(next);
+		// Collaborators see every keystroke; the database write is debounced.
+		pushTitle(next);
 		if (titleTimeoutRef.current) clearTimeout(titleTimeoutRef.current);
 		titleTimeoutRef.current = setTimeout(() => {
 			updatePageMutation.mutate(
@@ -130,6 +156,9 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					onSuccess: (result) => {
 						setPageSavedAtInCache(queryClient, pageId, result.updatedAt);
 						invalidatePages(queryClient);
+						// Hand display back to the shared title so later remote
+						// renames show through.
+						setTitle(null);
 					},
 				},
 			);
@@ -166,17 +195,24 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					This page was updated elsewhere — reloaded with the latest version.
 				</p>
 			) : null}
-			<HaunterEditor
-				key={`${pageId}:${reloadCount}`}
-				pageId={pageId}
-				workspaceId={page.workspaceId}
-				initialContent={page.content}
-				updatedAt={page.updatedAt}
-				editable={!readOnly}
-				collabUser={collabUser}
-				onSaveStateChange={setPageSaveState}
-				onConflict={handleConflict}
-			/>
+			{collabSession.status === "connecting" ? (
+				<div className="py-2">
+					<EditorBodySkeleton />
+				</div>
+			) : (
+				<HaunterEditor
+					key={`${pageId}:${reloadCount}`}
+					pageId={pageId}
+					workspaceId={page.workspaceId}
+					initialContent={page.content}
+					updatedAt={page.updatedAt}
+					editable={!readOnly}
+					collab={collabRoom}
+					collabUser={collabUser}
+					onSaveStateChange={setPageSaveState}
+					onConflict={handleConflict}
+				/>
+			)}
 			{/* Same 54px inset as the editor content column. */}
 			<div className="px-0 md:px-[54px]">
 				<Backlinks pageId={pageId} />

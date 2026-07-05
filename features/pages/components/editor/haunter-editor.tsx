@@ -38,12 +38,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Awareness } from "y-protocols/awareness";
 import { apiClient } from "@/client";
 import { createCanvas } from "@/features/canvases/contracts";
-import {
-	type CollabRoom,
-	getCollabMode,
-	useCollabRoom,
-} from "@/features/collab/client/liveblocks";
-import { pageRoomId } from "@/features/collab/lib/room";
+import type { CollabRoom } from "@/features/collab/client/liveblocks";
 import {
 	invalidateBacklinks,
 	invalidatePage,
@@ -191,14 +186,18 @@ type HaunterEditorProps = {
 	/** The document version this editor was initialized from. */
 	updatedAt?: string;
 	editable?: boolean;
+	/**
+	 * The page's synced Liveblocks room, or null for local-only editing.
+	 * PageEditor owns the session lifecycle (and its connecting/fallback
+	 * states) so the title can share the same doc.
+	 */
+	collab?: CollabRoom | null;
 	/** Cursor identity shown to collaborators when collaboration is on. */
 	collabUser?: { name: string; color: string };
 	onSaveStateChange?: (state: SaveState) => void;
 	/** The server rejected a save as stale; the owner should reload the doc. */
 	onConflict?: () => void;
 };
-
-const COLLAB_CONNECT_TIMEOUT_MS = 8000;
 
 /** Colored-initial chips for the other people currently in this page. */
 function PresenceRow({ room }: { room: CollabRoom }) {
@@ -248,54 +247,17 @@ function PresenceRow({ room }: { room: CollabRoom }) {
 	);
 }
 
-/**
- * Collaboration gate: when Liveblocks is configured, join the page's room
- * and mount the editor only once the shared doc has synced (it must know
- * whether the doc is empty before deciding to seed it from the database).
- * If the connection doesn't sync in time, fall back to the local editor so
- * a Liveblocks outage never blocks writing.
- */
-export default function HaunterEditor(props: HaunterEditorProps) {
-	const mode = getCollabMode();
-	const room = useCollabRoom(pageRoomId(props.pageId), mode);
-	const [fallbackLocal, setFallbackLocal] = useState(false);
-	const synced = room?.synced === true;
-
-	useEffect(() => {
-		if (!mode || synced || fallbackLocal) return;
-		const timer = setTimeout(
-			() => setFallbackLocal(true),
-			COLLAB_CONNECT_TIMEOUT_MS,
-		);
-		return () => clearTimeout(timer);
-	}, [mode, synced, fallbackLocal]);
-
-	if (mode && !fallbackLocal) {
-		if (!synced || !room) {
-			return (
-				<div className="flex flex-col gap-3 px-0 py-2 md:px-[54px]" aria-hidden>
-					<div className="h-4 w-11/12 animate-pulse rounded-md bg-muted" />
-					<div className="h-4 w-4/5 animate-pulse rounded-md bg-muted" />
-					<div className="h-4 w-3/5 animate-pulse rounded-md bg-muted" />
-				</div>
-			);
-		}
-		return <EditorCore {...props} collab={room} />;
-	}
-	return <EditorCore {...props} collab={null} />;
-}
-
-function EditorCore({
+export default function HaunterEditor({
 	pageId,
 	workspaceId,
 	initialContent,
 	updatedAt,
 	editable = true,
 	collabUser,
-	collab,
+	collab = null,
 	onSaveStateChange,
 	onConflict,
-}: HaunterEditorProps & { collab: CollabRoom | null }) {
+}: HaunterEditorProps) {
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
 	const queryClient = useQueryClient();

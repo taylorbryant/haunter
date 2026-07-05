@@ -19,6 +19,16 @@ import {
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
+import {
+	isLoadableSnapshot,
+	useCollabCanvasStore,
+} from "@/features/canvases/components/use-collab-canvas-store";
+import {
+	type CollabRoom,
+	useCollabSession,
+} from "@/features/collab/client/liveblocks";
+import { canvasRoomId } from "@/features/collab/lib/room";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { useSharedPageToken } from "@/features/shares/components/shared-page-context";
 
 const SNAPSHOT_SAVE_DELAY_MS = 1500;
@@ -38,6 +48,8 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	const queryClient = useQueryClient();
 	const canvasQuery = useQuery(getCanvasQueryOptions(canvasId));
 	const saveMutation = useMutation(saveCanvasSnapshotMutationOptions());
+	const collabSession = useCollabSession(canvasRoomId(canvasId));
+	const canEdit = useCanEditWorkspace();
 
 	const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,7 +68,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		};
 	}, []);
 
-	if (canvasQuery.isPending) {
+	if (canvasQuery.isPending || collabSession.status === "connecting") {
 		return (
 			<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
 				Loading canvas…
@@ -72,16 +84,31 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		);
 	}
 
+	if (collabSession.status === "ready") {
+		return (
+			<CollabCanvasSurface
+				canvasId={canvasId}
+				room={collabSession.room}
+				snapshot={canvasQuery.data.snapshot}
+				canEdit={canEdit}
+			/>
+		);
+	}
+
 	const stored = canvasQuery.data.snapshot;
-	const snapshot =
-		Object.keys(stored).length > 0
-			? (stored as unknown as TLStoreSnapshot)
-			: undefined;
+	// Legacy/empty rows without a schema crash tldraw's migrator; treat them
+	// as a fresh canvas instead.
+	const snapshot = isLoadableSnapshot(stored)
+		? (stored as unknown as TLStoreSnapshot)
+		: undefined;
 
 	function handleMount(editor: Editor) {
 		editor.user.updateUserPreferences({
 			colorScheme: resolvedTheme === "dark" ? "dark" : "light",
 		});
+		if (!canEdit) {
+			editor.updateInstanceState({ isReadonly: true });
+		}
 
 		let dirty = false;
 
@@ -93,7 +120,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 				staleTime: 0,
 			});
 			baseUpdatedAtRef.current = fresh.updatedAt;
-			if (Object.keys(fresh.snapshot).length > 0) {
+			if (isLoadableSnapshot(fresh.snapshot)) {
 				loadSnapshot(editor.store, {
 					document: fresh.snapshot as unknown as TLStoreSnapshot,
 				});
@@ -160,6 +187,102 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	return (
 		<div className="relative h-full w-full">
 			<Tldraw snapshot={snapshot} onMount={handleMount} />
+			{saveState === "saving" ? (
+				<span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-background/80 px-1.5 py-0.5 text-muted-foreground text-xs">
+					Saving…
+				</span>
+			) : null}
+		</div>
+	);
+}
+
+/**
+ * The collaborative canvas: the tldraw store is bound to the room's shared
+ * Y.Map, so shapes sync live between members. Persistence works like the
+ * page editor's — every editing peer debounce-saves the materialized
+ * snapshot, without a CAS precondition (Yjs already merges).
+ */
+function CollabCanvasSurface({
+	canvasId,
+	room,
+	snapshot,
+	canEdit,
+}: {
+	canvasId: string;
+	room: CollabRoom;
+	snapshot: Record<string, unknown>;
+	canEdit: boolean;
+}) {
+	const { resolvedTheme } = useTheme();
+	const queryClient = useQueryClient();
+	const saveMutation = useMutation(saveCanvasSnapshotMutationOptions());
+	const storeWithStatus = useCollabCanvasStore(room, snapshot);
+
+	const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
+	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const flushRef = useRef<() => void>(() => {});
+
+	// Flush a pending snapshot save when the block unmounts.
+	useEffect(() => {
+		return () => {
+			if (timeoutRef.current) clearTimeout(timeoutRef.current);
+			flushRef.current();
+		};
+	}, []);
+
+	function handleMount(editor: Editor) {
+		editor.user.updateUserPreferences({
+			colorScheme: resolvedTheme === "dark" ? "dark" : "light",
+		});
+		if (!canEdit) {
+			editor.updateInstanceState({ isReadonly: true });
+		}
+
+		let dirty = false;
+
+		function save() {
+			if (!dirty || !canEdit) return;
+			dirty = false;
+			setSaveState("saving");
+			const document = getSnapshot(editor.store).document as unknown as Record<
+				string,
+				unknown
+			>;
+			setCanvasSnapshotInCache(queryClient, canvasId, document);
+			saveMutation.mutate(
+				{ path: { id: canvasId }, body: { snapshot: document } },
+				{
+					onError: () => {
+						// Transient failure: keep local changes and retry on the next
+						// edit/flush; the shared doc is the live source of truth anyway.
+						dirty = true;
+					},
+					onSettled: () => setSaveState("saved"),
+				},
+			);
+		}
+		flushRef.current = save;
+
+		// Only this user's own edits schedule a save; remote peers persist
+		// their own edits (converged content makes the writes equivalent).
+		const unlisten = editor.store.listen(
+			() => {
+				dirty = true;
+				if (timeoutRef.current) clearTimeout(timeoutRef.current);
+				timeoutRef.current = setTimeout(save, SNAPSHOT_SAVE_DELAY_MS);
+			},
+			{ scope: "document", source: "user" },
+		);
+
+		return () => {
+			unlisten();
+			save();
+		};
+	}
+
+	return (
+		<div className="relative h-full w-full">
+			<Tldraw store={storeWithStatus} onMount={handleMount} />
 			{saveState === "saving" ? (
 				<span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-background/80 px-1.5 py-0.5 text-muted-foreground text-xs">
 					Saving…

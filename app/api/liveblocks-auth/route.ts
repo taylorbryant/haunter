@@ -1,13 +1,13 @@
 import { Liveblocks } from "@liveblocks/node";
-import { parsePageRoomId } from "@/features/collab/lib/room";
+import { parseRoomId } from "@/features/collab/lib/room";
 import { env } from "@/lib/env";
 import { getServer } from "@/server";
 
 /**
  * Liveblocks access-token auth: the client asks to enter a room, and this
- * endpoint decides from Haunter's own data. A `page:<id>` room is granted to
- * verified members of the page's workspace — viewers read-only, everyone
- * else full access. Everything invalid is a uniform 403.
+ * endpoint decides from Haunter's own data. `page:<id>` and `canvas:<id>`
+ * rooms are granted to verified members of the entity's workspace — viewers
+ * read-only, everyone else full access. Everything invalid is a uniform 403.
  */
 export async function POST(req: Request) {
 	if (!env.LIVEBLOCKS_SECRET_KEY) {
@@ -40,16 +40,23 @@ export async function POST(req: Request) {
 	}
 
 	const body = (await req.json().catch(() => null)) as { room?: string } | null;
-	const pageId = body?.room ? parsePageRoomId(body.room) : null;
-	if (!body?.room || !pageId) {
+	const target = body?.room ? parseRoomId(body.room) : null;
+	if (!body?.room || !target) {
 		return new Response(null, { status: 403 });
 	}
 
-	const page = await server.ports.pages.findById(pageId);
-	if (!page || page.deletedAt !== null) {
+	let workspaceId: string | null = null;
+	if (target.kind === "page") {
+		const page = await server.ports.pages.findById(target.id);
+		workspaceId = page && page.deletedAt === null ? page.workspaceId : null;
+	} else {
+		const canvas = await server.ports.canvases.findById(target.id);
+		workspaceId = canvas?.workspaceId ?? null;
+	}
+	if (!workspaceId) {
 		return new Response(null, { status: 403 });
 	}
-	const role = await server.ports.members.findRole(page.workspaceId, userId);
+	const role = await server.ports.members.findRole(workspaceId, userId);
 	if (!role) {
 		return new Response(null, { status: 403 });
 	}

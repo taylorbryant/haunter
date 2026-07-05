@@ -2,18 +2,27 @@ const UUID_PATTERN =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
- * Liveblocks room naming. One room per page; the page id is the only
- * client-controlled input, so parsing is strict — anything that isn't
- * exactly `page:<uuid>` is rejected before it reaches a database lookup.
+ * Liveblocks room naming. One room per page and one per canvas; the entity
+ * id is the only client-controlled input, so parsing is strict — anything
+ * that isn't exactly `page:<uuid>` or `canvas:<uuid>` is rejected before it
+ * reaches a database lookup.
  */
+export type RoomTarget = { kind: "page" | "canvas"; id: string };
+
 export function pageRoomId(pageId: string): string {
 	return `page:${pageId}`;
 }
 
-export function parsePageRoomId(room: string): string | null {
-	if (!room.startsWith("page:")) return null;
-	const pageId = room.slice("page:".length).toLowerCase();
-	return UUID_PATTERN.test(pageId) ? pageId : null;
+export function canvasRoomId(canvasId: string): string {
+	return `canvas:${canvasId}`;
+}
+
+export function parseRoomId(room: string): RoomTarget | null {
+	const [kind, id, ...rest] = room.split(":");
+	if (rest.length > 0 || !id) return null;
+	if (kind !== "page" && kind !== "canvas") return null;
+	const normalized = id.toLowerCase();
+	return UUID_PATTERN.test(normalized) ? { kind, id: normalized } : null;
 }
 
 /**

@@ -81,3 +81,41 @@ export function useCollabRoom(
 
 	return mode ? room : null;
 }
+
+const COLLAB_CONNECT_TIMEOUT_MS = 8000;
+
+export type CollabSession =
+	/** Collaboration is not configured; run the local-only path. */
+	| { status: "off" }
+	/** Room joined, waiting for the initial server doc. */
+	| { status: "connecting" }
+	/** Shared doc loaded; safe to bind editors to it. */
+	| { status: "ready"; room: CollabRoom }
+	/** Liveblocks didn't sync in time; run local so writing is never blocked. */
+	| { status: "fallback" };
+
+/**
+ * The full collaboration lifecycle for one room, including the connect
+ * timeout. Consumers render a loading state during "connecting" and treat
+ * "off" and "fallback" identically (local, non-collaborative behavior).
+ */
+export function useCollabSession(roomId: string): CollabSession {
+	const mode = getCollabMode();
+	const room = useCollabRoom(roomId, mode);
+	const [fallback, setFallback] = useState(false);
+	const synced = room?.synced === true;
+
+	useEffect(() => {
+		if (!mode || synced || fallback) return;
+		const timer = setTimeout(
+			() => setFallback(true),
+			COLLAB_CONNECT_TIMEOUT_MS,
+		);
+		return () => clearTimeout(timer);
+	}, [mode, synced, fallback]);
+
+	if (!mode) return { status: "off" };
+	if (fallback) return { status: "fallback" };
+	if (room && synced) return { status: "ready", room };
+	return { status: "connecting" };
+}

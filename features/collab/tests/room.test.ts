@@ -1,19 +1,33 @@
 import { describe, expect, it } from "bun:test";
-import { cursorColorFor, pageRoomId, parsePageRoomId } from "../lib/room";
+import {
+	canvasRoomId,
+	cursorColorFor,
+	pageRoomId,
+	parseRoomId,
+} from "../lib/room";
 
-describe("page room ids", () => {
-	it("round-trips a page id", () => {
+describe("room ids", () => {
+	it("round-trips page and canvas ids", () => {
 		const pageId = crypto.randomUUID();
-		expect(parsePageRoomId(pageRoomId(pageId))).toBe(pageId);
+		const canvasId = crypto.randomUUID();
+		expect(parseRoomId(pageRoomId(pageId))).toEqual({
+			kind: "page",
+			id: pageId,
+		});
+		expect(parseRoomId(canvasRoomId(canvasId))).toEqual({
+			kind: "canvas",
+			id: canvasId,
+		});
 	});
 
-	it("rejects anything that is not page:<uuid>", () => {
-		expect(parsePageRoomId("page:not-a-uuid")).toBeNull();
-		expect(parsePageRoomId(`canvas:${crypto.randomUUID()}`)).toBeNull();
-		expect(parsePageRoomId(`page:${crypto.randomUUID()}:extra`)).toBeNull();
-		expect(parsePageRoomId("")).toBeNull();
+	it("rejects anything that is not <kind>:<uuid>", () => {
+		expect(parseRoomId("page:not-a-uuid")).toBeNull();
+		expect(parseRoomId(`task:${crypto.randomUUID()}`)).toBeNull();
+		expect(parseRoomId(`page:${crypto.randomUUID()}:extra`)).toBeNull();
+		expect(parseRoomId("page:")).toBeNull();
+		expect(parseRoomId("")).toBeNull();
 		// SQL-ish / traversal-ish garbage must not survive parsing.
-		expect(parsePageRoomId("page:* OR 1=1")).toBeNull();
+		expect(parseRoomId("page:* OR 1=1")).toBeNull();
 	});
 
 	it("assigns stable colors per user", () => {
