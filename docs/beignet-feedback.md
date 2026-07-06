@@ -149,9 +149,16 @@ mitigations stand in the meantime:
 - Listener auto-fix in `doctor --fix`.
 - `PRAGMA foreign_keys = ON` in the sqlite starter.
 - A `provider` → `providers` CLI alias.
-- A Vercel Blob storage provider (Haunter's hand-written
-  [infra/storage/vercel-blob-storage.ts](../infra/storage/vercel-blob-storage.ts)
-  can retire when it lands).
+- A Vercel Blob storage provider — **landed** as
+  `@beignet/provider-storage-vercel-blob`; Haunter's hand-written adapter
+  is retired and [server/providers.ts](../server/providers.ts) uses the
+  package. The provider matches the constraints the adapter had
+  discovered (uniform store visibility defaulting to private,
+  `addRandomSuffix: false`, max-age-only cache control) and adds what the
+  adapter lacked: a `keyPrefix`, a health check, and an escape-hatch
+  `ports.vercelBlob` client. Verified live: upload through the app's
+  upload route returns the deterministic key, and the file streams back
+  through `/api/files/...`.
 
 ## Still-open gaps
 

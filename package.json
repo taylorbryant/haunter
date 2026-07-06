@@ -38,6 +38,7 @@
 		"@beignet/provider-mail-resend": "0.0.31",
 		"@beignet/provider-rate-limit-upstash": "0.0.31",
 		"@beignet/provider-storage-local": "0.0.31",
+		"@beignet/provider-storage-vercel-blob": "0.0.31",
 		"@beignet/react-hook-form": "0.0.31",
 		"@beignet/react-query": "0.0.31",
 		"@better-auth/agent-auth": "^0.6.2",
