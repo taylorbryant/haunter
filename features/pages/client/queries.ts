@@ -130,6 +130,24 @@ export function setPageSavedAtInCache(
 }
 
 /**
+ * Fold a title save's response into the getPage cache. The title input hands
+ * display back to the cached copy after a save, so without this the
+ * just-typed title snaps back to the stale one (always visible with
+ * collaboration off — there is no shared live title to paper over it).
+ */
+export function setPageTitleInCache(
+	queryClient: QueryClient,
+	id: string,
+	title: string,
+	updatedAt: string,
+) {
+	queryClient.setQueryData<Page>(
+		rq(getPage).key({ path: { id } }),
+		(current) => (current ? { ...current, title, updatedAt } : current),
+	);
+}
+
+/**
  * Mirror a just-saved document into the getPage cache so a remount between
  * the save and the next refetch never initializes the editor from stale data.
  */

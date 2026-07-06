@@ -12,7 +12,7 @@ import {
 	getPageQueryOptions,
 	invalidatePage,
 	invalidatePages,
-	setPageSavedAtInCache,
+	setPageTitleInCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import { setPageSaveState } from "@/features/pages/client/save-state";
@@ -167,10 +167,16 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				{ path: { id: pageId }, body: { title: next } },
 				{
 					onSuccess: (result) => {
-						setPageSavedAtInCache(queryClient, pageId, result.updatedAt);
+						// Write the saved title into the cache BEFORE handing display
+						// back to it — otherwise the input snaps back to the stale
+						// cached title (e.g. "Untitled" on a fresh page).
+						setPageTitleInCache(
+							queryClient,
+							pageId,
+							result.title,
+							result.updatedAt,
+						);
 						invalidatePages(queryClient);
-						// Hand display back to the shared title so later remote
-						// renames show through.
 						setTitle(null);
 					},
 				},

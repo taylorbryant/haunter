@@ -41,6 +41,7 @@ export function MembersDialog({
 }) {
 	const router = useRouter();
 	const orgQuery = authClient.useActiveOrganization();
+	const organizationsQuery = authClient.useListOrganizations();
 	const activeMemberQuery = authClient.useActiveMember();
 	const org = orgQuery.data;
 	const myRole = activeMemberQuery.data?.role ?? null;
@@ -107,6 +108,10 @@ export function MembersDialog({
 		if (!org || busy) return;
 		setBusy(true);
 		await authClient.organization.leave({ organizationId: org.id });
+		// Refresh the shared org-list cache before redirecting: the switcher
+		// must drop this workspace, and the home page picks the first list
+		// entry — a stale list would bounce us back into the one we just left.
+		await organizationsQuery.refetch?.();
 		setBusy(false);
 		onOpenChange(false);
 		router.push("/");
