@@ -49,6 +49,7 @@ import {
 	setPageContentInCache,
 	setPageSavedAtInCache,
 } from "@/features/pages/client/queries";
+import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
 import { invalidateTasks } from "@/features/tasks/client/queries";
@@ -404,6 +405,7 @@ export default function HaunterEditor({
 							// parent document (with the link block) on the way out.
 							onSubpageCreated: async (created) => {
 								await invalidatePages(queryClient);
+								focusTitleOnArrival(created.id);
 								router.push(`/w/${workspaceId}/p/${created.id}`);
 							},
 						})

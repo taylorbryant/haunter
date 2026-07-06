@@ -62,6 +62,7 @@ import {
 	listPagesQueryOptions,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
+import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import type { PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { cn } from "@/lib/utils";
@@ -167,6 +168,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 				onSuccess: async (page) => {
 					if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
 					await invalidatePages(queryClient);
+					focusTitleOnArrival(page.id);
 					router.push(`/w/${workspaceId}/p/${page.id}`);
 					// On mobile, close the sheet so the new page is visible.
 					if (isMobile) setOpenMobile(false);

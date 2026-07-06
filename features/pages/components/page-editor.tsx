@@ -15,6 +15,7 @@ import {
 	setPageTitleInCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
+import { consumeTitleFocus } from "@/features/pages/client/new-page-focus";
 import { setPageSaveState } from "@/features/pages/client/save-state";
 import { useSharedTitle } from "@/features/pages/client/use-shared-title";
 import { cn } from "@/lib/utils";
@@ -89,6 +90,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	);
 
 	const [title, setTitle] = useState<string | null>(null);
+	const titleInputRef = useRef<HTMLInputElement | null>(null);
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	// Bumped when a save is rejected as stale: refetches the doc and remounts
 	// the editor on the newer version instead of clobbering it.
@@ -102,6 +104,15 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		setTitle(null);
 		setPageSaveState("saved");
 	}, [pageId]);
+
+	// Arriving at a page we just created: put the caret in the title with
+	// "Untitled" selected, so typing replaces it immediately.
+	const pageLoaded = pageQuery.data != null;
+	useEffect(() => {
+		if (!pageLoaded || !consumeTitleFocus(pageId)) return;
+		titleInputRef.current?.focus();
+		titleInputRef.current?.select();
+	}, [pageId, pageLoaded]);
 
 	// A collaborator renamed the page: refresh the sidebar/breadcrumb lists
 	// (their PATCH already persisted it). Debounced — remote keystrokes
@@ -200,6 +211,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				</div>
 				<div className="mb-2 px-0 md:px-[54px]">
 					<input
+						ref={titleInputRef}
 						className="w-full border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60"
 						value={shownTitle}
 						placeholder="Untitled"

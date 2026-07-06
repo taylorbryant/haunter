@@ -10,6 +10,7 @@ import {
 	invalidatePages,
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
+import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 
 export default function WorkspacePage({
 	params,
@@ -51,6 +52,7 @@ export default function WorkspacePage({
 							{
 								onSuccess: async (page) => {
 									await invalidatePages(queryClient);
+									focusTitleOnArrival(page.id);
 									router.push(`/w/${workspaceId}/p/${page.id}`);
 								},
 							},
