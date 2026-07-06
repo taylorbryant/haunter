@@ -12,7 +12,7 @@ import { useTheme } from "next-themes";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { SettingsDialog } from "@/components/settings-dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -57,7 +57,11 @@ function initials(name: string): string {
 	);
 }
 
-export function NavUser({ user }: { user: { name: string; email: string } }) {
+export function NavUser({
+	user,
+}: {
+	user: { name: string; email: string; image: string | null };
+}) {
 	const { isMobile } = useSidebar();
 	const { theme, setTheme } = useTheme();
 	const [settingsOpen, setSettingsOpen] = useState(false);
@@ -74,6 +78,7 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
 	const userIdentity = (
 		<>
 			<Avatar>
+				<AvatarImage src={user.image ?? undefined} alt="" />
 				<AvatarFallback>{initials(user.name)}</AvatarFallback>
 			</Avatar>
 			<div className="grid min-w-0 flex-1 text-left text-sm leading-tight">

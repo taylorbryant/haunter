@@ -24,7 +24,7 @@ import { WorkspaceSwitcher } from "@/features/workspaces/components/workspace-sw
 export function AppSidebar({
 	user,
 }: {
-	user: { name: string; email: string };
+	user: { name: string; email: string; image: string | null };
 }) {
 	const pathname = usePathname();
 	const activeWorkspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;

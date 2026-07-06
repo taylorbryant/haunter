@@ -2,6 +2,7 @@
 
 import { CircleUserRoundIcon } from "lucide-react";
 import { authClient } from "@/client/auth-client";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -40,9 +41,12 @@ export function AssigneePicker({
 
 	const chip = label ? (
 		<span className="flex items-center gap-1">
-			<span className="flex size-4 items-center justify-center rounded-full bg-primary/15 text-[9px] text-primary leading-none">
-				{initials(label)}
-			</span>
+			<Avatar className="size-4 rounded-full bg-primary/15 text-[9px] text-primary">
+				<AvatarImage src={current?.user?.image ?? undefined} alt="" />
+				<AvatarFallback className="bg-transparent text-inherit">
+					{initials(label)}
+				</AvatarFallback>
+			</Avatar>
 			<span className="max-w-24 truncate">{label}</span>
 		</span>
 	) : (
@@ -95,9 +99,12 @@ export function AssigneePicker({
 							key={member.id}
 							onClick={() => onChange(member.userId)}
 						>
-							<span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-[10px] text-primary leading-none">
-								{initials(name)}
-							</span>
+							<Avatar className="size-5 rounded-full bg-primary/15 text-[10px] text-primary">
+								<AvatarImage src={member.user?.image ?? undefined} alt="" />
+								<AvatarFallback className="bg-transparent text-inherit">
+									{initials(name)}
+								</AvatarFallback>
+							</Avatar>
 							<span className="truncate">{name}</span>
 						</DropdownMenuItem>
 					);

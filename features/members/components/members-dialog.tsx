@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { ResponsiveDialog } from "@/components/responsive-dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -168,6 +168,7 @@ export function MembersDialog({
 					return (
 						<div key={member.id} className="flex items-center gap-3 py-1.5">
 							<Avatar className="size-8">
+								<AvatarImage src={member.user?.image ?? undefined} alt="" />
 								<AvatarFallback>{initials(label)}</AvatarFallback>
 							</Avatar>
 							<div className="flex min-w-0 flex-1 flex-col">

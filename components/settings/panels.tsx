@@ -7,6 +7,7 @@ import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { authClient } from "@/client/auth-client";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -22,6 +23,7 @@ import {
 	setCodeThemeId,
 	useCodeThemeId,
 } from "@/features/pages/components/editor/code-theme";
+import { gravatarUrl } from "@/lib/gravatar";
 import { cn } from "@/lib/utils";
 
 /** Flat, Notion-style pane header: title + hairline, no card chrome. */
@@ -108,12 +110,60 @@ export function ProfilePanel() {
 		setSaved(true);
 	});
 
+	const user = session.data?.user;
+
+	async function setAvatar(image: string | null) {
+		setSaved(false);
+		// Better Auth accepts null to clear the image.
+		await authClient.updateUser({ image: image as string | undefined });
+		await session.refetch();
+	}
+
+	async function useGravatar() {
+		if (!user?.email) return;
+		await setAvatar(await gravatarUrl(user.email));
+	}
+
 	return (
 		<Panel>
 			<PanelHeader
 				title="Profile"
-				description="Update your name and email address."
+				description="Update your name, avatar, and email address."
 			/>
+			<div className="flex items-center gap-4">
+				<Avatar className="size-14">
+					<AvatarImage src={user?.image ?? undefined} alt="" />
+					<AvatarFallback className="text-base">
+						{(user?.name ?? "?").trim().slice(0, 2).toUpperCase() || "?"}
+					</AvatarFallback>
+				</Avatar>
+				<div className="flex flex-col gap-1.5">
+					<div className="flex gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={useGravatar}
+						>
+							Use Gravatar
+						</Button>
+						{user?.image ? (
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={() => setAvatar(null)}
+							>
+								Remove
+							</Button>
+						) : null}
+					</div>
+					<p className="text-muted-foreground text-xs">
+						Gravatar uses the photo linked to your email at gravatar.com; no
+						photo there means your initials show instead.
+					</p>
+				</div>
+			</div>
 			<form className="flex max-w-sm flex-col gap-4" onSubmit={onSubmit}>
 				<div className="flex flex-col gap-2">
 					<Label htmlFor="name">Name</Label>

@@ -37,7 +37,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 	return (
 		<SidebarProvider defaultOpen={defaultOpen}>
 			<AppSidebar
-				user={{ name: session.user.name, email: session.user.email }}
+				user={{
+					name: session.user.name,
+					email: session.user.email,
+					image: session.user.image ?? null,
+				}}
 			/>
 			<SidebarInset>
 				<header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-3 backdrop-blur-sm">
