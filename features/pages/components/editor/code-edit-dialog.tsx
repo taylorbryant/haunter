@@ -130,6 +130,8 @@ export function CodeEditDialog({
 						value={text}
 						aria-label="Code"
 						spellCheck={false}
+						autoCapitalize="none"
+						autoCorrect="off"
 						className="relative size-full resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-sm text-transparent leading-relaxed outline-none"
 						style={{ caretColor: theme.fg }}
 						onChange={(event) => setText(event.target.value)}

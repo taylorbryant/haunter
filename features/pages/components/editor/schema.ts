@@ -40,17 +40,44 @@ export const supportedLanguages = Object.fromEntries(
 // exactly one checkbox concept (task rows are reconciled from these blocks).
 const { checkListItem: _checkListItem, ...baseBlockSpecs } = defaultBlockSpecs;
 
+const baseCodeBlockSpec = createCodeBlockSpec({
+	...codeBlockOptions,
+	defaultLanguage: "sql",
+	supportedLanguages,
+	// Shared app highlighter, created with the user's chosen theme.
+	createHighlighter: () => getHaunterHighlighter(),
+});
+
+// Mobile keyboards capitalize, autocorrect, and spellcheck inside code
+// blocks unless the DOM opts out, and BlockNote sets no input hints. They
+// must be set inside the node view's render — ProseMirror treats that DOM
+// as canonical, whereas attributes added from outside get reverted.
+const codeBlockSpec: typeof baseCodeBlockSpec = {
+	...baseCodeBlockSpec,
+	implementation: {
+		...baseCodeBlockSpec.implementation,
+		render(
+			...args: Parameters<typeof baseCodeBlockSpec.implementation.render>
+		) {
+			const rendered = baseCodeBlockSpec.implementation.render.apply(
+				this,
+				args,
+			);
+			if (rendered.dom instanceof HTMLElement) {
+				rendered.dom.setAttribute("autocapitalize", "none");
+				rendered.dom.setAttribute("autocorrect", "off");
+				rendered.dom.setAttribute("spellcheck", "false");
+			}
+			return rendered;
+		},
+	},
+};
+
 /** The single extension point for Haunter's block model. */
 export const editorSchema = BlockNoteSchema.create({
 	blockSpecs: {
 		...baseBlockSpecs,
-		codeBlock: createCodeBlockSpec({
-			...codeBlockOptions,
-			defaultLanguage: "sql",
-			supportedLanguages,
-			// Shared app highlighter, created with the user's chosen theme.
-			createHighlighter: () => getHaunterHighlighter(),
-		}),
+		codeBlock: codeBlockSpec,
 		task: taskBlockSpec(),
 		canvas: canvasBlockSpec(),
 		pageLink: pageLinkBlockSpec(),
