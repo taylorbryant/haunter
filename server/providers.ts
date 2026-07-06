@@ -2,8 +2,8 @@ import "@beignet/core/server-only";
 import { createDevtoolsProvider } from "@beignet/devtools";
 import { createAuthBetterAuthProvider } from "@beignet/provider-auth-better-auth";
 import { createDrizzleSqliteProvider } from "@beignet/provider-db-drizzle/sqlite";
-import { loggerPinoProvider } from "@beignet/provider-logger-pino";
-import { mailResendProvider } from "@beignet/provider-mail-resend";
+import { pinoLoggerProvider } from "@beignet/provider-logger-pino";
+import { resendMailProvider } from "@beignet/provider-mail-resend";
 import { upstashRateLimitProvider } from "@beignet/provider-rate-limit-upstash";
 import { createLocalStorageProvider } from "@beignet/provider-storage-local";
 import { vercelBlobStorageProvider } from "@beignet/provider-storage-vercel-blob";
@@ -19,7 +19,7 @@ const drizzleSqliteProvider = createDrizzleSqliteProvider({ schema });
 export const providers = [
 	createDevtoolsProvider(),
 	createAuthBetterAuthProvider<AuthUser, AuthSessionMetadata>(auth),
-	loggerPinoProvider,
+	pinoLoggerProvider,
 	drizzleSqliteProvider,
 	starterDatabaseProvider,
 	// Vercel Blob in deployed environments (local disk doesn't survive
@@ -27,7 +27,7 @@ export const providers = [
 	env.BLOB_READ_WRITE_TOKEN
 		? vercelBlobStorageProvider
 		: createLocalStorageProvider(),
-	mailResendProvider,
+	resendMailProvider,
 	// Durable, shared rate limiting in deployed environments; the in-process
 	// limiter keeps dev and tests working without Upstash credentials.
 	env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN

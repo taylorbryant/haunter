@@ -1,0 +1,3 @@
+[mcp_servers.beignet]
+command = "./node_modules/.bin/beignet"
+args = ["mcp"]
