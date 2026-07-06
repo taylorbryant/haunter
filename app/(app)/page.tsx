@@ -1,29 +1,30 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { authClient } from "@/client/auth-client";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/better-auth";
 
 /**
- * The homepage is My Tasks: send the user to their first workspace's task
- * list. With no workspaces yet, point them at the sidebar switcher.
+ * The homepage is My Tasks: send the user to their workspace's task list in
+ * ONE server-side hop. This used to be a client component that fetched the
+ * org list, POSTed set-active, and then client-redirected — three serial
+ * round trips of blank screen on every cold load (worst on mobile).
+ *
+ * The membership list validates a stale activeOrganizationId (e.g. after
+ * leaving a workspace) instead of bouncing into a workspace the user can no
+ * longer access.
  */
-export default function HomePage() {
-	const router = useRouter();
-	const organizationsQuery = authClient.useListOrganizations();
-	const firstWorkspace = organizationsQuery.data?.[0];
+export default async function HomePage() {
+	const headerList = await headers();
+	const session = await auth.api.getSession({ headers: headerList });
+	// The (app) layout already redirects signed-out visitors to /sign-in.
+	const activeId = session?.session.activeOrganizationId ?? null;
 
-	useEffect(() => {
-		if (!firstWorkspace) return;
-		authClient.organization
-			.setActive({ organizationId: firstWorkspace.id })
-			.finally(() => {
-				router.replace(`/w/${firstWorkspace.id}/tasks`);
-			});
-	}, [firstWorkspace, router]);
-
-	if (organizationsQuery.isPending || firstWorkspace) {
-		return null;
+	const organizations = await auth.api.listOrganizations({
+		headers: headerList,
+	});
+	const target =
+		organizations.find((org) => org.id === activeId) ?? organizations[0];
+	if (target) {
+		redirect(`/w/${target.id}/tasks`);
 	}
 
 	return (

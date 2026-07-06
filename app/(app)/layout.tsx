@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { ActiveWorkspaceHintProvider } from "@/components/active-workspace-provider";
 import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderBreadcrumbs } from "@/components/header-breadcrumbs";
 import { HeaderPresence } from "@/components/header-presence";
@@ -50,7 +51,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 					<HeaderPresence />
 					<HeaderPageActions />
 				</header>
-				<div className="min-w-0 flex-1">{children}</div>
+				<div className="min-w-0 flex-1">
+					<ActiveWorkspaceHintProvider
+						value={session.session.activeOrganizationId ?? null}
+					>
+						{children}
+					</ActiveWorkspaceHintProvider>
+				</div>
 			</SidebarInset>
 		</SidebarProvider>
 	);
