@@ -131,6 +131,11 @@ describe("page route hooks", () => {
 		expect(response.status).toBe(429);
 		expect(body.code).toBe("TOO_MANY_REQUESTS");
 		expect(body.details?.retryAfterSeconds).toBeGreaterThan(0);
+		// Since 0.0.30 the hook also sets the standard header, so generic
+		// clients can back off without parsing the error body.
+		expect(
+			Number(response.headers.get("retry-after")),
+		).toBeGreaterThan(0);
 	});
 
 	it("replays an idempotent create instead of re-executing it", async () => {

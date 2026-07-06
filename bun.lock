@@ -6,17 +6,17 @@
       "name": "haunter",
       "dependencies": {
         "@base-ui/react": "^1.6.0",
-        "@beignet/core": "0.0.29",
-        "@beignet/devtools": "0.0.29",
-        "@beignet/next": "0.0.29",
-        "@beignet/provider-auth-better-auth": "0.0.29",
-        "@beignet/provider-db-drizzle": "0.0.29",
-        "@beignet/provider-logger-pino": "0.0.29",
-        "@beignet/provider-mail-resend": "0.0.29",
-        "@beignet/provider-rate-limit-upstash": "0.0.29",
-        "@beignet/provider-storage-local": "0.0.29",
-        "@beignet/react-hook-form": "0.0.29",
-        "@beignet/react-query": "0.0.29",
+        "@beignet/core": "0.0.31",
+        "@beignet/devtools": "0.0.31",
+        "@beignet/next": "0.0.31",
+        "@beignet/provider-auth-better-auth": "0.0.31",
+        "@beignet/provider-db-drizzle": "0.0.31",
+        "@beignet/provider-logger-pino": "0.0.31",
+        "@beignet/provider-mail-resend": "0.0.31",
+        "@beignet/provider-rate-limit-upstash": "0.0.31",
+        "@beignet/provider-storage-local": "0.0.31",
+        "@beignet/react-hook-form": "0.0.31",
+        "@beignet/react-query": "0.0.31",
         "@better-auth/agent-auth": "^0.6.2",
         "@blocknote/code-block": "0.51.4",
         "@blocknote/core": "0.51.4",
@@ -59,8 +59,8 @@
         "zod": "^4.0.0",
       },
       "devDependencies": {
-        "@beignet/cli": "0.0.29",
-        "@beignet/web": "0.0.29",
+        "@beignet/cli": "0.0.31",
+        "@beignet/web": "0.0.31",
         "@biomejs/biome": "^2.4.14",
         "@tailwindcss/postcss": "^4.3.0",
         "@types/bun": "^1.3.13",
@@ -142,31 +142,31 @@
 
     "@base-ui/utils": ["@base-ui/utils@0.3.1", "", { "dependencies": { "@babel/runtime": "^7.29.2", "@floating-ui/utils": "^0.2.11", "reselect": "^5.2.0", "use-sync-external-store": "^1.6.0" }, "peerDependencies": { "@types/react": "^17 || ^18 || ^19", "react": "^17 || ^18 || ^19", "react-dom": "^17 || ^18 || ^19" }, "optionalPeers": ["@types/react"] }, "sha512-gFFiltORVmW/N6IILTGxizP3PBpVpysqML1ALY5Vk0mH+7faVkCknOU31goYHN5Aoek2dkjxva1XOD2Ce9WuIg=="],
 
-    "@beignet/cli": ["@beignet/cli@0.0.29", "", { "dependencies": { "@beignet/core": "^0.0.29", "@clack/prompts": "^1.5.1", "@modelcontextprotocol/sdk": "^1.29.0", "@stricli/core": "^1.2.7", "jiti": "^2.7.0", "zod": "^4.0.0" }, "bin": { "beignet": "dist/index.js" } }, "sha512-ELykx91CRE5YJANxgNnmQbEnyhyvFe6BKgSZ9IDunvsqSxf6EKWzTmctbqG5PCJwhVamPN+CFlbeHipptYUWNQ=="],
+    "@beignet/cli": ["@beignet/cli@0.0.31", "", { "dependencies": { "@beignet/core": "^0.0.31", "@clack/prompts": "^1.5.1", "@modelcontextprotocol/sdk": "^1.29.0", "@stricli/core": "^1.2.7", "jiti": "^2.7.0", "zod": "^4.0.0" }, "bin": { "beignet": "dist/index.js" } }, "sha512-b/JHnQWdNRJ8tqMCOXxsjOupB8ls2X4P3tqPHThEL9VeMYOG3Id/s7TXIOUXNqx1E8E7Ob5Ow7RtddfPOq38Yw=="],
 
-    "@beignet/core": ["@beignet/core@0.0.29", "", { "dependencies": { "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "zod": "^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-DfIBbVCpTMnQtlflGARp/oZj2wHX2rkTtI74jO+xRTORfwvXMSKBnR2EF6SOeWrCd47d41TCE+6oMfIb5vK/mA=="],
+    "@beignet/core": ["@beignet/core@0.0.31", "", { "dependencies": { "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "zod": "^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-MRTCq8dCSsH0zIVXbGKwLSaCAX6/PZXEHXpZoirjoRPnAUJHam02qogm9TD8vEr4p+wolmnsFfm5HiYscEqP2Q=="],
 
-    "@beignet/devtools": ["@beignet/devtools@0.0.29", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0" } }, "sha512-ZjzMJUMXPCSgfqFh/syPRIDNUbmsmNGfhIaHpA1WX9m54JlpXJwlzx+JwFxwoEYl++huVEsDDx9h6yJtTZjdRQ=="],
+    "@beignet/devtools": ["@beignet/devtools@0.0.31", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0" } }, "sha512-13awr0ql78vxXyVQm8bjFKYiQu6hrkSrhyMqVtMsZqa2qr6OE0IQt7UVGPORicLyNkKW3ErEEoMwsqNy63A+xw=="],
 
-    "@beignet/next": ["@beignet/next@0.0.29", "", { "dependencies": { "@beignet/web": "^0.0.29", "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "next": "^14.0.0 || ^15.0.0 || ^16.0.0" } }, "sha512-sfSi6oHMhi7XjPUqROHpwhcEeA4BRFzP6Bj76bp3C3bqHbnhdXThUzAjj7JhP5ND8WR56iwPy5uSaVDCh8Hjpg=="],
+    "@beignet/next": ["@beignet/next@0.0.31", "", { "dependencies": { "@beignet/web": "^0.0.31", "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "next": "^14.0.0 || ^15.0.0 || ^16.0.0" } }, "sha512-H97X7wr299Bhyj8l30e6nOcAROkAk+hnFGfwunhnX6NXfxVYp1OCS8oUD3LMCVRYF4YTS3I1NMv7F2LA0dPl+Q=="],
 
-    "@beignet/provider-auth-better-auth": ["@beignet/provider-auth-better-auth@0.0.29", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "better-auth": ">=1.3.26 <1.7.0" } }, "sha512-BPKpVsQisGd2rutC5uT62DPeVX6LjIBvK3E8Y+s3ZgjsthekJKDl58DlYTJ8RlLBXC97QwBcYuu3Arh+HfCrKA=="],
+    "@beignet/provider-auth-better-auth": ["@beignet/provider-auth-better-auth@0.0.31", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "better-auth": ">=1.3.26 <1.7.0" } }, "sha512-Hu8PTnzU0hpftfPZQRyYa5x3ttI/+8LrxsHTpU6cEe7FvyTzGHTyKqmeEtJKq8dKqcn7QgEYPnhlm0HGHyV5Fw=="],
 
-    "@beignet/provider-db-drizzle": ["@beignet/provider-db-drizzle@0.0.29", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@libsql/client": "^0.6.0 || ^0.14.0 || ^0.15.0", "drizzle-orm": "^0.45.2", "mysql2": ">=3.6.0", "pg": ">=8.11.0" }, "optionalPeers": ["@libsql/client", "mysql2", "pg"] }, "sha512-cHDpy7Umnq3ksioHa0jY/14QuXZ3MzFQ8J1B4ZKJz61fPAwbL23jJHTdQ9QQcylwWj/m3bABxz9o5TlBYommcA=="],
+    "@beignet/provider-db-drizzle": ["@beignet/provider-db-drizzle@0.0.31", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@libsql/client": "^0.6.0 || ^0.14.0 || ^0.15.0", "drizzle-orm": "^0.45.2", "mysql2": ">=3.6.0", "pg": ">=8.11.0" }, "optionalPeers": ["@libsql/client", "mysql2", "pg"] }, "sha512-lPY+NqHt5LKKffCc6fWGEm4IgTnrE63W+cDqZKZDrNKDZYtCnK3S9lv7fuljNqZeE3SXDnpw0KLkflQlip8xqA=="],
 
-    "@beignet/provider-logger-pino": ["@beignet/provider-logger-pino@0.0.29", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "pino": "^9.0.0 || ^10.0.0" } }, "sha512-xyLXjmCkogdLRHZY8kOppCSvDvh2HPWkt/qn1q8UEzyVTbbfECA4hpLdXzE4zzr6IJne4SXsMogAowdI0d6Fog=="],
+    "@beignet/provider-logger-pino": ["@beignet/provider-logger-pino@0.0.31", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "pino": "^9.0.0 || ^10.0.0" } }, "sha512-EY/4YObYJHzGKc1hvJOwfpy5ZwhrJ3sjktlbmyTyVD+CeqoikPEu/IiEHFZ01cA4pHxme+xBU0LCEHpyEooxzw=="],
 
-    "@beignet/provider-mail-resend": ["@beignet/provider-mail-resend@0.0.29", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "resend": "^2.0.0 || ^3.0.0 || ^4.0.0 || ^6.0.0" } }, "sha512-BPkT4KgkVNAtoNeh5BIQAW2dex+DL1BriaJSSpzUjU7Nzezqx8pPu1t+bivf1IyROLP4WwNhrUeDPfdaaY3T2g=="],
+    "@beignet/provider-mail-resend": ["@beignet/provider-mail-resend@0.0.31", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "resend": "^2.0.0 || ^3.0.0 || ^4.0.0 || ^6.0.0" } }, "sha512-7fzvfmUDNrypsgGMvzLjVD2rFMpLW+SH+oAcR5l0wpTyrSUFm6DbHIqp5gZmOf1HcpdHLFJEdQsxigM9+4SKIQ=="],
 
-    "@beignet/provider-rate-limit-upstash": ["@beignet/provider-rate-limit-upstash@0.0.29", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@upstash/ratelimit": "^2.0.0", "@upstash/redis": "^1.0.0" } }, "sha512-ffa89CMOIxCFOktfdpphmSea1K4bOLePNZCyEvr5gZ5rLqixausF2BFkOB2gBHKCrK1v93NtFXffvL9Iqf88gw=="],
+    "@beignet/provider-rate-limit-upstash": ["@beignet/provider-rate-limit-upstash@0.0.31", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@upstash/ratelimit": "^2.0.0", "@upstash/redis": "^1.0.0" } }, "sha512-eNSk5XpJBUKq/w+yArrQhukVsn9ApapDiKlw14fRkDAsCdWLzsrE/yAhfKN6Wz7PMyAqNf1XoDWE8DKI9+Wvlg=="],
 
-    "@beignet/provider-storage-local": ["@beignet/provider-storage-local@0.0.29", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0" } }, "sha512-+Oi/c5/JBvLX7vbECXr+jyqZHpM2cyCYEy/4+o+W1XxMzTEXvZRDpJrchkHXp95NDoDbpTB0xW2dggQy4aiS9Q=="],
+    "@beignet/provider-storage-local": ["@beignet/provider-storage-local@0.0.31", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0" } }, "sha512-sCUCqHswyA+T6drDeq82GAhjsrmcCA0BMC+jZE6GAYY1kx8YaDZsuDg8vR96VCQ87dAi0nBlmsNviwLBwqMPzg=="],
 
-    "@beignet/react-hook-form": ["@beignet/react-hook-form@0.0.29", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@hookform/resolvers": "^5.0.0", "react": "^18.0.0 || ^19.0.0", "react-hook-form": "^7.0.0" } }, "sha512-+4QuXP/JGGLv56HN4bdkyBg+HE4wHjtOL4Zfwm3PYIk8YNl8ZO9k/Bu9mEKlHX+YCstnh+3pSnZTjuEYiJT/Sw=="],
+    "@beignet/react-hook-form": ["@beignet/react-hook-form@0.0.31", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@hookform/resolvers": "^5.0.0", "react": "^18.0.0 || ^19.0.0", "react-hook-form": "^7.0.0" } }, "sha512-DOpaiaHgvxjMvkkh489qRbSj38LNLzyhFbiAw5PK2T0rPAfxhuYURyLeSAhEHELODbyAwi9cvAsXgXS+6mbJ3A=="],
 
-    "@beignet/react-query": ["@beignet/react-query@0.0.29", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@tanstack/react-query": "^5.0.0", "react": "^18.0.0 || ^19.0.0" } }, "sha512-/jY0VHs8JR5FYIW2gKNETxJwNLL2WJL7diIdLY3UmYlW5D49tfjFudmCdPRnkGeCug5W+MTXcGKg51H0Ik1CLg=="],
+    "@beignet/react-query": ["@beignet/react-query@0.0.31", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@tanstack/react-query": "^5.0.0", "react": "^18.0.0 || ^19.0.0" } }, "sha512-VNnCo6LBrMouk/aLEu1V0EZQhSOtkZ/mCzPImLo5EAC5LmPYnhynVcba7bGP7qBjpxQup+I/mRBvjvmpa0RyVg=="],
 
-    "@beignet/web": ["@beignet/web@0.0.29", "", { "dependencies": { "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0" } }, "sha512-yhQCqP5zBoRYeTwM+M8Ke3DTrFfaccd3XuYsZzCTWfl6VYceg26/mcaFH5M82S9cfRGVuGaouAciV7thGSxFNg=="],
+    "@beignet/web": ["@beignet/web@0.0.31", "", { "dependencies": { "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0" } }, "sha512-y2THGUYtaFwCrWd6dtFZ1a3vfXv5oyTsRXR3UuGEMWzWhcn6zfUM3jAXRtoO/2VM6ppUP6DChwpNVSmSp2PCug=="],
 
     "@better-auth/agent-auth": ["@better-auth/agent-auth@0.6.2", "", { "dependencies": { "@simplewebauthn/server": "^13.3.0", "better-call": "1.3.2", "jose": "^6.0.0", "zod": "^4.3.6" }, "peerDependencies": { "@better-auth/core": ">=1.4.0", "better-auth": ">=1.4.0" } }, "sha512-bXJ31rkZtCd27TuUfaAqNLbeZOMfJih5fO9HGq8mrU/23E9ljxScCkIPA3RJmUJ0SBGtaHA9GKVwIlFce0slvg=="],
 

@@ -15,6 +15,34 @@ investigation.
 > upgrade to 0.0.28, which shipped several roadmapped items — see the next
 > section, including one publish gap found during verification.
 
+## 0.0.30–0.0.31 upgrade report
+
+Two more report items closed, verified against the installed artifacts:
+
+- **`Retry-After` header parity (0.0.30)** — the rate-limit hooks now set
+  the standard header on 429s. The route-hook test asserts it and passes;
+  the residual under "Route-level hook testing" below is resolved.
+- **Publish pipeline hardened (0.0.30)** — every package rebuilds in
+  `prepack`, so the 0.0.28 stale-`dist` incident class is closed at the
+  source, not just patched.
+- **`createMemo` (0.0.31)** — the request-scoped memoization primitive
+  asked for under still-open gap #1. The design is right for the problem:
+  scope dies with the request (no TTL/invalidation policy to get wrong),
+  concurrent same-key calls share one in-flight promise, rejections are
+  evicted rather than cached, unscoped calls pass through, and
+  `invalidate(...)` pairs with same-request mutations. Haunter adopted it
+  in [infra/members/drizzle-member-repository.ts](../infra/members/drizzle-member-repository.ts):
+  `findRole` was the one lookup measurably duplicated per request (context
+  creation resolves the caller's role, then the Liveblocks auth route
+  looked it up again — one Turso round trip saved per call). Semantics
+  verified against the documented contract; the app's policies already
+  receive pre-fetched entities, so there were fewer duplicate reads to
+  harvest than the primitive supports — which speaks well of the
+  slice anatomy, not against the helper.
+
+Gap #1's remaining ask is now just the guidance piece: context latency
+budgets for serverless + remote-DB deployments.
+
 ## 0.0.28 upgrade report
 
 Haunter upgraded to `@beignet/*@0.0.28` and verified each changelog claim
@@ -137,10 +165,11 @@ before the use case ran, and the app "felt slow in production" until it was
 found and mitigated at the app level (Better Auth `cookieCache`, manual
 parallelization).
 
-The roadmapped devtools waterfall covers observability. Still open: a
-memoization/batching primitive for context resolvers, and guidance on
-context latency budgets for serverless + remote-DB deployments (the default
-deployment story).
+The roadmapped devtools waterfall covers observability, and 0.0.31's
+`createMemo` delivers the memoization primitive (adopted; see the
+0.0.30–0.0.31 report above). Still open: guidance on context latency
+budgets for serverless + remote-DB deployments (the default deployment
+story).
 
 ### 2. Escape-hatch routes drop the hooks pipeline
 
@@ -218,11 +247,11 @@ second row).
 
 - The unbound-ports default makes hook coverage opt-in and easy to miss —
   a `doctor` hint or a louder harness warning would help.
-- *(New, found during adoption)* the hooks' 429 carries
-  `retryAfterSeconds` only in the error body's `details`; no `Retry-After`
-  HTTP header is set. Client backoff generally looks at the header (our
-  manual raw-route rate limit sets it). Header parity would be a small,
-  worthwhile fix.
+- *(New, found during adoption)* the hooks' 429 carried
+  `retryAfterSeconds` only in the error body's `details` with no
+  `Retry-After` HTTP header. **Resolved in 0.0.30** — the header is set
+  whenever the limiter reports a reset time, and the route-hook test now
+  asserts it.
 
 ### Client-side machinery (withdrawn)
 
