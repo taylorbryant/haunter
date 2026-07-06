@@ -51,6 +51,7 @@ import {
 } from "@/features/pages/client/queries";
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
+import { invalidateTasks } from "@/features/tasks/client/queries";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -337,6 +338,9 @@ export default function HaunterEditor({
 					setPageSavedAtInCache(queryClient, pageId, result.updatedAt);
 					invalidatePage(queryClient, pageId);
 					invalidateBacklinks(queryClient);
+					// Saving content reconciles task rows server-side (create/update/
+					// orphan-delete), so the My Tasks cache is stale after every save.
+					invalidateTasks(queryClient);
 				},
 				onError: (error) => {
 					if (error instanceof ContractError && error.status === 409) {
