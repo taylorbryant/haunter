@@ -109,14 +109,18 @@ export const auth = betterAuth({
 	// the type-to-confirm delete flow works session-authenticated.
 	session: {
 		freshAge: 0,
-		// Serve getSession from a short-lived signed cookie instead of a
-		// remote-DB lookup — that lookup was a ~100-150ms tax on every API
-		// request and layout render. Sign-out clears it; a revoked session
-		// lives at most this long. Role checks are unaffected (membership is
-		// resolved per request in the app context).
+		// Serve getSession from a signed cookie instead of a remote-DB lookup —
+		// that lookup was a ~100-150ms tax on every API request and layout
+		// render. Thirty minutes, not five: only Better Auth's own routes can
+		// refresh the cookie (contract routes can't set cookies), so with a
+		// 5-minute TTL most browsing happened outside the hit window and paid
+		// the DB lookup anyway (measured: context 44ms on hit vs ~130ms on
+		// miss). Sign-out clears it; a revoked session lives at most this
+		// long. Role checks are unaffected (membership is resolved per request
+		// in the app context).
 		cookieCache: {
 			enabled: true,
-			maxAge: 5 * 60,
+			maxAge: 30 * 60,
 		},
 	},
 	user: {
