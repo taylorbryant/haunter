@@ -32,6 +32,7 @@ export default function AcceptInvitePage({
 	const { id } = use(params);
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
+	const organizationsQuery = authClient.useListOrganizations();
 	const [invite, setInvite] = useState<Invitation | null>(null);
 	const [status, setStatus] = useState<Status>("loading");
 	const [error, setError] = useState("");
@@ -71,6 +72,9 @@ export default function AcceptInvitePage({
 		if (orgId) {
 			await authClient.organization.setActive({ organizationId: orgId });
 		}
+		// Refresh the shared org-list cache before redirecting so the switcher
+		// includes the workspace we just joined (mirror of the leave() fix).
+		await organizationsQuery.refetch?.();
 		router.push(orgId ? `/w/${orgId}` : "/");
 		router.refresh();
 	}

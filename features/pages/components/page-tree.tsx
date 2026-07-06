@@ -63,6 +63,7 @@ import {
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
+import { invalidateTasks } from "@/features/tasks/client/queries";
 import { cn } from "@/lib/utils";
 import { PageIconPanel } from "./page-icon-picker";
 
@@ -204,6 +205,9 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					await Promise.all([
 						invalidatePages(queryClient),
 						invalidateTrash(queryClient),
+						// Tasks on trashed pages are filtered out server-side, so the
+						// subtree's tasks just left the My Tasks list.
+						invalidateTasks(queryClient),
 					]);
 					if (activePageId && subtree.has(activePageId)) {
 						router.push(`/w/${workspaceId}`);
