@@ -223,6 +223,13 @@
 	background-color: transparent;
 }
 
+/* BlockNote reverts text decoration on every editor anchor. Page-link blocks
+   draw their intended muted underline on the child title span, so suppress the
+   anchor decoration to avoid a double underline. */
+.bn-shadcn .bn-editor a.haunter-page-link {
+	text-decoration-line: none;
+}
+
 /* Mobile: the wrapper gets `editor-flush` (JS-driven, see haunter-editor.tsx)
    to drop BlockNote's 54px inline gutter so content runs edge-to-edge. The
    block controls that live in that gutter are hidden on mobile too. */

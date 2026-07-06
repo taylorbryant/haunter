@@ -41,7 +41,7 @@ function PageLink({
 			// with a muted icon. The color lives on the text span, not the anchor —
 			// the editor's default (blue) link color out-cascades a color set on
 			// the <a> itself, but a plain child span overrides cleanly.
-			className="inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
+			className="haunter-page-link inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
 		>
 			<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
 			<span className="truncate font-medium text-foreground underline decoration-muted-foreground/40 underline-offset-4">
