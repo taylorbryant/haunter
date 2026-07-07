@@ -3,6 +3,7 @@ import type { AppContext } from "@/app-context";
 import { appError } from "@/features/shared/errors";
 import {
 	ACCESS_STATUS_APPROVED,
+	ADMIN_ROLE,
 	type AuthSession,
 	type AuthUser,
 } from "@/ports/auth";
@@ -34,6 +35,28 @@ export function hasAppAccessSession(
 		session &&
 			(isApprovedUser(session.user) || session.session?.activeOrganizationId),
 	);
+}
+
+/** True when the user holds the app-wide admin role. */
+export function isAdmin(
+	user: Pick<AuthUser, "role"> | null | undefined,
+): boolean {
+	return user?.role === ADMIN_ROLE;
+}
+
+/**
+ * Assert the caller is an app-wide admin. Admins reach the waitlist surface
+ * regardless of workspace membership, so this checks the role directly rather
+ * than going through requireUser (which gates on approval/membership).
+ */
+export function requireAdmin(ctx: AppContext): AuthUser {
+	const session = requireSession(ctx);
+	if (!isAdmin(session.user)) {
+		throw appError("Forbidden", {
+			message: "Admin access required.",
+		});
+	}
+	return session.user;
 }
 
 export function requireUser(ctx: AppContext): AuthUser {

@@ -1,6 +1,6 @@
 "use client";
 
-import { ListTodoIcon, Trash2Icon } from "lucide-react";
+import { ListTodoIcon, ShieldCheckIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NavUser } from "@/components/nav-user";
@@ -23,8 +23,10 @@ import { WorkspaceSwitcher } from "@/features/workspaces/components/workspace-sw
 
 export function AppSidebar({
 	user,
+	isAdmin = false,
 }: {
 	user: { name: string; email: string; image: string | null };
+	isAdmin?: boolean;
 }) {
 	const pathname = usePathname();
 	const activeWorkspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
@@ -67,25 +69,41 @@ export function AppSidebar({
 				{activeWorkspaceId ? (
 					<PageTree workspaceId={activeWorkspaceId} />
 				) : null}
-				{activeWorkspaceId ? (
+				{activeWorkspaceId || isAdmin ? (
 					<SidebarGroup className="mt-auto">
 						<SidebarGroupContent>
 							<SidebarMenu>
-								<SidebarMenuItem>
-									<SidebarMenuButton
-										render={
-											<Link
-												href={`/w/${activeWorkspaceId}/trash`}
-												onClick={closeSheetOnMobile}
-											/>
-										}
-										isActive={pathname === `/w/${activeWorkspaceId}/trash`}
-										tooltip="Trash"
-									>
-										<Trash2Icon />
-										<span>Trash</span>
-									</SidebarMenuButton>
-								</SidebarMenuItem>
+								{isAdmin ? (
+									<SidebarMenuItem>
+										<SidebarMenuButton
+											render={
+												<Link href="/admin" onClick={closeSheetOnMobile} />
+											}
+											isActive={pathname === "/admin"}
+											tooltip="Waitlist"
+										>
+											<ShieldCheckIcon />
+											<span>Waitlist</span>
+										</SidebarMenuButton>
+									</SidebarMenuItem>
+								) : null}
+								{activeWorkspaceId ? (
+									<SidebarMenuItem>
+										<SidebarMenuButton
+											render={
+												<Link
+													href={`/w/${activeWorkspaceId}/trash`}
+													onClick={closeSheetOnMobile}
+												/>
+											}
+											isActive={pathname === `/w/${activeWorkspaceId}/trash`}
+											tooltip="Trash"
+										>
+											<Trash2Icon />
+											<span>Trash</span>
+										</SidebarMenuButton>
+									</SidebarMenuItem>
+								) : null}
 							</SidebarMenu>
 						</SidebarGroupContent>
 					</SidebarGroup>

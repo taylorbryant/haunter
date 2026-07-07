@@ -15,6 +15,7 @@ import {
 import { HeaderPageActions } from "@/components/header-page-actions";
 import { hasAppAccessSession } from "@/lib/auth";
 import { auth } from "@/lib/better-auth";
+import { ADMIN_ROLE } from "@/ports/auth";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
 	const headerList = await headers();
@@ -49,6 +50,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 						email: session.user.email,
 						image: session.user.image ?? null,
 					}}
+					isAdmin={session.user.role === ADMIN_ROLE}
 				/>
 				<SidebarInset>
 					<header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-3 backdrop-blur-sm">

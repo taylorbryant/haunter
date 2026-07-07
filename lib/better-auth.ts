@@ -2,7 +2,7 @@ import { agentAuth } from "@better-auth/agent-auth";
 import { createClient } from "@libsql/client";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { emailOTP, organization } from "better-auth/plugins";
+import { admin, emailOTP, organization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/libsql";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
@@ -56,6 +56,11 @@ export const auth = betterAuth({
 				await sendLoginCode(email, otp);
 			},
 		}),
+		// App-wide administration: an "admin"-role user can list/manage users,
+		// set roles, ban, and impersonate through /api/auth/admin/*. This is
+		// distinct from the per-workspace member roles the organization plugin
+		// governs — admin is global to the app, not scoped to a workspace.
+		admin(),
 		// A "workspace" in the product is an organization here. Members carry a
 		// role (owner/admin/member/viewer) that the app's gate reads to decide
 		// content-edit rights; viewers are read-only.

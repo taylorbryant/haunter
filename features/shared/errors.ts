@@ -61,6 +61,11 @@ export const errors = defineErrors({
 		status: 404,
 		message: "This agent request is no longer pending",
 	},
+	UserNotFound: {
+		code: "USER_NOT_FOUND",
+		status: 404,
+		message: "No waitlisted user with that id",
+	},
 });
 
 export const appError = createAppError(errors);

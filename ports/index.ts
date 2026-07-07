@@ -10,6 +10,7 @@ import type {
 	UnitOfWorkPort,
 } from "@beignet/core/ports";
 import type { ResendMailEscapeHatch } from "@beignet/provider-mail-resend";
+import type { AdminUserRepository } from "@/features/admin/ports";
 import type { AgentAdminRepository } from "@/features/agents/ports";
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type { CanvasRepository } from "@/features/canvases/ports";
@@ -33,6 +34,7 @@ export type AppPolicies = [
 ];
 
 export type AppTransactionPorts = {
+	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
 	canvases: CanvasRepository;
 	idempotency: IdempotencyPort;
@@ -47,6 +49,7 @@ export type AppTransactionPorts = {
 export type AppGate = BoundGate<AppPolicies>;
 
 export type AppPorts = {
+	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
 	auth: AuthPort;
 	canvases: CanvasRepository;

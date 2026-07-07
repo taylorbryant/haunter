@@ -19,6 +19,12 @@ export const user = sqliteTable("user", {
 		.default(false),
 	image: text("image"),
 	accessStatus: text("access_status").notNull().default("waitlisted"),
+	// Better Auth admin plugin: app-wide role ("admin" grants the admin API;
+	// null/"user" is a regular member) and the ban controls it manages.
+	role: text("role"),
+	banned: integer("banned", { mode: "boolean" }).default(false),
+	banReason: text("ban_reason"),
+	banExpires: integer("ban_expires", { mode: "timestamp" }),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
@@ -36,6 +42,8 @@ export const session = sqliteTable("session", {
 		.references(() => user.id, { onDelete: "cascade" }),
 	// Better Auth organization plugin: the workspace the session is scoped to.
 	activeOrganizationId: text("active_organization_id"),
+	// Better Auth admin plugin: set on sessions created while impersonating.
+	impersonatedBy: text("impersonated_by"),
 });
 
 export const account = sqliteTable("account", {

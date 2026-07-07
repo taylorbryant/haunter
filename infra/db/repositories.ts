@@ -1,4 +1,5 @@
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
+import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
 import { createDrizzleAgentAdminRepository } from "@/infra/agents/drizzle-agent-admin-repository";
 import { createDrizzleCanvasRepository } from "@/infra/canvases/drizzle-canvas-repository";
 import { createDrizzleMemberRepository } from "@/infra/members/drizzle-member-repository";
@@ -14,6 +15,7 @@ export function createRepositories(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): Omit<AppTransactionPorts, "idempotency"> {
 	return {
+		adminUsers: createDrizzleAdminUserRepository(db),
 		agents: createDrizzleAgentAdminRepository(db),
 		canvases: createDrizzleCanvasRepository(db),
 		members: createDrizzleMemberRepository(db),
