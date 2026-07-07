@@ -39,6 +39,9 @@ export const config = {
 		// accept-invite handles its own signed-out state (it prompts sign-in), so
 		// invitees who aren't signed in yet must not be bounced away from it.
 		// .well-known serves anonymous protocol discovery (agent-configuration).
-		"/((?!api|_next/static|_next/image|favicon.ico|sign-in|sign-up|accept-invite|share|\\.well-known).*)",
+		// PWA assets (manifest, service worker, generated icons) must stay
+		// publicly fetchable — the browser requests them without a session, and a
+		// redirect to /sign-in would break installability.
+		"/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons|icon.svg|apple-icon|sign-in|sign-up|accept-invite|share|\\.well-known).*)",
 	],
 };
