@@ -212,7 +212,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				<div className="mb-2 px-0 md:px-[54px]">
 					<input
 						ref={titleInputRef}
-						className="w-full border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60"
+						className="w-full rounded-md border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/50"
 						value={shownTitle}
 						placeholder="Untitled"
 						readOnly={readOnly}

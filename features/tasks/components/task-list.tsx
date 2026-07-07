@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
@@ -28,6 +29,17 @@ const FILTERS: { value: TaskFilter; label: string }[] = [
 	{ value: "all", label: "All" },
 ];
 
+type TaskScope = "everyone" | "mine";
+
+function readTaskFilter(value: string | null): TaskFilter {
+	if (value === "completed" || value === "all") return value;
+	return "open";
+}
+
+function readTaskScope(value: string | null): TaskScope {
+	return value === "mine" ? "mine" : "everyone";
+}
+
 function isOverdue(task: TaskWithPage): boolean {
 	return (
 		!task.completed &&
@@ -38,12 +50,15 @@ function isOverdue(task: TaskWithPage): boolean {
 
 export function TaskList({ workspaceId }: { workspaceId: string }) {
 	const queryClient = useQueryClient();
+	const pathname = usePathname();
+	const router = useRouter();
+	const searchParams = useSearchParams();
 	// Viewers see the list but get no add/toggle/edit/delete controls.
 	const canEdit = useCanEditWorkspace();
 	const session = authClient.useSession();
 	const myId = session.data?.user.id ?? null;
-	const [filter, setFilter] = useState<TaskFilter>("open");
-	const [scope, setScope] = useState<"everyone" | "mine">("everyone");
+	const filter = readTaskFilter(searchParams.get("filter"));
+	const scope = readTaskScope(searchParams.get("scope"));
 	const [composing, setComposing] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editTitle, setEditTitle] = useState("");
@@ -118,6 +133,29 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 		);
 	}
 
+	function setTaskListParams(next: { filter?: TaskFilter; scope?: TaskScope }) {
+		const params = new URLSearchParams(searchParams.toString());
+		const nextFilter = next.filter ?? filter;
+		const nextScope = next.scope ?? scope;
+
+		if (nextFilter === "open") {
+			params.delete("filter");
+		} else {
+			params.set("filter", nextFilter);
+		}
+
+		if (nextScope === "everyone") {
+			params.delete("scope");
+		} else {
+			params.set("scope", nextScope);
+		}
+
+		const query = params.toString();
+		router.replace(query ? `${pathname}?${query}` : pathname, {
+			scroll: false,
+		});
+	}
+
 	return (
 		<div className="flex flex-col gap-4">
 			{!canEdit ? null : composing ? (
@@ -144,7 +182,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 						type="button"
 						size="sm"
 						variant={filter === value ? "secondary" : "ghost"}
-						onClick={() => setFilter(value)}
+						onClick={() => setTaskListParams({ filter: value })}
 					>
 						{label}
 					</Button>
@@ -161,7 +199,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 						type="button"
 						size="sm"
 						variant={scope === value ? "secondary" : "ghost"}
-						onClick={() => setScope(value)}
+						onClick={() => setTaskListParams({ scope: value })}
 					>
 						{label}
 					</Button>
@@ -212,7 +250,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 											autoFocus
 											value={editTitle}
 											aria-label="Task name"
-											className="w-full bg-transparent text-base leading-tight outline-none sm:text-sm"
+											className="w-full rounded-sm bg-transparent text-base leading-tight outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:text-sm"
 											onChange={(event) => setEditTitle(event.target.value)}
 											onKeyDown={(event) => {
 												if (event.key === "Enter") commitTitle(task);
