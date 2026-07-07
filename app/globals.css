@@ -128,6 +128,37 @@
 	}
 }
 
+@layer components {
+	.keyboard-focus-ring,
+	.keyboard-focus-within-ring {
+		--keyboard-focus-ring-size: 3px;
+	}
+	.keyboard-focus-ring:focus {
+		outline: none;
+	}
+	.keyboard-focus-ring.keyboard-focus-ring-none:focus {
+		border-color: inherit;
+		box-shadow: none;
+	}
+	html[data-keyboard-nav="true"]
+		.keyboard-focus-ring:focus:not(
+			.keyboard-focus-ring-none,
+			[aria-invalid="true"]
+		) {
+		border-color: var(--ring);
+		box-shadow: 0 0 0 var(--keyboard-focus-ring-size)
+			color-mix(in oklab, var(--ring) 50%, transparent);
+	}
+	html[data-keyboard-nav="true"]
+		.keyboard-focus-within-ring:has(
+			[data-slot="input-group-control"]:focus
+		):not(:has([aria-invalid="true"])) {
+		border-color: var(--ring);
+		box-shadow: 0 0 0 var(--keyboard-focus-ring-size)
+			color-mix(in oklab, var(--ring) 50%, transparent);
+	}
+}
+
 /* BlockNote slash menu renders unbounded; cap it like a normal combobox. */
 #bn-suggestion-menu {
 	max-height: min(360px, 45vh);

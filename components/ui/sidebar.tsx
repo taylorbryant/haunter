@@ -37,6 +37,8 @@ type SidebarContextProps = {
 	setOpen: (open: boolean) => void;
 	openMobile: boolean;
 	setOpenMobile: (open: boolean) => void;
+	suppressMobileFinalFocus: boolean;
+	setSuppressMobileFinalFocus: (suppress: boolean) => void;
 	isMobile: boolean;
 	toggleSidebar: () => void;
 };
@@ -67,6 +69,8 @@ function SidebarProvider({
 }) {
 	const isMobile = useIsMobile();
 	const [openMobile, setOpenMobile] = React.useState(false);
+	const [suppressMobileFinalFocus, setSuppressMobileFinalFocus] =
+		React.useState(false);
 
 	// This is the internal state of the sidebar.
 	// We use openProp and setOpenProp for control from outside the component.
@@ -120,9 +124,20 @@ function SidebarProvider({
 			isMobile,
 			openMobile,
 			setOpenMobile,
+			suppressMobileFinalFocus,
+			setSuppressMobileFinalFocus,
 			toggleSidebar,
 		}),
-		[state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+		[
+			state,
+			open,
+			setOpen,
+			isMobile,
+			openMobile,
+			setOpenMobile,
+			suppressMobileFinalFocus,
+			toggleSidebar,
+		],
 	);
 
 	return (
@@ -161,7 +176,14 @@ function Sidebar({
 	variant?: "sidebar" | "floating" | "inset";
 	collapsible?: "offcanvas" | "icon" | "none";
 }) {
-	const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+	const {
+		isMobile,
+		state,
+		openMobile,
+		setOpenMobile,
+		suppressMobileFinalFocus,
+		setSuppressMobileFinalFocus,
+	} = useSidebar();
 
 	if (collapsible === "none") {
 		return (
@@ -180,12 +202,20 @@ function Sidebar({
 
 	if (isMobile) {
 		return (
-			<Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+			<Sheet
+				open={openMobile}
+				onOpenChange={setOpenMobile}
+				onOpenChangeComplete={(open) => {
+					if (!open) setSuppressMobileFinalFocus(false);
+				}}
+				{...props}
+			>
 				<SheetContent
 					dir={dir}
 					data-sidebar="sidebar"
 					data-slot="sidebar"
 					data-mobile="true"
+					finalFocus={suppressMobileFinalFocus ? false : undefined}
 					className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
 					style={
 						{

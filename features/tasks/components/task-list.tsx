@@ -250,7 +250,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 											autoFocus
 											value={editTitle}
 											aria-label="Task name"
-											className="w-full rounded-sm bg-transparent text-base leading-tight outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:text-sm"
+											className="keyboard-focus-ring w-full rounded-sm bg-transparent text-base leading-tight outline-none [--keyboard-focus-ring-size:2px] sm:text-sm"
 											onChange={(event) => setEditTitle(event.target.value)}
 											onKeyDown={(event) => {
 												if (event.key === "Enter") commitTitle(task);

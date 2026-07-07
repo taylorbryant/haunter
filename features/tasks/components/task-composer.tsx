@@ -124,7 +124,7 @@ export function TaskComposer({
 						placeholder="Task name, e.g. “buy groceries tomorrow”"
 						aria-label="Task name"
 						className={cn(
-							"relative w-full bg-transparent font-medium text-base leading-6 outline-none placeholder:text-muted-foreground sm:text-sm",
+							"keyboard-focus-ring relative w-full rounded-sm bg-transparent font-medium text-base leading-6 outline-none [--keyboard-focus-ring-size:2px] placeholder:text-muted-foreground sm:text-sm",
 							activeMatch && "text-transparent caret-foreground",
 						)}
 						onChange={(event) => setText(event.target.value)}

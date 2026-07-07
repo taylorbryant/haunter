@@ -10,7 +10,11 @@ import {
 	invalidatePages,
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
-import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
+import {
+	focusTitleOnArrival,
+	primeTitleKeyboard,
+	releaseTitleKeyboardPrime,
+} from "@/features/pages/client/new-page-focus";
 
 export default function WorkspacePage({
 	params,
@@ -46,7 +50,8 @@ export default function WorkspacePage({
 			{canEdit ? (
 				<Button
 					disabled={createMutation.isPending}
-					onClick={() =>
+					onClick={() => {
+						primeTitleKeyboard();
 						createMutation.mutate(
 							{ body: { workspaceId, title: "" } },
 							{
@@ -55,9 +60,10 @@ export default function WorkspacePage({
 									focusTitleOnArrival(page.id);
 									router.push(`/w/${workspaceId}/p/${page.id}`);
 								},
+								onError: releaseTitleKeyboardPrime,
 							},
-						)
-					}
+						);
+					}}
 				>
 					Create your first page
 				</Button>

@@ -63,7 +63,11 @@ import {
 	listPagesQueryOptions,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
-import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
+import {
+	focusTitleOnArrival,
+	primeTitleKeyboard,
+	releaseTitleKeyboardPrime,
+} from "@/features/pages/client/new-page-focus";
 import type { PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
@@ -125,7 +129,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const queryClient = useQueryClient();
-	const { isMobile, setOpenMobile } = useSidebar();
+	const { isMobile, setOpenMobile, setSuppressMobileFinalFocus } = useSidebar();
 	// Viewers browse the tree but get no create/rename/move/delete controls.
 	const canEdit = useCanEditWorkspace();
 	const { synced } = useWorkspaceRouteSync(workspaceId);
@@ -163,6 +167,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 
 	function createPage(parentPageId: string | null) {
+		primeTitleKeyboard();
 		createMutation.mutate(
 			{
 				body: {
@@ -176,9 +181,16 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
 					await invalidatePages(queryClient);
 					focusTitleOnArrival(page.id);
-					router.push(`/w/${workspaceId}/p/${page.id}`);
 					// On mobile, close the sheet so the new page is visible.
-					if (isMobile) setOpenMobile(false);
+					if (isMobile) {
+						setSuppressMobileFinalFocus(true);
+						setOpenMobile(false);
+					}
+					router.push(`/w/${workspaceId}/p/${page.id}`);
+				},
+				onError: () => {
+					setSuppressMobileFinalFocus(false);
+					releaseTitleKeyboardPrime();
 				},
 			},
 		);

@@ -15,7 +15,10 @@ import {
 	setPageTitleInCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
-import { consumeTitleFocus } from "@/features/pages/client/new-page-focus";
+import {
+	consumeTitleFocus,
+	releaseTitleKeyboardPrime,
+} from "@/features/pages/client/new-page-focus";
 import { setPageSaveState } from "@/features/pages/client/save-state";
 import { useSharedTitle } from "@/features/pages/client/use-shared-title";
 import { cn } from "@/lib/utils";
@@ -109,7 +112,11 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const pageLoaded = pageQuery.data != null;
 	useEffect(() => {
 		if (!pageLoaded || !consumeTitleFocus(pageId)) return;
-		titleInputRef.current?.focus();
+		const input = titleInputRef.current;
+		if (!input) return;
+		input.focus({ preventScroll: true });
+		input.setSelectionRange(input.value.length, input.value.length);
+		releaseTitleKeyboardPrime();
 	}, [pageId, pageLoaded]);
 
 	// A collaborator renamed the page: refresh the sidebar/breadcrumb lists
@@ -210,7 +217,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				<div className="mb-2 px-0 md:px-[54px]">
 					<input
 						ref={titleInputRef}
-						className="w-full rounded-md border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+						className="keyboard-focus-ring w-full rounded-md border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60"
 						value={shownTitle}
 						placeholder="Untitled"
 						readOnly={readOnly}
