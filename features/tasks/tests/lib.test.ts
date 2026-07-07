@@ -2,8 +2,15 @@ import { describe, expect, it } from "bun:test";
 import type { BlockJson } from "@/features/pages/schemas";
 import { extractTaskBlocks } from "../lib/extract-task-blocks";
 import { patchTaskBlock } from "../lib/patch-task-block";
+import { parseTaskDateShortcut, toIsoDate } from "../lib/parse-task-input";
 import { reconcileTaskBlockProps } from "../lib/reconcile-task-block-props";
 import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
+
+function addDays(days: number): Date {
+	const date = new Date();
+	date.setDate(date.getDate() + days);
+	return date;
+}
 
 function paragraph(id: string, children: BlockJson[] = []): BlockJson {
 	return { id, type: "paragraph", props: {}, content: [], children };
@@ -93,6 +100,29 @@ describe("extractTaskBlocks", () => {
 		const found = extractTaskBlocks(doc);
 		expect(found).toHaveLength(1);
 		expect(found[0]?.title).toBe("First");
+	});
+});
+
+describe("parseTaskDateShortcut", () => {
+	it("strips a natural-language date phrase from task inline content", () => {
+		const result = parseTaskDateShortcut(
+			[{ type: "text", text: "Eat a sandwich tomorrow", styles: {} }],
+			"",
+		);
+
+		expect(result).toEqual({
+			title: "Eat a sandwich",
+			dueDate: toIsoDate(addDays(1)),
+		});
+	});
+
+	it("does not override an existing due date", () => {
+		const result = parseTaskDateShortcut(
+			[{ type: "text", text: "Eat a sandwich tomorrow", styles: {} }],
+			"2026-07-10",
+		);
+
+		expect(result).toBeNull();
 	});
 });
 

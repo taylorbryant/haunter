@@ -9,6 +9,16 @@ export type ParsedTaskInput = {
 	match: { index: number; text: string } | null;
 };
 
+export type ParsedTaskDateShortcut = {
+	title: string;
+	dueDate: string;
+};
+
+type InlineNode = {
+	text?: string;
+	content?: unknown;
+};
+
 export function toIsoDate(date: Date): string {
 	const month = String(date.getMonth() + 1).padStart(2, "0");
 	const day = String(date.getDate()).padStart(2, "0");
@@ -41,6 +51,34 @@ export function parseTaskInput(text: string): ParsedTaskInput {
 		dueDate: toIsoDate(match.start.date()),
 		match: { index: match.index, text: match.text },
 	};
+}
+
+/** Concatenate BlockNote-ish inline content into the text the user sees. */
+export function taskInlineText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+
+	let text = "";
+	for (const node of content as InlineNode[]) {
+		if (typeof node?.text === "string") {
+			text += node.text;
+		} else if (node?.content) {
+			text += taskInlineText(node.content);
+		}
+	}
+	return text;
+}
+
+export function parseTaskDateShortcut(
+	content: unknown,
+	dueDate: string | null | undefined,
+): ParsedTaskDateShortcut | null {
+	if (dueDate) return null;
+
+	const parsed = parseTaskInput(taskInlineText(content));
+	if (!parsed.match || !parsed.dueDate) return null;
+
+	return { title: parsed.title, dueDate: parsed.dueDate };
 }
 
 /** "Today", "Tomorrow", a weekday within a week, else "Jul 16". */

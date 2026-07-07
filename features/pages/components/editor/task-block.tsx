@@ -5,9 +5,15 @@ import {
 	createReactBlockSpec,
 	type ReactCustomBlockRenderProps,
 } from "@blocknote/react";
-import { createContext, useContext } from "react";
+import {
+	type FocusEvent,
+	type KeyboardEvent,
+	createContext,
+	useContext,
+} from "react";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
+import { parseTaskDateShortcut } from "@/features/tasks/lib/parse-task-input";
 import { AUTO_TASK_ASSIGNEE } from "@/features/tasks/lib/task-block-props";
 
 export const TaskBlockCurrentUserContext = createContext<string | null>(null);
@@ -49,6 +55,46 @@ function TaskBlockView({
 		});
 	}
 
+	function applyDateShortcut() {
+		if (!editor.isEditable) return;
+
+		const latest = editor.getBlock(block.id);
+		if (latest?.type !== "task") return;
+
+		const parsed = parseTaskDateShortcut(latest.content, latest.props.due);
+		if (!parsed) return;
+
+		editor.updateBlock(latest, {
+			content: parsed.title,
+			props: { due: parsed.dueDate },
+		});
+	}
+
+	function handleBlur(event: FocusEvent<HTMLDivElement>) {
+		const nextFocused = event.relatedTarget;
+		if (
+			nextFocused instanceof Node &&
+			event.currentTarget.contains(nextFocused)
+		) {
+			return;
+		}
+		applyDateShortcut();
+	}
+
+	function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+		if (
+			event.key !== "Enter" ||
+			event.shiftKey ||
+			event.metaKey ||
+			event.ctrlKey ||
+			event.altKey ||
+			event.nativeEvent.isComposing
+		) {
+			return;
+		}
+		requestAnimationFrame(applyDateShortcut);
+	}
+
 	const overdue =
 		due !== "" && !checked && due < new Date().toISOString().slice(0, 10);
 
@@ -56,7 +102,12 @@ function TaskBlockView({
 		// flex-wrap + the content's flex-basis floor: on narrow screens
 		// the chip group drops to its own right-aligned line instead of
 		// squeezing the task text into a sliver.
-		<div className="haunter-task flex w-full flex-wrap items-start gap-2">
+		// biome-ignore lint/a11y/noStaticElementInteractions: observes child editor blur/Enter events, not direct static-element interaction
+		<div
+			className="haunter-task flex w-full flex-wrap items-start gap-2"
+			onBlur={handleBlur}
+			onKeyDownCapture={handleKeyDown}
+		>
 			<input
 				type="checkbox"
 				checked={checked}
