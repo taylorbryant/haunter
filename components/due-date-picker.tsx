@@ -9,6 +9,7 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 /** Parse a stored `YYYY-MM-DD` string as a local date. */
 function toDate(value: string): Date | undefined {
@@ -45,10 +46,17 @@ export function DueDatePicker({
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger
 				render={
-					<button type="button" className={className} aria-label={ariaLabel} />
+					<button
+						type="button"
+						className={cn(
+							"outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+							className,
+						)}
+						aria-label={ariaLabel}
+					/>
 				}
 			>
-				<CalendarIcon className="size-3" />
+				<CalendarIcon className="size-3" aria-hidden="true" />
 				{value ?? "Due"}
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-0" align="end">

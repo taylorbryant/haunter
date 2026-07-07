@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -50,6 +51,7 @@ export function SharePanel({
 	const [copied, setCopied] = useState(false);
 	const [flushError, setFlushError] = useState<string | null>(null);
 	const [flushing, setFlushing] = useState(false);
+	const [revokeOpen, setRevokeOpen] = useState(false);
 
 	const shareQuery = useQuery({
 		...getPageShareQueryOptions(pageId),
@@ -89,7 +91,12 @@ export function SharePanel({
 		if (busy) return;
 		revokeMutation.mutate(
 			{ path: { pageId } },
-			{ onSuccess: () => invalidatePageShare(queryClient, pageId) },
+			{
+				onSuccess: async () => {
+					setRevokeOpen(false);
+					await invalidatePageShare(queryClient, pageId);
+				},
+			},
 		);
 	}
 
@@ -135,13 +142,23 @@ export function SharePanel({
 					size="sm"
 					className="w-fit text-destructive hover:text-destructive"
 					disabled={busy}
-					onClick={revoke}
+					onClick={() => setRevokeOpen(true)}
 				>
 					Revoke link
 				</Button>
 				{flushError ? (
 					<p className="text-destructive text-xs">{flushError}</p>
 				) : null}
+				<DestructiveConfirmationDialog
+					open={revokeOpen}
+					onOpenChange={setRevokeOpen}
+					title="Revoke public link?"
+					description="Anyone with this link will lose access. You can publish a new link later."
+					actionLabel="Revoke link"
+					pendingLabel="Revoking…"
+					pending={busy}
+					onConfirm={revoke}
+				/>
 			</div>
 		);
 	}

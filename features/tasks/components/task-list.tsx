@@ -5,6 +5,7 @@ import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
@@ -46,6 +47,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 	const [composing, setComposing] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editTitle, setEditTitle] = useState("");
+	const [taskToDelete, setTaskToDelete] = useState<TaskWithPage | null>(null);
 
 	const tasksQuery = useQuery(listTasksQueryOptions(workspaceId, filter));
 	const createMutation = useMutation(createTaskMutationOptions());
@@ -101,6 +103,19 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 				},
 			);
 		});
+	}
+
+	function confirmDeleteTask() {
+		if (!taskToDelete || deleteMutation.isPending) return;
+		deleteMutation.mutate(
+			{ path: { id: taskToDelete.id } },
+			{
+				onSuccess: async () => {
+					setTaskToDelete(null);
+					await refresh(taskToDelete);
+				},
+			},
+		);
 	}
 
 	return (
@@ -268,9 +283,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 											className={cn(
 												"flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
 												task.dueDate === null
-													? // Touch devices have no hover to reveal the affordance,
-														// so keep it visible there (pointer-coarse).
-														"text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100 pointer-coarse:opacity-100"
+													? "text-muted-foreground/70 hover:bg-muted focus-visible:bg-muted aria-expanded:bg-muted"
 													: isOverdue(task)
 														? "bg-destructive/10 text-destructive"
 														: "bg-muted text-muted-foreground",
@@ -295,14 +308,10 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 											type="button"
 											variant="ghost"
 											size="icon"
-											className="size-7 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
+											className="size-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
 											aria-label="Delete task"
-											onClick={() =>
-												deleteMutation.mutate(
-													{ path: { id: task.id } },
-													{ onSuccess: () => refresh() },
-												)
-											}
+											disabled={deleteMutation.isPending}
+											onClick={() => setTaskToDelete(task)}
 										>
 											<Trash2Icon className="size-3.5" />
 										</Button>
@@ -313,6 +322,23 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 					))}
 				</ul>
 			)}
+			<DestructiveConfirmationDialog
+				open={taskToDelete !== null}
+				onOpenChange={(open) => {
+					if (!open) setTaskToDelete(null);
+				}}
+				title="Delete task?"
+				description={
+					<span className="break-words">
+						This removes {taskToDelete?.title || "Untitled task"} permanently.
+						This cannot be undone.
+					</span>
+				}
+				actionLabel="Delete task"
+				pendingLabel="Deleting…"
+				pending={deleteMutation.isPending}
+				onConfirm={confirmDeleteTask}
+			/>
 		</div>
 	);
 }

@@ -12,17 +12,8 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { GhostLogo } from "@/components/ghost-logo";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
 	ResponsiveDialog,
 	ResponsiveDialogFooter,
@@ -470,31 +461,21 @@ export function WorkspaceSwitcher({
 
 				<MembersDialog open={membersOpen} onOpenChange={setMembersOpen} />
 
-				<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>
-								Delete {active ? `"${active.name}"` : "workspace"}?
-							</AlertDialogTitle>
-							<AlertDialogDescription>
-								This permanently deletes the workspace and all of its pages,
-								tasks, and canvases. This can't be undone.
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel>Cancel</AlertDialogCancel>
-							<AlertDialogAction
-								variant="destructive"
-								onClick={(event) => {
-									event.preventDefault();
-									confirmDelete();
-								}}
-							>
-								{busy ? "Deleting…" : "Delete"}
-							</AlertDialogAction>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
+				<DestructiveConfirmationDialog
+					open={deleteOpen}
+					onOpenChange={setDeleteOpen}
+					title={`Delete ${active ? `“${active.name}”` : "workspace"}?`}
+					description={
+						<span className="break-words">
+							This permanently deletes the workspace and all of its pages,
+							tasks, and canvases. This cannot be undone.
+						</span>
+					}
+					actionLabel="Delete workspace"
+					pendingLabel="Deleting…"
+					pending={busy}
+					onConfirm={confirmDelete}
+				/>
 			</SidebarMenuItem>
 		</SidebarMenu>
 	);

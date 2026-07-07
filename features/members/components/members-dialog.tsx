@@ -4,6 +4,7 @@ import { ChevronDownIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { ResponsiveDialog } from "@/components/responsive-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,11 @@ export function MembersDialog({
 	const [inviteRole, setInviteRole] = useState<string>("member");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [memberToRemove, setMemberToRemove] = useState<{
+		id: string;
+		label: string;
+	} | null>(null);
+	const [leaveOpen, setLeaveOpen] = useState(false);
 
 	async function refresh() {
 		await Promise.all([orgQuery.refetch?.(), activeMemberQuery.refetch?.()]);
@@ -94,6 +100,7 @@ export function MembersDialog({
 		setBusy(true);
 		await authClient.organization.removeMember({ memberIdOrEmail });
 		setBusy(false);
+		setMemberToRemove(null);
 		await refresh();
 	}
 
@@ -102,6 +109,11 @@ export function MembersDialog({
 		await authClient.organization.cancelInvitation({ invitationId });
 		setBusy(false);
 		await refresh();
+	}
+
+	function confirmRemoveMember() {
+		if (!memberToRemove || busy) return;
+		removeMember(memberToRemove.id);
 	}
 
 	async function leave() {
@@ -113,6 +125,7 @@ export function MembersDialog({
 		// entry — a stale list would bounce us back into the one we just left.
 		await organizationsQuery.refetch?.();
 		setBusy(false);
+		setLeaveOpen(false);
 		onOpenChange(false);
 		router.push("/");
 		router.refresh();
@@ -196,7 +209,7 @@ export function MembersDialog({
 									size="icon"
 									className="size-8 text-muted-foreground"
 									aria-label={`Remove ${label}`}
-									onClick={() => removeMember(member.id)}
+									onClick={() => setMemberToRemove({ id: member.id, label })}
 								>
 									<XIcon />
 								</Button>
@@ -240,12 +253,44 @@ export function MembersDialog({
 						variant="ghost"
 						className="text-destructive hover:text-destructive"
 						disabled={busy}
-						onClick={leave}
+						onClick={() => setLeaveOpen(true)}
 					>
 						Leave workspace
 					</Button>
 				</div>
 			) : null}
+			<DestructiveConfirmationDialog
+				open={memberToRemove !== null}
+				onOpenChange={(nextOpen) => {
+					if (!nextOpen) setMemberToRemove(null);
+				}}
+				title="Remove member?"
+				description={
+					<span className="break-words">
+						Remove {memberToRemove?.label ?? "this member"} from this workspace?
+						They will lose access immediately.
+					</span>
+				}
+				actionLabel="Remove member"
+				pendingLabel="Removing…"
+				pending={busy}
+				onConfirm={confirmRemoveMember}
+			/>
+			<DestructiveConfirmationDialog
+				open={leaveOpen}
+				onOpenChange={setLeaveOpen}
+				title="Leave workspace?"
+				description={
+					<span className="break-words">
+						You will lose access to {org?.name ?? "this workspace"} unless
+						someone invites you again.
+					</span>
+				}
+				actionLabel="Leave workspace"
+				pendingLabel="Leaving…"
+				pending={busy}
+				onConfirm={leave}
+			/>
 		</ResponsiveDialog>
 	);
 }

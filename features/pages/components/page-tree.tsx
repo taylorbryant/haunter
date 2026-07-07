@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import {
 	ResponsiveDialog,
 	ResponsiveDialogFooter,
@@ -140,6 +141,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [renameValue, setRenameValue] = useState("");
 	const [iconPageId, setIconPageId] = useState<string | null>(null);
+	const [pageToTrash, setPageToTrash] = useState<TreeNode | null>(null);
 	const [dragId, setDragId] = useState<string | null>(null);
 	const [dropTarget, setDropTarget] = useState<{
 		id: string;
@@ -209,6 +211,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			{ path: { id: node.id } },
 			{
 				onSuccess: async () => {
+					setPageToTrash(null);
 					await Promise.all([
 						invalidatePages(queryClient),
 						invalidateTrash(queryClient),
@@ -496,7 +499,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 											<Button
 												variant="ghost"
 												className="h-11 justify-start text-destructive hover:text-destructive"
-												onClick={() => deletePage(node)}
+												onClick={() => setPageToTrash(node)}
 											/>
 										}
 									>
@@ -538,7 +541,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 									</DropdownMenuItem>
 									<DropdownMenuItem
 										className="text-destructive focus:text-destructive"
-										onClick={() => deletePage(node)}
+										onClick={() => setPageToTrash(node)}
 									>
 										Move to trash
 									</DropdownMenuItem>
@@ -620,6 +623,28 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					</form>
 				</ResponsiveDialog>
 			) : null}
+			<DestructiveConfirmationDialog
+				open={pageToTrash !== null}
+				onOpenChange={(open) => {
+					if (!open) setPageToTrash(null);
+				}}
+				title="Move to trash?"
+				description={
+					<span className="break-words">
+						Move {pageToTrash?.title || "Untitled"}{" "}
+						{pageToTrash && pageToTrash.children.length > 0
+							? "and its subpages "
+							: ""}
+						to trash? You can restore it later from Trash.
+					</span>
+				}
+				actionLabel="Move to trash"
+				pendingLabel="Moving…"
+				pending={deleteMutation.isPending}
+				onConfirm={() => {
+					if (pageToTrash) deletePage(pageToTrash);
+				}}
+			/>
 			<Dialog
 				open={iconPageId !== null}
 				onOpenChange={(open) => !open && setIconPageId(null)}

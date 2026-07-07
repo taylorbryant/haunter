@@ -3,17 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BotIcon } from "lucide-react";
 import { useState } from "react";
+import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { Panel, PanelHeader } from "@/components/settings/panels";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -114,6 +105,13 @@ export function AgentsPanel() {
 		onSettled: () => invalidateAgents(queryClient),
 	});
 
+	function confirmRevokeAgent() {
+		if (!revoking || revoke.isPending) return;
+		revoke.mutate(revoking.id, {
+			onSettled: () => setRevoking(null),
+		});
+	}
+
 	return (
 		<Panel>
 			<PanelHeader
@@ -154,34 +152,18 @@ export function AgentsPanel() {
 						: "Could not revoke this agent."}
 				</p>
 			) : null}
-			<AlertDialog
+			<DestructiveConfirmationDialog
 				open={revoking !== null}
 				onOpenChange={(open) => {
 					if (!open) setRevoking(null);
 				}}
-			>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Revoke “{revoking?.name}”?</AlertDialogTitle>
-						<AlertDialogDescription>
-							The agent loses all its capabilities immediately and its tokens
-							stop working. This cannot be undone — the agent would have to
-							register and be approved again.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={() => {
-								if (revoking) revoke.mutate(revoking.id);
-								setRevoking(null);
-							}}
-						>
-							Revoke agent
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+				title={`Revoke “${revoking?.name ?? "agent"}”?`}
+				description="The agent loses all capabilities immediately and its tokens stop working. This cannot be undone; the agent would have to register and be approved again."
+				actionLabel="Revoke agent"
+				pendingLabel="Revoking…"
+				pending={revoke.isPending}
+				onConfirm={confirmRevokeAgent}
+			/>
 		</Panel>
 	);
 }

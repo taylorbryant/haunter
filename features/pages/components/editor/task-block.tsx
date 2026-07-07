@@ -88,9 +88,7 @@ export const taskBlockSpec = createReactBlockSpec(
 								onChange={(next) => update({ due: next ?? "" })}
 								className={`flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${
 									due === ""
-										? // Touch devices have no hover to reveal the affordance,
-											// so keep it visible there (pointer-coarse).
-											"text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 aria-expanded:opacity-100 pointer-coarse:opacity-100 [.haunter-task:hover_&]:opacity-100"
+										? "text-muted-foreground/70 hover:bg-muted focus-visible:bg-muted aria-expanded:bg-muted"
 										: overdue
 											? "bg-destructive/10 text-destructive"
 											: "bg-muted text-muted-foreground"
