@@ -47,6 +47,7 @@ const {
 
 const headingBlockSpec = createHeadingBlockSpec({
 	levels: [1, 2, 3, 4],
+	allowToggleHeadings: false,
 });
 
 const headingStyles = {
