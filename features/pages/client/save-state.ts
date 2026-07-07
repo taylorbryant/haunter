@@ -12,6 +12,12 @@ let state: PageSaveState = "saved";
 const listeners = new Set<() => void>();
 const flushers = new Map<string, () => Promise<boolean>>();
 
+type DrainPageSaveQueueOptions = {
+	clearPendingTimer: () => void;
+	hasPendingChanges: () => boolean;
+	save: () => Promise<boolean>;
+};
+
 export function setPageSaveState(next: PageSaveState) {
 	if (state === next) return;
 	state = next;
@@ -46,4 +52,17 @@ export function registerPageSaveFlusher(
 export async function flushPendingPageSave(pageId: string): Promise<boolean> {
 	const flush = flushers.get(pageId);
 	return flush ? flush() : true;
+}
+
+export async function drainPageSaveQueue({
+	clearPendingTimer,
+	hasPendingChanges,
+	save,
+}: DrainPageSaveQueueOptions): Promise<boolean> {
+	while (true) {
+		clearPendingTimer();
+		const saved = await save();
+		if (!saved) return false;
+		if (!hasPendingChanges()) return true;
+	}
 }

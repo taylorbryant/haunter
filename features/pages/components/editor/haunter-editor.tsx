@@ -50,11 +50,15 @@ import {
 	setPageSavedAtInCache,
 } from "@/features/pages/client/queries";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
-import { registerPageSaveFlusher } from "@/features/pages/client/save-state";
+import {
+	drainPageSaveQueue,
+	registerPageSaveFlusher,
+} from "@/features/pages/client/save-state";
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
-import { invalidateTasks } from "@/features/tasks/client/queries";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
+import { invalidateTasks } from "@/features/tasks/client/queries";
+import { reconcileTaskBlockProps } from "@/features/tasks/lib/reconcile-task-block-props";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { CodeEditDialog } from "./code-edit-dialog";
@@ -299,6 +303,19 @@ export default function HaunterEditor({
 		editor.replaceBlocks(editor.document, initialContent as never);
 	}, [collab, shouldSeed, editor, initialContent]);
 
+	const reconciledVersionRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!collab) return;
+		if (reconciledVersionRef.current === updatedAt) return;
+		reconciledVersionRef.current = updatedAt ?? null;
+
+		const { blocks, changed } = reconcileTaskBlockProps(
+			editor.document as unknown as BlockJson[],
+			initialContent,
+		);
+		if (changed) editor.replaceBlocks(editor.document, blocks as never);
+	}, [collab, editor, initialContent, updatedAt]);
+
 	const saveMutation = useMutation(savePageContentMutationOptions());
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const dirtyRef = useRef(false);
@@ -387,11 +404,17 @@ export default function HaunterEditor({
 
 	useEffect(() => {
 		return registerPageSaveFlusher(pageId, async () => {
-			if (timeoutRef.current) {
-				clearTimeout(timeoutRef.current);
-				timeoutRef.current = null;
-			}
-			return saveRef.current();
+			return drainPageSaveQueue({
+				clearPendingTimer: () => {
+					if (timeoutRef.current) {
+						clearTimeout(timeoutRef.current);
+						timeoutRef.current = null;
+					}
+				},
+				hasPendingChanges: () =>
+					dirtyRef.current || inFlightSaveRef.current !== null,
+				save: () => saveRef.current(),
+			});
 		});
 	}, [pageId]);
 
