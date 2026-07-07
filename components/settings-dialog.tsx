@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/dialog";
 import {
 	Drawer,
-	DrawerClose,
 	DrawerContent,
 	DrawerDescription,
 	DrawerHeader,
@@ -114,23 +113,11 @@ export function SettingsDialog({
 		return (
 			<Drawer showSwipeHandle open={open} onOpenChange={onOpenChange}>
 				<DrawerContent className="h-[85dvh]">
-					<DrawerHeader className="relative px-4 pb-3">
+					<DrawerHeader className="px-4 pb-3">
 						<DrawerTitle>Settings</DrawerTitle>
 						<DrawerDescription className="sr-only">
 							Account settings
 						</DrawerDescription>
-						<DrawerClose
-							render={
-								<Button
-									variant="ghost"
-									size="icon"
-									className="absolute top-2 right-2 size-11"
-								/>
-							}
-						>
-							<XIcon />
-							<span className="sr-only">Close</span>
-						</DrawerClose>
 					</DrawerHeader>
 					<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-popover">
 						<MobileSectionTabs active={active} onActiveChange={setActive} />
