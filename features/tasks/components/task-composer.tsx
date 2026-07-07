@@ -141,39 +141,14 @@ export function TaskComposer({
 								<button
 									type="button"
 									className={cn(
-										"flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
+										"flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
 										dueDate
 											? "text-foreground"
 											: "text-muted-foreground hover:bg-muted",
 									)}
 								>
-									<CalendarIcon className="size-3.5" />
+									<CalendarIcon className="size-3.5" aria-hidden="true" />
 									{dueDate ? humanizeDueDate(dueDate) : "Date"}
-									{dueDate ? (
-										// Nested clickable; stops propagation so clearing
-										// doesn't open the picker.
-										// biome-ignore lint/a11y/useSemanticElements: a real <button> cannot nest inside the PopoverTrigger button (invalid HTML); keyboard support is provided via onKeyDown
-										<span
-											role="button"
-											tabIndex={0}
-											aria-label="Remove due date"
-											className="-mr-1 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-											onPointerDown={(event) => event.stopPropagation()}
-											onClick={(event) => {
-												event.stopPropagation();
-												clearDate();
-											}}
-											onKeyDown={(event) => {
-												if (event.key === "Enter" || event.key === " ") {
-													event.preventDefault();
-													event.stopPropagation();
-													clearDate();
-												}
-											}}
-										>
-											<XIcon className="size-3" />
-										</span>
-									) : null}
 								</button>
 							}
 						/>
@@ -224,6 +199,16 @@ export function TaskComposer({
 							/>
 						</PopoverContent>
 					</Popover>
+					{dueDate ? (
+						<button
+							type="button"
+							aria-label="Remove due date"
+							className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+							onClick={clearDate}
+						>
+							<XIcon className="size-3" aria-hidden="true" />
+						</button>
+					) : null}
 				</div>
 			</div>
 			<Separator />

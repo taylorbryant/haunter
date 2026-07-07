@@ -185,7 +185,7 @@ export function ProfilePanel() {
 					/>
 				</div>
 				{form.formState.errors.root ? (
-					<p className="text-destructive text-sm">
+					<p role="alert" className="text-destructive text-sm">
 						{form.formState.errors.root.message}
 					</p>
 				) : null}
@@ -195,10 +195,12 @@ export function ProfilePanel() {
 						size="sm"
 						disabled={form.formState.isSubmitting}
 					>
-						{form.formState.isSubmitting ? "Saving..." : "Save changes"}
+						{form.formState.isSubmitting ? "Saving…" : "Save changes"}
 					</Button>
 					{saved ? (
-						<p className="text-muted-foreground text-sm">Saved.</p>
+						<p role="status" className="text-muted-foreground text-sm">
+							Saved.
+						</p>
 					) : null}
 				</div>
 			</form>
@@ -314,7 +316,11 @@ export function DeleteAccountPanel() {
 						onChange={(event) => setConfirm(event.target.value)}
 					/>
 				</div>
-				{error ? <p className="text-destructive text-sm">{error}</p> : null}
+				{error ? (
+					<p role="alert" className="text-destructive text-sm">
+						{error}
+					</p>
+				) : null}
 				<div>
 					<Button
 						type="submit"
@@ -322,7 +328,7 @@ export function DeleteAccountPanel() {
 						size="sm"
 						disabled={!matches || pending}
 					>
-						{pending ? "Deleting..." : "Delete account"}
+						{pending ? "Deleting…" : "Delete account"}
 					</Button>
 				</div>
 			</form>

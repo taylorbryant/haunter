@@ -131,11 +131,18 @@ export function SharePanel({
 						variant="outline"
 						size="sm"
 						onClick={copy}
-						aria-label="Copy link"
+						aria-label={copied ? "Link copied" : "Copy link"}
 					>
-						{copied ? <CheckIcon /> : <CopyIcon />}
+						{copied ? (
+							<CheckIcon aria-hidden="true" />
+						) : (
+							<CopyIcon aria-hidden="true" />
+						)}
 					</Button>
 				</div>
+				<span className="sr-only" role="status">
+					{copied ? "Link copied." : ""}
+				</span>
 				<Button
 					type="button"
 					variant="ghost"
@@ -147,7 +154,9 @@ export function SharePanel({
 					Revoke link
 				</Button>
 				{flushError ? (
-					<p className="text-destructive text-xs">{flushError}</p>
+					<p role="alert" className="text-destructive text-xs">
+						{flushError}
+					</p>
 				) : null}
 				<DestructiveConfirmationDialog
 					open={revokeOpen}
@@ -178,7 +187,9 @@ export function SharePanel({
 				{busy ? "Publishing…" : "Publish"}
 			</Button>
 			{flushError ? (
-				<p className="text-destructive text-xs">{flushError}</p>
+				<p role="alert" className="text-destructive text-xs">
+					{flushError}
+				</p>
 			) : null}
 		</div>
 	);

@@ -170,7 +170,11 @@ export function MembersDialog({
 					</div>
 				</form>
 			) : null}
-			{error ? <p className="text-destructive text-sm">{error}</p> : null}
+			{error ? (
+				<p role="alert" className="text-destructive text-sm">
+					{error}
+				</p>
+			) : null}
 
 			<div className="flex flex-col gap-1">
 				{members.map((member) => {

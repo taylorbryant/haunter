@@ -218,7 +218,11 @@ export function ApproveAgentCard({
 						approving the right request.
 					</p>
 				</div>
-				{error ? <p className="text-destructive text-sm">{error}</p> : null}
+				{error ? (
+					<p role="alert" className="text-destructive text-sm">
+						{error}
+					</p>
+				) : null}
 			</CardContent>
 			<CardFooter className="gap-2">
 				<Button

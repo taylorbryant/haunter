@@ -146,7 +146,7 @@ export function AgentsPanel() {
 				</div>
 			)}
 			{revoke.isError ? (
-				<p className="text-destructive text-sm">
+				<p role="alert" className="text-destructive text-sm">
 					{revoke.error instanceof Error
 						? revoke.error.message
 						: "Could not revoke this agent."}

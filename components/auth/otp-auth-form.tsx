@@ -156,7 +156,7 @@ export function OtpAuthForm() {
 							? "Enter your code"
 							: "What should we call you?"}
 				</CardTitle>
-				<CardDescription>
+				<CardDescription aria-live="polite">
 					{step === "email"
 						? "We'll email you a 6-digit code — no password needed."
 						: step === "code"
@@ -180,7 +180,11 @@ export function OtpAuthForm() {
 								onChange={(event) => setEmail(event.target.value)}
 							/>
 						</div>
-						{error ? <p className="text-destructive text-sm">{error}</p> : null}
+						{error ? (
+							<p role="alert" className="text-destructive text-sm">
+								{error}
+							</p>
+						) : null}
 						<Button type="submit" disabled={!email.trim() || pending}>
 							{pending ? "Sending…" : "Send code"}
 						</Button>
@@ -198,7 +202,11 @@ export function OtpAuthForm() {
 								onChange={(event) => setName(event.target.value)}
 							/>
 						</div>
-						{error ? <p className="text-destructive text-sm">{error}</p> : null}
+						{error ? (
+							<p role="alert" className="text-destructive text-sm">
+								{error}
+							</p>
+						) : null}
 						<Button type="submit" disabled={!name.trim() || pending}>
 							{pending ? "Saving…" : "Continue"}
 						</Button>
@@ -239,7 +247,11 @@ export function OtpAuthForm() {
 								</InputOTPGroup>
 							</InputOTP>
 						</div>
-						{error ? <p className="text-destructive text-sm">{error}</p> : null}
+						{error ? (
+							<p role="alert" className="text-destructive text-sm">
+								{error}
+							</p>
+						) : null}
 						<Button type="submit" disabled={code.length < 6 || pending}>
 							{pending ? "Verifying…" : "Verify & continue"}
 						</Button>
