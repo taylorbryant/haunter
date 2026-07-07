@@ -252,6 +252,18 @@
    editor-background var doesn't match our dark theme's --background. */
 .bn-shadcn .bn-editor {
 	background-color: transparent;
+	color: var(--foreground);
+	--bn-colors-editor-text: var(--foreground);
+}
+
+/* BlockNote draws vertical nested-block guide lines. Haunter uses indentation
+   alone, so hide the guide without affecting list bullets or task controls. */
+.bn-shadcn
+	.bn-block-group
+	.bn-block:not(:has(.bn-toggle-wrapper))
+	.bn-block-group
+	.bn-block-outer::before {
+	border-left: 0;
 }
 
 /* BlockNote reverts text decoration on every editor anchor. Page-link blocks
