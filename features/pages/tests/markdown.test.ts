@@ -137,6 +137,19 @@ describe("markdownToBlocks", () => {
 		expect(child.type).toBe("bulletListItem");
 	});
 
+	it("supports H4 and caps deeper markdown headings at H4", () => {
+		const blocks = markdownToBlocks("#### Minor\n\n###### Too deep");
+
+		expect(blocks[0]).toMatchObject({
+			type: "heading",
+			props: { level: 4 },
+		});
+		expect(blocks[1]).toMatchObject({
+			type: "heading",
+			props: { level: 4 },
+		});
+	});
+
 	it("round-trips content through markdown", () => {
 		const original = [
 			block("heading", { level: 1 }, "Title"),

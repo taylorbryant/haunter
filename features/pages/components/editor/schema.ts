@@ -2,6 +2,7 @@ import { codeBlockOptions } from "@blocknote/code-block";
 import {
 	BlockNoteSchema,
 	createCodeBlockSpec,
+	createHeadingBlockSpec,
 	defaultBlockSpecs,
 	defaultInlineContentSpecs,
 } from "@blocknote/core";
@@ -38,7 +39,15 @@ export const supportedLanguages = Object.fromEntries(
 
 // Haunter's task block replaces the built-in check list so the app has
 // exactly one checkbox concept (task rows are reconciled from these blocks).
-const { checkListItem: _checkListItem, ...baseBlockSpecs } = defaultBlockSpecs;
+const {
+	checkListItem: _checkListItem,
+	heading: _heading,
+	...baseBlockSpecs
+} = defaultBlockSpecs;
+
+const headingBlockSpec = createHeadingBlockSpec({
+	levels: [1, 2, 3, 4],
+});
 
 const baseCodeBlockSpec = createCodeBlockSpec({
 	...codeBlockOptions,
@@ -77,6 +86,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 export const editorSchema = BlockNoteSchema.create({
 	blockSpecs: {
 		...baseBlockSpecs,
+		heading: headingBlockSpec,
 		codeBlock: codeBlockSpec,
 		task: taskBlockSpec(),
 		canvas: canvasBlockSpec(),

@@ -234,6 +234,48 @@
 	margin-block: 1px;
 }
 
+/* Headings: match Notion's document scale. New content is limited to H1-H4
+   in the schema; old H5/H6 blocks fall back to the H4 visual size. */
+.bn-shadcn .bn-block-content[data-content-type="heading"][data-level="1"],
+.bn-shadcn
+	.bn-block-outer[data-prev-level="1"]
+	> .bn-block
+	> .bn-block-content {
+	font-size: 30px;
+	line-height: 1.25;
+}
+.bn-shadcn .bn-block-content[data-content-type="heading"][data-level="2"],
+.bn-shadcn
+	.bn-block-outer[data-prev-level="2"]
+	> .bn-block
+	> .bn-block-content {
+	font-size: 24px;
+	line-height: 1.3;
+}
+.bn-shadcn .bn-block-content[data-content-type="heading"][data-level="3"],
+.bn-shadcn
+	.bn-block-outer[data-prev-level="3"]
+	> .bn-block
+	> .bn-block-content {
+	font-size: 20px;
+	line-height: 1.35;
+}
+.bn-shadcn .bn-block-content[data-content-type="heading"][data-level="4"],
+.bn-shadcn .bn-block-content[data-content-type="heading"][data-level="5"],
+.bn-shadcn .bn-block-content[data-content-type="heading"][data-level="6"],
+.bn-shadcn .bn-block-outer[data-prev-level="4"] > .bn-block > .bn-block-content,
+.bn-shadcn .bn-block-outer[data-prev-level="5"] > .bn-block > .bn-block-content,
+.bn-shadcn
+	.bn-block-outer[data-prev-level="6"]
+	> .bn-block
+	> .bn-block-content {
+	font-size: 18px;
+	line-height: 1.4;
+}
+.bn-shadcn .bn-block-content[data-content-type="heading"] {
+	font-weight: 700;
+}
+
 /* Code blocks: 14px monospace (BlockNote defaults to 16px). */
 .bn-shadcn .bn-block-content[data-content-type="codeBlock"] pre,
 .bn-shadcn .bn-block-content[data-content-type="codeBlock"] code {
@@ -258,8 +300,7 @@
 
 /* BlockNote draws vertical nested-block guide lines. Haunter uses indentation
    alone, so hide the guide without affecting list bullets or task controls. */
-.haunter-editor
-	.bn-shadcn
+.haunter-editor .bn-shadcn
 	.bn-block-group
 	.bn-block-group
 	> .bn-block-outer::before,

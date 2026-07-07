@@ -322,7 +322,7 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 			roots.push(
 				makeBlock(
 					"heading",
-					{ level: Math.min(heading[1].length, 3) },
+					{ level: Math.min(heading[1].length, 4) },
 					parseInline(heading[2]),
 				),
 			);
