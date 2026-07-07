@@ -72,6 +72,17 @@ type HaunterBlockNoteEditor = BlockNoteEditor<
 	(typeof editorSchema)["styleSchema"]
 >;
 
+function focusBlockContentOnNextFrame(
+	editor: HaunterBlockNoteEditor,
+	blockId: string,
+) {
+	requestAnimationFrame(() => {
+		if (!editor.getBlock(blockId)) return;
+		editor.setTextCursorPosition(blockId, "start");
+		editor.focus();
+	});
+}
+
 /** Block-menu item to open a code block in the larger editing dialog. */
 function EditCodeMenuItem({ onOpen }: { onOpen: (blockId: string) => void }) {
 	const Components = useComponentsContext();
@@ -111,7 +122,10 @@ function getSlashMenuItems(
 		group: "Basic blocks",
 		icon: <CheckSquareIcon className="size-4.5" />,
 		onItemClick: () => {
-			insertOrUpdateBlockForSlashMenu(editor, { type: "task" });
+			const insertedTask = insertOrUpdateBlockForSlashMenu(editor, {
+				type: "task",
+			});
+			focusBlockContentOnNextFrame(editor, insertedTask.id);
 		},
 	};
 
