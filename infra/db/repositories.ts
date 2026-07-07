@@ -7,7 +7,6 @@ import { createDrizzlePageRepository } from "@/infra/pages/drizzle-page-reposito
 import { createDrizzlePageVersionRepository } from "@/infra/pages/drizzle-page-version-repository";
 import { createDrizzleShareRepository } from "@/infra/shares/drizzle-share-repository";
 import { createDrizzleTaskRepository } from "@/infra/tasks/drizzle-task-repository";
-import { createDrizzleWaitlistRepository } from "@/infra/waitlist/drizzle-waitlist-repository";
 import type { AppTransactionPorts } from "@/ports";
 import type * as schema from "./schema";
 
@@ -23,6 +22,5 @@ export function createRepositories(
 		pageVersions: createDrizzlePageVersionRepository(db),
 		shares: createDrizzleShareRepository(db),
 		tasks: createDrizzleTaskRepository(db),
-		waitlist: createDrizzleWaitlistRepository(db),
 	};
 }

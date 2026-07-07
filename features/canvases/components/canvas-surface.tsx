@@ -6,12 +6,7 @@ import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
-import {
-	type Editor,
-	getSnapshot,
-	loadSnapshot,
-	Tldraw,
-} from "tldraw";
+import { type Editor, getSnapshot, loadSnapshot, Tldraw } from "tldraw";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
 	getCanvasQueryOptions,

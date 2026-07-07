@@ -1,8 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-	createMemoryRateLimiter,
-	createStaticAuth,
-} from "@beignet/core/ports";
+import { createMemoryRateLimiter, createStaticAuth } from "@beignet/core/ports";
 import {
 	createIdempotencyHooks,
 	createRateLimitHooks,
@@ -16,7 +13,12 @@ import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
-import type { AuthRequest, AuthSessionMetadata, AuthUser } from "@/ports/auth";
+import {
+	ACCESS_STATUS_APPROVED,
+	type AuthRequest,
+	type AuthSessionMetadata,
+	type AuthUser,
+} from "@/ports/auth";
 import { type AppServiceContextInput, appContext } from "@/server/context";
 import {
 	createPage,
@@ -38,7 +40,12 @@ function createSignedInAuth(
 	workspaceId: string,
 ): AppPorts["auth"] {
 	return createStaticAuth<AuthUser, AuthSessionMetadata, AuthRequest>({
-		user: { id: userId, email: `${userId}@example.com`, name: "Test User" },
+		user: {
+			id: userId,
+			email: `${userId}@example.com`,
+			name: "Test User",
+			accessStatus: ACCESS_STATUS_APPROVED,
+		},
 		// The active organization is the request tenant.
 		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	});

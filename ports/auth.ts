@@ -6,12 +6,18 @@ import type {
 
 export type AuthRequest = AuthRequestLike;
 
+export const ACCESS_STATUS_APPROVED = "approved";
+export const ACCESS_STATUS_WAITLISTED = "waitlisted";
+
+export type AccessStatus = string;
+
 export type AuthUser = {
 	id: string;
 	email?: string;
 	name?: string;
 	tenantId?: string;
 	organizationId?: string;
+	accessStatus?: AccessStatus;
 };
 
 export type AuthSessionMetadata = {

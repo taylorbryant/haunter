@@ -12,6 +12,7 @@ import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
+import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import type { AgentAdminRow } from "../ports";
 import { getPendingAgentUseCase, listAgentsUseCase } from "../use-cases";
 import { createTestAgentAdminRepository } from "./helpers";
@@ -37,7 +38,12 @@ function createFixture(rows: (AgentAdminRow & { userId: string | null })[]) {
 	const agents = createTestAgentAdminRepository(rows);
 	const workspaceId = crypto.randomUUID().replaceAll("-", "");
 	const auth = {
-		user: { id: "user_test", email: "user_test@example.com", name: "Test" },
+		user: {
+			id: "user_test",
+			email: "user_test@example.com",
+			name: "Test",
+			accessStatus: ACCESS_STATUS_APPROVED,
+		},
 		session: { id: "session_test", activeOrganizationId: workspaceId },
 	};
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({

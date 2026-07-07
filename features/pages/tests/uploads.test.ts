@@ -12,6 +12,7 @@ import { enforceUploadRateLimit } from "@/app/api/uploads/[uploadName]/[action]/
 import { AttachmentUpload } from "@/features/pages/uploads";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
+import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import { createTestPageRepository } from "./helpers";
 
 function createUploadFixture(role: string) {
@@ -25,22 +26,24 @@ function createUploadFixture(role: string) {
 			id: userId,
 			email: `${userId}@example.com`,
 			name: "Test User",
+			accessStatus: ACCESS_STATUS_APPROVED,
 		},
 		session: { id: `session_${userId}`, activeOrganizationId: workspace.id },
 	};
 	const pages = createTestPageRepository();
-	const portsFixture = createTestPorts<AppContext["ports"], AppTransactionPorts>(
-		{
-			base: appPorts,
-			overrides: {
-				gate: appPorts.gate,
-				pages,
-			},
-			transaction: {
-				ports: (ports) => ({ ...ports, pages }),
-			},
+	const portsFixture = createTestPorts<
+		AppContext["ports"],
+		AppTransactionPorts
+	>({
+		base: appPorts,
+		overrides: {
+			gate: appPorts.gate,
+			pages,
 		},
-	);
+		transaction: {
+			ports: (ports) => ({ ...ports, pages }),
+		},
+	});
 	const createContext = createTestContextFactory<
 		AppContext,
 		AppContext["ports"]
@@ -143,7 +146,9 @@ describe("page attachment uploads", () => {
 			},
 		};
 		const ctx = {
-			auth: { user: { id: "user_editor" } },
+			auth: {
+				user: { id: "user_editor", accessStatus: ACCESS_STATUS_APPROVED },
+			},
 		} as AppContext;
 
 		const response = await enforceUploadRateLimit(

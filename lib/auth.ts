@@ -1,7 +1,11 @@
 import { requireTenantId } from "@beignet/core/ports";
 import type { AppContext } from "@/app-context";
 import { appError } from "@/features/shared/errors";
-import type { AuthSession, AuthUser } from "@/ports/auth";
+import {
+	ACCESS_STATUS_APPROVED,
+	type AuthSession,
+	type AuthUser,
+} from "@/ports/auth";
 
 export function requireSession(ctx: AppContext): AuthSession {
 	if (!ctx.auth) {
@@ -11,8 +15,36 @@ export function requireSession(ctx: AppContext): AuthSession {
 	return ctx.auth;
 }
 
+export function isApprovedUser(
+	user: Pick<AuthUser, "accessStatus"> | null | undefined,
+): boolean {
+	return user?.accessStatus === ACCESS_STATUS_APPROVED;
+}
+
+export function hasAppAccessSession(
+	session:
+		| {
+				user?: Pick<AuthUser, "accessStatus"> | null;
+				session?: { activeOrganizationId?: string | null } | null;
+		  }
+		| null
+		| undefined,
+): boolean {
+	return Boolean(
+		session &&
+			(isApprovedUser(session.user) || session.session?.activeOrganizationId),
+	);
+}
+
 export function requireUser(ctx: AppContext): AuthUser {
-	return requireSession(ctx).user;
+	const session = requireSession(ctx);
+	if (!isApprovedUser(session.user) && !ctx.membership) {
+		throw appError("Forbidden", {
+			message: "Your account is still on the waitlist.",
+		});
+	}
+
+	return session.user;
 }
 
 /**

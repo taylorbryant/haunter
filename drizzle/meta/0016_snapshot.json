@@ -1,8 +1,8 @@
 {
 	"version": "6",
 	"dialect": "sqlite",
-	"id": "5b5fd106-c59e-42d9-aec6-1892a3a2e0a1",
-	"prevId": "972bc0fb-0be6-4f6a-843f-4a1fd5111e68",
+	"id": "69bdd504-de8b-4a5a-98e4-3cd5192e4cf6",
+	"prevId": "5b5fd106-c59e-42d9-aec6-1892a3a2e0a1",
 	"tables": {
 		"account": {
 			"name": "account",
@@ -1660,6 +1660,14 @@
 					"notNull": false,
 					"autoincrement": false
 				},
+				"access_status": {
+					"name": "access_status",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "'waitlisted'"
+				},
 				"created_at": {
 					"name": "created_at",
 					"type": "integer",
@@ -1734,57 +1742,6 @@
 				}
 			},
 			"indexes": {},
-			"foreignKeys": {},
-			"compositePrimaryKeys": {},
-			"uniqueConstraints": {},
-			"checkConstraints": {}
-		},
-		"waitlist_entries": {
-			"name": "waitlist_entries",
-			"columns": {
-				"id": {
-					"name": "id",
-					"type": "text",
-					"primaryKey": true,
-					"notNull": true,
-					"autoincrement": false
-				},
-				"email": {
-					"name": "email",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": true,
-					"autoincrement": false
-				},
-				"created_at": {
-					"name": "created_at",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": true,
-					"autoincrement": false
-				},
-				"updated_at": {
-					"name": "updated_at",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": true,
-					"autoincrement": false
-				},
-				"last_requested_at": {
-					"name": "last_requested_at",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": true,
-					"autoincrement": false
-				}
-			},
-			"indexes": {
-				"waitlist_entries_email_unique": {
-					"name": "waitlist_entries_email_unique",
-					"columns": ["email"],
-					"isUnique": true
-				}
-			},
 			"foreignKeys": {},
 			"compositePrimaryKeys": {},
 			"uniqueConstraints": {},

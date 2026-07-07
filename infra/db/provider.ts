@@ -36,7 +36,6 @@ export const starterDatabaseProvider = createProvider<{
 			| "pageVersions"
 			| "shares"
 			| "tasks"
-			| "waitlist"
 			| "uow"
 		> = {
 			...repositories,

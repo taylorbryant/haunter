@@ -20,6 +20,7 @@ import {
 import { savePageContentUseCase } from "@/features/pages/use-cases";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
+import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import {
 	createTaskUseCase,
 	deleteTaskUseCase,
@@ -59,7 +60,12 @@ async function createFixture(userId = "user_test") {
 	});
 
 	const auth = {
-		user: { id: userId, email: `${userId}@example.com`, name: "Test User" },
+		user: {
+			id: userId,
+			email: `${userId}@example.com`,
+			name: "Test User",
+			accessStatus: ACCESS_STATUS_APPROVED,
+		},
 		session: { id: `session_${userId}`, activeOrganizationId: workspace.id },
 	};
 	const pageLinks = createTestPageLinkRepository({ pages });
@@ -419,6 +425,7 @@ describe("tasks use cases", () => {
 				id: "user_intruder",
 				email: "user_intruder@example.com",
 				name: "Intruder",
+				accessStatus: ACCESS_STATUS_APPROVED,
 			},
 			session: {
 				id: "session_intruder",

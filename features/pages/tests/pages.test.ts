@@ -15,6 +15,7 @@ import type { PageRepository } from "@/features/pages/ports";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
+import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import {
 	createPageUseCase,
 	deletePageUseCase,
@@ -49,6 +50,7 @@ function createTester(
 			id: userId,
 			email: `${userId}@example.com`,
 			name: "Test User",
+			accessStatus: ACCESS_STATUS_APPROVED,
 		},
 		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	};

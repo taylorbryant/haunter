@@ -9,6 +9,7 @@ import { defineServerContext } from "@beignet/core/server";
 import type { TraceContext } from "@beignet/core/tracing";
 import type { AppContext, AppRuntimePorts } from "@/app-context";
 import { resolveRequestTenant, resolveServiceTenant } from "@/lib/tenant";
+import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 
 export type AppServiceContextInput =
 	| {
@@ -74,11 +75,9 @@ export const appContext = defineServerContext<AppContext, AppRuntimePorts>()({
 				// Synthetic session: requireUser() only needs the acting user's
 				// verified identity.
 				auth: {
-					user: { id: input.asUser.id },
+					user: { id: input.asUser.id, accessStatus: ACCESS_STATUS_APPROVED },
 					session: {
-						...(input.tenantId
-							? { activeOrganizationId: input.tenantId }
-							: {}),
+						...(input.tenantId ? { activeOrganizationId: input.tenantId } : {}),
 					},
 				},
 				...trace,

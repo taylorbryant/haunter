@@ -13,7 +13,9 @@ export function useWorkspaceRouteSync(
 	const activeId = activeQuery.data?.id ?? null;
 	const synced =
 		workspaceId !== null &&
-		(activeQuery.isPending ? serverHint === workspaceId : activeId === workspaceId);
+		(activeQuery.isPending
+			? serverHint === workspaceId
+			: activeId === workspaceId);
 
 	useEffect(() => {
 		if (

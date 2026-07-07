@@ -18,6 +18,7 @@ export const user = sqliteTable("user", {
 		.notNull()
 		.default(false),
 	image: text("image"),
+	accessStatus: text("access_status").notNull().default("waitlisted"),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
@@ -203,14 +204,6 @@ export const approvalRequest = sqliteTable("approval_request", {
 	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
 	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
-
-export const waitlistEntries = sqliteTable("waitlist_entries", {
-	id: text("id").primaryKey(),
-	email: text("email").notNull().unique(),
-	createdAt: text("created_at").notNull(),
-	updatedAt: text("updated_at").notNull(),
-	lastRequestedAt: text("last_requested_at").notNull(),
 });
 
 export const pages = sqliteTable(

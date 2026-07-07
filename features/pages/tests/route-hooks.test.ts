@@ -1,8 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-	createMemoryRateLimiter,
-	createStaticAuth,
-} from "@beignet/core/ports";
+import { createMemoryRateLimiter, createStaticAuth } from "@beignet/core/ports";
 import {
 	createIdempotencyHooks,
 	createRateLimitHooks,
@@ -16,7 +13,12 @@ import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
-import type { AuthRequest, AuthSessionMetadata, AuthUser } from "@/ports/auth";
+import {
+	ACCESS_STATUS_APPROVED,
+	type AuthRequest,
+	type AuthSessionMetadata,
+	type AuthUser,
+} from "@/ports/auth";
 import { type AppServiceContextInput, appContext } from "@/server/context";
 import { createPage, listPages, searchPages } from "../contracts";
 import { pageRoutes } from "../routes";
@@ -95,7 +97,12 @@ function createSignedInAuth(
 	workspaceId: string,
 ): AppPorts["auth"] {
 	return createStaticAuth<AuthUser, AuthSessionMetadata, AuthRequest>({
-		user: { id: userId, email: `${userId}@example.com`, name: "Test User" },
+		user: {
+			id: userId,
+			email: `${userId}@example.com`,
+			name: "Test User",
+			accessStatus: ACCESS_STATUS_APPROVED,
+		},
 		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	});
 }
@@ -133,9 +140,7 @@ describe("page route hooks", () => {
 		expect(body.details?.retryAfterSeconds).toBeGreaterThan(0);
 		// Since 0.0.30 the hook also sets the standard header, so generic
 		// clients can back off without parsing the error body.
-		expect(
-			Number(response.headers.get("retry-after")),
-		).toBeGreaterThan(0);
+		expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
 	});
 
 	it("replays an idempotent create instead of re-executing it", async () => {

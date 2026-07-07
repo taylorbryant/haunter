@@ -25,6 +25,7 @@ import {
 import type { ShareRepository } from "@/features/shares/ports";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
+import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import {
 	createPageShareUseCase,
 	getPageShareUseCase,
@@ -68,7 +69,12 @@ function createTester(options: {
 			: createTestAnonymousActor(),
 		auth: userId
 			? {
-					user: { id: userId, email: `${userId}@example.com`, name: "Test" },
+					user: {
+						id: userId,
+						email: `${userId}@example.com`,
+						name: "Test",
+						accessStatus: ACCESS_STATUS_APPROVED,
+					},
 					session: {
 						id: `session_${userId}`,
 						activeOrganizationId: workspaceId ?? undefined,

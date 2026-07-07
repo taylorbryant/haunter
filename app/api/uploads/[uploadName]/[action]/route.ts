@@ -26,9 +26,11 @@ function uploadRateLimitKey(req: Request, ctx: AppContext): string {
 	const userId = ctx.auth?.user.id;
 	if (userId) return `uploads:user:${userId}`;
 
-	const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-	const ip =
-		forwardedFor || req.headers.get("x-real-ip")?.trim() || "unknown";
+	const forwardedFor = req.headers
+		.get("x-forwarded-for")
+		?.split(",")[0]
+		?.trim();
+	const ip = forwardedFor || req.headers.get("x-real-ip")?.trim() || "unknown";
 	return `uploads:ip:${ip}`;
 }
 

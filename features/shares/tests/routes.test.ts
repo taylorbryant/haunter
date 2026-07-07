@@ -13,7 +13,12 @@ import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
-import type { AuthRequest, AuthSessionMetadata, AuthUser } from "@/ports/auth";
+import {
+	ACCESS_STATUS_APPROVED,
+	type AuthRequest,
+	type AuthSessionMetadata,
+	type AuthUser,
+} from "@/ports/auth";
 import { type AppServiceContextInput, appContext } from "@/server/context";
 import { createPageShare } from "../contracts";
 import { shareRoutes } from "../routes";
@@ -41,7 +46,12 @@ describe("shareRoutes rate limiting", () => {
 			AuthSessionMetadata,
 			AuthRequest
 		>({
-			user: { id: "user_test", email: "user_test@example.com", name: "Test" },
+			user: {
+				id: "user_test",
+				email: "user_test@example.com",
+				name: "Test",
+				accessStatus: ACCESS_STATUS_APPROVED,
+			},
 			session: { id: "session_test", activeOrganizationId: workspaceId },
 		});
 		const members = {

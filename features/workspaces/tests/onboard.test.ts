@@ -18,16 +18,33 @@ import {
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
+import {
+	ACCESS_STATUS_APPROVED,
+	ACCESS_STATUS_WAITLISTED,
+	type AccessStatus,
+} from "@/ports/auth";
 import { onboardUserUseCase } from "../use-cases";
 
-async function createFixture(role = "owner") {
+async function createFixture(
+	role = "owner",
+	accessStatus: AccessStatus = ACCESS_STATUS_APPROVED,
+	hasMembership = true,
+) {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository({ pages });
 	// Better Auth org ids are nanoid-style, not UUIDs.
 	const workspaceId = crypto.randomUUID().replaceAll("-", "");
 	const auth = {
-		user: { id: "user_test", email: "user_test@example.com", name: "Test" },
-		session: { id: "session_test", activeOrganizationId: workspaceId },
+		user: {
+			id: "user_test",
+			email: "user_test@example.com",
+			name: "Test",
+			accessStatus,
+		},
+		session: {
+			id: "session_test",
+			...(hasMembership ? { activeOrganizationId: workspaceId } : {}),
+		},
 	};
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
@@ -52,8 +69,12 @@ async function createFixture(role = "owner") {
 		ports: fixture.ports,
 		actor: createTestUserActor(auth.user.id, { displayName: "Test" }),
 		auth,
-		tenant: createTestTenant(workspaceId),
-		extra: { membership: { role } },
+		...(hasMembership
+			? {
+					tenant: createTestTenant(workspaceId),
+					extra: { membership: { role } },
+				}
+			: {}),
 	});
 	const tester = createUseCaseTester<AppContext>(createTestContext);
 	const ctx = await tester.ctx();
@@ -103,5 +124,17 @@ describe("onboarding", () => {
 		const result = await tester.run(onboardUserUseCase, {}, { ctx });
 		expect(result.pageId).toBeNull();
 		expect(await pages.listMetaByWorkspace(workspaceId)).toHaveLength(0);
+	});
+
+	it("blocks waitlisted users that have not been admitted to a workspace", async () => {
+		const { tester, ctx } = await createFixture(
+			"owner",
+			ACCESS_STATUS_WAITLISTED,
+			false,
+		);
+
+		await expect(tester.run(onboardUserUseCase, {}, { ctx })).rejects.toThrow(
+			"still on the waitlist",
+		);
 	});
 });

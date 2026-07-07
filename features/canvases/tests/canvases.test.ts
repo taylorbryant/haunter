@@ -20,6 +20,7 @@ import { purgePageUseCase } from "@/features/pages/use-cases";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
+import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import {
 	createCanvasUseCase,
 	getCanvasUseCase,
@@ -37,7 +38,12 @@ function createTester(
 ) {
 	const tasks = createTestTaskRepository();
 	const auth = {
-		user: { id: userId, email: `${userId}@example.com`, name: "Test User" },
+		user: {
+			id: userId,
+			email: `${userId}@example.com`,
+			name: "Test User",
+			accessStatus: ACCESS_STATUS_APPROVED,
+		},
 		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	};
 	const pageLinks = createTestPageLinkRepository({ pages: repos.pages });

@@ -13,6 +13,7 @@ import {
 	SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { HeaderPageActions } from "@/components/header-page-actions";
+import { hasAppAccessSession } from "@/lib/auth";
 import { auth } from "@/lib/better-auth";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -29,6 +30,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 				? `/sign-in?next=${encodeURIComponent(requestedPath)}`
 				: "/sign-in",
 		);
+	}
+	if (!hasAppAccessSession(session)) {
+		redirect("/waitlist");
 	}
 
 	const cookieStore = await cookies();
@@ -58,9 +62,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 						<HeaderPresence />
 						<HeaderPageActions />
 					</header>
-					<div className="min-w-0 flex-1">
-						{children}
-					</div>
+					<div className="min-w-0 flex-1">{children}</div>
 				</SidebarInset>
 			</SidebarProvider>
 		</ActiveWorkspaceHintProvider>

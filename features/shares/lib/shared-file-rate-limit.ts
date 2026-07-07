@@ -7,7 +7,10 @@ type RateLimitServer = {
 };
 
 function sharedFileIp(req: Request): string {
-	const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+	const forwardedFor = req.headers
+		.get("x-forwarded-for")
+		?.split(",")[0]
+		?.trim();
 	return forwardedFor || req.headers.get("x-real-ip")?.trim() || "unknown";
 }
 
@@ -44,5 +47,8 @@ export async function enforceSharedFileTokenRateLimit(
 	server: RateLimitServer,
 	token: string,
 ): Promise<Response | null> {
-	return hitSharedFileLimit(server.ports.rateLimit, `share-files:token:${token}`);
+	return hitSharedFileLimit(
+		server.ports.rateLimit,
+		`share-files:token:${token}`,
+	);
 }

@@ -21,19 +21,16 @@ import {
 	InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
-import { requestAccess } from "@/features/waitlist/contracts";
 import { onboard } from "@/features/workspaces/contracts";
 import { gravatarUrl } from "@/lib/gravatar";
 
 /**
- * Passwordless sign-in for existing accounts. Unknown emails join the waitlist
- * instead of being created implicitly by OTP verification.
+ * Passwordless sign-in. Unknown emails still receive the same OTP flow, then
+ * land on a waitlist-only account after verification.
  */
 export function OtpAuthForm() {
 	const router = useRouter();
-	const [step, setStep] = useState<"email" | "code" | "name" | "waitlist">(
-		"email",
-	);
+	const [step, setStep] = useState<"email" | "code" | "name">("email");
 	const [email, setEmail] = useState("");
 	const [code, setCode] = useState("");
 	const [name, setName] = useState("");
@@ -47,22 +44,6 @@ export function OtpAuthForm() {
 		setError(null);
 		setPending(true);
 		setEmail(address);
-		let access: { status: "existing" | "waitlisted" };
-		try {
-			access = await apiClient
-				.endpoint(requestAccess)
-				.call({ body: { email: address } });
-		} catch {
-			setPending(false);
-			setError("Could not request access. Try again.");
-			return;
-		}
-
-		if (access.status === "waitlisted") {
-			setPending(false);
-			setStep("waitlist");
-			return;
-		}
 
 		const result = await authClient.emailOtp.sendVerificationOtp({
 			email: address,
@@ -91,9 +72,21 @@ export function OtpAuthForm() {
 			return;
 		}
 
+		const user = result.data?.user as
+			| { accessStatus?: string; name?: string | null }
+			| undefined;
+		if (user?.accessStatus !== "approved") {
+			const nextPath = getSafeNextPath();
+			router.push(
+				nextPath?.startsWith("/accept-invite/") ? nextPath : "/waitlist",
+			);
+			router.refresh();
+			return;
+		}
+
 		// A fresh OTP-created account has no name — ask for one before landing
 		// in the app. Returning users skip straight through.
-		if (!result.data?.user?.name) {
+		if (!user.name) {
 			setPending(false);
 			setStep("name");
 			return;
@@ -129,11 +122,7 @@ export function OtpAuthForm() {
 		// A ?next= destination (set by the auth proxy) wins over the onboarding
 		// landing page. Same-origin relative paths only — "//host" would be a
 		// protocol-relative open redirect.
-		const nextParam = new URLSearchParams(window.location.search).get("next");
-		const nextPath =
-			nextParam?.startsWith("/") && !nextParam.startsWith("//")
-				? nextParam
-				: null;
+		const nextPath = getSafeNextPath();
 
 		// Signed in. Ensure the user has a workspace (a Better Auth organization),
 		// make it active, then seed it (idempotent for returning users) and land
@@ -173,18 +162,14 @@ export function OtpAuthForm() {
 						? "Sign in"
 						: step === "code"
 							? "Enter your code"
-							: step === "waitlist"
-								? "You're on the waitlist"
-								: "What should we call you?"}
+							: "What should we call you?"}
 				</CardTitle>
 				<CardDescription aria-live="polite">
 					{step === "email"
 						? "We'll email you a 6-digit code — no password needed."
 						: step === "code"
 							? `We sent a code to ${email}.`
-							: step === "waitlist"
-								? `We'll let you know when ${email} can create a Haunter account.`
-								: "Your name is shown to people you share workspaces with."}
+							: "Your name is shown to people you share workspaces with."}
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
@@ -212,25 +197,6 @@ export function OtpAuthForm() {
 							{pending ? "Sending…" : "Send code"}
 						</Button>
 					</form>
-				) : step === "waitlist" ? (
-					<div className="flex flex-col gap-4">
-						<p className="text-muted-foreground text-sm">
-							Haunter is not creating new accounts for that email yet. You're
-							on the list, and existing accounts can still sign in with a code.
-						</p>
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => {
-								setStep("email");
-								setEmail("");
-								setCode("");
-								setError(null);
-							}}
-						>
-							Use a different email
-						</Button>
-					</div>
 				) : step === "name" ? (
 					<form className="flex flex-col gap-4" onSubmit={submitName}>
 						<div className="flex flex-col gap-2">
@@ -313,4 +279,11 @@ export function OtpAuthForm() {
 			</CardContent>
 		</Card>
 	);
+}
+
+function getSafeNextPath(): string | null {
+	const nextParam = new URLSearchParams(window.location.search).get("next");
+	return nextParam?.startsWith("/") && !nextParam.startsWith("//")
+		? nextParam
+		: null;
 }

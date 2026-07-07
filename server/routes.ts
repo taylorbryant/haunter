@@ -6,7 +6,6 @@ import { canvasRoutes } from "@/features/canvases/routes";
 import { pageRoutes } from "@/features/pages/routes";
 import { shareRoutes } from "@/features/shares/routes";
 import { taskRoutes } from "@/features/tasks/routes";
-import { waitlistRoutes } from "@/features/waitlist/routes";
 import { workspaceRoutes } from "@/features/workspaces/routes";
 
 export const routes = defineRoutes<AppContext>([
@@ -16,6 +15,5 @@ export const routes = defineRoutes<AppContext>([
 	shareRoutes,
 	taskRoutes,
 	canvasRoutes,
-	waitlistRoutes,
 ]);
 export const contracts = contractsFromRoutes(routes);

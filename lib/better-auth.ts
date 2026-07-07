@@ -14,6 +14,7 @@ import { createAuthRateLimitStorage } from "@/lib/auth-rate-limit";
 import { env } from "@/lib/env";
 import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
 import { accessControl, roles } from "@/lib/org-access";
+import { ACCESS_STATUS_APPROVED, ACCESS_STATUS_WAITLISTED } from "@/ports/auth";
 
 const client = createClient({
 	url: env.SQLITE_DB_URL,
@@ -51,9 +52,6 @@ export const auth = betterAuth({
 		emailOTP({
 			otpLength: 6,
 			expiresIn: 60 * 5,
-			// Unknown emails are handled by the app-owned waitlist route instead
-			// of being implicitly created by OTP verification.
-			disableSignUp: true,
 			async sendVerificationOTP({ email, otp }) {
 				await sendLoginCode(email, otp);
 			},
@@ -64,6 +62,10 @@ export const auth = betterAuth({
 		organization({
 			ac: accessControl,
 			roles,
+			requireEmailVerificationOnInvitation: true,
+			allowUserToCreateOrganization(user) {
+				return user.accessStatus === ACCESS_STATUS_APPROVED;
+			},
 			async sendInvitationEmail(data) {
 				await sendWorkspaceInvite({
 					email: data.email,
@@ -127,6 +129,14 @@ export const auth = betterAuth({
 		},
 	},
 	user: {
+		additionalFields: {
+			accessStatus: {
+				type: "string",
+				required: true,
+				defaultValue: ACCESS_STATUS_WAITLISTED,
+				input: false,
+			},
+		},
 		changeEmail: {
 			enabled: true,
 		},
