@@ -112,6 +112,7 @@ function getSlashMenuItems(
 	page: {
 		pageId: string;
 		workspaceId: string;
+		currentUserId: string | null;
 		onSubpageCreated: (created: PageMeta) => void;
 	},
 ) {
@@ -124,6 +125,7 @@ function getSlashMenuItems(
 		onItemClick: () => {
 			const insertedTask = insertOrUpdateBlockForSlashMenu(editor, {
 				type: "task",
+				props: page.currentUserId ? { assignee: page.currentUserId } : {},
 			});
 			focusBlockContentOnNextFrame(editor, insertedTask.id);
 		},
@@ -220,6 +222,8 @@ type HaunterEditorProps = {
 	collabUser?: { name: string; color: string };
 	/** Incremented by the owner when focus should move from the title to body. */
 	focusRequest?: number;
+	/** Current signed-in user, used for same-user authoring defaults. */
+	currentUserId?: string | null;
 	/** Flush pending same-client metadata writes before saving document content. */
 	flushMetadataSave?: () => Promise<string | null>;
 	onSaveStateChange?: (state: SaveState) => void;
@@ -281,6 +285,7 @@ export default function HaunterEditor({
 	collabUser,
 	collab = null,
 	focusRequest = 0,
+	currentUserId = null,
 	flushMetadataSave,
 	onSaveStateChange,
 	onConflict,
@@ -496,6 +501,7 @@ export default function HaunterEditor({
 						getSlashMenuItems(editor, query, {
 							pageId,
 							workspaceId,
+							currentUserId,
 							// Open the new subpage; the unmount flush persists the
 							// parent document (with the link block) on the way out.
 							onSubpageCreated: async (created) => {

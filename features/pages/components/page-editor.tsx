@@ -306,6 +306,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					collab={collabRoom}
 					collabUser={collabUser}
 					focusRequest={editorFocusRequest}
+					currentUserId={session.data?.user.id ?? null}
 					flushMetadataSave={flushTitleSave}
 					onSaveStateChange={setPageSaveState}
 					onConflict={handleConflict}
