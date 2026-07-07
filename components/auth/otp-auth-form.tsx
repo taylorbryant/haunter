@@ -21,18 +21,19 @@ import {
 	InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
+import { requestAccess } from "@/features/waitlist/contracts";
 import { onboard } from "@/features/workspaces/contracts";
 import { gravatarUrl } from "@/lib/gravatar";
 
 /**
- * Passwordless sign-in/sign-up: email a 6-digit code, then verify it. An
- * unknown email creates the account (and gets a name step, since OTP signup
- * has nowhere else to ask). On success we seed the user's workspace
- * (idempotent) and land on their welcome page.
+ * Passwordless sign-in for existing accounts. Unknown emails join the waitlist
+ * instead of being created implicitly by OTP verification.
  */
 export function OtpAuthForm() {
 	const router = useRouter();
-	const [step, setStep] = useState<"email" | "code" | "name">("email");
+	const [step, setStep] = useState<"email" | "code" | "name" | "waitlist">(
+		"email",
+	);
 	const [email, setEmail] = useState("");
 	const [code, setCode] = useState("");
 	const [name, setName] = useState("");
@@ -41,10 +42,28 @@ export function OtpAuthForm() {
 
 	async function sendCode(event: React.FormEvent) {
 		event.preventDefault();
-		const address = email.trim();
+		const address = email.trim().toLowerCase();
 		if (!address || pending) return;
 		setError(null);
 		setPending(true);
+		setEmail(address);
+		let access: { status: "existing" | "waitlisted" };
+		try {
+			access = await apiClient
+				.endpoint(requestAccess)
+				.call({ body: { email: address } });
+		} catch {
+			setPending(false);
+			setError("Could not request access. Try again.");
+			return;
+		}
+
+		if (access.status === "waitlisted") {
+			setPending(false);
+			setStep("waitlist");
+			return;
+		}
+
 		const result = await authClient.emailOtp.sendVerificationOtp({
 			email: address,
 			type: "sign-in",
@@ -154,14 +173,18 @@ export function OtpAuthForm() {
 						? "Sign in"
 						: step === "code"
 							? "Enter your code"
-							: "What should we call you?"}
+							: step === "waitlist"
+								? "You're on the waitlist"
+								: "What should we call you?"}
 				</CardTitle>
 				<CardDescription aria-live="polite">
 					{step === "email"
 						? "We'll email you a 6-digit code — no password needed."
 						: step === "code"
 							? `We sent a code to ${email}.`
-							: "Your name is shown to people you share workspaces with."}
+							: step === "waitlist"
+								? `We'll let you know when ${email} can create a Haunter account.`
+								: "Your name is shown to people you share workspaces with."}
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
@@ -189,6 +212,25 @@ export function OtpAuthForm() {
 							{pending ? "Sending…" : "Send code"}
 						</Button>
 					</form>
+				) : step === "waitlist" ? (
+					<div className="flex flex-col gap-4">
+						<p className="text-muted-foreground text-sm">
+							Haunter is not creating new accounts for that email yet. You're
+							on the list, and existing accounts can still sign in with a code.
+						</p>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => {
+								setStep("email");
+								setEmail("");
+								setCode("");
+								setError(null);
+							}}
+						>
+							Use a different email
+						</Button>
+					</div>
 				) : step === "name" ? (
 					<form className="flex flex-col gap-4" onSubmit={submitName}>
 						<div className="flex flex-col gap-2">

@@ -45,5 +45,6 @@ export const appPorts = definePorts<AppPorts>()({
 		"tasks",
 		"uow",
 		"storage",
+		"waitlist",
 	],
 });

@@ -51,6 +51,9 @@ export const auth = betterAuth({
 		emailOTP({
 			otpLength: 6,
 			expiresIn: 60 * 5,
+			// Unknown emails are handled by the app-owned waitlist route instead
+			// of being implicitly created by OTP verification.
+			disableSignUp: true,
 			async sendVerificationOTP({ email, otp }) {
 				await sendLoginCode(email, otp);
 			},

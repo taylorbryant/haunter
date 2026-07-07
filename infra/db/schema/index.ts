@@ -205,6 +205,14 @@ export const approvalRequest = sqliteTable("approval_request", {
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+export const waitlistEntries = sqliteTable("waitlist_entries", {
+	id: text("id").primaryKey(),
+	email: text("email").notNull().unique(),
+	createdAt: text("created_at").notNull(),
+	updatedAt: text("updated_at").notNull(),
+	lastRequestedAt: text("last_requested_at").notNull(),
+});
+
 export const pages = sqliteTable(
 	"pages",
 	{

@@ -24,6 +24,7 @@ import type { AuthorizationContext } from "@/features/shared/authorization";
 import type { ShareRepository } from "@/features/shares/ports";
 import type { taskPolicy } from "@/features/tasks/policy";
 import type { TaskRepository } from "@/features/tasks/ports";
+import type { WaitlistRepository } from "@/features/waitlist/ports";
 import type { AuthPort } from "./auth";
 
 export type AppPolicies = [
@@ -42,6 +43,7 @@ export type AppTransactionPorts = {
 	pageVersions: PageVersionRepository;
 	shares: ShareRepository;
 	tasks: TaskRepository;
+	waitlist: WaitlistRepository;
 };
 
 export type AppGate = BoundGate<AppPolicies>;
@@ -65,4 +67,5 @@ export type AppPorts = {
 	tasks: TaskRepository;
 	uow: UnitOfWorkPort<AppTransactionPorts>;
 	storage: StoragePort;
+	waitlist: WaitlistRepository;
 };
