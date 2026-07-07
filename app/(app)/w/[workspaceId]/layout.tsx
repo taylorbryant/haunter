@@ -1,9 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { use, useEffect } from "react";
-import { authClient } from "@/client/auth-client";
-import { useActiveWorkspaceHint } from "@/components/active-workspace-provider";
+import { use } from "react";
+import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 
 /**
  * Keep Better Auth's active organization in sync with the workspace in the
@@ -26,18 +25,7 @@ export default function WorkspaceLayout({
 	params: Promise<{ workspaceId: string }>;
 }) {
 	const { workspaceId } = use(params);
-	const serverHint = useActiveWorkspaceHint();
-	const activeQuery = authClient.useActiveOrganization();
-	const activeId = activeQuery.data?.id ?? null;
-	const synced = activeQuery.isPending
-		? serverHint === workspaceId
-		: activeId === workspaceId;
-
-	useEffect(() => {
-		if (!activeQuery.isPending && activeId !== workspaceId) {
-			authClient.organization.setActive({ organizationId: workspaceId });
-		}
-	}, [activeQuery.isPending, activeId, workspaceId]);
+	const { synced } = useWorkspaceRouteSync(workspaceId, { syncActive: true });
 
 	if (!synced) return null;
 

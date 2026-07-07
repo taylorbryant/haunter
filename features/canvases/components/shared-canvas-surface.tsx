@@ -4,9 +4,10 @@ import "tldraw/tldraw.css";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { type Editor, type TLStoreSnapshot, Tldraw } from "tldraw";
+import { type Editor, Tldraw } from "tldraw";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import { rq } from "@/client";
+import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
 import { getSharedCanvas } from "@/features/shares/contracts";
 
 /**
@@ -42,10 +43,7 @@ export default function SharedCanvasSurface({
 	}
 
 	const stored = canvasQuery.data.snapshot;
-	const snapshot =
-		Object.keys(stored).length > 0
-			? (stored as unknown as TLStoreSnapshot)
-			: undefined;
+	const snapshot = loadableSnapshot(stored);
 
 	function handleMount(editor: Editor) {
 		editor.user.updateUserPreferences({

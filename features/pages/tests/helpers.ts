@@ -125,7 +125,9 @@ export function createTestPageRepository(): PageRepository {
 				throw new Error(`Page not found: ${id}`);
 			}
 
-			const updatedAt = new Date().toISOString();
+			const updatedAt = new Date(
+				Math.max(Date.now(), Date.parse(page.updatedAt) + 1),
+			).toISOString();
 			pages.set(id, { ...page, content: JSON.parse(contentJson), updatedAt });
 			return { updatedAt };
 		},

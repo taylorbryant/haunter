@@ -31,6 +31,8 @@ import {
 	invalidatePageShare,
 	revokePageShareMutationOptions,
 } from "@/features/shares/client/queries";
+import { flushPendingPageSave } from "@/features/pages/client/save-state";
+import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 
 /**
  * The share controls for one page: publish a read-only web link, copy it,
@@ -46,6 +48,8 @@ export function SharePanel({
 }) {
 	const queryClient = useQueryClient();
 	const [copied, setCopied] = useState(false);
+	const [flushError, setFlushError] = useState<string | null>(null);
+	const [flushing, setFlushing] = useState(false);
 
 	const shareQuery = useQuery({
 		...getPageShareQueryOptions(pageId),
@@ -58,10 +62,23 @@ export function SharePanel({
 	const shareUrl = share
 		? `${window.location.origin}/share/${share.token}`
 		: null;
-	const busy = createMutation.isPending || revokeMutation.isPending;
+	const busy = flushing || createMutation.isPending || revokeMutation.isPending;
 
-	function publish() {
+	async function flushBeforeShare() {
+		setFlushError(null);
+		setFlushing(true);
+		try {
+			if (await flushPendingPageSave(pageId)) return true;
+			setFlushError("Save this page before sharing.");
+			return false;
+		} finally {
+			setFlushing(false);
+		}
+	}
+
+	async function publish() {
 		if (busy) return;
+		if (!(await flushBeforeShare())) return;
 		createMutation.mutate(
 			{ path: { pageId }, body: {} },
 			{ onSuccess: () => invalidatePageShare(queryClient, pageId) },
@@ -78,6 +95,7 @@ export function SharePanel({
 
 	async function copy() {
 		if (!shareUrl) return;
+		if (!(await flushBeforeShare())) return;
 		await navigator.clipboard.writeText(shareUrl);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 1500);
@@ -121,6 +139,9 @@ export function SharePanel({
 				>
 					Revoke link
 				</Button>
+				{flushError ? (
+					<p className="text-destructive text-xs">{flushError}</p>
+				) : null}
 			</div>
 		);
 	}
@@ -139,6 +160,9 @@ export function SharePanel({
 			<Button type="button" size="sm" disabled={busy} onClick={publish}>
 				{busy ? "Publishing…" : "Publish"}
 			</Button>
+			{flushError ? (
+				<p className="text-destructive text-xs">{flushError}</p>
+			) : null}
 		</div>
 	);
 }
@@ -179,11 +203,13 @@ export function ShareDrawer({
  */
 export function ShareButton() {
 	const pathname = usePathname();
+	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
+	const { synced } = useWorkspaceRouteSync(workspaceId);
 	const canEdit = useCanEditWorkspace();
 	const [open, setOpen] = useState(false);
 
-	if (!pageId || !canEdit) return null;
+	if (!pageId || !canEdit || !synced) return null;
 
 	return (
 		// modal: non-modal Radix popovers don't dismiss on outside taps in iOS

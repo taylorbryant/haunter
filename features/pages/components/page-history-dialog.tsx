@@ -32,6 +32,7 @@ import {
 	restorePageVersionMutationOptions,
 } from "@/features/pages/client/queries";
 import { invalidateTasks } from "@/features/tasks/client/queries";
+import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
@@ -65,11 +66,13 @@ function versionSubtext(version: {
  */
 export function PageHistoryButton() {
 	const pathname = usePathname();
+	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
+	const { synced } = useWorkspaceRouteSync(workspaceId);
 	const canEdit = useCanEditWorkspace();
 	const [open, setOpen] = useState(false);
 
-	if (!pageId || !canEdit) return null;
+	if (!pageId || !canEdit || !synced) return null;
 
 	return (
 		<>

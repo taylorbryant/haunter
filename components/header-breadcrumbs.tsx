@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { listPagesQueryOptions } from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
+import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 function pageTrail(pages: PageMeta[], pageId: string): PageMeta[] {
@@ -41,13 +42,14 @@ export function HeaderBreadcrumbs() {
 	const pathname = usePathname();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
+	const { synced } = useWorkspaceRouteSync(workspaceId);
 
 	const pagesQuery = useQuery({
 		...listPagesQueryOptions(workspaceId ?? ""),
-		enabled: workspaceId !== null,
+		enabled: workspaceId !== null && synced,
 	});
 
-	if (!workspaceId) {
+	if (!workspaceId || !synced) {
 		return null;
 	}
 

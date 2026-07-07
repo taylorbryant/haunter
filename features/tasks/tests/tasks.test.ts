@@ -236,6 +236,44 @@ describe("tasks use cases", () => {
 		});
 	});
 
+	it("does not let a stale page save revert task-list write-through changes", async () => {
+		const { pages, tasks, workspace, page, tester, ctx } =
+			await createFixture();
+		const staleEditorContent = [taskBlock("b1", "Toggle me")];
+
+		const firstSave = await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: staleEditorContent },
+			{ ctx },
+		);
+		const [row] = await tasks.listByWorkspace(workspace.id, "all");
+		if (!row) throw new Error("Expected a task row.");
+
+		await tester.run(
+			updateTaskUseCase,
+			{ id: row.id, completed: true, dueDate: "2026-07-04" },
+			{ ctx },
+		);
+
+		await expect(
+			tester.run(
+				savePageContentUseCase,
+				{
+					id: page.id,
+					content: staleEditorContent,
+					baseUpdatedAt: firstSave.updatedAt,
+				},
+				{ ctx },
+			),
+		).rejects.toThrow(/changed since/);
+
+		const saved = await pages.findById(page.id);
+		expect(saved?.content[0]?.props).toEqual({
+			checked: true,
+			due: "2026-07-04",
+		});
+	});
+
 	it("rejects title edits and deletion for page-sourced tasks", async () => {
 		const { tasks, workspace, page, tester, ctx } = await createFixture();
 

@@ -50,6 +50,7 @@ import {
 	setPageSavedAtInCache,
 } from "@/features/pages/client/queries";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
+import { registerPageSaveFlusher } from "@/features/pages/client/save-state";
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
 import { invalidateTasks } from "@/features/tasks/client/queries";
@@ -301,7 +302,8 @@ export default function HaunterEditor({
 	const saveMutation = useMutation(savePageContentMutationOptions());
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const dirtyRef = useRef(false);
-	const saveRef = useRef<() => void>(() => {});
+	const inFlightSaveRef = useRef<Promise<boolean> | null>(null);
+	const saveRef = useRef<() => Promise<boolean>>(async () => true);
 
 	const reportState = useCallback(
 		(state: SaveState) => {
@@ -311,29 +313,29 @@ export default function HaunterEditor({
 		[onSaveStateChange],
 	);
 
-	saveRef.current = () => {
-		if (!dirtyRef.current) return;
+	saveRef.current = async () => {
+		if (inFlightSaveRef.current) {
+			return inFlightSaveRef.current;
+		}
+		if (!dirtyRef.current) return true;
 		dirtyRef.current = false;
 		reportState("saving");
 		const content = editor.document as unknown as BlockJson[];
 		// Mirror into the cache immediately: a remount between this save and
 		// the next refetch must not initialize the editor from a stale doc.
 		setPageContentInCache(queryClient, pageId, content);
-		saveMutation.mutate(
-			{
+		const run = saveMutation
+			.mutateAsync({
 				path: { id: pageId },
 				body: {
 					content,
-					// With collaboration on, Yjs already merges concurrent edits and
-					// every peer persists the same converged doc — a CAS precondition
-					// would only produce false 409s between peers.
-					...(baseUpdatedAtRef.current && !collab
+					...(baseUpdatedAtRef.current
 						? { baseUpdatedAt: baseUpdatedAtRef.current }
 						: {}),
 				},
-			},
-			{
-				onSuccess: (result) => {
+			})
+			.then(
+				(result) => {
 					baseUpdatedAtRef.current = result.updatedAt;
 					if (!dirtyRef.current) reportState("saved");
 					setPageSavedAtInCache(queryClient, pageId, result.updatedAt);
@@ -342,21 +344,27 @@ export default function HaunterEditor({
 					// Saving content reconciles task rows server-side (create/update/
 					// orphan-delete), so the My Tasks cache is stale after every save.
 					invalidateTasks(queryClient);
+					return true;
 				},
-				onError: (error) => {
+				(error) => {
 					if (error instanceof ContractError && error.status === 409) {
 						// Someone else saved a newer version. Don't retry over it —
 						// hand off so the owner reloads the doc into a fresh editor.
 						dirtyRef.current = false;
 						reportState("saved");
 						onConflict?.();
-						return;
+						return false;
 					}
 					dirtyRef.current = true;
 					reportState("error");
+					return false;
 				},
-			},
-		);
+			)
+			.finally(() => {
+				inFlightSaveRef.current = null;
+			});
+		inFlightSaveRef.current = run;
+		return run;
 	};
 
 	const handleChange = useCallback(() => {
@@ -373,9 +381,19 @@ export default function HaunterEditor({
 	useEffect(() => {
 		return () => {
 			if (timeoutRef.current) clearTimeout(timeoutRef.current);
-			saveRef.current();
+			void saveRef.current();
 		};
 	}, []);
+
+	useEffect(() => {
+		return registerPageSaveFlusher(pageId, async () => {
+			if (timeoutRef.current) {
+				clearTimeout(timeoutRef.current);
+				timeoutRef.current = null;
+			}
+			return saveRef.current();
+		});
+	}, [pageId]);
 
 	const [codeDialogBlockId, setCodeDialogBlockId] = useState<string | null>(
 		null,

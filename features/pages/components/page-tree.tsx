@@ -65,6 +65,7 @@ import {
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import type { PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
+import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { cn } from "@/lib/utils";
 import { PageIconPanel } from "./page-icon-picker";
 
@@ -126,7 +127,11 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const { isMobile, setOpenMobile } = useSidebar();
 	// Viewers browse the tree but get no create/rename/move/delete controls.
 	const canEdit = useCanEditWorkspace();
-	const pagesQuery = useQuery(listPagesQueryOptions(workspaceId));
+	const { synced } = useWorkspaceRouteSync(workspaceId);
+	const pagesQuery = useQuery({
+		...listPagesQueryOptions(workspaceId),
+		enabled: synced,
+	});
 	const createMutation = useMutation(createPageMutationOptions());
 	const updateMutation = useMutation(updatePageMutationOptions());
 	const deleteMutation = useMutation(deletePageMutationOptions());
@@ -563,7 +568,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	return (
 		<SidebarGroup>
 			<SidebarGroupLabel>Pages</SidebarGroupLabel>
-			{canEdit ? (
+			{canEdit && synced ? (
 				<SidebarGroupAction
 					title="New page"
 					aria-label="New page"
@@ -573,7 +578,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 				</SidebarGroupAction>
 			) : null}
 			<SidebarGroupContent>
-				{pagesQuery.isPending ? (
+				{!synced || pagesQuery.isPending ? (
 					<p className="px-2 text-sidebar-foreground/50 text-xs">Loading…</p>
 				) : tree.length === 0 ? (
 					<p className="px-2 text-sidebar-foreground/50 text-xs">

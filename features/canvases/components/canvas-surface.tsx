@@ -10,7 +10,6 @@ import {
 	type Editor,
 	getSnapshot,
 	loadSnapshot,
-	type TLStoreSnapshot,
 	Tldraw,
 } from "tldraw";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
@@ -23,9 +22,12 @@ import { authClient } from "@/client/auth-client";
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
 import {
 	type CanvasCollabUser,
-	isLoadableSnapshot,
 	useCollabCanvasStore,
 } from "@/features/canvases/components/use-collab-canvas-store";
+import {
+	isLoadableSnapshot,
+	loadableSnapshot,
+} from "@/features/canvases/lib/snapshot";
 import {
 	type CollabRoom,
 	useCollabSession,
@@ -101,9 +103,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	const stored = canvasQuery.data.snapshot;
 	// Legacy/empty rows without a schema crash tldraw's migrator; treat them
 	// as a fresh canvas instead.
-	const snapshot = isLoadableSnapshot(stored)
-		? (stored as unknown as TLStoreSnapshot)
-		: undefined;
+	const snapshot = loadableSnapshot(stored);
 
 	function handleMount(editor: Editor) {
 		editor.user.updateUserPreferences({
@@ -125,7 +125,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 			baseUpdatedAtRef.current = fresh.updatedAt;
 			if (isLoadableSnapshot(fresh.snapshot)) {
 				loadSnapshot(editor.store, {
-					document: fresh.snapshot as unknown as TLStoreSnapshot,
+					document: fresh.snapshot,
 				});
 			}
 			dirty = false;

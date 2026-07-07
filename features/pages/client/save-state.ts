@@ -10,6 +10,7 @@ export type PageSaveState = "saved" | "pending" | "saving" | "error";
  */
 let state: PageSaveState = "saved";
 const listeners = new Set<() => void>();
+const flushers = new Map<string, () => Promise<boolean>>();
 
 export function setPageSaveState(next: PageSaveState) {
 	if (state === next) return;
@@ -28,4 +29,21 @@ export function usePageSaveState(): PageSaveState {
 		() => state,
 		() => "saved" as const,
 	);
+}
+
+export function registerPageSaveFlusher(
+	pageId: string,
+	flush: () => Promise<boolean>,
+) {
+	flushers.set(pageId, flush);
+	return () => {
+		if (flushers.get(pageId) === flush) {
+			flushers.delete(pageId);
+		}
+	};
+}
+
+export async function flushPendingPageSave(pageId: string): Promise<boolean> {
+	const flush = flushers.get(pageId);
+	return flush ? flush() : true;
 }

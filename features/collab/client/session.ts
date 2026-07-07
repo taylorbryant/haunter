@@ -66,6 +66,8 @@ export function useCollabSession(roomId: string): CollabSession {
 	const synced = room?.synced === true;
 
 	useEffect(() => {
+		setRoom(null);
+		setFallback(false);
 		if (!mode) return;
 		let disposed = false;
 		let unbind: (() => void) | null = null;

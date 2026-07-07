@@ -22,6 +22,7 @@ import {
 	ShareButton,
 	ShareDrawer,
 } from "@/features/shares/components/share-button";
+import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 /**
@@ -31,7 +32,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
  */
 export function HeaderPageActions() {
 	const pathname = usePathname();
+	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
+	const { synced } = useWorkspaceRouteSync(workspaceId);
 	const canEdit = useCanEditWorkspace();
 	const isMobile = useIsMobile();
 	const [historyOpen, setHistoryOpen] = useState(false);
@@ -47,7 +50,7 @@ export function HeaderPageActions() {
 	}
 
 	// Both actions are editor-gated, same as their desktop buttons.
-	if (!pageId || !canEdit) return null;
+	if (!pageId || !canEdit || !synced) return null;
 
 	return (
 		<>

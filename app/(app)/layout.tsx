@@ -35,34 +35,34 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 	const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
 	return (
-		<SidebarProvider defaultOpen={defaultOpen}>
-			<AppSidebar
-				user={{
-					name: session.user.name,
-					email: session.user.email,
-					image: session.user.image ?? null,
-				}}
-			/>
-			<SidebarInset>
-				<header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-3 backdrop-blur-sm">
-					<SidebarTrigger />
-					<Separator
-						orientation="vertical"
-						className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-					/>
-					<HeaderBreadcrumbs />
-					<HeaderSaveIndicator />
-					<HeaderPresence />
-					<HeaderPageActions />
-				</header>
-				<div className="min-w-0 flex-1">
-					<ActiveWorkspaceHintProvider
-						value={session.session.activeOrganizationId ?? null}
-					>
+		<ActiveWorkspaceHintProvider
+			value={session.session.activeOrganizationId ?? null}
+		>
+			<SidebarProvider defaultOpen={defaultOpen}>
+				<AppSidebar
+					user={{
+						name: session.user.name,
+						email: session.user.email,
+						image: session.user.image ?? null,
+					}}
+				/>
+				<SidebarInset>
+					<header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-3 backdrop-blur-sm">
+						<SidebarTrigger />
+						<Separator
+							orientation="vertical"
+							className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+						/>
+						<HeaderBreadcrumbs />
+						<HeaderSaveIndicator />
+						<HeaderPresence />
+						<HeaderPageActions />
+					</header>
+					<div className="min-w-0 flex-1">
 						{children}
-					</ActiveWorkspaceHintProvider>
-				</div>
-			</SidebarInset>
-		</SidebarProvider>
+					</div>
+				</SidebarInset>
+			</SidebarProvider>
+		</ActiveWorkspaceHintProvider>
 	);
 }

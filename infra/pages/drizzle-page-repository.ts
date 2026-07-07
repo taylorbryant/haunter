@@ -176,7 +176,20 @@ export function createDrizzlePageRepository(
 			return toPageMeta(row);
 		},
 		async saveContent(id: string, contentJson: string) {
-			const updatedAt = new Date().toISOString();
+			const [current] = await db
+				.select({ updatedAt: schema.pages.updatedAt })
+				.from(schema.pages)
+				.where(eq(schema.pages.id, id))
+				.limit(1);
+			if (!current) {
+				throw new Error(`Failed to save content for page ${id}`);
+			}
+
+			// Strictly after the previous version: write-through saves without a
+			// CAS base must still invalidate any editor holding that base.
+			const updatedAt = new Date(
+				Math.max(Date.now(), Date.parse(current.updatedAt) + 1),
+			).toISOString();
 			const [row] = await db
 				.update(schema.pages)
 				.set({ content: contentJson, updatedAt })
