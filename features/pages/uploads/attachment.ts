@@ -32,10 +32,16 @@ export const AttachmentUpload = defineUpload<
 		cacheControl: "private, max-age=31536000, immutable",
 	},
 	async authorize({ ctx, metadata }) {
-		if (ctx.actor.type !== "user" || !ctx.auth || !ctx.tenant) return false;
 		const page = await ctx.ports.pages.findMetaById(metadata.pageId);
-		// Any member of the page's workspace may attach to it.
-		return page !== null && page.workspaceId === ctx.tenant.id;
+		if (!page || page.deletedAt !== null) return false;
+
+		const decision = await ctx.gate.inspect("pages.update", page);
+		if (decision.allowed) return true;
+
+		return {
+			allowed: false,
+			reason: decision.reason ?? "You cannot attach files to this page.",
+		};
 	},
 	key({ ctx, metadata, uploadId, file }) {
 		// Keys are workspace-scoped so any member can read the attachment; the
