@@ -75,7 +75,7 @@ function MobileSectionTabs({
 }) {
 	return (
 		<div
-			className="flex min-w-0 gap-1 overflow-x-auto border-b bg-background p-2"
+			className="flex min-w-0 gap-1 overflow-x-auto border-b bg-popover p-2"
 			role="tablist"
 			aria-label="Settings sections"
 		>
@@ -132,7 +132,7 @@ export function SettingsDialog({
 							<span className="sr-only">Close</span>
 						</DrawerClose>
 					</DrawerHeader>
-					<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+					<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-popover">
 						<MobileSectionTabs active={active} onActiveChange={setActive} />
 						<div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
 							<Panel />
