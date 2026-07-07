@@ -1,4 +1,10 @@
 import { getServer } from "@/server";
+import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
+import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
+import {
+	enforceSharedFileRateLimit,
+	enforceSharedFileTokenRateLimit,
+} from "@/features/shares/lib/shared-file-rate-limit";
 
 /**
  * Serve files embedded in a shared page to anonymous visitors. The share
@@ -8,40 +14,34 @@ import { getServer } from "@/server";
  * token, trashed page, foreign key — is a uniform 404.
  */
 export async function GET(
-	_req: Request,
+	req: Request,
 	{ params }: { params: Promise<{ token: string; key: string[] }> },
 ) {
 	const { token, key: segments } = await params;
 	const server = await getServer();
 
 	// This route bypasses the contract hooks, so enforce the limit manually.
-	// Keyed by token: abuse of one leaked link can't starve other shares.
-	const limit = await server.ports.rateLimit.hit({
-		key: `share-files:${token}`,
-		limit: 300,
-		windowSec: 60,
-	});
-	if (!limit.allowed) {
-		return new Response(null, {
-			status: 429,
-			headers: limit.retryAfterSeconds
-				? { "retry-after": String(limit.retryAfterSeconds) }
-				: {},
-		});
-	}
+	// Key by IP before lookup so invalid-token sprays cannot bypass rate limits.
+	const limited = await enforceSharedFileRateLimit(server, req);
+	if (limited) return limited;
 
 	const share = await server.ports.shares.findByToken(token);
 	if (!share) {
 		return new Response(null, { status: 404 });
 	}
+	const tokenLimited = await enforceSharedFileTokenRateLimit(server, token);
+	if (tokenLimited) return tokenLimited;
 
-	const page = await server.ports.pages.findMetaById(share.pageId);
+	const page = await server.ports.pages.findById(share.pageId);
 	if (!page || page.deletedAt !== null) {
 		return new Response(null, { status: 404 });
 	}
 
 	const key = segments.join("/");
 	if (!key.startsWith(`pages/${share.workspaceId}/${share.pageId}/`)) {
+		return new Response(null, { status: 404 });
+	}
+	if (!contentReferencesFileKey(page.content, key)) {
 		return new Response(null, { status: 404 });
 	}
 
@@ -51,12 +51,6 @@ export async function GET(
 	}
 
 	return new Response(object.stream(), {
-		headers: {
-			"content-type": object.contentType ?? "application/octet-stream",
-			"content-length": String(object.size),
-			// The share URL is already capability-scoped; long cache is safe
-			// because upload keys are immutable.
-			"cache-control": object.cacheControl ?? "private, max-age=0",
-		},
+		headers: sharedFileHeaders(object),
 	});
 }

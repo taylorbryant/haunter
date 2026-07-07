@@ -14,7 +14,11 @@ export const createCanvasUseCase = useCase
 
 		return ctx.ports.uow.transaction(async (tx) => {
 			const page = await tx.pages.findMetaById(input.pageId);
-			if (!page || page.workspaceId !== input.workspaceId) {
+			if (
+				!page ||
+				page.deletedAt !== null ||
+				page.workspaceId !== input.workspaceId
+			) {
 				throw appError("PageNotFound", { details: { id: input.pageId } });
 			}
 

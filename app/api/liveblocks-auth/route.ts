@@ -53,7 +53,15 @@ export async function POST(req: Request) {
 							)
 					: await ctx.ports.canvases
 							.findById(target.id)
-							.then((canvas) => canvas?.workspaceId ?? null);
+							.then(async (canvas) => {
+								if (!canvas) return null;
+								const page = await ctx.ports.pages.findMetaById(canvas.pageId);
+								return page &&
+									page.deletedAt === null &&
+									page.workspaceId === canvas.workspaceId
+									? canvas.workspaceId
+									: null;
+							});
 			if (!workspaceId) {
 				return new Response(null, { status: 403 });
 			}

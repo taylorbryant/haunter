@@ -1,6 +1,37 @@
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
+import { appError } from "@/features/shared/errors";
+import type { MemberRepository } from "@/features/members/ports";
 import type { TaskRepository } from "@/features/tasks/ports";
 import { extractTaskBlocks } from "./extract-task-blocks";
+
+const DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+type TaskReconciliationPorts = {
+	members: MemberRepository;
+	tasks: TaskRepository;
+};
+
+async function validateTaskBlock(
+	members: MemberRepository,
+	page: PageMeta,
+	block: ReturnType<typeof extractTaskBlocks>[number],
+) {
+	if (block.due !== null && !DUE_DATE_PATTERN.test(block.due)) {
+		throw appError("InvalidPageContent", {
+			message: "Task due dates must be YYYY-MM-DD.",
+			details: { blockId: block.blockId, due: block.due },
+		});
+	}
+	if (block.assignee !== null) {
+		const role = await members.findRole(page.workspaceId, block.assignee);
+		if (role === null) {
+			throw appError("InvalidPageContent", {
+				message: "Task assignees must be members of this workspace.",
+				details: { blockId: block.blockId, assigneeId: block.assignee },
+			});
+		}
+	}
+}
 
 /**
  * Make the tasks table mirror the task blocks in a page document. Called from
@@ -8,13 +39,17 @@ import { extractTaskBlocks } from "./extract-task-blocks";
  * document: task rows are keyed by the block's own id.
  */
 export async function reconcilePageTasks(
-	tasks: TaskRepository,
+	ports: TaskReconciliationPorts,
 	page: PageMeta,
 	content: BlockJson[],
 ): Promise<void> {
 	const now = new Date().toISOString();
 	const found = extractTaskBlocks(content);
-	const existing = await tasks.listByPage(page.id);
+	for (const block of found) {
+		await validateTaskBlock(ports.members, page, block);
+	}
+
+	const existing = await ports.tasks.listByPage(page.id);
 	const existingByBlockId = new Map(
 		existing
 			.filter((task) => task.sourceBlockId !== null)
@@ -25,7 +60,7 @@ export async function reconcilePageTasks(
 		const current = existingByBlockId.get(block.blockId);
 
 		if (!current) {
-			await tasks.create({
+			await ports.tasks.create({
 				userId: page.userId,
 				workspaceId: page.workspaceId,
 				pageId: page.id,
@@ -46,7 +81,7 @@ export async function reconcilePageTasks(
 			current.assigneeId !== block.assignee;
 
 		if (changed) {
-			await tasks.update(current.id, {
+			await ports.tasks.update(current.id, {
 				title: block.title,
 				completed: block.checked,
 				dueDate: block.due,
@@ -67,5 +102,5 @@ export async function reconcilePageTasks(
 		)
 		.map((task) => task.id);
 
-	await tasks.deleteByIds(orphanIds);
+	await ports.tasks.deleteByIds(orphanIds);
 }

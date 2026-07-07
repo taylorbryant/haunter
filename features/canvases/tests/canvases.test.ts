@@ -206,6 +206,35 @@ describe("canvases use cases", () => {
 		).rejects.toThrow("You do not have access to this canvas.");
 	});
 
+	it("treats canvases on trashed pages as gone", async () => {
+		const { pages, workspace, page, tester, ctx } = await createFixture();
+		const canvas = await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, pageId: page.id },
+			{ ctx },
+		);
+
+		await pages.setDeletedByIds([page.id], new Date().toISOString());
+
+		await expect(
+			tester.run(getCanvasUseCase, { id: canvas.id }, { ctx }),
+		).rejects.toThrow("Canvas not found");
+		await expect(
+			tester.run(
+				saveCanvasSnapshotUseCase,
+				{ id: canvas.id, snapshot: { v: 1 } },
+				{ ctx },
+			),
+		).rejects.toThrow("Canvas not found");
+		await expect(
+			tester.run(
+				createCanvasUseCase,
+				{ workspaceId: workspace.id, pageId: page.id },
+				{ ctx },
+			),
+		).rejects.toThrow("Page not found");
+	});
+
 	it("deletes a page's canvases when the page is purged", async () => {
 		const { canvases, workspace, page, tester, ctx } = await createFixture();
 

@@ -21,6 +21,14 @@ export const saveCanvasSnapshotUseCase = useCase
 			}
 
 			await ctx.gate.authorize("canvases.update", canvas);
+			const page = await tx.pages.findMetaById(canvas.pageId);
+			if (
+				!page ||
+				page.deletedAt !== null ||
+				page.workspaceId !== canvas.workspaceId
+			) {
+				throw appError("CanvasNotFound", { details: { id: input.id } });
+			}
 
 			// Refuse to clobber a newer snapshot when the client provides its
 			// last-seen updatedAt (another member or tab drew since).

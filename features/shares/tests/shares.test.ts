@@ -15,6 +15,12 @@ import type { CanvasRepository } from "@/features/canvases/ports";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import type { PageRepository } from "@/features/pages/ports";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
+import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
+import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
+import {
+	enforceSharedFileRateLimit,
+	enforceSharedFileTokenRateLimit,
+} from "@/features/shares/lib/shared-file-rate-limit";
 import type { ShareRepository } from "@/features/shares/ports";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
@@ -232,6 +238,7 @@ describe("page shares", () => {
 	it("rewrites embedded file URLs to the share-scoped route", async () => {
 		const { pages, page, tester, ctx, anonymous, anonymousCtx } =
 			await createFixture();
+		const key = `pages/ws/${page.id}/img.png`;
 
 		await pages.saveContent(
 			page.id,
@@ -239,7 +246,7 @@ describe("page shares", () => {
 				{
 					id: "img-1",
 					type: "image",
-					props: { url: `/api/files/pages/ws/${page.id}/img.png` },
+					props: { url: `/api/files/${key}` },
 					children: [],
 				},
 			]),
@@ -257,7 +264,11 @@ describe("page shares", () => {
 		);
 
 		expect(shared.content[0]?.props.url).toBe(
-			`/api/shared/${share.token}/files/pages/ws/${page.id}/img.png`,
+			`/api/shared/${share.token}/files/${key}`,
+		);
+		expect(contentReferencesFileKey(shared.content, key)).toBe(true);
+		expect(contentReferencesFileKey(shared.content, `${key}.removed`)).toBe(
+			false,
 		);
 	});
 
@@ -336,5 +347,130 @@ describe("page shares", () => {
 				{ ctx: outsiderCtx },
 			),
 		).rejects.toThrow("You do not have access to this page.");
+	});
+});
+
+describe("shared file route helpers", () => {
+	it("finds only file keys still referenced by the page content", () => {
+		const key = "pages/workspace/page/file.png";
+		const content = [
+			{
+				id: "outer",
+				type: "paragraph",
+				props: {},
+				children: [
+					{
+						id: "image",
+						type: "image",
+						props: { url: `/api/files/${key}` },
+						children: [],
+					},
+				],
+			},
+		];
+
+		expect(contentReferencesFileKey(content, key)).toBe(true);
+		expect(contentReferencesFileKey(content, "pages/workspace/page/old.png")).toBe(
+			false,
+		);
+	});
+
+	it("rate-limits shared file reads by IP before share lookup", async () => {
+		const hits: unknown[] = [];
+		const server = {
+			ports: {
+				rateLimit: {
+					async hit(input: unknown) {
+						hits.push(input);
+						return {
+							allowed: true,
+							remaining: 1,
+							resetAt: null,
+							retryAfterSeconds: null,
+						};
+					},
+				},
+			},
+		};
+
+		await expect(
+			enforceSharedFileRateLimit(
+				server,
+				new Request("https://example.test/file", {
+					headers: { "x-forwarded-for": "203.0.113.5, 10.0.0.1" },
+				}),
+			),
+		).resolves.toBeNull();
+
+		expect(hits).toEqual([
+			{
+				key: "share-files:ip:203.0.113.5",
+				limit: 300,
+				windowSec: 60,
+			},
+		]);
+
+		await expect(
+			enforceSharedFileTokenRateLimit(server, "token_1"),
+		).resolves.toBeNull();
+		expect(hits).toEqual([
+			{
+				key: "share-files:ip:203.0.113.5",
+				limit: 300,
+				windowSec: 60,
+			},
+			{
+				key: "share-files:token:token_1",
+				limit: 300,
+				windowSec: 60,
+			},
+		]);
+	});
+
+	it("does not spend token buckets once the shared file IP bucket is exhausted", async () => {
+		const hits: unknown[] = [];
+		const server = {
+			ports: {
+				rateLimit: {
+					async hit(input: unknown) {
+						hits.push(input);
+						return {
+							allowed: false,
+							remaining: 0,
+							resetAt: null,
+							retryAfterSeconds: 12,
+						};
+					},
+				},
+			},
+		};
+
+		const response = await enforceSharedFileRateLimit(
+			server,
+			new Request("https://example.test/file"),
+		);
+
+		expect(response?.status).toBe(429);
+		expect(response?.headers.get("retry-after")).toBe("12");
+		expect(hits).toEqual([
+			{
+				key: "share-files:ip:unknown",
+				limit: 300,
+				windowSec: 60,
+			},
+		]);
+	});
+
+	it("does not reuse immutable upload cache headers for shared files", () => {
+		const headers = new Headers(
+			sharedFileHeaders({
+				contentType: "image/png",
+				size: 12,
+			}),
+		);
+
+		expect(headers.get("content-type")).toBe("image/png");
+		expect(headers.get("content-length")).toBe("12");
+		expect(headers.get("cache-control")).toBe("no-store");
 	});
 });

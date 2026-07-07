@@ -56,7 +56,11 @@ export const onboardUserUseCase = useCase
 				if (welcomePageId === null) welcomePageId = created.id;
 				await tx.pages.update(created.id, { icon: page.icon });
 				await tx.pages.saveContent(created.id, JSON.stringify(page.content));
-				await reconcilePageTasks(tx.tasks, created, page.content);
+				await reconcilePageTasks(
+					{ members: tx.members, tasks: tx.tasks },
+					created,
+					page.content,
+				);
 				position += 1;
 			}
 

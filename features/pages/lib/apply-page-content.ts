@@ -3,6 +3,7 @@ import type {
 	PageRepository,
 } from "@/features/pages/ports";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
+import type { MemberRepository } from "@/features/members/ports";
 import { reconcilePageTasks } from "@/features/tasks/lib/reconcile-page-tasks";
 import type { TaskRepository } from "@/features/tasks/ports";
 import { extractPageLinks } from "./extract-page-links";
@@ -15,6 +16,7 @@ import { extractPageLinks } from "./extract-page-links";
  */
 export async function reconcilePageDerivations(
 	tx: {
+		members: MemberRepository;
 		pages: Pick<PageRepository, "findMetaById">;
 		pageLinks: PageLinkRepository;
 		tasks: TaskRepository;
@@ -22,7 +24,11 @@ export async function reconcilePageDerivations(
 	page: PageMeta,
 	content: BlockJson[],
 ): Promise<void> {
-	await reconcilePageTasks(tx.tasks, page, content);
+	await reconcilePageTasks(
+		{ members: tx.members, tasks: tx.tasks },
+		page,
+		content,
+	);
 
 	// Keep only link targets that still exist and live in the same workspace
 	// (purged or foreign ids would break the link table's foreign keys).

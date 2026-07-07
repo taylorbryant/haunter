@@ -205,6 +205,38 @@ describe("task reconciliation on page content save", () => {
 		const saved = await pages.findById(page.id);
 		expect(saved?.content).toEqual(content);
 	});
+
+	it("rejects invalid page-derived task props", async () => {
+		const { tasks, workspace, page, tester, ctx } = await createFixture();
+
+		await expect(
+			tester.run(
+				savePageContentUseCase,
+				{
+					id: page.id,
+					content: [taskBlock("bad-due", "Bad due", { due: "tomorrow" })],
+				},
+				{ ctx },
+			),
+		).rejects.toThrow("Task due dates must be YYYY-MM-DD.");
+
+		await expect(
+			tester.run(
+				savePageContentUseCase,
+				{
+					id: page.id,
+					content: [
+						taskBlock("bad-assignee", "Bad assignee", {
+							assignee: "user_stranger",
+						}),
+					],
+				},
+				{ ctx },
+			),
+		).rejects.toThrow("Task assignees must be members");
+
+		expect(await tasks.listByWorkspace(workspace.id, "all")).toHaveLength(0);
+	});
 });
 
 describe("tasks use cases", () => {

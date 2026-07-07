@@ -17,6 +17,14 @@ export const getCanvasUseCase = useCase
 		}
 
 		await ctx.gate.authorize("canvases.read", canvas);
+		const page = await ctx.ports.pages.findMetaById(canvas.pageId);
+		if (
+			!page ||
+			page.deletedAt !== null ||
+			page.workspaceId !== canvas.workspaceId
+		) {
+			throw appError("CanvasNotFound", { details: { id: input.id } });
+		}
 
 		return canvas;
 	});

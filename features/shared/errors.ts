@@ -26,6 +26,11 @@ export const errors = defineErrors({
 		status: 422,
 		message: "A page cannot be moved into itself or its descendants",
 	},
+	InvalidPageContent: {
+		code: "INVALID_PAGE_CONTENT",
+		status: 422,
+		message: "This page contains invalid content",
+	},
 	TaskNotFound: {
 		code: "TASK_NOT_FOUND",
 		status: 404,

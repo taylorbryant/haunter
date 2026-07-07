@@ -89,6 +89,7 @@ export const savePageContent = pages
 	.meta({ rateLimit: { max: 240, windowSec: 60, scope: "user" } })
 	.errors({
 		Forbidden: errors.Forbidden,
+		InvalidPageContent: errors.InvalidPageContent,
 		PageNotFound: errors.PageNotFound,
 		StaleWrite: errors.StaleWrite,
 	})
@@ -190,6 +191,7 @@ export const restorePageVersion = pages
 	.body(z.object({}))
 	.errors({
 		Forbidden: errors.Forbidden,
+		InvalidPageContent: errors.InvalidPageContent,
 		PageNotFound: errors.PageNotFound,
 	})
 	.responses({
