@@ -49,6 +49,55 @@ const headingBlockSpec = createHeadingBlockSpec({
 	levels: [1, 2, 3, 4],
 });
 
+const headingStyles = {
+	1: { fontSize: "30px", lineHeight: "1.25" },
+	2: { fontSize: "24px", lineHeight: "1.3" },
+	3: { fontSize: "20px", lineHeight: "1.35" },
+	4: { fontSize: "18px", lineHeight: "1.4" },
+} as const;
+
+type HeadingLevel = keyof typeof headingStyles;
+
+function applyHeadingStyles(
+	element: HTMLElement | undefined,
+	level: HeadingLevel,
+) {
+	if (!element) return;
+
+	const style = headingStyles[level];
+	element.classList.add("haunter-heading", `haunter-heading-${level}`);
+	element.style.setProperty("--level", style.fontSize);
+	element.style.setProperty("--prev-level", style.fontSize);
+	element.style.setProperty("font-size", style.fontSize, "important");
+	element.style.setProperty("line-height", style.lineHeight, "important");
+	element.style.setProperty("font-weight", "700", "important");
+}
+
+function getHeadingLevel(level: unknown): HeadingLevel {
+	const parsed = typeof level === "number" ? level : Number(level);
+	if (parsed === 2 || parsed === 3 || parsed === 4) return parsed;
+	if (parsed >= 5) return 4;
+	return 1;
+}
+
+const haunterHeadingBlockSpec: typeof headingBlockSpec = {
+	...headingBlockSpec,
+	implementation: {
+		...headingBlockSpec.implementation,
+		render(...args: Parameters<typeof headingBlockSpec.implementation.render>) {
+			const rendered = headingBlockSpec.implementation.render.apply(this, args);
+			const level = getHeadingLevel(args[0].props.level);
+			applyHeadingStyles(
+				rendered.dom instanceof HTMLElement ? rendered.dom : undefined,
+				level,
+			);
+			applyHeadingStyles(rendered.contentDOM, level);
+
+			return rendered;
+		},
+	},
+};
+
 const baseCodeBlockSpec = createCodeBlockSpec({
 	...codeBlockOptions,
 	defaultLanguage: "sql",
@@ -86,7 +135,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 export const editorSchema = BlockNoteSchema.create({
 	blockSpecs: {
 		...baseBlockSpecs,
-		heading: headingBlockSpec,
+		heading: haunterHeadingBlockSpec,
 		codeBlock: codeBlockSpec,
 		task: taskBlockSpec(),
 		canvas: canvasBlockSpec(),
