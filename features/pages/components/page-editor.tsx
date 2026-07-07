@@ -209,9 +209,9 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					);
 					setLocalMetadataUpdatedAt(result.updatedAt);
 					invalidatePages(queryClient);
-					setTitle(null);
 					if (titleDraftRef.current === next) {
 						titleDraftRef.current = null;
+						setTitle((current) => (current === next ? null : current));
 					}
 					return result.updatedAt;
 				},
