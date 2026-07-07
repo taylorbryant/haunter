@@ -105,13 +105,11 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		setPageSaveState("saved");
 	}, [pageId]);
 
-	// Arriving at a page we just created: put the caret in the title with
-	// "Untitled" selected, so typing replaces it immediately.
+	// Arriving at a page we just created: put the caret in its empty title.
 	const pageLoaded = pageQuery.data != null;
 	useEffect(() => {
 		if (!pageLoaded || !consumeTitleFocus(pageId)) return;
 		titleInputRef.current?.focus();
-		titleInputRef.current?.select();
 	}, [pageId, pageLoaded]);
 
 	// A collaborator renamed the page: refresh the sidebar/breadcrumb lists

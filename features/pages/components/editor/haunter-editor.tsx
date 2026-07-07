@@ -170,7 +170,7 @@ function getSlashMenuItems(
 				body: {
 					workspaceId: page.workspaceId,
 					parentPageId: page.pageId,
-					title: "Untitled",
+					title: "",
 				},
 			});
 			insertOrUpdateBlockForSlashMenu(editor, {

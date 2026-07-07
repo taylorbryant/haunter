@@ -48,7 +48,7 @@ export default function WorkspacePage({
 					disabled={createMutation.isPending}
 					onClick={() =>
 						createMutation.mutate(
-							{ body: { workspaceId, title: "Untitled" } },
+							{ body: { workspaceId, title: "" } },
 							{
 								onSuccess: async (page) => {
 									await invalidatePages(queryClient);

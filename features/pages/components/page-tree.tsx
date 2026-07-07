@@ -167,7 +167,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			{
 				body: {
 					workspaceId,
-					title: "Untitled",
+					title: "",
 					...(parentPageId ? { parentPageId } : {}),
 				},
 			},
