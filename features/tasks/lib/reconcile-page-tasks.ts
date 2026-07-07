@@ -11,8 +11,14 @@ type TaskReconciliationPorts = {
 	tasks: TaskRepository;
 };
 
+type ReconcilePageTasksOptions = {
+	defaultAssigneeId?: string | null;
+};
+
 async function validateTaskBlock(
-	block: ReturnType<typeof extractTaskBlocks>[number],
+	block: ReturnType<typeof extractTaskBlocks>[number] & {
+		resolvedAssigneeId: string | null;
+	},
 	validAssignees: Set<string>,
 ) {
 	if (block.due !== null && !DUE_DATE_PATTERN.test(block.due)) {
@@ -21,10 +27,16 @@ async function validateTaskBlock(
 			details: { blockId: block.blockId, due: block.due },
 		});
 	}
-	if (block.assignee !== null && !validAssignees.has(block.assignee)) {
+	if (
+		block.resolvedAssigneeId !== null &&
+		!validAssignees.has(block.resolvedAssigneeId)
+	) {
 		throw appError("InvalidPageContent", {
 			message: "Task assignees must be members of this workspace.",
-			details: { blockId: block.blockId, assigneeId: block.assignee },
+			details: {
+				blockId: block.blockId,
+				assigneeId: block.resolvedAssigneeId,
+			},
 		});
 	}
 }
@@ -38,13 +50,30 @@ export async function reconcilePageTasks(
 	ports: TaskReconciliationPorts,
 	page: PageMeta,
 	content: BlockJson[],
+	options: ReconcilePageTasksOptions = {},
 ): Promise<boolean> {
 	const now = new Date().toISOString();
 	const found = extractTaskBlocks(content);
+	const existing = await ports.tasks.listByPage(page.id);
+	const existingByBlockId = new Map(
+		existing
+			.filter((task) => task.sourceBlockId !== null)
+			.map((task) => [task.sourceBlockId as string, task]),
+	);
+	const resolved = found.map((block) => {
+		const current = existingByBlockId.get(block.blockId);
+		const resolvedAssigneeId =
+			block.assignee ??
+			(block.useDefaultAssignee
+				? (current?.assigneeId ?? options.defaultAssigneeId ?? null)
+				: null);
+
+		return { ...block, resolvedAssigneeId };
+	});
 	const assigneeIds = Array.from(
 		new Set(
-			found
-				.map((block) => block.assignee)
+			resolved
+				.map((block) => block.resolvedAssigneeId)
 				.filter((assignee): assignee is string => assignee !== null),
 		),
 	);
@@ -61,19 +90,13 @@ export async function reconcilePageTasks(
 			)
 		).filter((assigneeId): assigneeId is string => assigneeId !== null),
 	);
-	for (const block of found) {
+	for (const block of resolved) {
 		await validateTaskBlock(block, validAssignees);
 	}
 
-	const existing = await ports.tasks.listByPage(page.id);
-	const existingByBlockId = new Map(
-		existing
-			.filter((task) => task.sourceBlockId !== null)
-			.map((task) => [task.sourceBlockId as string, task]),
-	);
 	let changed = false;
 
-	for (const block of found) {
+	for (const block of resolved) {
 		const current = existingByBlockId.get(block.blockId);
 
 		if (!current) {
@@ -86,7 +109,7 @@ export async function reconcilePageTasks(
 				title: block.title,
 				completed: block.checked,
 				dueDate: block.due,
-				assigneeId: block.assignee,
+				assigneeId: block.resolvedAssigneeId,
 				completedAt: block.checked ? now : null,
 			});
 			continue;
@@ -96,7 +119,7 @@ export async function reconcilePageTasks(
 			current.title !== block.title ||
 			current.completed !== block.checked ||
 			current.dueDate !== block.due ||
-			current.assigneeId !== block.assignee;
+			current.assigneeId !== block.resolvedAssigneeId;
 
 		if (rowChanged) {
 			changed = true;
@@ -104,7 +127,7 @@ export async function reconcilePageTasks(
 				title: block.title,
 				completed: block.checked,
 				dueDate: block.due,
-				assigneeId: block.assignee,
+				assigneeId: block.resolvedAssigneeId,
 				// Stamp/clear completedAt only when the completed state flips.
 				...(current.completed !== block.checked
 					? { completedAt: block.checked ? now : null }

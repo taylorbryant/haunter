@@ -23,11 +23,13 @@ export async function reconcilePageDerivations(
 	},
 	page: PageMeta,
 	content: BlockJson[],
+	options: { defaultTaskAssigneeId?: string | null } = {},
 ): Promise<{ tasksChanged: boolean; linksChanged: boolean }> {
 	const tasksChanged = await reconcilePageTasks(
 		{ members: tx.members, tasks: tx.tasks },
 		page,
 		content,
+		{ defaultAssigneeId: options.defaultTaskAssigneeId },
 	);
 
 	// Keep only link targets that still exist and live in the same workspace

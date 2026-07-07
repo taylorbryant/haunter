@@ -61,7 +61,9 @@ export const onboardUserUseCase = useCase
 					JSON.stringify(page.content),
 					extractPageSearchText(page.content),
 				);
-				await reconcilePageDerivations(tx, created, page.content);
+				await reconcilePageDerivations(tx, created, page.content, {
+					defaultTaskAssigneeId: user.id,
+				});
 				position += 1;
 			}
 

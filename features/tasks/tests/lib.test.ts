@@ -3,6 +3,7 @@ import type { BlockJson } from "@/features/pages/schemas";
 import { extractTaskBlocks } from "../lib/extract-task-blocks";
 import { patchTaskBlock } from "../lib/patch-task-block";
 import { reconcileTaskBlockProps } from "../lib/reconcile-task-block-props";
+import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
 
 function paragraph(id: string, children: BlockJson[] = []): BlockJson {
 	return { id, type: "paragraph", props: {}, content: [], children };
@@ -40,6 +41,7 @@ describe("extractTaskBlocks", () => {
 				checked: true,
 				due: "2026-07-03",
 				assignee: null,
+				useDefaultAssignee: false,
 			},
 			{
 				blockId: "t2",
@@ -47,8 +49,18 @@ describe("extractTaskBlocks", () => {
 				checked: false,
 				due: null,
 				assignee: null,
+				useDefaultAssignee: false,
 			},
 		]);
+	});
+
+	it("marks editor-created auto-assignee task blocks", () => {
+		const doc = [task("t1", "Mine", { assignee: AUTO_TASK_ASSIGNEE })];
+
+		expect(extractTaskBlocks(doc)[0]).toMatchObject({
+			assignee: null,
+			useDefaultAssignee: true,
+		});
 	});
 
 	it("concatenates styled and linked inline content into a plain title", () => {

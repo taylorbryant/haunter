@@ -76,6 +76,7 @@ export const savePageContentUseCase = useCase
 				tx,
 				page,
 				input.content,
+				{ defaultTaskAssigneeId: user.id },
 			);
 
 			return { ...result, ...derivations };

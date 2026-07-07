@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarIcon, XIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -10,6 +10,7 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import {
 	humanizeDueDate,
 	parseTaskInput,
@@ -43,12 +44,15 @@ const PRESETS: { label: string; date: () => Date }[] = [
  * the title and prefill the date chip; the chip's picker offers presets.
  */
 export function TaskComposer({
+	currentUserId,
 	onSubmit,
 	onCancel,
 }: {
+	currentUserId: string | null;
 	onSubmit: (input: {
 		title: string;
 		dueDate: string | null;
+		assigneeId?: string | null;
 	}) => Promise<boolean>;
 	onCancel: () => void;
 }) {
@@ -57,8 +61,14 @@ export function TaskComposer({
 	const [manualDate, setManualDate] = useState<string | null>(null);
 	// Set when the user dismisses a detected phrase so it stays dismissed.
 	const [ignoredMatchText, setIgnoredMatchText] = useState<string | null>(null);
+	const [assigneeId, setAssigneeId] = useState<string | null>(currentUserId);
+	const [assigneeTouched, setAssigneeTouched] = useState(false);
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [pending, setPending] = useState(false);
+
+	useEffect(() => {
+		if (!assigneeTouched) setAssigneeId(currentUserId);
+	}, [assigneeTouched, currentUserId]);
 
 	const parsed = parseTaskInput(text);
 	const activeMatch =
@@ -72,12 +82,22 @@ export function TaskComposer({
 	async function submit() {
 		if (!title || pending) return;
 		setPending(true);
-		const ok = await onSubmit({ title, dueDate });
+		const submitAssigneeId =
+			assigneeTouched || assigneeId !== null ? assigneeId : undefined;
+		const ok = await onSubmit({
+			title,
+			dueDate,
+			...(submitAssigneeId !== undefined
+				? { assigneeId: submitAssigneeId }
+				: {}),
+		});
 		setPending(false);
 		if (ok) {
 			setText("");
 			setManualDate(null);
 			setIgnoredMatchText(null);
+			setAssigneeId(currentUserId);
+			setAssigneeTouched(false);
 			inputRef.current?.focus();
 		}
 	}
@@ -135,6 +155,14 @@ export function TaskComposer({
 					/>
 				</div>
 				<div className="flex items-center gap-1.5">
+					<AssigneePicker
+						value={assigneeId}
+						onChange={(next) => {
+							setAssigneeTouched(true);
+							setAssigneeId(next);
+						}}
+						className="opacity-100 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
+					/>
 					<Popover open={pickerOpen} onOpenChange={setPickerOpen}>
 						<PopoverTrigger
 							render={

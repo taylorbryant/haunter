@@ -5,6 +5,7 @@ import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { authClient } from "@/client/auth-client";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 	const searchParams = useSearchParams();
 	// Viewers see the list but get no add/toggle/edit/delete controls.
 	const canEdit = useCanEditWorkspace();
+	const session = authClient.useSession();
 	const filter = readTaskFilter(searchParams.get("filter"));
 	const scope = readTaskScope(searchParams.get("scope"));
 	const [limit, setLimit] = useState(TASK_PAGE_SIZE);
@@ -112,6 +114,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 	function createTask(input: {
 		title: string;
 		dueDate: string | null;
+		assigneeId?: string | null;
 	}): Promise<boolean> {
 		return new Promise((resolve) => {
 			createMutation.mutate(
@@ -120,6 +123,9 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 						workspaceId,
 						title: input.title,
 						...(input.dueDate ? { dueDate: input.dueDate } : {}),
+						...(input.assigneeId !== undefined
+							? { assigneeId: input.assigneeId }
+							: {}),
 					},
 				},
 				{
@@ -174,6 +180,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 		<div className="flex flex-col gap-4">
 			{!canEdit ? null : composing ? (
 				<TaskComposer
+					currentUserId={session.data?.user.id ?? null}
 					onSubmit={createTask}
 					onCancel={() => setComposing(false)}
 				/>

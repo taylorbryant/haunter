@@ -1,4 +1,5 @@
 import type { BlockJson } from "@/features/pages/schemas";
+import { isAutoTaskAssignee } from "./task-block-props";
 
 export type ExtractedTaskBlock = {
 	blockId: string;
@@ -7,6 +8,8 @@ export type ExtractedTaskBlock = {
 	due: string | null;
 	/** User id from the block's assignee prop; null when unassigned. */
 	assignee: string | null;
+	/** New editor task blocks can request assignment to the current saver. */
+	useDefaultAssignee: boolean;
 };
 
 type InlineNode = {
@@ -44,15 +47,19 @@ export function extractTaskBlocks(blocks: BlockJson[]): ExtractedTaskBlock[] {
 				seen.add(block.id);
 				const due = block.props.due;
 				const assignee = block.props.assignee;
+				const useDefaultAssignee = isAutoTaskAssignee(assignee);
 				found.push({
 					blockId: block.id,
 					title: inlineText(block.content),
 					checked: block.props.checked === true,
 					due: typeof due === "string" && due.length > 0 ? due : null,
 					assignee:
-						typeof assignee === "string" && assignee.length > 0
+						typeof assignee === "string" &&
+						assignee.length > 0 &&
+						!useDefaultAssignee
 							? assignee
 							: null,
+					useDefaultAssignee,
 				});
 			}
 			if (block.children.length > 0) {

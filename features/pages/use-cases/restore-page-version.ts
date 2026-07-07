@@ -63,6 +63,7 @@ export const restorePageVersionUseCase = useCase
 				tx,
 				page,
 				version.content,
+				{ defaultTaskAssigneeId: user.id },
 			);
 
 			return { ...result, ...derivations };

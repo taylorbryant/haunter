@@ -63,6 +63,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { CodeEditDialog } from "./code-edit-dialog";
 import { editorSchema } from "./schema";
+import { TaskBlockCurrentUserContext } from "./task-block";
 
 const AUTOSAVE_DELAY_MS = 1000;
 
@@ -127,6 +128,11 @@ function getSlashMenuItems(
 				type: "task",
 				props: page.currentUserId ? { assignee: page.currentUserId } : {},
 			});
+			if (page.currentUserId) {
+				editor.updateBlock(insertedTask, {
+					props: { ...insertedTask.props, assignee: page.currentUserId },
+				});
+			}
 			focusBlockContentOnNextFrame(editor, insertedTask.id);
 		},
 	};
@@ -487,79 +493,81 @@ export default function HaunterEditor({
 		// hidden below. Driven from JS (not CSS) to share one breakpoint.
 		<div className={cn("haunter-editor", isMobile && "editor-flush")}>
 			{collab ? <PresencePublisher room={collab} /> : null}
-			<BlockNoteView
-				editor={editor}
-				editable={editable}
-				onChange={handleChange}
-				theme={resolvedTheme === "dark" ? "dark" : "light"}
-				slashMenu={false}
-				sideMenu={false}
-			>
-				<SuggestionMenuController
-					triggerCharacter="/"
-					getItems={(query) =>
-						getSlashMenuItems(editor, query, {
-							pageId,
-							workspaceId,
-							currentUserId,
-							// Open the new subpage; the unmount flush persists the
-							// parent document (with the link block) on the way out.
-							onSubpageCreated: async (created) => {
-								await invalidatePages(queryClient);
-								focusTitleOnArrival(created.id);
-								router.push(`/w/${workspaceId}/p/${created.id}`);
-							},
-						})
-					}
-				/>
-				<SuggestionMenuController
-					triggerCharacter="@"
-					getItems={async (query) => {
-						// Cache-first: the sidebar keeps this list warm.
-						const pages = await queryClient.ensureQueryData(
-							listPagesQueryOptions(workspaceId),
-						);
-						const needle = query.toLowerCase();
-						return pages.items
-							.filter((item) => item.id !== pageId)
-							.filter((item) =>
-								(item.title || "Untitled").toLowerCase().includes(needle),
-							)
-							.slice(0, 10)
-							.map((item) => ({
-								title: item.title || "Untitled",
-								icon: <FileTextIcon className="size-4.5" />,
-								onItemClick: () => {
-									editor.insertInlineContent([
-										{
-											type: "mention",
-											props: { pageId: item.id, workspaceId },
-										},
-										" ",
-									]);
+			<TaskBlockCurrentUserContext.Provider value={currentUserId}>
+				<BlockNoteView
+					editor={editor}
+					editable={editable}
+					onChange={handleChange}
+					theme={resolvedTheme === "dark" ? "dark" : "light"}
+					slashMenu={false}
+					sideMenu={false}
+				>
+					<SuggestionMenuController
+						triggerCharacter="/"
+						getItems={(query) =>
+							getSlashMenuItems(editor, query, {
+								pageId,
+								workspaceId,
+								currentUserId,
+								// Open the new subpage; the unmount flush persists the
+								// parent document (with the link block) on the way out.
+								onSubpageCreated: async (created) => {
+									await invalidatePages(queryClient);
+									focusTitleOnArrival(created.id);
+									router.push(`/w/${workspaceId}/p/${created.id}`);
 								},
-							}));
-					}}
-				/>
-				{/* The +/drag block controls are hidden on mobile: they're hard
-				    to use on touch and their gutter is reclaimed for content. */}
-				{!isMobile ? (
-					<SideMenuController
-						sideMenu={(props) => (
-							<SideMenu
-								{...props}
-								dragHandleMenu={() => (
-									<DragHandleMenu>
-										<RemoveBlockItem>Delete</RemoveBlockItem>
-										<BlockColorsItem>Colors</BlockColorsItem>
-										<EditCodeMenuItem onOpen={setCodeDialogBlockId} />
-									</DragHandleMenu>
-								)}
-							/>
-						)}
+							})
+						}
 					/>
-				) : null}
-			</BlockNoteView>
+					<SuggestionMenuController
+						triggerCharacter="@"
+						getItems={async (query) => {
+							// Cache-first: the sidebar keeps this list warm.
+							const pages = await queryClient.ensureQueryData(
+								listPagesQueryOptions(workspaceId),
+							);
+							const needle = query.toLowerCase();
+							return pages.items
+								.filter((item) => item.id !== pageId)
+								.filter((item) =>
+									(item.title || "Untitled").toLowerCase().includes(needle),
+								)
+								.slice(0, 10)
+								.map((item) => ({
+									title: item.title || "Untitled",
+									icon: <FileTextIcon className="size-4.5" />,
+									onItemClick: () => {
+										editor.insertInlineContent([
+											{
+												type: "mention",
+												props: { pageId: item.id, workspaceId },
+											},
+											" ",
+										]);
+									},
+								}));
+						}}
+					/>
+					{/* The +/drag block controls are hidden on mobile: they're hard
+				    to use on touch and their gutter is reclaimed for content. */}
+					{!isMobile ? (
+						<SideMenuController
+							sideMenu={(props) => (
+								<SideMenu
+									{...props}
+									dragHandleMenu={() => (
+										<DragHandleMenu>
+											<RemoveBlockItem>Delete</RemoveBlockItem>
+											<BlockColorsItem>Colors</BlockColorsItem>
+											<EditCodeMenuItem onOpen={setCodeDialogBlockId} />
+										</DragHandleMenu>
+									)}
+								/>
+							)}
+						/>
+					) : null}
+				</BlockNoteView>
+			</TaskBlockCurrentUserContext.Provider>
 			{codeDialogBlockId ? (
 				<CodeEditDialog
 					editor={editor}

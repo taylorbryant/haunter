@@ -21,6 +21,7 @@ import { savePageContentUseCase } from "@/features/pages/use-cases";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
+import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
 import {
 	createTaskUseCase,
 	deleteTaskUseCase,
@@ -470,7 +471,7 @@ describe("tasks use cases", () => {
 });
 
 describe("task assignment", () => {
-	it("quick-add assigns the creator by default; explicit null stays unassigned", async () => {
+	it("quick-add assigns the creator by default and accepts explicit assignees", async () => {
 		const { workspace, tester, ctx } = await createFixture();
 
 		const mine = await tester.run(
@@ -480,12 +481,72 @@ describe("task assignment", () => {
 		);
 		expect(mine.assigneeId).toBe("user_test");
 
+		const teammate = await tester.run(
+			createTaskUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "For teammate",
+				assigneeId: "user_teammate",
+			},
+			{ ctx },
+		);
+		expect(teammate.assigneeId).toBe("user_teammate");
+
 		const unassigned = await tester.run(
 			createTaskUseCase,
 			{ workspaceId: workspace.id, title: "For anyone", assigneeId: null },
 			{ ctx },
 		);
 		expect(unassigned.assigneeId).toBeNull();
+	});
+
+	it("assigns new auto-assignee page task blocks to the saver", async () => {
+		const { tasks, page, tester, ctx } = await createFixture();
+
+		await tester.run(
+			savePageContentUseCase,
+			{
+				id: page.id,
+				content: [
+					taskBlock("b-auto", "Mine from the editor", {
+						assignee: AUTO_TASK_ASSIGNEE,
+					}),
+				],
+			},
+			{ ctx },
+		);
+		let [row] = await tasks.listByPage(page.id);
+		expect(row.assigneeId).toBe("user_test");
+
+		await tester.run(
+			savePageContentUseCase,
+			{
+				id: page.id,
+				content: [
+					taskBlock("b-auto", "Mine from the editor, renamed", {
+						assignee: AUTO_TASK_ASSIGNEE,
+					}),
+				],
+			},
+			{ ctx },
+		);
+		[row] = await tasks.listByPage(page.id);
+		expect(row.assigneeId).toBe("user_test");
+
+		await tester.run(
+			savePageContentUseCase,
+			{
+				id: page.id,
+				content: [
+					taskBlock("b-auto", "Mine from the editor, renamed", {
+						assignee: "",
+					}),
+				],
+			},
+			{ ctx },
+		);
+		[row] = await tasks.listByPage(page.id);
+		expect(row.assigneeId).toBeNull();
 	});
 
 	it("rejects assigning to a non-member", async () => {
