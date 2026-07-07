@@ -5,16 +5,25 @@ import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { DeletePageOutputSchema, PageIdInputSchema } from "../schemas";
 
-/** Collect the page and all descendants, deepest last. */
+/** Collect the page and all descendants with a single workspace hierarchy read. */
 export async function collectSubtreeIds(
-	pages: Pick<PageRepository, "listIdsByParent">,
+	pages: Pick<PageRepository, "listHierarchyByWorkspace">,
+	workspaceId: string,
 	rootId: string,
 ): Promise<string[]> {
+	const childrenByParent = new Map<string, string[]>();
+	for (const row of await pages.listHierarchyByWorkspace(workspaceId)) {
+		if (!row.parentPageId) continue;
+		const children = childrenByParent.get(row.parentPageId) ?? [];
+		children.push(row.id);
+		childrenByParent.set(row.parentPageId, children);
+	}
+
 	const ids: string[] = [rootId];
 	for (let cursor = 0; cursor < ids.length; cursor++) {
 		const id = ids[cursor];
 		if (id === undefined) break;
-		ids.push(...(await pages.listIdsByParent(id)));
+		ids.push(...(childrenByParent.get(id) ?? []));
 	}
 	return ids;
 }
@@ -35,7 +44,11 @@ export const deletePageUseCase = useCase
 
 			await ctx.gate.authorize("pages.delete", page);
 
-			const subtree = await collectSubtreeIds(tx.pages, page.id);
+			const subtree = await collectSubtreeIds(
+				tx.pages,
+				page.workspaceId,
+				page.id,
+			);
 			await tx.pages.setDeletedByIds(subtree, new Date().toISOString());
 		});
 	});

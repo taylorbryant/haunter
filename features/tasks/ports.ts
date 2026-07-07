@@ -20,11 +20,17 @@ export type UpdateTaskData = {
 	completedAt?: string | null;
 };
 
+export type ListTasksOptions = {
+	assigneeId?: string;
+	limit?: number;
+};
+
 export interface TaskRepository {
-	/** Every member sees the whole workspace's tasks; "mine" filters client-side. */
+	/** Workspace tasks, optionally narrowed to an assignee and bounded by limit. */
 	listByWorkspace(
 		workspaceId: string,
 		filter: TaskFilter,
+		options?: ListTasksOptions,
 	): Promise<TaskWithPage[]>;
 	listByPage(pageId: string): Promise<Task[]>;
 	findById(id: string): Promise<Task | null>;

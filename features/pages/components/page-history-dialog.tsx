@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	getPageVersionQueryOptions,
+	invalidateBacklinks,
 	invalidatePage,
 	invalidatePages,
 	invalidatePageVersions,
@@ -122,13 +123,19 @@ export function PageHistoryDialog({
 		restoreMutation.mutate(
 			{ path: { id: pageId, versionId: selected }, body: {} },
 			{
-				onSuccess: async () => {
-					await Promise.all([
+				onSuccess: async (result) => {
+					const invalidations = [
 						invalidatePage(queryClient, pageId),
 						invalidatePages(queryClient),
 						invalidatePageVersions(queryClient, pageId),
-						invalidateTasks(queryClient),
-					]);
+					];
+					if (result.tasksChanged) {
+						invalidations.push(invalidateTasks(queryClient));
+					}
+					if (result.linksChanged) {
+						invalidations.push(invalidateBacklinks(queryClient));
+					}
+					await Promise.all(invalidations);
 					onOpenChange(false);
 					// The open editor initializes once; a hard reload is the
 					// simplest way to guarantee it picks up the restored doc.

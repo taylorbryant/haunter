@@ -370,11 +370,12 @@ export default function HaunterEditor({
 					baseUpdatedAtRef.current = result.updatedAt;
 					if (!dirtyRef.current) reportState("saved");
 					setPageSavedAtInCache(queryClient, pageId, result.updatedAt);
-					invalidatePage(queryClient, pageId);
-					invalidateBacklinks(queryClient);
-					// Saving content reconciles task rows server-side (create/update/
-					// orphan-delete), so the My Tasks cache is stale after every save.
-					invalidateTasks(queryClient);
+					if (result.linksChanged) {
+						invalidateBacklinks(queryClient);
+					}
+					if (result.tasksChanged) {
+						invalidateTasks(queryClient);
+					}
 					return true;
 				},
 				(error) => {

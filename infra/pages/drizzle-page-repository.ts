@@ -17,6 +17,7 @@ import type {
 	UpdatePageData,
 } from "@/features/pages/ports";
 import type { BlockJson, Page, PageMeta } from "@/features/pages/schemas";
+import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import * as schema from "@/infra/db/schema";
 
 type PageRow = typeof schema.pages.$inferSelect;
@@ -34,7 +35,7 @@ const metaColumns = {
 	updatedAt: schema.pages.updatedAt,
 };
 
-type PageMetaRow = Omit<PageRow, "content">;
+type PageMetaRow = Omit<PageRow, "content" | "searchText">;
 
 function toPageMeta(row: PageMetaRow): PageMeta {
 	return {
@@ -58,6 +59,17 @@ function toPage(row: PageRow): Page {
 	};
 }
 
+function searchTextForRow(
+	row: Pick<PageRow, "content" | "searchText">,
+): string {
+	if (row.searchText.length > 0) return row.searchText;
+	try {
+		return extractPageSearchText(JSON.parse(row.content) as BlockJson[]);
+	} catch {
+		return "";
+	}
+}
+
 export function createDrizzlePageRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): PageRepository {
@@ -75,6 +87,15 @@ export function createDrizzlePageRepository(
 				.orderBy(asc(schema.pages.position));
 
 			return rows.map(toPageMeta);
+		},
+		async listHierarchyByWorkspace(workspaceId: string) {
+			return db
+				.select({
+					id: schema.pages.id,
+					parentPageId: schema.pages.parentPageId,
+				})
+				.from(schema.pages)
+				.where(eq(schema.pages.workspaceId, workspaceId));
 		},
 		async listTrashedMetaByWorkspace(workspaceId: string) {
 			const rows = await db
@@ -108,6 +129,15 @@ export function createDrizzlePageRepository(
 
 			return row ? toPageMeta(row) : null;
 		},
+		async findMetaByIds(ids: string[]) {
+			if (ids.length === 0) return [];
+			const rows = await db
+				.select(metaColumns)
+				.from(schema.pages)
+				.where(inArray(schema.pages.id, ids));
+
+			return rows.map(toPageMeta);
+		},
 		async searchByWorkspace(
 			workspaceId: string,
 			needle: string,
@@ -115,7 +145,11 @@ export function createDrizzlePageRepository(
 		) {
 			const pattern = `%${needle.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 			const rows = await db
-				.select()
+				.select({
+					...metaColumns,
+					content: schema.pages.content,
+					searchText: schema.pages.searchText,
+				})
 				.from(schema.pages)
 				.where(
 					and(
@@ -123,14 +157,21 @@ export function createDrizzlePageRepository(
 						isNull(schema.pages.deletedAt),
 						or(
 							sql`${schema.pages.title} LIKE ${pattern} ESCAPE '\\'`,
-							sql`${schema.pages.content} LIKE ${pattern} ESCAPE '\\'`,
+							sql`${schema.pages.searchText} LIKE ${pattern} ESCAPE '\\'`,
+							and(
+								eq(schema.pages.searchText, ""),
+								sql`${schema.pages.content} LIKE ${pattern} ESCAPE '\\'`,
+							),
 						),
 					),
 				)
 				.orderBy(desc(schema.pages.updatedAt))
 				.limit(limit);
 
-			return rows.map(toPage);
+			return rows.map((row) => ({
+				...toPageMeta(row),
+				searchText: searchTextForRow(row),
+			}));
 		},
 		async listIdsByParent(parentPageId: string) {
 			const rows = await db
@@ -139,6 +180,27 @@ export function createDrizzlePageRepository(
 				.where(eq(schema.pages.parentPageId, parentPageId));
 
 			return rows.map((row) => row.id);
+		},
+		async maxPositionForParent(
+			workspaceId: string,
+			parentPageId: string | null,
+		) {
+			const [row] = await db
+				.select({
+					position: sql<number | null>`max(${schema.pages.position})`,
+				})
+				.from(schema.pages)
+				.where(
+					and(
+						eq(schema.pages.workspaceId, workspaceId),
+						isNull(schema.pages.deletedAt),
+						parentPageId === null
+							? isNull(schema.pages.parentPageId)
+							: eq(schema.pages.parentPageId, parentPageId),
+					),
+				);
+
+			return row?.position ?? 0;
 		},
 		async create(input: NewPage) {
 			const now = new Date().toISOString();
@@ -151,6 +213,7 @@ export function createDrizzlePageRepository(
 				icon: null,
 				position: input.position,
 				content: "[]",
+				searchText: "",
 				createdAt: now,
 				updatedAt: now,
 			};
@@ -175,7 +238,7 @@ export function createDrizzlePageRepository(
 
 			return toPageMeta(row);
 		},
-		async saveContent(id: string, contentJson: string) {
+		async saveContent(id: string, contentJson: string, searchText: string) {
 			const [current] = await db
 				.select({ updatedAt: schema.pages.updatedAt })
 				.from(schema.pages)
@@ -192,7 +255,7 @@ export function createDrizzlePageRepository(
 			).toISOString();
 			const [row] = await db
 				.update(schema.pages)
-				.set({ content: contentJson, updatedAt })
+				.set({ content: contentJson, searchText, updatedAt })
 				.where(eq(schema.pages.id, id))
 				.returning({ id: schema.pages.id });
 
@@ -205,6 +268,7 @@ export function createDrizzlePageRepository(
 		async saveContentIf(
 			id: string,
 			contentJson: string,
+			searchText: string,
 			baseUpdatedAt: string,
 		) {
 			// Strictly after the base version: two writes inside the same
@@ -217,7 +281,7 @@ export function createDrizzlePageRepository(
 			// another writer already bumped updatedAt.
 			const [row] = await db
 				.update(schema.pages)
-				.set({ content: contentJson, updatedAt })
+				.set({ content: contentJson, searchText, updatedAt })
 				.where(
 					and(
 						eq(schema.pages.id, id),

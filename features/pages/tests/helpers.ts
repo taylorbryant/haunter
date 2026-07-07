@@ -6,6 +6,7 @@ import type {
 	PageVersionRepository,
 	UpdatePageData,
 } from "@/features/pages/ports";
+import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { Page, PageMeta, PageVersion } from "@/features/pages/schemas";
 
 export function createTestPageLinkRepository(deps: {
@@ -19,7 +20,17 @@ export function createTestPageLinkRepository(deps: {
 			_userId: string,
 			targetPageIds: string[],
 		) {
+			const current = linksBySource.get(sourcePageId) ?? [];
+			const currentIds = [...current].sort();
+			const nextIds = [...targetPageIds].sort();
+			if (
+				currentIds.length === nextIds.length &&
+				currentIds.every((id, index) => id === nextIds[index])
+			) {
+				return false;
+			}
 			linksBySource.set(sourcePageId, [...targetPageIds]);
+			return true;
 		},
 		async listBacklinkSources(targetPageId: string) {
 			const sources: PageMeta[] = [];
@@ -54,6 +65,14 @@ export function createTestPageRepository(): PageRepository {
 				.sort((left, right) => left.position - right.position)
 				.map(toMeta);
 		},
+		async listHierarchyByWorkspace(workspaceId: string) {
+			return Array.from(pages.values())
+				.filter((page) => page.workspaceId === workspaceId)
+				.map((page) => ({
+					id: page.id,
+					parentPageId: page.parentPageId,
+				}));
+		},
 		async listTrashedMetaByWorkspace(workspaceId: string) {
 			return Array.from(pages.values())
 				.filter(
@@ -69,6 +88,12 @@ export function createTestPageRepository(): PageRepository {
 			const page = pages.get(id);
 			return page ? toMeta(page) : null;
 		},
+		async findMetaByIds(ids: string[]) {
+			const wanted = new Set(ids);
+			return Array.from(pages.values())
+				.filter((page) => wanted.has(page.id))
+				.map(toMeta);
+		},
 		async searchByWorkspace(
 			workspaceId: string,
 			needle: string,
@@ -81,15 +106,34 @@ export function createTestPageRepository(): PageRepository {
 						page.workspaceId === workspaceId &&
 						page.deletedAt === null &&
 						(page.title.toLowerCase().includes(lowered) ||
-							JSON.stringify(page.content).toLowerCase().includes(lowered)),
+							extractPageSearchText(page.content)
+								.toLowerCase()
+								.includes(lowered)),
 				)
 				.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-				.slice(0, limit);
+				.slice(0, limit)
+				.map((page) => ({
+					...toMeta(page),
+					searchText: extractPageSearchText(page.content),
+				}));
 		},
 		async listIdsByParent(parentPageId: string) {
 			return Array.from(pages.values())
 				.filter((page) => page.parentPageId === parentPageId)
 				.map((page) => page.id);
+		},
+		async maxPositionForParent(
+			workspaceId: string,
+			parentPageId: string | null,
+		) {
+			return Array.from(pages.values())
+				.filter(
+					(page) =>
+						page.workspaceId === workspaceId &&
+						page.deletedAt === null &&
+						page.parentPageId === parentPageId,
+				)
+				.reduce((max, page) => Math.max(max, page.position), 0);
 		},
 		async create(input: NewPage) {
 			const now = new Date().toISOString();
@@ -119,7 +163,7 @@ export function createTestPageRepository(): PageRepository {
 			pages.set(id, next);
 			return toMeta(next);
 		},
-		async saveContent(id: string, contentJson: string) {
+		async saveContent(id: string, contentJson: string, _searchText: string) {
 			const page = pages.get(id);
 			if (!page) {
 				throw new Error(`Page not found: ${id}`);
@@ -134,6 +178,7 @@ export function createTestPageRepository(): PageRepository {
 		async saveContentIf(
 			id: string,
 			contentJson: string,
+			_searchText: string,
 			baseUpdatedAt: string,
 		) {
 			const page = pages.get(id);

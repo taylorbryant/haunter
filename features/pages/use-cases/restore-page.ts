@@ -25,7 +25,11 @@ export const restorePageUseCase = useCase
 				return page;
 			}
 
-			const subtree = await collectSubtreeIds(tx.pages, page.id);
+			const subtree = await collectSubtreeIds(
+				tx.pages,
+				page.workspaceId,
+				page.id,
+			);
 			await tx.pages.setDeletedByIds(subtree, null);
 
 			// If the original parent is gone or still trashed, surface the page
@@ -34,11 +38,8 @@ export const restorePageUseCase = useCase
 				? await tx.pages.findMetaById(page.parentPageId)
 				: null;
 			if (page.parentPageId && (!parent || parent.deletedAt !== null)) {
-				const roots = await tx.pages.listMetaByWorkspace(page.workspaceId);
 				const position =
-					roots
-						.filter((item) => item.parentPageId === null)
-						.reduce((max, item) => Math.max(max, item.position), 0) + 1;
+					(await tx.pages.maxPositionForParent(page.workspaceId, null)) + 1;
 
 				return tx.pages.update(page.id, { parentPageId: null, position });
 			}

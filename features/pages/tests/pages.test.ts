@@ -640,6 +640,77 @@ describe("pages use cases", () => {
 		expect(backlinks.items).toEqual([]);
 	});
 
+	it("reports whether content saves changed derived tasks or links", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+
+		const target = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Target" },
+			{ ctx },
+		);
+		const source = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Source" },
+			{ ctx },
+		);
+		const linkBlock = {
+			id: "link",
+			type: "pageLink",
+			props: { pageId: target.id },
+			children: [],
+		};
+		const taskBlock = {
+			id: "task",
+			type: "task",
+			props: { checked: false },
+			content: [{ type: "text", text: "Follow up", styles: {} }],
+			children: [],
+		};
+
+		const plain = await tester.run(
+			savePageContentUseCase,
+			{
+				id: source.id,
+				content: [
+					{
+						id: "plain",
+						type: "paragraph",
+						props: {},
+						content: [{ type: "text", text: "No derived data", styles: {} }],
+						children: [],
+					},
+				],
+			},
+			{ ctx },
+		);
+		expect(plain.tasksChanged).toBe(false);
+		expect(plain.linksChanged).toBe(false);
+
+		const linked = await tester.run(
+			savePageContentUseCase,
+			{ id: source.id, content: [linkBlock] },
+			{ ctx },
+		);
+		expect(linked.tasksChanged).toBe(false);
+		expect(linked.linksChanged).toBe(true);
+
+		const unchanged = await tester.run(
+			savePageContentUseCase,
+			{ id: source.id, content: [linkBlock] },
+			{ ctx },
+		);
+		expect(unchanged.tasksChanged).toBe(false);
+		expect(unchanged.linksChanged).toBe(false);
+
+		const withTask = await tester.run(
+			savePageContentUseCase,
+			{ id: source.id, content: [linkBlock, taskBlock] },
+			{ ctx },
+		);
+		expect(withTask.tasksChanged).toBe(true);
+		expect(withTask.linksChanged).toBe(false);
+	});
+
 	it("searches page titles and body text with snippets", async () => {
 		const { workspace, tester, ctx } = await createFixture();
 

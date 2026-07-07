@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import {
 	ResponsiveDialog,
@@ -94,6 +94,30 @@ function buildTree(pages: PageMeta[]): TreeNode[] {
 	return roots;
 }
 
+function buildTreeIndex(pages: PageMeta[]) {
+	const tree = buildTree(pages);
+	const nodesById = new Map<string, TreeNode>();
+	const subtreeIdsById = new Map<string, Set<string>>();
+
+	function visit(node: TreeNode): Set<string> {
+		nodesById.set(node.id, node);
+		const ids = new Set<string>([node.id]);
+		for (const child of node.children) {
+			for (const id of visit(child)) {
+				ids.add(id);
+			}
+		}
+		subtreeIdsById.set(node.id, ids);
+		return ids;
+	}
+
+	for (const node of tree) {
+		visit(node);
+	}
+
+	return { tree, nodesById, subtreeIdsById };
+}
+
 function useExpandedState(workspaceId: string) {
 	const storageKey = `haunter.tree.${workspaceId}`;
 	const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -153,17 +177,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	} | null>(null);
 
 	const pages = pagesQuery.data?.items ?? [];
-	const tree = buildTree(pages);
-	const nodesById = new Map<string, TreeNode>();
-	{
-		const stack = [...tree];
-		while (stack.length > 0) {
-			const node = stack.pop();
-			if (!node) break;
-			nodesById.set(node.id, node);
-			stack.push(...node.children);
-		}
-	}
+	const { tree, nodesById, subtreeIdsById } = useMemo(
+		() => buildTreeIndex(pages),
+		[pages],
+	);
 	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 
 	function createPage(parentPageId: string | null) {
@@ -206,19 +223,9 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		);
 	}
 
-	function collectSubtreeIds(node: TreeNode): Set<string> {
-		const ids = new Set<string>([node.id]);
-		for (const child of node.children) {
-			for (const id of collectSubtreeIds(child)) {
-				ids.add(id);
-			}
-		}
-		return ids;
-	}
-
 	// Soft delete: the subtree moves to the workspace trash (restorable).
 	function deletePage(node: TreeNode) {
-		const subtree = collectSubtreeIds(node);
+		const subtree = subtreeIdsById.get(node.id) ?? new Set([node.id]);
 		deleteMutation.mutate(
 			{ path: { id: node.id } },
 			{
@@ -248,7 +255,8 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		const dragged = nodesById.get(dragId);
 		// A page cannot be dropped into its own subtree.
 		return (
-			Boolean(dragged) && !collectSubtreeIds(dragged as TreeNode).has(targetId)
+			Boolean(dragged) &&
+			!(subtreeIdsById.get((dragged as TreeNode).id) ?? new Set()).has(targetId)
 		);
 	}
 

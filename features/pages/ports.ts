@@ -20,13 +20,22 @@ export type UpdatePageData = {
 	position?: number;
 };
 
+export type PageHierarchyRow = {
+	id: string;
+	parentPageId: string | null;
+};
+
+export type PageSearchCandidate = PageMeta & {
+	searchText: string;
+};
+
 export interface PageLinkRepository {
 	/** Replace the outgoing links of a source page with the given targets. */
 	replaceForSource(
 		sourcePageId: string,
 		userId: string,
 		targetPageIds: string[],
-	): Promise<void>;
+	): Promise<boolean>;
 	/** Live pages that link to the target, most recently updated first. */
 	listBacklinkSources(targetPageId: string): Promise<PageMeta[]>;
 }
@@ -34,24 +43,34 @@ export interface PageLinkRepository {
 export interface PageRepository {
 	/** Live (non-trashed) pages only. */
 	listMetaByWorkspace(workspaceId: string): Promise<PageMeta[]>;
+	/** Minimal parent links for every page in a workspace, including trash. */
+	listHierarchyByWorkspace(workspaceId: string): Promise<PageHierarchyRow[]>;
 	/** All trashed pages in the workspace, subtree members included. */
 	listTrashedMetaByWorkspace(workspaceId: string): Promise<PageMeta[]>;
 	findById(id: string): Promise<Page | null>;
 	findMetaById(id: string): Promise<PageMeta | null>;
+	findMetaByIds(ids: string[]): Promise<PageMeta[]>;
 	listIdsByParent(parentPageId: string): Promise<string[]>;
+	maxPositionForParent(
+		workspaceId: string,
+		parentPageId: string | null,
+	): Promise<number>;
 	/**
-	 * Live pages in the workspace whose title or raw content JSON contains
-	 * the needle (case-insensitive), newest first. Candidates only — content
-	 * matches are re-verified against extracted block text by the caller.
+	 * Live pages in the workspace whose title or materialized plain text contains
+	 * the needle (case-insensitive), newest first.
 	 */
 	searchByWorkspace(
 		workspaceId: string,
 		needle: string,
 		limit: number,
-	): Promise<Page[]>;
+	): Promise<PageSearchCandidate[]>;
 	create(input: NewPage): Promise<PageMeta>;
 	update(id: string, input: UpdatePageData): Promise<PageMeta>;
-	saveContent(id: string, contentJson: string): Promise<{ updatedAt: string }>;
+	saveContent(
+		id: string,
+		contentJson: string,
+		searchText: string,
+	): Promise<{ updatedAt: string }>;
 	/**
 	 * Compare-and-set variant: persist only if the row's updatedAt still
 	 * equals `baseUpdatedAt`. Returns null when the row moved on (stale write).
@@ -59,6 +78,7 @@ export interface PageRepository {
 	saveContentIf(
 		id: string,
 		contentJson: string,
+		searchText: string,
 		baseUpdatedAt: string,
 	): Promise<{ updatedAt: string } | null>;
 	/** Set or clear deletedAt for the given pages. */

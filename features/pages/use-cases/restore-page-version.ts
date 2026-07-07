@@ -3,6 +3,7 @@ import { appError } from "@/features/shared/errors";
 import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { reconcilePageDerivations } from "../lib/apply-page-content";
+import { extractPageSearchText } from "../lib/extract-page-text";
 import {
 	PageVersionIdInputSchema,
 	SavePageContentOutputSchema,
@@ -53,12 +54,17 @@ export const restorePageVersionUseCase = useCase
 			const result = await tx.pages.saveContent(
 				page.id,
 				JSON.stringify(version.content),
+				extractPageSearchText(version.content),
 			);
 
 			// A restored document is the source of truth again: reconcile its
 			// task rows and page links exactly like a normal save.
-			await reconcilePageDerivations(tx, page, version.content);
+			const derivations = await reconcilePageDerivations(
+				tx,
+				page,
+				version.content,
+			);
 
-			return result;
+			return { ...result, ...derivations };
 		});
 	});

@@ -21,7 +21,11 @@ export const purgePageUseCase = useCase
 
 			await ctx.gate.authorize("pages.delete", page);
 
-			const subtree = await collectSubtreeIds(tx.pages, page.id);
+			const subtree = await collectSubtreeIds(
+				tx.pages,
+				page.workspaceId,
+				page.id,
+			);
 			await tx.canvases.deleteByPageIds(subtree);
 			await tx.tasks.deleteByPageIds(subtree);
 			// Delete children before parents so the self-FK never dangles.

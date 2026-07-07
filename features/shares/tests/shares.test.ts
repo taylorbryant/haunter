@@ -13,6 +13,7 @@ import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { PageRepository } from "@/features/pages/ports";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
 import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
@@ -94,17 +95,19 @@ async function createFixture(role = "owner") {
 		title: "Public notes",
 		position: 1,
 	});
+	const content = [
+		{
+			id: "b1",
+			type: "paragraph",
+			props: {},
+			content: [{ type: "text", text: "Hello, web", styles: {} }],
+			children: [],
+		},
+	];
 	await pages.saveContent(
 		page.id,
-		JSON.stringify([
-			{
-				id: "b1",
-				type: "paragraph",
-				props: {},
-				content: [{ type: "text", text: "Hello, web", styles: {} }],
-				children: [],
-			},
-		]),
+		JSON.stringify(content),
+		extractPageSearchText(content),
 	);
 	const tester = createTester({ pages, shares, canvases, workspaceId, role });
 	const ctx = await tester.ctx();
@@ -240,16 +243,18 @@ describe("page shares", () => {
 			await createFixture();
 		const key = `pages/ws/${page.id}/img.png`;
 
+		const content = [
+			{
+				id: "img-1",
+				type: "image",
+				props: { url: `/api/files/${key}` },
+				children: [],
+			},
+		];
 		await pages.saveContent(
 			page.id,
-			JSON.stringify([
-				{
-					id: "img-1",
-					type: "image",
-					props: { url: `/api/files/${key}` },
-					children: [],
-				},
-			]),
+			JSON.stringify(content),
+			extractPageSearchText(content),
 		);
 
 		const share = await tester.run(
@@ -370,9 +375,9 @@ describe("shared file route helpers", () => {
 		];
 
 		expect(contentReferencesFileKey(content, key)).toBe(true);
-		expect(contentReferencesFileKey(content, "pages/workspace/page/old.png")).toBe(
-			false,
-		);
+		expect(
+			contentReferencesFileKey(content, "pages/workspace/page/old.png"),
+		).toBe(false);
 	});
 
 	it("rate-limits shared file reads by IP before share lookup", async () => {

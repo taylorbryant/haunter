@@ -46,11 +46,11 @@ export function SearchCommand() {
 
 	const search = useQuery({
 		...searchPagesQueryOptions(debounced),
-		enabled: open && debounced.length > 0,
+		enabled: open && debounced.length >= 2,
 		placeholderData: keepPreviousData,
 	});
 
-	const items = debounced.length > 0 ? (search.data?.items ?? []) : [];
+	const items = debounced.length >= 2 ? (search.data?.items ?? []) : [];
 
 	function close() {
 		setOpen(false);
@@ -113,9 +113,11 @@ export function SearchCommand() {
 							<div className="py-6 text-center text-muted-foreground text-sm">
 								{debounced.length === 0
 									? "Search pages in this workspace."
-									: search.isFetching
-										? "Searching…"
-										: "No pages found."}
+									: debounced.length < 2
+										? "Type at least 2 characters."
+										: search.isFetching
+											? "Searching…"
+											: "No pages found."}
 							</div>
 						)}
 					</CommandList>

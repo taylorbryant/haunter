@@ -1,5 +1,6 @@
 import type { PageRepository } from "@/features/pages/ports";
 import type {
+	ListTasksOptions,
 	NewTask,
 	TaskRepository,
 	UpdateTaskData,
@@ -18,7 +19,11 @@ export function createTestTaskRepository(options?: {
 	}
 
 	return {
-		async listByWorkspace(workspaceId: string, filter: TaskFilter) {
+		async listByWorkspace(
+			workspaceId: string,
+			filter: TaskFilter,
+			listOptions: ListTasksOptions = {},
+		) {
 			const trashedPageIds = new Set<string>();
 			for (const task of tasks.values()) {
 				if (task.pageId && options?.pages) {
@@ -33,6 +38,8 @@ export function createTestTaskRepository(options?: {
 					(task) =>
 						task.workspaceId === workspaceId &&
 						matches(task, filter) &&
+						(!listOptions.assigneeId ||
+							task.assigneeId === listOptions.assigneeId) &&
 						(task.pageId === null || !trashedPageIds.has(task.pageId)),
 				)
 				.sort((left, right) => {
@@ -42,7 +49,8 @@ export function createTestTaskRepository(options?: {
 						return (left.dueDate ?? "").localeCompare(right.dueDate ?? "");
 					}
 					return left.createdAt.localeCompare(right.createdAt);
-				});
+				})
+				.slice(0, listOptions.limit);
 
 			return Promise.all(
 				items.map(async (task) => ({

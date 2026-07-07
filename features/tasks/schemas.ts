@@ -31,13 +31,18 @@ export const TaskFilterSchema = z
 	.enum(["open", "completed", "all"])
 	.default("open");
 
+export const TaskScopeSchema = z.enum(["everyone", "mine"]).default("everyone");
+
 export const ListTasksInputSchema = z.object({
 	workspaceId: z.string().min(1),
 	filter: TaskFilterSchema,
+	scope: TaskScopeSchema,
+	limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
 export const ListTasksOutputSchema = z.object({
 	items: z.array(TaskWithPageSchema),
+	hasMore: z.boolean(),
 });
 
 export const TaskIdInputSchema = z.object({
@@ -68,5 +73,6 @@ export const DeleteTaskOutputSchema = z.void();
 export type Task = z.infer<typeof TaskSchema>;
 export type TaskWithPage = z.infer<typeof TaskWithPageSchema>;
 export type TaskFilter = z.infer<typeof TaskFilterSchema>;
+export type TaskScope = z.infer<typeof TaskScopeSchema>;
 export type CreateTaskInput = z.infer<typeof CreateTaskInputSchema>;
 export type UpdateTaskInput = z.infer<typeof UpdateTaskInputSchema>;

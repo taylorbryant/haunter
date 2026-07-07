@@ -26,11 +26,9 @@ export const createPageUseCase = useCase
 				}
 			}
 
-			const siblings = await tx.pages.listMetaByWorkspace(input.workspaceId);
 			const position =
-				siblings
-					.filter((page) => page.parentPageId === parentPageId)
-					.reduce((max, page) => Math.max(max, page.position), 0) + 1;
+				(await tx.pages.maxPositionForParent(input.workspaceId, parentPageId)) +
+				1;
 
 			return tx.pages.create({
 				userId: user.id,

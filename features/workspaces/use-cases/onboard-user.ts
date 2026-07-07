@@ -1,5 +1,6 @@
 import "@beignet/core/server-only";
-import { reconcilePageTasks } from "@/features/tasks/lib/reconcile-page-tasks";
+import { reconcilePageDerivations } from "@/features/pages/lib/apply-page-content";
+import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import { requireActiveWorkspaceId, requireUser } from "@/lib/auth";
 import { canEditContent } from "@/lib/org-access";
 import { useCase } from "@/lib/use-case";
@@ -55,12 +56,12 @@ export const onboardUserUseCase = useCase
 				});
 				if (welcomePageId === null) welcomePageId = created.id;
 				await tx.pages.update(created.id, { icon: page.icon });
-				await tx.pages.saveContent(created.id, JSON.stringify(page.content));
-				await reconcilePageTasks(
-					{ members: tx.members, tasks: tx.tasks },
-					created,
-					page.content,
+				await tx.pages.saveContent(
+					created.id,
+					JSON.stringify(page.content),
+					extractPageSearchText(page.content),
 				);
+				await reconcilePageDerivations(tx, created, page.content);
 				position += 1;
 			}
 

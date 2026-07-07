@@ -83,6 +83,8 @@ export const SavePageContentInputSchema = PageIdInputSchema.merge(
 
 export const SavePageContentOutputSchema = z.object({
 	updatedAt: z.string().datetime(),
+	tasksChanged: z.boolean(),
+	linksChanged: z.boolean(),
 });
 
 export const DeletePageOutputSchema = z.void();
@@ -125,7 +127,7 @@ export const ListBacklinksOutputSchema = z.object({
 });
 
 export const SearchPagesInputSchema = z.object({
-	q: z.string().min(1).max(200),
+	q: z.string().min(2).max(200),
 });
 
 export const SearchResultSchema = z.object({

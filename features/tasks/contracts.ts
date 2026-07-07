@@ -6,6 +6,7 @@ import {
 	ListTasksOutputSchema,
 	TaskFilterSchema,
 	TaskIdInputSchema,
+	TaskScopeSchema,
 	TaskSchema,
 	UpdateTaskBodySchema,
 } from "@/features/tasks/schemas";
@@ -26,7 +27,13 @@ const tasks = defineContractGroup()
 export const listTasks = tasks
 	.get("/api/workspaces/:workspaceId/tasks")
 	.pathParams(z.object({ workspaceId: z.string().min(1) }))
-	.query(z.object({ filter: TaskFilterSchema.optional() }))
+	.query(
+		z.object({
+			filter: TaskFilterSchema.optional(),
+			scope: TaskScopeSchema.optional(),
+			limit: z.coerce.number().int().min(1).max(200).optional(),
+		}),
+	)
 	.errors({
 		Forbidden: errors.Forbidden,
 		WorkspaceNotFound: errors.WorkspaceNotFound,

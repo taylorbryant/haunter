@@ -48,3 +48,9 @@ export function extractPageText(blocks: BlockJson[]): PageBlockText[] {
 	walk(blocks);
 	return found;
 }
+
+export function extractPageSearchText(blocks: BlockJson[]): string {
+	return extractPageText(blocks)
+		.map((block) => block.text)
+		.join("\n");
+}

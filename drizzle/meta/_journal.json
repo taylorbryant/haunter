@@ -99,6 +99,13 @@
 			"when": 1783203154625,
 			"tag": "0013_classy_human_torch",
 			"breakpoints": true
+		},
+		{
+			"idx": 14,
+			"version": "6",
+			"when": 1783393619893,
+			"tag": "0014_smooth_warstar",
+			"breakpoints": true
 		}
 	]
 }

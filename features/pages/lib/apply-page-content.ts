@@ -17,14 +17,14 @@ import { extractPageLinks } from "./extract-page-links";
 export async function reconcilePageDerivations(
 	tx: {
 		members: MemberRepository;
-		pages: Pick<PageRepository, "findMetaById">;
+		pages: Pick<PageRepository, "findMetaByIds">;
 		pageLinks: PageLinkRepository;
 		tasks: TaskRepository;
 	},
 	page: PageMeta,
 	content: BlockJson[],
-): Promise<void> {
-	await reconcilePageTasks(
+): Promise<{ tasksChanged: boolean; linksChanged: boolean }> {
+	const tasksChanged = await reconcilePageTasks(
 		{ members: tx.members, tasks: tx.tasks },
 		page,
 		content,
@@ -32,13 +32,20 @@ export async function reconcilePageDerivations(
 
 	// Keep only link targets that still exist and live in the same workspace
 	// (purged or foreign ids would break the link table's foreign keys).
-	const targets: string[] = [];
-	for (const targetId of extractPageLinks(content)) {
-		if (targetId === page.id) continue;
-		const target = await tx.pages.findMetaById(targetId);
-		if (target && target.workspaceId === page.workspaceId) {
-			targets.push(targetId);
-		}
-	}
-	await tx.pageLinks.replaceForSource(page.id, page.userId, targets);
+	const targetIds = extractPageLinks(content).filter(
+		(targetId) => targetId !== page.id,
+	);
+	const targets = await tx.pages.findMetaByIds(targetIds);
+	const validTargets = new Set(
+		targets
+			.filter((target) => target.workspaceId === page.workspaceId)
+			.map((target) => target.id),
+	);
+	const linksChanged = await tx.pageLinks.replaceForSource(
+		page.id,
+		page.userId,
+		targetIds.filter((targetId) => validTargets.has(targetId)),
+	);
+
+	return { tasksChanged, linksChanged };
 }

@@ -1,5 +1,6 @@
 import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
+import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import { patchTaskBlock } from "@/features/tasks/lib/patch-task-block";
 import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -80,7 +81,11 @@ export const updateTaskUseCase = useCase
 					// A missing block means the row is stale; the next content save
 					// will orphan-delete it. Update the row anyway.
 					if (found) {
-						await tx.pages.saveContent(page.id, JSON.stringify(blocks));
+						await tx.pages.saveContent(
+							page.id,
+							JSON.stringify(blocks),
+							extractPageSearchText(blocks),
+						);
 					}
 				}
 			}

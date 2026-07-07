@@ -8,14 +8,19 @@ export const listTasksUseCase = useCase
 	.input(ListTasksInputSchema)
 	.output(ListTasksOutputSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
+		const user = requireUser(ctx);
 		requireActiveWorkspace(ctx, input.workspaceId);
 
-		// Workspace-wide by design: every member sees the same task list, and
-		// "assigned to me" is a view filter, not a data boundary.
 		const items = await ctx.ports.tasks.listByWorkspace(
 			input.workspaceId,
 			input.filter,
+			{
+				assigneeId: input.scope === "mine" ? user.id : undefined,
+				limit: input.limit + 1,
+			},
 		);
-		return { items };
+		return {
+			items: items.slice(0, input.limit),
+			hasMore: items.length > input.limit,
+		};
 	});

@@ -6,13 +6,18 @@ import {
 	listTasks,
 	updateTask,
 } from "@/features/tasks/contracts";
-import type { TaskFilter } from "@/features/tasks/schemas";
+import type { TaskFilter, TaskScope } from "@/features/tasks/schemas";
 
-export function listTasksQueryOptions(workspaceId: string, filter: TaskFilter) {
+export function listTasksQueryOptions(
+	workspaceId: string,
+	filter: TaskFilter,
+	scope: TaskScope = "everyone",
+	limit = 50,
+) {
 	return {
 		...rq(listTasks).queryOptions({
 			path: { workspaceId },
-			query: { filter },
+			query: { filter, scope, limit },
 		}),
 		// Shared workspaces: pick up other members' changes without a manual
 		// reload. Paused automatically while the tab is in the background.

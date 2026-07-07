@@ -1,9 +1,8 @@
 import "@beignet/core/server-only";
 import { requireActiveWorkspaceId } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
-import { extractPageText } from "../lib/extract-page-text";
 import {
-	type Page,
+	type PageMeta,
 	SearchPagesInputSchema,
 	SearchPagesOutputSchema,
 	type SearchResult,
@@ -22,7 +21,7 @@ function snippetAround(text: string, index: number, matchLength: number) {
 	return `${prefix}${text.slice(start, end)}${suffix}`;
 }
 
-function toResult(page: Page, snippet: string): SearchResult {
+function toResult(page: PageMeta, snippet: string): SearchResult {
 	return {
 		id: page.id,
 		workspaceId: page.workspaceId,
@@ -46,7 +45,7 @@ export const searchPagesUseCase = useCase
 		const workspaceId = requireActiveWorkspaceId(ctx);
 		const query = input.q.trim();
 		const needle = query.toLowerCase();
-		if (needle.length === 0) {
+		if (needle.length < 2) {
 			return { items: [] };
 		}
 
@@ -60,10 +59,10 @@ export const searchPagesUseCase = useCase
 		const bodyMatches: SearchResult[] = [];
 
 		for (const page of candidates) {
-			const blocks = extractPageText(page.content);
+			const searchText = page.searchText;
 
 			if (page.title.toLowerCase().includes(needle)) {
-				const lead = blocks[0]?.text ?? "";
+				const lead = searchText;
 				const snippet =
 					lead.length > LEAD_SNIPPET_LENGTH
 						? `${lead.slice(0, LEAD_SNIPPET_LENGTH)}…`
@@ -72,14 +71,11 @@ export const searchPagesUseCase = useCase
 				continue;
 			}
 
-			for (const block of blocks) {
-				const index = block.text.toLowerCase().indexOf(needle);
-				if (index >= 0) {
-					bodyMatches.push(
-						toResult(page, snippetAround(block.text, index, needle.length)),
-					);
-					break;
-				}
+			const index = searchText.toLowerCase().indexOf(needle);
+			if (index >= 0) {
+				bodyMatches.push(
+					toResult(page, snippetAround(searchText, index, needle.length)),
+				);
 			}
 		}
 

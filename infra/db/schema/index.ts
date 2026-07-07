@@ -223,12 +223,16 @@ export const pages = sqliteTable(
 		icon: text("icon"),
 		position: real("position").notNull(),
 		content: text("content").notNull().default("[]"),
+		searchText: text("search_text").notNull().default(""),
 		deletedAt: text("deleted_at"),
 		createdAt: text("created_at").notNull(),
 		updatedAt: text("updated_at").notNull(),
 	},
 	(table) => ({
 		workspaceIdx: index("pages_workspace_idx").on(table.workspaceId),
+		workspaceDeletedPositionIdx: index(
+			"pages_workspace_deleted_position_idx",
+		).on(table.workspaceId, table.deletedAt, table.position),
 		parentIdx: index("pages_parent_idx").on(table.parentPageId),
 	}),
 );
@@ -267,6 +271,11 @@ export const tasks = sqliteTable(
 			.where(sql`source_block_id IS NOT NULL`),
 		workspaceIdx: index("tasks_workspace_idx").on(
 			table.workspaceId,
+			table.completed,
+		),
+		assigneeIdx: index("tasks_assignee_idx").on(
+			table.workspaceId,
+			table.assigneeId,
 			table.completed,
 		),
 		userIdx: index("tasks_user_idx").on(table.userId),

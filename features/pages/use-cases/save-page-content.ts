@@ -3,6 +3,7 @@ import { appError } from "@/features/shared/errors";
 import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { reconcilePageDerivations } from "../lib/apply-page-content";
+import { extractPageSearchText } from "../lib/extract-page-text";
 import {
 	SavePageContentInputSchema,
 	SavePageContentOutputSchema,
@@ -56,21 +57,27 @@ export const savePageContentUseCase = useCase
 			// without one (internal writes like task write-through) fall back
 			// to last-write-wins.
 			const contentJson = JSON.stringify(input.content);
+			const searchText = extractPageSearchText(input.content);
 			const result = input.baseUpdatedAt
 				? await tx.pages.saveContentIf(
 						input.id,
 						contentJson,
+						searchText,
 						input.baseUpdatedAt,
 					)
-				: await tx.pages.saveContent(input.id, contentJson);
+				: await tx.pages.saveContent(input.id, contentJson, searchText);
 			if (result === null) {
 				throw appError("StaleWrite", { details: { id: input.id } });
 			}
 
 			// The saved document is the source of truth for its task blocks and
 			// outgoing page links.
-			await reconcilePageDerivations(tx, page, input.content);
+			const derivations = await reconcilePageDerivations(
+				tx,
+				page,
+				input.content,
+			);
 
-			return result;
+			return { ...result, ...derivations };
 		});
 	});

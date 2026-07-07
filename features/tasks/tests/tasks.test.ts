@@ -10,6 +10,7 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
+import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { BlockJson } from "@/features/pages/schemas";
 import {
 	createTestPageLinkRepository,
@@ -342,7 +343,7 @@ describe("tasks use cases", () => {
 		if (!row) throw new Error("Expected a task row.");
 
 		// Simulate the block disappearing without a reconciling save.
-		await pages.saveContent(page.id, "[]");
+		await pages.saveContent(page.id, "[]", extractPageSearchText([]));
 
 		const updated = await tester.run(
 			updateTaskUseCase,
@@ -391,6 +392,7 @@ describe("tasks use cases", () => {
 		);
 		expect(open.items).toHaveLength(0);
 		expect(completed.items).toHaveLength(1);
+		expect(completed.hasMore).toBe(false);
 
 		await tester.run(deleteTaskUseCase, { id: task.id }, { ctx });
 		const all = await tester.run(
@@ -558,7 +560,7 @@ describe("task assignment", () => {
 		expect(row.assigneeId).toBeNull();
 	});
 
-	it("lists every member's tasks workspace-wide", async () => {
+	it("lists tasks with server-side scope and limits", async () => {
 		const { pages, workspace, tester, ctx } = await createFixture();
 
 		// A page created by a different member; its reconciled task rows carry
@@ -588,5 +590,20 @@ describe("task assignment", () => {
 		);
 		const titles = listed.items.map((item) => item.title).sort();
 		expect(titles).toEqual(["My quick-add", "Their task"]);
+
+		const mine = await tester.run(
+			listTasksUseCase,
+			{ workspaceId: workspace.id, filter: "all", scope: "mine" },
+			{ ctx },
+		);
+		expect(mine.items.map((item) => item.title)).toEqual(["My quick-add"]);
+
+		const firstPage = await tester.run(
+			listTasksUseCase,
+			{ workspaceId: workspace.id, filter: "all", limit: 1 },
+			{ ctx },
+		);
+		expect(firstPage.items).toHaveLength(1);
+		expect(firstPage.hasMore).toBe(true);
 	});
 });

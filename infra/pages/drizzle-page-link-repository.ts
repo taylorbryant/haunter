@@ -26,11 +26,25 @@ export function createDrizzlePageLinkRepository(
 			userId: string,
 			targetPageIds: string[],
 		) {
+			const current = await db
+				.select({ targetPageId: schema.pageLinks.targetPageId })
+				.from(schema.pageLinks)
+				.where(eq(schema.pageLinks.sourcePageId, sourcePageId));
+			const currentIds = current.map((row) => row.targetPageId).sort();
+			const nextIds = [...targetPageIds].sort();
+
+			if (
+				currentIds.length === nextIds.length &&
+				currentIds.every((id, index) => id === nextIds[index])
+			) {
+				return false;
+			}
+
 			await db
 				.delete(schema.pageLinks)
 				.where(eq(schema.pageLinks.sourcePageId, sourcePageId));
 
-			if (targetPageIds.length === 0) return;
+			if (targetPageIds.length === 0) return true;
 			const createdAt = new Date().toISOString();
 			await db.insert(schema.pageLinks).values(
 				targetPageIds.map((targetPageId) => ({
@@ -40,6 +54,7 @@ export function createDrizzlePageLinkRepository(
 					createdAt,
 				})),
 			);
+			return true;
 		},
 		async listBacklinkSources(targetPageId: string) {
 			const rows = await db

@@ -2,6 +2,7 @@ import "@beignet/core/server-only";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type {
+	ListTasksOptions,
 	NewTask,
 	TaskRepository,
 	UpdateTaskData,
@@ -35,6 +36,7 @@ export function createDrizzleTaskRepository(
 		async listByWorkspace(
 			workspaceId: string,
 			filter: TaskFilter,
+			options: ListTasksOptions = {},
 		): Promise<TaskWithPage[]> {
 			const conditions = [
 				eq(schema.tasks.workspaceId, workspaceId),
@@ -47,8 +49,11 @@ export function createDrizzleTaskRepository(
 			} else if (filter === "completed") {
 				conditions.push(eq(schema.tasks.completed, true));
 			}
+			if (options.assigneeId) {
+				conditions.push(eq(schema.tasks.assigneeId, options.assigneeId));
+			}
 
-			const rows = await db
+			let query = db
 				.select({
 					task: schema.tasks,
 					pageTitle: schema.pages.title,
@@ -66,7 +71,12 @@ export function createDrizzleTaskRepository(
 					sql`${schema.tasks.dueDate} IS NULL`,
 					asc(schema.tasks.dueDate),
 					asc(schema.tasks.createdAt),
-				);
+				)
+				.$dynamic();
+			if (options.limit !== undefined) {
+				query = query.limit(options.limit);
+			}
+			const rows = await query;
 
 			return rows.map((row) => ({
 				...toTask(row.task),
