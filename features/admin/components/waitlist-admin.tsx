@@ -88,7 +88,10 @@ export function WaitlistAdmin() {
 					const joined = formatJoined(user.createdAt);
 					// Only repeat the email in the subline when the primary label is a
 					// name; a nameless user already shows their email as the label.
-					const subline = [user.name ? user.email : null, joined && `joined ${joined}`]
+					const subline = [
+						user.name ? user.email : null,
+						joined && `joined ${joined}`,
+					]
 						.filter(Boolean)
 						.join(" · ");
 					const pending = approvingId === user.id;

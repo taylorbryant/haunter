@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,19 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 
 	const tasks = tasksQuery.data?.items ?? [];
 	const hasMore = tasksQuery.data?.hasMore ?? false;
+
+	// Opened from the ⌘K "Create task" command: reveal the composer, then strip
+	// the query param so a refresh or back-navigation doesn't reopen it.
+	useEffect(() => {
+		if (searchParams.get("compose") !== "1") return;
+		if (canEdit) setComposing(true);
+		const params = new URLSearchParams(searchParams);
+		params.delete("compose");
+		const queryString = params.toString();
+		router.replace(`${pathname}${queryString ? `?${queryString}` : ""}`, {
+			scroll: false,
+		});
+	}, [searchParams, router, pathname, canEdit]);
 
 	async function refresh(task?: TaskWithPage) {
 		await invalidateTasks(queryClient);

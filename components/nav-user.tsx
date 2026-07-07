@@ -11,6 +11,7 @@ import {
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { useCommand } from "@/components/command-palette/registry";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,15 @@ export function NavUser({
 	const { isMobile } = useSidebar();
 	const { theme, setTheme } = useTheme();
 	const [settingsOpen, setSettingsOpen] = useState(false);
+
+	useCommand({
+		id: "settings.open",
+		title: "Open settings",
+		group: "General",
+		keywords: "profile appearance account preferences",
+		icon: SettingsIcon,
+		run: () => setSettingsOpen(true),
+	});
 
 	async function signOut() {
 		await authClient.signOut();

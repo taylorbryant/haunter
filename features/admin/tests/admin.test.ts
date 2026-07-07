@@ -79,8 +79,16 @@ describe("admin waitlist", () => {
 	it("lists only waitlisted users, oldest first", async () => {
 		const { tester, ctx } = await createAdminFixture({
 			seed: [
-				{ id: "u_2", email: "second@example.com", createdAt: "2026-02-01T00:00:00.000Z" },
-				{ id: "u_1", email: "first@example.com", createdAt: "2026-01-01T00:00:00.000Z" },
+				{
+					id: "u_2",
+					email: "second@example.com",
+					createdAt: "2026-02-01T00:00:00.000Z",
+				},
+				{
+					id: "u_1",
+					email: "first@example.com",
+					createdAt: "2026-01-01T00:00:00.000Z",
+				},
 				{
 					id: "u_in",
 					email: "already@example.com",
@@ -154,9 +162,9 @@ describe("admin waitlist", () => {
 			seed: [{ id: "u_1", email: "invitee@example.com" }],
 		});
 
-		await expect(
-			tester.run(listWaitlistUseCase, {}, { ctx }),
-		).rejects.toThrow(/Admin access required/i);
+		await expect(tester.run(listWaitlistUseCase, {}, { ctx })).rejects.toThrow(
+			/Admin access required/i,
+		);
 		await expect(
 			tester.run(approveWaitlistUserUseCase, { userId: "u_1" }, { ctx }),
 		).rejects.toThrow(/Admin access required/i);
@@ -171,8 +179,8 @@ describe("admin waitlist", () => {
 			seed: [{ id: "u_1", email: "invitee@example.com" }],
 		});
 
-		await expect(
-			tester.run(listWaitlistUseCase, {}, { ctx }),
-		).rejects.toThrow(/Authentication required/i);
+		await expect(tester.run(listWaitlistUseCase, {}, { ctx })).rejects.toThrow(
+			/Authentication required/i,
+		);
 	});
 });

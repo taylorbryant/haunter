@@ -1,9 +1,6 @@
 import type { AdminUserRepository } from "@/features/admin/ports";
 import type { WaitlistUser } from "@/features/admin/schemas";
-import {
-	ACCESS_STATUS_APPROVED,
-	ACCESS_STATUS_WAITLISTED,
-} from "@/ports/auth";
+import { ACCESS_STATUS_APPROVED, ACCESS_STATUS_WAITLISTED } from "@/ports/auth";
 
 export type SeedUser = {
 	id: string;
@@ -41,8 +38,7 @@ export function createTestAdminUserRepository(seed: SeedUser[] = []) {
 			name: user.name ?? "",
 			accessStatus: user.accessStatus ?? ACCESS_STATUS_WAITLISTED,
 			// Deterministic increasing timestamps so ordering is stable in tests.
-			createdAt:
-				user.createdAt ?? `2026-01-0${index + 1}T00:00:00.000Z`,
+			createdAt: user.createdAt ?? `2026-01-0${index + 1}T00:00:00.000Z`,
 		});
 	}
 

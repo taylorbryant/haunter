@@ -4,10 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import type { AdminUserRepository } from "@/features/admin/ports";
 import type { WaitlistUser } from "@/features/admin/schemas";
 import * as schema from "@/infra/db/schema";
-import {
-	ACCESS_STATUS_APPROVED,
-	ACCESS_STATUS_WAITLISTED,
-} from "@/ports/auth";
+import { ACCESS_STATUS_APPROVED, ACCESS_STATUS_WAITLISTED } from "@/ports/auth";
 
 type UserRow = {
 	id: string;

@@ -20,11 +20,9 @@ const admin = defineContractGroup()
 	});
 
 // List everyone still on the waitlist. Admin-only (enforced in the use-case).
-export const listWaitlist = admin
-	.get("/api/admin/waitlist")
-	.responses({
-		200: ListWaitlistOutputSchema,
-	});
+export const listWaitlist = admin.get("/api/admin/waitlist").responses({
+	200: ListWaitlistOutputSchema,
+});
 
 // Approve a waitlisted user: flips their access status and emails them.
 export const approveWaitlistUser = admin

@@ -1,9 +1,10 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { FileTextIcon, SearchIcon } from "lucide-react";
+import { CornerDownLeftIcon, FileTextIcon, SearchIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useFilteredCommandGroups } from "@/components/command-palette/registry";
 import {
 	Command,
 	CommandDialog,
@@ -26,11 +27,19 @@ function useDebouncedValue(value: string, delayMs: number) {
 	return debounced;
 }
 
-/** Sidebar "Search" row plus the ⌘K quick-find dialog it opens. */
+// Typing "> " (VS Code style) switches the palette from page search to the
+// command list.
+const COMMAND_PREFIX = ">";
+
+/** Sidebar "Search" row plus the ⌘K palette it opens (pages + commands). */
 export function SearchCommand() {
 	const router = useRouter();
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
+
+	const isCommandMode = query.startsWith(COMMAND_PREFIX);
+	const commandQuery = isCommandMode ? query.slice(COMMAND_PREFIX.length) : "";
+
 	const debounced = useDebouncedValue(query.trim(), 200);
 
 	useEffect(() => {
@@ -46,15 +55,24 @@ export function SearchCommand() {
 
 	const search = useQuery({
 		...searchPagesQueryOptions(debounced),
-		enabled: open && debounced.length >= 2,
+		enabled: open && !isCommandMode && debounced.length >= 2,
 		placeholderData: keepPreviousData,
 	});
 
-	const items = debounced.length >= 2 ? (search.data?.items ?? []) : [];
+	const pageItems =
+		!isCommandMode && debounced.length >= 2 ? (search.data?.items ?? []) : [];
+	const commandGroups = useFilteredCommandGroups(commandQuery);
 
 	function close() {
 		setOpen(false);
 		setQuery("");
+	}
+
+	function runCommand(run: () => void) {
+		// Close the palette before running so a command that opens another dialog
+		// doesn't fight it for focus.
+		close();
+		run();
 	}
 
 	return (
@@ -69,20 +87,54 @@ export function SearchCommand() {
 			<CommandDialog
 				open={open}
 				onOpenChange={(next) => (next ? setOpen(true) : close())}
-				title="Search"
-				description="Search pages by title or content"
+				title={isCommandMode ? "Commands" : "Search"}
+				description={
+					isCommandMode
+						? "Run a command"
+						: "Search pages by title or content, or type > for commands"
+				}
 			>
-				{/* Results are already filtered server-side. */}
+				{/* Both pages (server-side) and commands (in useFilteredCommandGroups)
+				    are already filtered. */}
 				<Command shouldFilter={false}>
 					<CommandInput
-						placeholder="Search pages…"
+						placeholder={
+							isCommandMode
+								? "Type a command…"
+								: "Search pages, or > for commands…"
+						}
 						value={query}
 						onValueChange={setQuery}
 					/>
 					<CommandList>
-						{items.length > 0 ? (
+						{isCommandMode ? (
+							commandGroups.length > 0 ? (
+								commandGroups.map(({ group, commands }) => (
+									<CommandGroup key={group} heading={group}>
+										{commands.map((command) => (
+											<CommandItem
+												key={command.id}
+												value={command.id}
+												onSelect={() => runCommand(command.run)}
+											>
+												{command.icon ? (
+													<command.icon className="text-muted-foreground" />
+												) : (
+													<CornerDownLeftIcon className="text-muted-foreground" />
+												)}
+												<span className="truncate">{command.title}</span>
+											</CommandItem>
+										))}
+									</CommandGroup>
+								))
+							) : (
+								<div className="py-6 text-center text-muted-foreground text-sm">
+									No matching commands.
+								</div>
+							)
+						) : pageItems.length > 0 ? (
 							<CommandGroup heading="Pages">
-								{items.map((item) => (
+								{pageItems.map((item) => (
 									<CommandItem
 										key={item.id}
 										value={item.id}
@@ -112,7 +164,7 @@ export function SearchCommand() {
 						) : (
 							<div className="py-6 text-center text-muted-foreground text-sm">
 								{debounced.length === 0
-									? "Search pages in this workspace."
+									? "Search pages, or type > for commands."
 									: debounced.length < 2
 										? "Type at least 2 characters."
 										: search.isFetching

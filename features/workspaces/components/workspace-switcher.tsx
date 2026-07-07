@@ -12,6 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { useCommand } from "@/components/command-palette/registry";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { GhostLogo } from "@/components/ghost-logo";
 import {
@@ -98,6 +99,56 @@ export function WorkspaceSwitcher({
 	const myRole = activeMemberQuery.data?.role ?? null;
 	const canEditWorkspace = canManageMembers(myRole);
 	const canDeleteWorkspace = myRole === "owner";
+
+	function openEdit() {
+		if (!active) return;
+		setEditName(active.name);
+		setEditIcon(active.logo ?? null);
+		setEditOpen(true);
+	}
+
+	// Palette commands, colocated with the dialogs they open and gated by the
+	// same roles as the menu items below.
+	useCommand({
+		id: "workspace.new",
+		title: "New workspace",
+		group: "Workspace",
+		keywords: "create organization",
+		icon: PlusIcon,
+		run: () => setDialogOpen(true),
+	});
+	useCommand(
+		active && {
+			id: "workspace.members",
+			title: "Workspace members",
+			group: "Workspace",
+			keywords: "people invite team",
+			icon: UsersIcon,
+			run: () => setMembersOpen(true),
+		},
+	);
+	useCommand(
+		active &&
+			canEditWorkspace && {
+				id: "workspace.edit",
+				title: "Edit workspace",
+				group: "Workspace",
+				keywords: "rename emoji icon",
+				icon: PencilIcon,
+				run: openEdit,
+			},
+	);
+	useCommand(
+		active &&
+			canDeleteWorkspace && {
+				id: "workspace.delete",
+				title: "Delete workspace",
+				group: "Workspace",
+				keywords: "remove",
+				icon: Trash2Icon,
+				run: () => setDeleteOpen(true),
+			},
+	);
 
 	async function switchTo(id: string) {
 		if (id === activeWorkspaceId) return;
@@ -241,11 +292,7 @@ export function WorkspaceSwitcher({
 													<Button
 														variant="ghost"
 														className="h-11 justify-start"
-														onClick={() => {
-															setEditName(active.name);
-															setEditIcon(active.logo ?? null);
-															setEditOpen(true);
-														}}
+														onClick={openEdit}
 													/>
 												}
 											>
@@ -319,13 +366,7 @@ export function WorkspaceSwitcher({
 										Members
 									</DropdownMenuItem>
 									{canEditWorkspace ? (
-										<DropdownMenuItem
-											onClick={() => {
-												setEditName(active.name);
-												setEditIcon(active.logo ?? null);
-												setEditOpen(true);
-											}}
-										>
+										<DropdownMenuItem onClick={openEdit}>
 											<PencilIcon />
 											Edit workspace
 										</DropdownMenuItem>

@@ -1,0 +1,101 @@
+"use client";
+
+import {
+	CheckIcon,
+	ListTodoIcon,
+	PlusIcon,
+	ShieldCheckIcon,
+	Trash2Icon,
+} from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { authClient } from "@/client/auth-client";
+import {
+	CommandRegistration,
+	useCommand,
+} from "@/components/command-palette/registry";
+
+/**
+ * Registers the always-available palette commands — navigation and workspace
+ * switching — that have no natural home in another component. Renders nothing.
+ * Mounted once inside the CommandRegistryProvider.
+ */
+export function AppCommands({ isAdmin }: { isAdmin: boolean }) {
+	const router = useRouter();
+	const pathname = usePathname();
+	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
+	const organizationsQuery = authClient.useListOrganizations();
+	const workspaces = organizationsQuery.data ?? [];
+
+	useCommand(
+		workspaceId
+			? {
+					id: "task.create",
+					title: "Create task",
+					group: "Tasks",
+					keywords: "new todo add",
+					icon: PlusIcon,
+					run: () => router.push(`/w/${workspaceId}/tasks?compose=1`),
+				}
+			: null,
+	);
+
+	useCommand(
+		workspaceId
+			? {
+					id: "nav.tasks",
+					title: "Go to Tasks",
+					group: "Go to",
+					icon: ListTodoIcon,
+					run: () => router.push(`/w/${workspaceId}/tasks`),
+				}
+			: null,
+	);
+
+	useCommand(
+		workspaceId
+			? {
+					id: "nav.trash",
+					title: "Go to Trash",
+					group: "Go to",
+					icon: Trash2Icon,
+					run: () => router.push(`/w/${workspaceId}/trash`),
+				}
+			: null,
+	);
+
+	useCommand(
+		isAdmin && {
+			id: "nav.waitlist",
+			title: "Go to Waitlist",
+			group: "Go to",
+			keywords: "admin approve",
+			icon: ShieldCheckIcon,
+			run: () => router.push("/admin"),
+		},
+	);
+
+	return (
+		<>
+			{workspaces.map((workspace) => (
+				<CommandRegistration
+					key={workspace.id}
+					command={{
+						id: `workspace.switch.${workspace.id}`,
+						title: `Switch to ${workspace.name}`,
+						group: "Switch workspace",
+						keywords: "workspace organization",
+						icon: workspace.id === workspaceId ? CheckIcon : undefined,
+						run: async () => {
+							if (workspace.id !== workspaceId) {
+								await authClient.organization.setActive({
+									organizationId: workspace.id,
+								});
+							}
+							router.push(`/w/${workspace.id}`);
+						},
+					}}
+				/>
+			))}
+		</>
+	);
+}
