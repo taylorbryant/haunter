@@ -207,6 +207,8 @@ type HaunterEditorProps = {
 	initialContent: BlockJson[];
 	/** The document version this editor was initialized from. */
 	updatedAt?: string;
+	/** Same-client metadata writes, like title saves, also advance page updatedAt. */
+	localMetadataUpdatedAt?: string | null;
 	editable?: boolean;
 	/**
 	 * The page's synced Liveblocks room, or null for local-only editing.
@@ -218,10 +220,21 @@ type HaunterEditorProps = {
 	collabUser?: { name: string; color: string };
 	/** Incremented by the owner when focus should move from the title to body. */
 	focusRequest?: number;
+	/** Flush pending same-client metadata writes before saving document content. */
+	flushMetadataSave?: () => Promise<string | null>;
 	onSaveStateChange?: (state: SaveState) => void;
 	/** The server rejected a save as stale; the owner should reload the doc. */
 	onConflict?: () => void;
 };
+
+function isSameOrNewerVersion(next: string, current: string | null): boolean {
+	if (!current) return true;
+	const nextMs = Date.parse(next);
+	const currentMs = Date.parse(current);
+	return Number.isNaN(nextMs) || Number.isNaN(currentMs)
+		? next >= current
+		: nextMs >= currentMs;
+}
 
 /**
  * Publishes the other people currently in this page to the presence store;
@@ -263,10 +276,12 @@ export default function HaunterEditor({
 	workspaceId,
 	initialContent,
 	updatedAt,
+	localMetadataUpdatedAt = null,
 	editable = true,
 	collabUser,
 	collab = null,
 	focusRequest = 0,
+	flushMetadataSave,
 	onSaveStateChange,
 	onConflict,
 }: HaunterEditorProps) {
@@ -277,6 +292,19 @@ export default function HaunterEditor({
 	const [saveState, setSaveState] = useState<SaveState>("saved");
 	// Last server updatedAt this editor saw: the optimistic-concurrency base.
 	const baseUpdatedAtRef = useRef<string | null>(updatedAt ?? null);
+
+	const advanceBaseUpdatedAt = useCallback(
+		(next: string | null | undefined) => {
+			if (!next || !isSameOrNewerVersion(next, baseUpdatedAtRef.current))
+				return;
+			baseUpdatedAtRef.current = next;
+		},
+		[],
+	);
+
+	useEffect(() => {
+		advanceBaseUpdatedAt(localMetadataUpdatedAt);
+	}, [localMetadataUpdatedAt, advanceBaseUpdatedAt]);
 
 	// Whether the shared doc needs seeding from the database, decided once at
 	// mount — before BlockNote binds the fragment and materializes its empty
@@ -361,6 +389,7 @@ export default function HaunterEditor({
 		if (!dirtyRef.current) return true;
 		dirtyRef.current = false;
 		reportState("saving");
+		advanceBaseUpdatedAt(await flushMetadataSave?.());
 		const content = editor.document as unknown as BlockJson[];
 		// Mirror into the cache immediately: a remount between this save and
 		// the next refetch must not initialize the editor from a stale doc.

@@ -95,6 +95,11 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const [title, setTitle] = useState<string | null>(null);
 	const titleInputRef = useRef<HTMLInputElement | null>(null);
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const titleDraftRef = useRef<string | null>(null);
+	const titleSavePromiseRef = useRef<Promise<string | null> | null>(null);
+	const [localMetadataUpdatedAt, setLocalMetadataUpdatedAt] = useState<
+		string | null
+	>(null);
 	// Bumped when a save is rejected as stale: refetches the doc and remounts
 	// the editor on the newer version instead of clobbering it.
 	const [reloadCount, setReloadCount] = useState(0);
@@ -106,6 +111,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on page change
 	useEffect(() => {
 		setTitle(null);
+		setLocalMetadataUpdatedAt(null);
 		setPageSaveState("saved");
 	}, [pageId]);
 
@@ -176,29 +182,64 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 	function handleTitleChange(next: string) {
 		setTitle(next);
+		titleDraftRef.current = next;
 		// Collaborators see every keystroke; the database write is debounced.
 		pushTitle(next);
 		if (titleTimeoutRef.current) clearTimeout(titleTimeoutRef.current);
 		titleTimeoutRef.current = setTimeout(() => {
-			updatePageMutation.mutate(
-				{ path: { id: pageId }, body: { title: next } },
-				{
-					onSuccess: (result) => {
-						// Write the saved title into the cache BEFORE handing display
-						// back to it — otherwise the input snaps back to the stale
-						// cached title (e.g. "Untitled" on a fresh page).
-						setPageTitleInCache(
-							queryClient,
-							pageId,
-							result.title,
-							result.updatedAt,
-						);
-						invalidatePages(queryClient);
-						setTitle(null);
-					},
-				},
-			);
+			titleTimeoutRef.current = null;
+			void saveTitle(next);
 		}, TITLE_SAVE_DELAY_MS);
+	}
+
+	function saveTitle(next: string): Promise<string | null> {
+		let promise: Promise<string | null>;
+		promise = updatePageMutation
+			.mutateAsync({ path: { id: pageId }, body: { title: next } })
+			.then(
+				(result) => {
+					// Write the saved title into the cache BEFORE handing display
+					// back to it — otherwise the input snaps back to the stale
+					// cached title (e.g. "Untitled" on a fresh page).
+					setPageTitleInCache(
+						queryClient,
+						pageId,
+						result.title,
+						result.updatedAt,
+					);
+					setLocalMetadataUpdatedAt(result.updatedAt);
+					invalidatePages(queryClient);
+					setTitle(null);
+					if (titleDraftRef.current === next) {
+						titleDraftRef.current = null;
+					}
+					return result.updatedAt;
+				},
+				() => null,
+			)
+			.finally(() => {
+				if (titleSavePromiseRef.current === promise) {
+					titleSavePromiseRef.current = null;
+				}
+			});
+		titleSavePromiseRef.current = promise;
+		return promise;
+	}
+
+	async function flushTitleSave(): Promise<string | null> {
+		let pendingTitle: string | null = null;
+		if (titleTimeoutRef.current) {
+			clearTimeout(titleTimeoutRef.current);
+			titleTimeoutRef.current = null;
+			pendingTitle = titleDraftRef.current;
+		}
+
+		if (titleSavePromiseRef.current) {
+			const updatedAt = await titleSavePromiseRef.current;
+			if (pendingTitle === null) return updatedAt;
+		}
+
+		return pendingTitle !== null ? saveTitle(pendingTitle) : null;
 	}
 
 	function handleTitleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -260,10 +301,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					workspaceId={page.workspaceId}
 					initialContent={page.content}
 					updatedAt={page.updatedAt}
+					localMetadataUpdatedAt={localMetadataUpdatedAt}
 					editable={!readOnly}
 					collab={collabRoom}
 					collabUser={collabUser}
 					focusRequest={editorFocusRequest}
+					flushMetadataSave={flushTitleSave}
 					onSaveStateChange={setPageSaveState}
 					onConflict={handleConflict}
 				/>
