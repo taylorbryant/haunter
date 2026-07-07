@@ -174,6 +174,21 @@
 	transform: translateX(-8px);
 	gap: 2px;
 }
+/* BlockNote sizes heading handles for its default 3em/2em/1.3em headings.
+   Haunter renders Notion-sized headings, so center the drag controls against
+   the real heading line boxes instead. */
+.bn-shadcn .bn-side-menu[data-block-type="heading"][data-level="1"] {
+	height: 59px;
+}
+.bn-shadcn .bn-side-menu[data-block-type="heading"][data-level="2"] {
+	height: 52px;
+}
+.bn-shadcn .bn-side-menu[data-block-type="heading"][data-level="3"] {
+	height: 48px;
+}
+.bn-shadcn .bn-side-menu[data-block-type="heading"][data-level="4"] {
+	height: 46px;
+}
 /* The extra .bn-button raises specificity over BlockNote's own
    `.bn-shadcn .bn-side-menu .bn-button { height: 24px }`. */
 .bn-shadcn .bn-side-menu button.bn-button {
