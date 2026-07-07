@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCollabSession } from "@/features/collab/client/session";
@@ -98,6 +98,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// Bumped when a save is rejected as stale: refetches the doc and remounts
 	// the editor on the newer version instead of clobbering it.
 	const [reloadCount, setReloadCount] = useState(0);
+	const [editorFocusRequest, setEditorFocusRequest] = useState(0);
 	const [conflictNotice, setConflictNotice] = useState(false);
 	const conflictTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -200,6 +201,22 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		}, TITLE_SAVE_DELAY_MS);
 	}
 
+	function handleTitleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+		if (
+			event.key !== "Enter" ||
+			event.shiftKey ||
+			event.metaKey ||
+			event.ctrlKey ||
+			event.altKey ||
+			readOnly
+		) {
+			return;
+		}
+
+		event.preventDefault();
+		setEditorFocusRequest((count) => count + 1);
+	}
+
 	return (
 		<div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-10">
 			{/* BlockNote insets its content 54px (.bn-editor padding-inline) to
@@ -222,6 +239,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 						placeholder="Untitled"
 						readOnly={readOnly}
 						onChange={(event) => handleTitleChange(event.target.value)}
+						onKeyDown={handleTitleKeyDown}
 						aria-label="Page title"
 					/>
 				</div>
@@ -245,6 +263,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					editable={!readOnly}
 					collab={collabRoom}
 					collabUser={collabUser}
+					focusRequest={editorFocusRequest}
 					onSaveStateChange={setPageSaveState}
 					onConflict={handleConflict}
 				/>

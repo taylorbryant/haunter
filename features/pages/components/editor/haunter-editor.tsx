@@ -216,6 +216,8 @@ type HaunterEditorProps = {
 	collab?: CollabRoom | null;
 	/** Cursor identity shown to collaborators when collaboration is on. */
 	collabUser?: { name: string; color: string };
+	/** Incremented by the owner when focus should move from the title to body. */
+	focusRequest?: number;
 	onSaveStateChange?: (state: SaveState) => void;
 	/** The server rejected a save as stale; the owner should reload the doc. */
 	onConflict?: () => void;
@@ -264,6 +266,7 @@ export default function HaunterEditor({
 	editable = true,
 	collabUser,
 	collab = null,
+	focusRequest = 0,
 	onSaveStateChange,
 	onConflict,
 }: HaunterEditorProps) {
@@ -329,6 +332,13 @@ export default function HaunterEditor({
 		);
 		if (changed) editor.replaceBlocks(editor.document, blocks as never);
 	}, [collab, editor, initialContent, updatedAt]);
+
+	useEffect(() => {
+		if (!focusRequest || !editable) return;
+		const firstBlock = editor.document[0];
+		if (!firstBlock) return;
+		focusBlockContentOnNextFrame(editor, firstBlock.id);
+	}, [editor, editable, focusRequest]);
 
 	const saveMutation = useMutation(savePageContentMutationOptions());
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
