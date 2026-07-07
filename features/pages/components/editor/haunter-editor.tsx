@@ -29,7 +29,6 @@ import {
 	CheckSquareIcon,
 	FilePlusIcon,
 	FileTextIcon,
-	Heading4Icon,
 	LightbulbIcon,
 	PenToolIcon,
 } from "lucide-react";
@@ -184,20 +183,6 @@ function getSlashMenuItems(
 		},
 	};
 
-	const headingFourItem = {
-		title: "Heading 4",
-		subtext: "Minor section heading",
-		aliases: ["h4", "heading4", "subheading4"],
-		group: "Headings",
-		icon: <Heading4Icon className="size-4.5" />,
-		onItemClick: () => {
-			insertOrUpdateBlockForSlashMenu(editor, {
-				type: "heading",
-				props: { level: 4 },
-			});
-		},
-	};
-
 	// Splice the custom items in right after the last "Basic blocks" entry so
 	// the menu keeps one contiguous group (duplicate group headers break keys).
 	const items = [...getDefaultReactSlashMenuItems(editor)];
@@ -211,15 +196,6 @@ function getSlashMenuItems(
 		taskItem,
 		calloutItem,
 		canvasItem,
-	);
-
-	const lastHeading = items.findLastIndex(
-		(item) => "group" in item && item.group === "Headings",
-	);
-	items.splice(
-		lastHeading === -1 ? items.length : lastHeading + 1,
-		0,
-		headingFourItem,
 	);
 
 	return Promise.resolve(filterSuggestionItems(items, query));
