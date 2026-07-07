@@ -258,11 +258,24 @@
 
 /* BlockNote draws vertical nested-block guide lines. Haunter uses indentation
    alone, so hide the guide without affecting list bullets or task controls. */
+.haunter-editor
+	.bn-shadcn
+	.bn-block-group
+	.bn-block-group
+	> .bn-block-outer::before,
+.haunter-editor
+	.bn-shadcn
+	.bn-block-group
+	.bn-block:not(:has(.bn-toggle-wrapper))
+	.bn-block-group
+	.bn-block-outer:not([data-prev-depth-changed])::before,
 .bn-shadcn
 	.bn-block-group
 	.bn-block:not(:has(.bn-toggle-wrapper))
 	.bn-block-group
 	.bn-block-outer::before {
+	content: none;
+	display: none;
 	border-left: 0;
 }
 
