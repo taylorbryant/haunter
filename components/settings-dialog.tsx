@@ -21,6 +21,14 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import {
+	Drawer,
+	DrawerClose,
+	DrawerContent,
+	DrawerDescription,
+	DrawerHeader,
+	DrawerTitle,
+} from "@/components/ui/drawer";
+import {
 	Sidebar,
 	SidebarContent,
 	SidebarGroup,
@@ -32,6 +40,7 @@ import {
 	SidebarProvider,
 } from "@/components/ui/sidebar";
 import { AgentsPanel } from "@/features/agents/components/agents-panel";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const SECTIONS = [
 	{ id: "profile", label: "Profile", icon: UserIcon, panel: ProfilePanel },
@@ -57,6 +66,38 @@ const SECTIONS = [
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
+function MobileSectionTabs({
+	active,
+	onActiveChange,
+}: {
+	active: SectionId;
+	onActiveChange: (section: SectionId) => void;
+}) {
+	return (
+		<div
+			className="flex min-w-0 gap-1 overflow-x-auto border-b bg-background p-2"
+			role="tablist"
+			aria-label="Settings sections"
+		>
+			{SECTIONS.map((item) => (
+				<Button
+					key={item.id}
+					type="button"
+					role="tab"
+					aria-selected={item.id === active}
+					size="sm"
+					variant={item.id === active ? "secondary" : "ghost"}
+					className="h-11 shrink-0 px-3"
+					onClick={() => onActiveChange(item.id)}
+				>
+					<item.icon />
+					{item.label}
+				</Button>
+			))}
+		</div>
+	);
+}
+
 export function SettingsDialog({
 	open,
 	onOpenChange,
@@ -64,9 +105,43 @@ export function SettingsDialog({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
+	const isMobile = useIsMobile();
 	const [active, setActive] = useState<SectionId>("profile");
 	const section = SECTIONS.find((item) => item.id === active) ?? SECTIONS[0];
 	const Panel = section.panel;
+
+	if (isMobile) {
+		return (
+			<Drawer showSwipeHandle open={open} onOpenChange={onOpenChange}>
+				<DrawerContent className="h-[85dvh]">
+					<DrawerHeader className="relative px-4 pb-3">
+						<DrawerTitle>Settings</DrawerTitle>
+						<DrawerDescription className="sr-only">
+							Account settings
+						</DrawerDescription>
+						<DrawerClose
+							render={
+								<Button
+									variant="ghost"
+									size="icon"
+									className="absolute top-2 right-2 size-11"
+								/>
+							}
+						>
+							<XIcon />
+							<span className="sr-only">Close</span>
+						</DrawerClose>
+					</DrawerHeader>
+					<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+						<MobileSectionTabs active={active} onActiveChange={setActive} />
+						<div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+							<Panel />
+						</div>
+					</div>
+				</DrawerContent>
+			</Drawer>
+		);
+	}
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -76,7 +151,7 @@ export function SettingsDialog({
 			>
 				<DialogTitle className="sr-only">Settings</DialogTitle>
 				{/* min-w-0 stops the grid item from growing to the panel's
-				    max-content width, which overflowed the dialog on mobile. */}
+				    max-content width, which can overflow the dialog. */}
 				<SidebarProvider className="min-h-0 min-w-0 items-start">
 					<Sidebar collapsible="none" className="hidden w-48 md:flex">
 						<SidebarContent>
@@ -101,35 +176,6 @@ export function SettingsDialog({
 						</SidebarContent>
 					</Sidebar>
 					<main className="flex h-[560px] min-w-0 flex-1 flex-col overflow-y-auto bg-background">
-						{/* The section list is a sidebar on desktop; on mobile it's
-						    hidden, so surface the sections as a scrollable tab row —
-						    sharing a header with the close button so they never
-						    overlap. */}
-						<div className="sticky top-0 z-10 flex items-center gap-1 border-b bg-background p-2 md:hidden">
-							<div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-								{SECTIONS.map((item) => (
-									<Button
-										key={item.id}
-										type="button"
-										size="sm"
-										variant={item.id === active ? "secondary" : "ghost"}
-										className="shrink-0"
-										onClick={() => setActive(item.id)}
-									>
-										<item.icon />
-										{item.label}
-									</Button>
-								))}
-							</div>
-							<DialogClose
-								render={
-									<Button variant="ghost" size="icon-sm" className="shrink-0" />
-								}
-							>
-								<XIcon />
-								<span className="sr-only">Close</span>
-							</DialogClose>
-						</div>
 						<div className="flex flex-col gap-4 p-6">
 							<Panel />
 						</div>
