@@ -285,6 +285,20 @@
 	text-decoration-line: none;
 }
 
+/* Page-link blocks are selectable nodes, but BlockNote's default selected-node
+   style is a heavy blue 4px outline. Keep the state visible without making the
+   block feel like a primary action. */
+.bn-shadcn .bn-block-content[data-content-type="pageLink"].ProseMirror-selectednode
+	> *,
+.bn-shadcn
+	.ProseMirror-selectednode
+	> .bn-block-content[data-content-type="pageLink"]
+	> * {
+	background-color: color-mix(in oklab, var(--muted) 45%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ring) 30%, transparent);
+	outline: none;
+}
+
 /* Mobile: the wrapper gets `editor-flush` (JS-driven, see haunter-editor.tsx)
    to drop BlockNote's 54px inline gutter so content runs edge-to-edge. The
    block controls that live in that gutter are hidden on mobile too. */

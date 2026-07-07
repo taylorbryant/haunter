@@ -41,10 +41,10 @@ function PageLink({
 			// with a muted icon. The color lives on the text span, not the anchor —
 			// the editor's default (blue) link color out-cascades a color set on
 			// the <a> itself, but a plain child span overrides cleanly.
-			className="haunter-page-link inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
+			className="haunter-page-link inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
 		>
 			<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-			<span className="truncate font-medium text-foreground underline decoration-muted-foreground/40 underline-offset-4">
+			<span className="min-w-0 truncate font-medium text-foreground underline decoration-muted-foreground/40 underline-offset-4">
 				{page.icon ? `${page.icon} ` : ""}
 				{page.title || "Untitled"}
 			</span>
@@ -66,7 +66,10 @@ export const pageLinkBlockSpec = createReactBlockSpec(
 			const { pageId, workspaceId } = block.props;
 
 			return (
-				<div className="w-full" contentEditable={false}>
+				<div
+					className="inline-flex max-w-full min-w-0 rounded"
+					contentEditable={false}
+				>
 					{pageId === "" ? (
 						<span className="text-muted-foreground text-sm">
 							Creating page…
