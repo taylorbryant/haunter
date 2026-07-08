@@ -1,24 +1,16 @@
 "use client";
 
 import type { BlockNoteEditor } from "@blocknote/core";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
 	Dialog,
+	DialogClose,
 	DialogContent,
-	DialogFooter,
-	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { getCodeTheme, getHaunterHighlighter } from "./code-theme";
-import { type editorSchema, supportedLanguages } from "./schema";
+import type { editorSchema } from "./schema";
 
 function blockInlineText(block: { content?: unknown }): string {
 	if (!Array.isArray(block.content)) return "";
@@ -45,7 +37,7 @@ export function CodeEditDialog({
 }) {
 	const block = editor.getBlock(blockId);
 	const [text, setText] = useState(() => (block ? blockInlineText(block) : ""));
-	const [language, setLanguage] = useState(() =>
+	const [language] = useState(() =>
 		block?.type === "codeBlock" && typeof block.props.language === "string"
 			? block.props.language
 			: "text",
@@ -84,52 +76,28 @@ export function CodeEditDialog({
 		};
 	}, [text, language, theme.id]);
 
-	function save() {
+	function commitAndClose() {
 		if (!editable) {
 			onClose();
 			return;
 		}
-		editor.updateBlock(blockId, { content: text, props: { language } });
+		if (editor.getBlock(blockId)) {
+			editor.updateBlock(blockId, { content: text, props: { language } });
+		}
 		onClose();
 	}
 
 	return (
-		<Dialog open onOpenChange={(open) => !open && onClose()}>
-			<DialogContent className="flex h-[75vh] flex-col gap-4 sm:max-w-3xl">
-				<DialogHeader>
-					<div className="flex items-center gap-3">
-						<DialogTitle>{editable ? "Edit code" : "Code"}</DialogTitle>
-						{editable ? (
-							<DropdownMenu>
-								<DropdownMenuTrigger
-									render={<Button variant="outline" size="sm" />}
-								>
-									{supportedLanguages[language]?.name ?? language}
-									<ChevronDownIcon className="opacity-50" />
-								</DropdownMenuTrigger>
-								<DropdownMenuContent
-									align="start"
-									className="max-h-64 overflow-y-auto"
-								>
-									{Object.entries(supportedLanguages).map(([id, meta]) => (
-										<DropdownMenuItem key={id} onClick={() => setLanguage(id)}>
-											{meta.name}
-											{id === language ? (
-												<CheckIcon className="ml-auto" />
-											) : null}
-										</DropdownMenuItem>
-									))}
-								</DropdownMenuContent>
-							</DropdownMenu>
-						) : (
-							<span className="rounded-md border px-2 py-1 text-muted-foreground text-sm">
-								{supportedLanguages[language]?.name ?? language}
-							</span>
-						)}
-					</div>
-				</DialogHeader>
+		<Dialog open onOpenChange={(open) => !open && commitAndClose()}>
+			<DialogContent
+				showCloseButton={false}
+				className="block h-[85vh] overflow-visible p-0 sm:max-w-[90vw]"
+			>
+				<DialogTitle className="sr-only">
+					{editable ? "Edit code" : "Code"}
+				</DialogTitle>
 				<div
-					className="code-edit-focus-ring relative min-h-0 flex-1 overflow-hidden rounded-md border"
+					className="code-edit-focus-ring relative h-full w-full overflow-hidden rounded-lg border"
 					style={{ backgroundColor: theme.bg }}
 				>
 					<div
@@ -164,27 +132,24 @@ export function CodeEditDialog({
 								event.key === "Enter"
 							) {
 								event.preventDefault();
-								save();
+								commitAndClose();
 							}
 						}}
 					/>
 				</div>
-				<DialogFooter>
-					{editable ? (
-						<>
-							<Button type="button" variant="ghost" size="sm" onClick={onClose}>
-								Cancel
-							</Button>
-							<Button type="button" size="sm" onClick={save}>
-								Save
-							</Button>
-						</>
-					) : (
-						<Button type="button" size="sm" onClick={onClose}>
-							Close
-						</Button>
-					)}
-				</DialogFooter>
+				{/* Match the expanded canvas close affordance and keep it outside
+				    the code surface so the whole dialog remains the editor. */}
+				<DialogClose
+					render={
+						<button
+							type="button"
+							aria-label="Close code editor"
+							className="-top-3 -right-3 absolute z-10 flex size-9 items-center justify-center rounded-full bg-background/70 text-muted-foreground ring-1 ring-border/60 backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground"
+						/>
+					}
+				>
+					<XIcon className="size-5" />
+				</DialogClose>
 			</DialogContent>
 		</Dialog>
 	);
