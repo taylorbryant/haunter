@@ -9,3 +9,4 @@ coverage
 local.db
 local.db-*
 /storage
+.vercel
