@@ -125,22 +125,14 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				args,
 			);
 
-			const wrapper = document.createDocumentFragment();
-			const header = document.createElement("div");
-			header.className = "haunter-code-block-header";
-			header.contentEditable = "false";
-
 			const sourceNodes =
 				rendered.dom instanceof DocumentFragment
 					? Array.from(rendered.dom.childNodes)
 					: [rendered.dom];
-			const languageSelect = sourceNodes
-				.find(
-					(node): node is HTMLElement =>
-						node instanceof HTMLElement &&
-						node.querySelector("select") !== null,
-				)
-				?.querySelector("select");
+			const header = sourceNodes.find(
+				(node): node is HTMLElement =>
+					node instanceof HTMLElement && node.querySelector("select") !== null,
+			);
 			const pre = sourceNodes.find(
 				(node): node is HTMLPreElement => node instanceof HTMLPreElement,
 			);
@@ -151,11 +143,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				element.setAttribute("spellcheck", "false");
 			}
 
-			if (languageSelect) {
-				header.appendChild(languageSelect);
-			} else {
-				header.appendChild(document.createElement("span"));
-			}
+			header?.classList.add("haunter-code-block-header");
 
 			const expandButton = document.createElement("button");
 			expandButton.type = "button";
@@ -171,14 +159,10 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				);
 			};
 			expandButton.addEventListener("click", handleExpand);
-			header.appendChild(expandButton);
-
-			wrapper.appendChild(header);
-			if (pre) wrapper.appendChild(pre);
+			header?.appendChild(expandButton);
 
 			return {
 				...rendered,
-				dom: wrapper,
 				destroy: () => {
 					expandButton.removeEventListener("click", handleExpand);
 					rendered.destroy?.();
