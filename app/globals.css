@@ -273,8 +273,13 @@
 	> .haunter-code-block-shell {
 	display: flex;
 	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
 	flex-direction: column;
 	align-items: stretch;
+	overflow: hidden;
+	background-color: var(--prosemirror-highlight-bg, #282a36);
+	color: var(--prosemirror-highlight, #f8f8f2);
 }
 
 .bn-shadcn
@@ -284,6 +289,8 @@
 	order: 1;
 	display: flex;
 	width: 100%;
+	box-sizing: border-box;
+	flex-shrink: 0;
 	min-height: 36px;
 	align-items: center;
 	justify-content: space-between;
@@ -295,6 +302,7 @@
 		black 14%
 	);
 	color: var(--prosemirror-highlight, #f8f8f2);
+	gap: 8px;
 	padding: 0 8px 0 10px;
 }
 
@@ -304,8 +312,11 @@
 	> pre {
 	order: 2;
 	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
 	margin: 0;
 	padding: 16px 24px 24px;
+	background: transparent;
 	font-size: 14px;
 	line-height: 1.6;
 }
@@ -323,6 +334,7 @@
 	position: static;
 	max-width: min(220px, 60%);
 	min-width: 0;
+	flex-shrink: 1;
 	opacity: 1;
 	border: 0;
 	border-radius: var(--radius-sm, 0.25rem);
@@ -391,6 +403,8 @@ html[data-keyboard-nav="true"]
 	align-items: center;
 	justify-content: center;
 	margin-left: auto;
+	-webkit-appearance: none;
+	appearance: none;
 	border: 0;
 	border-radius: var(--radius-sm, 0.25rem);
 	background-color: transparent;
@@ -400,10 +414,13 @@ html[data-keyboard-nav="true"]
 		transparent
 	);
 	cursor: pointer;
+	opacity: 1;
 	padding: 0;
+	pointer-events: auto;
 	transition:
 		background-color 0.15s,
 		color 0.15s;
+	visibility: visible;
 }
 
 .bn-shadcn

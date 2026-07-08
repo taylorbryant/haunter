@@ -147,9 +147,22 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			const header = document.createElement("div");
 			header.className = "haunter-code-block-header";
 			header.contentEditable = "false";
+			header.style.setProperty("display", "flex");
+			header.style.setProperty("width", "100%");
+			header.style.setProperty("min-height", "36px");
+			header.style.setProperty("align-items", "center");
+			header.style.setProperty("justify-content", "space-between");
+			header.style.setProperty(
+				"color",
+				"var(--prosemirror-highlight, #f8f8f2)",
+			);
+			header.style.setProperty("gap", "8px");
 			if (languageSelect) {
 				languageSelect.style.setProperty("position", "static");
 				languageSelect.style.setProperty("opacity", "1");
+				languageSelect.style.setProperty("max-width", "min(220px, 60%)");
+				languageSelect.style.setProperty("min-width", "0");
+				languageSelect.style.setProperty("flex-shrink", "1");
 				header.appendChild(languageSelect);
 			} else {
 				header.appendChild(document.createElement("span"));
@@ -159,8 +172,26 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			expandButton.type = "button";
 			expandButton.className = "haunter-code-block-expand keyboard-focus-ring";
 			expandButton.setAttribute("aria-label", "Expand code");
+			expandButton.style.setProperty("display", "flex", "important");
+			expandButton.style.setProperty("width", "28px");
+			expandButton.style.setProperty("height", "28px");
+			expandButton.style.setProperty("flex-shrink", "0");
+			expandButton.style.setProperty("align-items", "center");
+			expandButton.style.setProperty("justify-content", "center");
+			expandButton.style.setProperty("margin-left", "auto");
+			expandButton.style.setProperty("border", "0");
+			expandButton.style.setProperty("background", "transparent");
+			expandButton.style.setProperty(
+				"color",
+				"var(--prosemirror-highlight, #f8f8f2)",
+			);
+			expandButton.style.setProperty("opacity", "1");
+			expandButton.style.setProperty("visibility", "visible");
+			expandButton.style.setProperty("pointer-events", "auto");
+			expandButton.style.setProperty("-webkit-appearance", "none");
+			expandButton.style.setProperty("appearance", "none");
 			expandButton.innerHTML =
-				'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>';
+				'<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>';
 			const handleExpand = () => {
 				window.dispatchEvent(
 					new CustomEvent(OPEN_CODE_BLOCK_DIALOG_EVENT, {
@@ -173,9 +204,21 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 
 			const shell = document.createElement("div");
 			shell.className = "haunter-code-block-shell";
+			shell.style.setProperty("display", "flex");
+			shell.style.setProperty("width", "100%");
+			shell.style.setProperty("min-width", "0");
+			shell.style.setProperty("flex-direction", "column");
+			shell.style.setProperty("align-items", "stretch");
+			shell.style.setProperty("overflow", "hidden");
+			shell.style.setProperty(
+				"background-color",
+				"var(--prosemirror-highlight-bg, #282a36)",
+			);
+			shell.style.setProperty("color", "var(--prosemirror-highlight, #f8f8f2)");
 			shell.appendChild(header);
 			if (pre) {
 				pre.style.setProperty("width", "100%");
+				pre.style.setProperty("min-width", "0");
 				pre.style.setProperty("margin", "0");
 				shell.appendChild(pre);
 			}
