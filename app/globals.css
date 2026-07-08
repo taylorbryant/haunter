@@ -270,6 +270,16 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
+	> .haunter-code-block-shell {
+	display: flex;
+	width: 100%;
+	flex-direction: column;
+	align-items: stretch;
+}
+
+.bn-shadcn
+	.bn-block-content[data-content-type="codeBlock"]
+	> .haunter-code-block-shell
 	> .haunter-code-block-header {
 	order: 1;
 	display: flex;
@@ -288,7 +298,10 @@
 	padding: 0 8px 0 10px;
 }
 
-.bn-shadcn .bn-block-content[data-content-type="codeBlock"] > pre {
+.bn-shadcn
+	.bn-block-content[data-content-type="codeBlock"]
+	> .haunter-code-block-shell
+	> pre {
 	order: 2;
 	width: 100%;
 	margin: 0;
@@ -304,6 +317,7 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
+	> .haunter-code-block-shell
 	> .haunter-code-block-header
 	> select {
 	position: static;
@@ -327,6 +341,7 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
+	> .haunter-code-block-shell
 	> .haunter-code-block-header
 	> select:disabled {
 	cursor: default;
@@ -335,6 +350,7 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
+	> .haunter-code-block-shell
 	> .haunter-code-block-header
 	> select
 	> option {
@@ -343,10 +359,12 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
+	> .haunter-code-block-shell
 	> .haunter-code-block-header
 	> select:hover,
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
+	> .haunter-code-block-shell
 	> .haunter-code-block-header
 	> select:focus {
 	background-color: color-mix(in oklab, currentColor 8%, transparent);
@@ -355,6 +373,7 @@
 html[data-keyboard-nav="true"]
 	.bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
+	> .haunter-code-block-shell
 	> .haunter-code-block-header
 	> select:focus {
 	box-shadow:

@@ -147,14 +147,6 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			const header = document.createElement("div");
 			header.className = "haunter-code-block-header";
 			header.contentEditable = "false";
-			header.style.setProperty("display", "flex");
-			header.style.setProperty("width", "100%");
-			header.style.setProperty("align-items", "center");
-			header.style.setProperty("justify-content", "space-between");
-			header.style.setProperty("min-height", "36px");
-			pre?.style.setProperty("order", "2");
-			pre?.style.setProperty("width", "100%");
-			pre?.style.setProperty("margin", "0");
 			if (languageSelect) {
 				languageSelect.style.setProperty("position", "static");
 				languageSelect.style.setProperty("opacity", "1");
@@ -179,14 +171,18 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			expandButton.addEventListener("click", handleExpand);
 			header.appendChild(expandButton);
 
-			if (selectWrapper) {
-				selectWrapper.replaceWith(header);
-			} else if (rendered.dom instanceof DocumentFragment) {
-				rendered.dom.insertBefore(header, pre ?? null);
+			const shell = document.createElement("div");
+			shell.className = "haunter-code-block-shell";
+			shell.appendChild(header);
+			if (pre) {
+				pre.style.setProperty("width", "100%");
+				pre.style.setProperty("margin", "0");
+				shell.appendChild(pre);
 			}
 
 			return {
 				...rendered,
+				dom: shell,
 				destroy: () => {
 					expandButton.removeEventListener("click", handleExpand);
 					rendered.destroy?.();
