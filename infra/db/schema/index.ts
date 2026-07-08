@@ -242,6 +242,11 @@ export const pages = sqliteTable(
 		workspaceDeletedPositionIdx: index(
 			"pages_workspace_deleted_position_idx",
 		).on(table.workspaceId, table.deletedAt, table.position),
+		workspaceDeletedUpdatedIdx: index("pages_workspace_deleted_updated_idx").on(
+			table.workspaceId,
+			table.deletedAt,
+			table.updatedAt,
+		),
 		parentIdx: index("pages_parent_idx").on(table.parentPageId),
 	}),
 );
@@ -282,11 +287,25 @@ export const tasks = sqliteTable(
 			table.workspaceId,
 			table.completed,
 		),
+		workspaceListIdx: index("tasks_workspace_list_idx").on(
+			table.workspaceId,
+			table.completed,
+			table.dueDate,
+			table.createdAt,
+		),
 		assigneeIdx: index("tasks_assignee_idx").on(
 			table.workspaceId,
 			table.assigneeId,
 			table.completed,
 		),
+		assigneeListIdx: index("tasks_assignee_list_idx").on(
+			table.workspaceId,
+			table.assigneeId,
+			table.completed,
+			table.dueDate,
+			table.createdAt,
+		),
+		pageIdx: index("tasks_page_idx").on(table.pageId),
 		userIdx: index("tasks_user_idx").on(table.userId),
 	}),
 );

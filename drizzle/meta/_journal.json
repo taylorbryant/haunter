@@ -127,6 +127,13 @@
 			"when": 1783399786806,
 			"tag": "0017_rapid_kinsey_walden",
 			"breakpoints": true
+		},
+		{
+			"idx": 18,
+			"version": "6",
+			"when": 1783552233320,
+			"tag": "0018_lyrical_giant_man",
+			"breakpoints": true
 		}
 	]
 }
