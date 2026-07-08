@@ -108,7 +108,7 @@ export function PageIconButton({
 					) : (
 						<button
 							type="button"
-							className="-ml-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground text-sm opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover/header:opacity-100 aria-expanded:opacity-100"
+							className="-ml-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground text-sm opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover/header:opacity-100 aria-expanded:opacity-100 pointer-coarse:opacity-100"
 						>
 							<SmilePlusIcon className="size-4" />
 							Add icon

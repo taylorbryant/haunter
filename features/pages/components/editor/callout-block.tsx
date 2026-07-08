@@ -58,11 +58,13 @@ function CalloutView({
 	color,
 	contentRef,
 	onChange,
+	readOnly,
 }: {
 	emoji: string;
 	color: string;
 	contentRef: (node: HTMLElement | null) => void;
 	onChange: (props: { emoji?: string; color?: string }) => void;
+	readOnly: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const colorKey: CalloutColor =
@@ -77,49 +79,55 @@ function CalloutView({
 			)}
 		>
 			<div contentEditable={false} className="shrink-0">
-				<Popover open={open} onOpenChange={setOpen}>
-					<PopoverTrigger
-						render={
-							<button
-								type="button"
-								aria-label="Change callout icon and color"
-								className="mt-px flex size-6 items-center justify-center rounded text-lg leading-none transition-colors hover:bg-foreground/10"
-							/>
-						}
-					>
+				{readOnly ? (
+					<span className="mt-px flex size-6 items-center justify-center text-lg leading-none">
 						{emoji || "💡"}
-					</PopoverTrigger>
-					<PopoverContent align="start" className="w-auto p-0">
-						<div className="flex items-center gap-1.5 border-b p-2">
-							{Object.entries(CALLOUT_COLORS).map(([key, value]) => (
+					</span>
+				) : (
+					<Popover open={open} onOpenChange={setOpen}>
+						<PopoverTrigger
+							render={
 								<button
-									key={key}
 									type="button"
-									aria-label={value.label}
-									onClick={() => onChange({ color: key })}
-									className={cn(
-										"size-5 rounded-full border transition-transform hover:scale-110",
-										value.swatch,
-										key === colorKey &&
-											"ring-2 ring-ring ring-offset-1 ring-offset-background",
-									)}
+									aria-label="Change callout icon and color"
+									className="mt-px flex size-6 items-center justify-center rounded text-lg leading-none transition-colors hover:bg-foreground/10"
 								/>
-							))}
-						</div>
-						<div className="flex h-[300px] w-[288px] flex-col">
-							<EmojiPicker
-								className="min-h-0 flex-1"
-								onEmojiSelect={(selected) => {
-									onChange({ emoji: selected.emoji });
-									setOpen(false);
-								}}
-							>
-								<EmojiPickerSearch placeholder="Search emoji…" />
-								<EmojiPickerContent />
-							</EmojiPicker>
-						</div>
-					</PopoverContent>
-				</Popover>
+							}
+						>
+							{emoji || "💡"}
+						</PopoverTrigger>
+						<PopoverContent align="start" className="w-auto p-0">
+							<div className="flex items-center gap-1.5 border-b p-2">
+								{Object.entries(CALLOUT_COLORS).map(([key, value]) => (
+									<button
+										key={key}
+										type="button"
+										aria-label={value.label}
+										onClick={() => onChange({ color: key })}
+										className={cn(
+											"size-5 rounded-full border transition-transform hover:scale-110",
+											value.swatch,
+											key === colorKey &&
+												"ring-2 ring-ring ring-offset-1 ring-offset-background",
+										)}
+									/>
+								))}
+							</div>
+							<div className="flex h-[300px] w-[288px] flex-col">
+								<EmojiPicker
+									className="min-h-0 flex-1"
+									onEmojiSelect={(selected) => {
+										onChange({ emoji: selected.emoji });
+										setOpen(false);
+									}}
+								>
+									<EmojiPickerSearch placeholder="Search emoji…" />
+									<EmojiPickerContent />
+								</EmojiPicker>
+							</div>
+						</PopoverContent>
+					</Popover>
+				)}
 			</div>
 			<div ref={contentRef} className="min-w-0 flex-1 py-0.5" />
 		</div>
@@ -144,6 +152,7 @@ export const calloutBlockSpec = createReactBlockSpec(
 				onChange={(props) =>
 					editor.updateBlock(block, { props: { ...block.props, ...props } })
 				}
+				readOnly={!editor.isEditable}
 			/>
 		),
 	},

@@ -15,6 +15,7 @@ import { DueDatePicker } from "@/components/due-date-picker";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import { parseTaskDateShortcut } from "@/features/tasks/lib/parse-task-input";
 import { AUTO_TASK_ASSIGNEE } from "@/features/tasks/lib/task-block-props";
+import { formatDueDateLabel } from "@/lib/due-date";
 
 export const TaskBlockCurrentUserContext = createContext<string | null>(null);
 
@@ -144,7 +145,7 @@ function TaskBlockView({
 								: "bg-muted text-muted-foreground"
 						}`}
 					>
-						{due}
+						{formatDueDateLabel(due)}
 					</span>
 				) : (
 					<DueDatePicker

@@ -28,22 +28,26 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 	const [expanded, setExpanded] = useState(false);
 
 	return (
-		<div className="group/canvas relative h-full w-full">
-			{expanded ? (
-				<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-					Editing in expanded view…
-				</div>
-			) : (
-				<CanvasSurface canvasId={canvasId} />
-			)}
-			<button
-				type="button"
-				aria-label="Expand canvas"
-				className="absolute top-2 right-2 z-10 rounded-md border bg-background/90 p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/canvas:opacity-100"
-				onClick={() => setExpanded(true)}
-			>
-				<Maximize2Icon className="size-4" />
-			</button>
+		<div className="flex h-full w-full flex-col">
+			<div className="flex h-9 shrink-0 items-center justify-end border-b bg-background/95 px-2">
+				<button
+					type="button"
+					aria-label="Expand canvas"
+					className="keyboard-focus-ring flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+					onClick={() => setExpanded(true)}
+				>
+					<Maximize2Icon className="size-4" />
+				</button>
+			</div>
+			<div className="min-h-0 flex-1">
+				{expanded ? (
+					<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+						Editing in expanded view…
+					</div>
+				) : (
+					<CanvasSurface canvasId={canvasId} />
+				)}
+			</div>
 			{expanded ? (
 				<Dialog open onOpenChange={(open) => !open && setExpanded(false)}>
 					<DialogContent

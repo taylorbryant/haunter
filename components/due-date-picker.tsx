@@ -9,20 +9,8 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import { formatDueDateLabel, parseIsoDate, toIsoDate } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
-
-/** Parse a stored `YYYY-MM-DD` string as a local date. */
-function toDate(value: string): Date | undefined {
-	const [year, month, day] = value.split("-").map(Number);
-	if (!year || !month || !day) return undefined;
-	return new Date(year, month - 1, day);
-}
-
-function toIsoDate(date: Date): string {
-	const month = String(date.getMonth() + 1).padStart(2, "0");
-	const day = String(date.getDate()).padStart(2, "0");
-	return `${date.getFullYear()}-${month}-${day}`;
-}
 
 /**
  * Due-date chip that opens a calendar. `value` is a `YYYY-MM-DD` string or
@@ -40,7 +28,7 @@ export function DueDatePicker({
 	ariaLabel?: string;
 }) {
 	const [open, setOpen] = useState(false);
-	const selected = value ? toDate(value) : undefined;
+	const selected = value ? parseIsoDate(value) : undefined;
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
@@ -57,7 +45,7 @@ export function DueDatePicker({
 				}
 			>
 				<CalendarIcon className="size-3" aria-hidden="true" />
-				{value ?? "Due"}
+				{value ? formatDueDateLabel(value) : "Due"}
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-0" align="end">
 				<Calendar

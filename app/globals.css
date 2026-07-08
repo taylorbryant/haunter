@@ -256,11 +256,66 @@
 	line-height: 1.6;
 }
 
+.bn-shadcn .bn-block-content[data-content-type="codeBlock"] > pre {
+	padding-top: 36px;
+}
+
 /* Paint the code block with the active shiki theme's colors (Dracula)
    instead of BlockNote's fixed dark background. */
 .bn-shadcn .bn-block-content[data-content-type="codeBlock"] {
 	background-color: var(--prosemirror-highlight-bg, #282a36);
 	color: var(--prosemirror-highlight, #f8f8f2);
+}
+
+/* BlockNote hides the code language selector until hover. Keep it visible so
+   the block's language is discoverable. */
+.bn-shadcn .bn-block-content[data-content-type="codeBlock"] > div > select {
+	top: 8px;
+	left: 10px;
+	border-radius: var(--radius-sm, 0.25rem);
+	background-color: color-mix(
+		in oklab,
+		var(--prosemirror-highlight-bg, #282a36) 78%,
+		black 22%
+	);
+	box-shadow: inset 0 0 0 1px
+		color-mix(in oklab, var(--prosemirror-highlight, #f8f8f2) 18%, transparent);
+	color: var(--prosemirror-highlight, #f8f8f2);
+	opacity: 1;
+	padding: 2px 20px 2px 6px;
+	transition:
+		background-color 0.15s,
+		box-shadow 0.15s,
+		color 0.15s;
+	transition-delay: 0s;
+}
+
+.bn-shadcn
+	.bn-block-content[data-content-type="codeBlock"]:hover
+	> div
+	> select,
+.bn-shadcn
+	.bn-block-content[data-content-type="codeBlock"]
+	> div
+	> select:focus {
+	opacity: 1;
+	transition-delay: 0s;
+}
+
+html[data-keyboard-nav="true"]
+	.bn-shadcn
+	.bn-block-content[data-content-type="codeBlock"]
+	> div
+	> select:focus {
+	box-shadow:
+		0 0 0 2px color-mix(in oklab, var(--ring) 55%, transparent),
+		inset 0 0 0 1px
+		color-mix(in oklab, var(--prosemirror-highlight, #f8f8f2) 18%, transparent);
+}
+
+html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
+	border-color: var(--ring);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
 }
 
 /* The editor should sit on the page background: BlockNote's own

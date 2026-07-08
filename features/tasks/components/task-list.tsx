@@ -25,6 +25,7 @@ import type {
 	TaskScope,
 	TaskWithPage,
 } from "@/features/tasks/schemas";
+import { formatDueDateLabel } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
 const TASK_PAGE_SIZE = 50;
@@ -365,7 +366,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 												)}
 											>
 												<CalendarIcon className="size-3" />
-												{task.dueDate}
+												{formatDueDateLabel(task.dueDate)}
 											</span>
 										) : null}
 										{task.sourceBlockId === null && canEdit ? (

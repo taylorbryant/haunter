@@ -115,7 +115,7 @@ export function CodeEditDialog({
 					</div>
 				</DialogHeader>
 				<div
-					className="relative min-h-0 flex-1 overflow-hidden rounded-md border"
+					className="code-edit-focus-ring relative min-h-0 flex-1 overflow-hidden rounded-md border"
 					style={{ backgroundColor: theme.bg }}
 				>
 					<div

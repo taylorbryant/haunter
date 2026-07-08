@@ -1,4 +1,8 @@
 import * as chrono from "chrono-node";
+import {
+	formatDueDateLabel,
+	toIsoDate as toIsoDateValue,
+} from "@/lib/due-date";
 
 export type ParsedTaskInput = {
 	/** Title with the date phrase stripped (and dangling prepositions tidied). */
@@ -20,9 +24,7 @@ type InlineNode = {
 };
 
 export function toIsoDate(date: Date): string {
-	const month = String(date.getMonth() + 1).padStart(2, "0");
-	const day = String(date.getDate()).padStart(2, "0");
-	return `${date.getFullYear()}-${month}-${day}`;
+	return toIsoDateValue(date);
 }
 
 /**
@@ -83,21 +85,5 @@ export function parseTaskDateShortcut(
 
 /** "Today", "Tomorrow", a weekday within a week, else "Jul 16". */
 export function humanizeDueDate(iso: string): string {
-	const [year, month, day] = iso.split("-").map(Number);
-	if (!year || !month || !day) return iso;
-	const date = new Date(year, month - 1, day);
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-	const days = Math.round((date.getTime() - today.getTime()) / 86_400_000);
-
-	if (days === 0) return "Today";
-	if (days === 1) return "Tomorrow";
-	if (days > 1 && days < 7) {
-		return date.toLocaleDateString(undefined, { weekday: "long" });
-	}
-	return date.toLocaleDateString(undefined, {
-		month: "short",
-		day: "numeric",
-		...(date.getFullYear() !== today.getFullYear() ? { year: "numeric" } : {}),
-	});
+	return formatDueDateLabel(iso);
 }
