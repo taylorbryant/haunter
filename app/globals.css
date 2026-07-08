@@ -256,6 +256,67 @@
 	margin-block: 1px;
 }
 
+/* Notion keeps unordered lists visually consistent across nesting. BlockNote's
+   default CSS cycles disc/circle/square markers by depth, so pin every
+   bullet-list marker back to the same round dot. */
+.bn-shadcn .bn-block-content[data-content-type="bulletListItem"]::before {
+	content: "•";
+}
+
+.bn-shadcn
+	.bn-block-outer[data-prev-type="bulletListItem"]
+	> .bn-block
+	> .bn-block-content::before {
+	content: "•";
+}
+
+.bn-shadcn
+	.bn-block-outer:not([data-prev-type])
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]::before {
+	content: "•";
+}
+
+.bn-shadcn
+	[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer[data-prev-type="bulletListItem"]
+	> .bn-block
+	> .bn-block-content::before {
+	content: "•";
+}
+
+.bn-shadcn
+	[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer:not([data-prev-type])
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]::before {
+	content: "•";
+}
+
+.bn-shadcn
+	[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer[data-prev-type="bulletListItem"]
+	> .bn-block
+	> .bn-block-content::before {
+	content: "•";
+}
+
+.bn-shadcn
+	[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer:not([data-prev-type])
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]::before {
+	content: "•";
+}
+
 /* Code blocks: turn BlockNote's absolute-positioned language picker into
    Haunter's real header row without replacing the editable code DOM. */
 .bn-shadcn .bn-block-content[data-content-type="codeBlock"] {
