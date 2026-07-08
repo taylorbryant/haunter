@@ -133,6 +133,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				(node): node is HTMLElement =>
 					node instanceof HTMLElement && node.querySelector("select") !== null,
 			);
+			const languageSelect = header?.querySelector("select");
 			const pre = sourceNodes.find(
 				(node): node is HTMLPreElement => node instanceof HTMLPreElement,
 			);
@@ -144,6 +145,16 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			}
 
 			header?.classList.add("haunter-code-block-header");
+			header?.style.setProperty("order", "1");
+			header?.style.setProperty("display", "flex");
+			header?.style.setProperty("align-items", "center");
+			header?.style.setProperty("justify-content", "space-between");
+			header?.style.setProperty("min-height", "36px");
+			pre?.style.setProperty("order", "2");
+			pre?.style.setProperty("width", "100%");
+			pre?.style.setProperty("margin", "0");
+			languageSelect?.style.setProperty("position", "static");
+			languageSelect?.style.setProperty("opacity", "1");
 
 			const expandButton = document.createElement("button");
 			expandButton.type = "button";

@@ -256,29 +256,22 @@
 	margin-block: 1px;
 }
 
-/* Code blocks: 14px monospace (BlockNote defaults to 16px). */
-.bn-shadcn .bn-block-content[data-content-type="codeBlock"] pre,
-.bn-shadcn .bn-block-content[data-content-type="codeBlock"] code {
-	font-size: 14px;
-	line-height: 1.6;
-}
-
-/* Paint the code block with the active shiki theme's colors (Dracula)
-   instead of BlockNote's fixed dark background. */
+/* Code blocks: turn BlockNote's absolute-positioned language picker into
+   Haunter's real header row without replacing the editable code DOM. */
 .bn-shadcn .bn-block-content[data-content-type="codeBlock"] {
-	background-color: var(--prosemirror-highlight-bg, #282a36);
-	color: var(--prosemirror-highlight, #f8f8f2);
 	display: flex;
 	flex-direction: column;
+	align-items: stretch;
 	overflow: hidden;
 	padding: 0;
+	background-color: var(--prosemirror-highlight-bg, #282a36);
+	color: var(--prosemirror-highlight, #f8f8f2);
 }
 
-.bn-shadcn .bn-block-content[data-content-type="codeBlock"] > pre {
-	padding: 16px 24px 24px;
-}
-
-.haunter-code-block-header {
+.bn-shadcn
+	.bn-block-content[data-content-type="codeBlock"]
+	> div:has(> select) {
+	order: 1;
 	display: flex;
 	min-height: 36px;
 	align-items: center;
@@ -294,17 +287,31 @@
 	padding: 0 8px 0 10px;
 }
 
+.bn-shadcn .bn-block-content[data-content-type="codeBlock"] > pre {
+	order: 2;
+	width: 100%;
+	margin: 0;
+	padding: 16px 24px 24px;
+	font-size: 14px;
+	line-height: 1.6;
+}
+
+.bn-shadcn .bn-block-content[data-content-type="codeBlock"] code {
+	font-size: 14px;
+	line-height: 1.6;
+}
+
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> .haunter-code-block-header
+	> div:has(> select)
 	> select {
 	position: static;
 	max-width: min(220px, 60%);
 	min-width: 0;
 	opacity: 1;
+	border: 0;
 	border-radius: var(--radius-sm, 0.25rem);
 	background-color: transparent;
-	border: 0;
 	box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 16%, transparent);
 	color: inherit;
 	cursor: pointer;
@@ -319,7 +326,7 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> .haunter-code-block-header
+	> div:has(> select)
 	> select:disabled {
 	cursor: default;
 	opacity: 0.7;
@@ -327,7 +334,7 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> .haunter-code-block-header
+	> div:has(> select)
 	> select
 	> option {
 	color: black;
@@ -335,11 +342,11 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> .haunter-code-block-header
+	> div:has(> select)
 	> select:hover,
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> .haunter-code-block-header
+	> div:has(> select)
 	> select:focus {
 	background-color: color-mix(in oklab, currentColor 8%, transparent);
 }
@@ -347,20 +354,23 @@
 html[data-keyboard-nav="true"]
 	.bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> .haunter-code-block-header
+	> div:has(> select)
 	> select:focus {
 	box-shadow:
 		0 0 0 2px color-mix(in oklab, var(--ring) 55%, transparent),
 		inset 0 0 0 1px color-mix(in oklab, currentColor 16%, transparent);
 }
 
-.haunter-code-block-expand {
+.bn-shadcn
+	.bn-block-content[data-content-type="codeBlock"]
+	.haunter-code-block-expand {
 	display: flex;
 	width: 28px;
 	height: 28px;
 	flex-shrink: 0;
 	align-items: center;
 	justify-content: center;
+	margin-left: auto;
 	border: 0;
 	border-radius: var(--radius-sm, 0.25rem);
 	background-color: transparent;
@@ -376,12 +386,17 @@ html[data-keyboard-nav="true"]
 		color 0.15s;
 }
 
-.haunter-code-block-expand:hover {
+.bn-shadcn
+	.bn-block-content[data-content-type="codeBlock"]
+	.haunter-code-block-expand:hover {
 	background-color: color-mix(in oklab, currentColor 10%, transparent);
 	color: var(--prosemirror-highlight, #f8f8f2);
 }
 
-.bn-shadcn .haunter-code-block-header .haunter-code-block-expand svg {
+.bn-shadcn
+	.bn-block-content[data-content-type="codeBlock"]
+	.haunter-code-block-expand
+	svg {
 	width: 16px;
 	height: 16px;
 }
