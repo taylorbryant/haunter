@@ -8,6 +8,7 @@ import {
 } from "@blocknote/core";
 import { calloutBlockSpec } from "./callout-block";
 import { canvasBlockSpec } from "./canvas-block";
+import { OPEN_CODE_BLOCK_DIALOG_EVENT } from "./code-block-dialog-event";
 import { getHaunterHighlighter } from "./code-theme";
 import { dividerBlockSpec } from "./divider-block";
 import { mentionSpec } from "./mention";
@@ -118,16 +119,71 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 		render(
 			...args: Parameters<typeof baseCodeBlockSpec.implementation.render>
 		) {
+			const [block] = args;
 			const rendered = baseCodeBlockSpec.implementation.render.apply(
 				this,
 				args,
 			);
-			if (rendered.dom instanceof HTMLElement) {
-				rendered.dom.setAttribute("autocapitalize", "none");
-				rendered.dom.setAttribute("autocorrect", "off");
-				rendered.dom.setAttribute("spellcheck", "false");
+
+			const wrapper = document.createDocumentFragment();
+			const header = document.createElement("div");
+			header.className = "haunter-code-block-header";
+			header.contentEditable = "false";
+
+			const sourceNodes =
+				rendered.dom instanceof DocumentFragment
+					? Array.from(rendered.dom.childNodes)
+					: [rendered.dom];
+			const languageSelect = sourceNodes
+				.find(
+					(node): node is HTMLElement =>
+						node instanceof HTMLElement &&
+						node.querySelector("select") !== null,
+				)
+				?.querySelector("select");
+			const pre = sourceNodes.find(
+				(node): node is HTMLPreElement => node instanceof HTMLPreElement,
+			);
+			for (const element of [pre, rendered.contentDOM]) {
+				if (!element) continue;
+				element.setAttribute("autocapitalize", "none");
+				element.setAttribute("autocorrect", "off");
+				element.setAttribute("spellcheck", "false");
 			}
-			return rendered;
+
+			if (languageSelect) {
+				header.appendChild(languageSelect);
+			} else {
+				header.appendChild(document.createElement("span"));
+			}
+
+			const expandButton = document.createElement("button");
+			expandButton.type = "button";
+			expandButton.className = "haunter-code-block-expand keyboard-focus-ring";
+			expandButton.setAttribute("aria-label", "Expand code");
+			expandButton.innerHTML =
+				'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>';
+			const handleExpand = () => {
+				window.dispatchEvent(
+					new CustomEvent(OPEN_CODE_BLOCK_DIALOG_EVENT, {
+						detail: { blockId: block.id },
+					}),
+				);
+			};
+			expandButton.addEventListener("click", handleExpand);
+			header.appendChild(expandButton);
+
+			wrapper.appendChild(header);
+			if (pre) wrapper.appendChild(pre);
+
+			return {
+				...rendered,
+				dom: wrapper,
+				destroy: () => {
+					expandButton.removeEventListener("click", handleExpand);
+					rendered.destroy?.();
+				},
+			};
 		},
 	},
 };

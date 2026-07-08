@@ -9,7 +9,6 @@ import {
 	filterSuggestionItems,
 	insertOrUpdateBlockForSlashMenu,
 } from "@blocknote/core";
-import { SideMenuExtension } from "@blocknote/core/extensions";
 import {
 	BlockColorsItem,
 	DragHandleMenu,
@@ -18,10 +17,7 @@ import {
 	SideMenu,
 	SideMenuController,
 	SuggestionMenuController,
-	useBlockNoteEditor,
-	useComponentsContext,
 	useCreateBlockNote,
-	useExtensionState,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -62,6 +58,10 @@ import { reconcileTaskBlockProps } from "@/features/tasks/lib/reconcile-task-blo
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { CodeEditDialog } from "./code-edit-dialog";
+import {
+	OPEN_CODE_BLOCK_DIALOG_EVENT,
+	type OpenCodeBlockDialogDetail,
+} from "./code-block-dialog-event";
 import { editorSchema } from "./schema";
 import { TaskBlockCurrentUserContext } from "./task-block";
 
@@ -82,29 +82,6 @@ function focusBlockContentOnNextFrame(
 		editor.setTextCursorPosition(blockId, "start");
 		editor.focus();
 	});
-}
-
-/** Block-menu item to open a code block in the larger editing dialog. */
-function EditCodeMenuItem({ onOpen }: { onOpen: (blockId: string) => void }) {
-	const Components = useComponentsContext();
-	const editor = useBlockNoteEditor();
-	const block = useExtensionState(SideMenuExtension, {
-		editor,
-		selector: (state) => state?.block,
-	});
-
-	if (!Components || !block || block.type !== "codeBlock") {
-		return null;
-	}
-
-	return (
-		<Components.Generic.Menu.Item
-			className="bn-menu-item"
-			onClick={() => onOpen(block.id)}
-		>
-			Edit in dialog
-		</Components.Generic.Menu.Item>
-	);
 }
 
 function getSlashMenuItems(
@@ -487,6 +464,19 @@ export default function HaunterEditor({
 		null,
 	);
 
+	useEffect(() => {
+		const openCodeDialog = (event: Event) => {
+			const detail = (event as CustomEvent<OpenCodeBlockDialogDetail>).detail;
+			if (typeof detail?.blockId === "string") {
+				setCodeDialogBlockId(detail.blockId);
+			}
+		};
+		window.addEventListener(OPEN_CODE_BLOCK_DIALOG_EVENT, openCodeDialog);
+		return () => {
+			window.removeEventListener(OPEN_CODE_BLOCK_DIALOG_EVENT, openCodeDialog);
+		};
+	}, []);
+
 	return (
 		// On mobile, `editor-flush` drops BlockNote's 54px inline gutter so
 		// content runs edge-to-edge; the block controls that live there are
@@ -559,7 +549,6 @@ export default function HaunterEditor({
 										<DragHandleMenu>
 											<RemoveBlockItem>Delete</RemoveBlockItem>
 											<BlockColorsItem>Colors</BlockColorsItem>
-											<EditCodeMenuItem onOpen={setCodeDialogBlockId} />
 										</DragHandleMenu>
 									)}
 								/>
@@ -572,6 +561,7 @@ export default function HaunterEditor({
 				<CodeEditDialog
 					editor={editor}
 					blockId={codeDialogBlockId}
+					editable={editable}
 					onClose={() => setCodeDialogBlockId(null)}
 				/>
 			) : null}

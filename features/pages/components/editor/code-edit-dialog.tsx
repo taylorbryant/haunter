@@ -27,10 +27,11 @@ function blockInlineText(block: { content?: unknown }): string {
 		.join("");
 }
 
-/** A roomier editing surface for code blocks, opened from the block menu. */
+/** A roomier editing surface for code blocks, opened from the block header. */
 export function CodeEditDialog({
 	editor,
 	blockId,
+	editable = true,
 	onClose,
 }: {
 	editor: BlockNoteEditor<
@@ -39,6 +40,7 @@ export function CodeEditDialog({
 		(typeof editorSchema)["styleSchema"]
 	>;
 	blockId: string;
+	editable?: boolean;
 	onClose: () => void;
 }) {
 	const block = editor.getBlock(blockId);
@@ -83,6 +85,10 @@ export function CodeEditDialog({
 	}, [text, language, theme.id]);
 
 	function save() {
+		if (!editable) {
+			onClose();
+			return;
+		}
 		editor.updateBlock(blockId, { content: text, props: { language } });
 		onClose();
 	}
@@ -92,26 +98,34 @@ export function CodeEditDialog({
 			<DialogContent className="flex h-[75vh] flex-col gap-4 sm:max-w-3xl">
 				<DialogHeader>
 					<div className="flex items-center gap-3">
-						<DialogTitle>Edit code</DialogTitle>
-						<DropdownMenu>
-							<DropdownMenuTrigger
-								render={<Button variant="outline" size="sm" />}
-							>
+						<DialogTitle>{editable ? "Edit code" : "Code"}</DialogTitle>
+						{editable ? (
+							<DropdownMenu>
+								<DropdownMenuTrigger
+									render={<Button variant="outline" size="sm" />}
+								>
+									{supportedLanguages[language]?.name ?? language}
+									<ChevronDownIcon className="opacity-50" />
+								</DropdownMenuTrigger>
+								<DropdownMenuContent
+									align="start"
+									className="max-h-64 overflow-y-auto"
+								>
+									{Object.entries(supportedLanguages).map(([id, meta]) => (
+										<DropdownMenuItem key={id} onClick={() => setLanguage(id)}>
+											{meta.name}
+											{id === language ? (
+												<CheckIcon className="ml-auto" />
+											) : null}
+										</DropdownMenuItem>
+									))}
+								</DropdownMenuContent>
+							</DropdownMenu>
+						) : (
+							<span className="rounded-md border px-2 py-1 text-muted-foreground text-sm">
 								{supportedLanguages[language]?.name ?? language}
-								<ChevronDownIcon className="opacity-50" />
-							</DropdownMenuTrigger>
-							<DropdownMenuContent
-								align="start"
-								className="max-h-64 overflow-y-auto"
-							>
-								{Object.entries(supportedLanguages).map(([id, meta]) => (
-									<DropdownMenuItem key={id} onClick={() => setLanguage(id)}>
-										{meta.name}
-										{id === language ? <CheckIcon className="ml-auto" /> : null}
-									</DropdownMenuItem>
-								))}
-							</DropdownMenuContent>
-						</DropdownMenu>
+							</span>
+						)}
 					</div>
 				</DialogHeader>
 				<div
@@ -132,6 +146,7 @@ export function CodeEditDialog({
 						spellCheck={false}
 						autoCapitalize="none"
 						autoCorrect="off"
+						readOnly={!editable}
 						className="relative size-full resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-sm text-transparent leading-relaxed outline-none"
 						style={{ caretColor: theme.fg }}
 						onChange={(event) => setText(event.target.value)}
@@ -143,7 +158,11 @@ export function CodeEditDialog({
 							}
 						}}
 						onKeyDown={(event) => {
-							if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+							if (
+								editable &&
+								(event.metaKey || event.ctrlKey) &&
+								event.key === "Enter"
+							) {
 								event.preventDefault();
 								save();
 							}
@@ -151,12 +170,20 @@ export function CodeEditDialog({
 					/>
 				</div>
 				<DialogFooter>
-					<Button type="button" variant="ghost" size="sm" onClick={onClose}>
-						Cancel
-					</Button>
-					<Button type="button" size="sm" onClick={save}>
-						Save
-					</Button>
+					{editable ? (
+						<>
+							<Button type="button" variant="ghost" size="sm" onClick={onClose}>
+								Cancel
+							</Button>
+							<Button type="button" size="sm" onClick={save}>
+								Save
+							</Button>
+						</>
+					) : (
+						<Button type="button" size="sm" onClick={onClose}>
+							Close
+						</Button>
+					)}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
