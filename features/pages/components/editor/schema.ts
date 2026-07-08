@@ -129,11 +129,11 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				rendered.dom instanceof DocumentFragment
 					? Array.from(rendered.dom.childNodes)
 					: [rendered.dom];
-			const header = sourceNodes.find(
+			const selectWrapper = sourceNodes.find(
 				(node): node is HTMLElement =>
 					node instanceof HTMLElement && node.querySelector("select") !== null,
 			);
-			const languageSelect = header?.querySelector("select");
+			const languageSelect = selectWrapper?.querySelector("select");
 			const pre = sourceNodes.find(
 				(node): node is HTMLPreElement => node instanceof HTMLPreElement,
 			);
@@ -144,17 +144,24 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				element.setAttribute("spellcheck", "false");
 			}
 
-			header?.classList.add("haunter-code-block-header");
-			header?.style.setProperty("order", "1");
-			header?.style.setProperty("display", "flex");
-			header?.style.setProperty("align-items", "center");
-			header?.style.setProperty("justify-content", "space-between");
-			header?.style.setProperty("min-height", "36px");
+			const header = document.createElement("div");
+			header.className = "haunter-code-block-header";
+			header.contentEditable = "false";
+			header.style.setProperty("display", "flex");
+			header.style.setProperty("width", "100%");
+			header.style.setProperty("align-items", "center");
+			header.style.setProperty("justify-content", "space-between");
+			header.style.setProperty("min-height", "36px");
 			pre?.style.setProperty("order", "2");
 			pre?.style.setProperty("width", "100%");
 			pre?.style.setProperty("margin", "0");
-			languageSelect?.style.setProperty("position", "static");
-			languageSelect?.style.setProperty("opacity", "1");
+			if (languageSelect) {
+				languageSelect.style.setProperty("position", "static");
+				languageSelect.style.setProperty("opacity", "1");
+				header.appendChild(languageSelect);
+			} else {
+				header.appendChild(document.createElement("span"));
+			}
 
 			const expandButton = document.createElement("button");
 			expandButton.type = "button";
@@ -170,7 +177,13 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				);
 			};
 			expandButton.addEventListener("click", handleExpand);
-			header?.appendChild(expandButton);
+			header.appendChild(expandButton);
+
+			if (selectWrapper) {
+				selectWrapper.replaceWith(header);
+			} else if (rendered.dom instanceof DocumentFragment) {
+				rendered.dom.insertBefore(header, pre ?? null);
+			}
 
 			return {
 				...rendered,

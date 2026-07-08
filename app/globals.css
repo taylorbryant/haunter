@@ -270,9 +270,10 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> div:has(> select) {
+	> .haunter-code-block-header {
 	order: 1;
 	display: flex;
+	width: 100%;
 	min-height: 36px;
 	align-items: center;
 	justify-content: space-between;
@@ -303,7 +304,7 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> div:has(> select)
+	> .haunter-code-block-header
 	> select {
 	position: static;
 	max-width: min(220px, 60%);
@@ -326,7 +327,7 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> div:has(> select)
+	> .haunter-code-block-header
 	> select:disabled {
 	cursor: default;
 	opacity: 0.7;
@@ -334,7 +335,7 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> div:has(> select)
+	> .haunter-code-block-header
 	> select
 	> option {
 	color: black;
@@ -342,11 +343,11 @@
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> div:has(> select)
+	> .haunter-code-block-header
 	> select:hover,
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> div:has(> select)
+	> .haunter-code-block-header
 	> select:focus {
 	background-color: color-mix(in oklab, currentColor 8%, transparent);
 }
@@ -354,7 +355,7 @@
 html[data-keyboard-nav="true"]
 	.bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	> div:has(> select)
+	> .haunter-code-block-header
 	> select:focus {
 	box-shadow:
 		0 0 0 2px color-mix(in oklab, var(--ring) 55%, transparent),
