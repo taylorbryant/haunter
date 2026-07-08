@@ -5,10 +5,10 @@ import {
 	ChevronDownIcon,
 	PencilIcon,
 	PlusIcon,
-	SmilePlusIcon,
 	Trash2Icon,
 	UsersIcon,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
@@ -38,26 +38,42 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-	EmojiPicker,
-	EmojiPickerContent,
-	EmojiPickerSearch,
-} from "@/components/ui/emoji-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/ui/popover";
 import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import { MembersDialog } from "@/features/members/components/members-dialog";
 import { canManageMembers } from "@/lib/org-access";
+
+const MembersDialog = dynamic(
+	() =>
+		import("@/features/members/components/members-dialog").then(
+			(mod) => mod.MembersDialog,
+		),
+	{ ssr: false },
+);
+
+const WorkspaceIconPicker = dynamic(
+	() =>
+		import("./workspace-icon-picker").then((mod) => ({
+			default: mod.WorkspaceIconPicker,
+		})),
+	{
+		ssr: false,
+		loading: () => (
+			<Button
+				type="button"
+				variant="outline"
+				className="size-9 p-0"
+				disabled
+				aria-hidden
+			/>
+		),
+	},
+);
 
 // A "workspace" is a Better Auth organization; its emoji lives in the org's
 // `logo` field.
@@ -85,7 +101,6 @@ export function WorkspaceSwitcher({
 	const [editOpen, setEditOpen] = useState(false);
 	const [editName, setEditName] = useState("");
 	const [editIcon, setEditIcon] = useState<string | null>(null);
-	const [iconPickerOpen, setIconPickerOpen] = useState(false);
 	const [deleteOpen, setDeleteOpen] = useState(false);
 	const [membersOpen, setMembersOpen] = useState(false);
 
@@ -425,82 +440,44 @@ export function WorkspaceSwitcher({
 					description="Update this workspace's emoji and name."
 					className="sm:max-w-sm"
 				>
-					<form
-						className="flex flex-col gap-4"
-						onSubmit={(event) => {
-							event.preventDefault();
-							saveEdit();
-						}}
-					>
-						<div className="flex items-end gap-3">
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="edit-workspace-emoji">Emoji</Label>
-								<Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
-									<PopoverTrigger
-										render={
-											<Button
-												id="edit-workspace-emoji"
-												type="button"
-												variant="outline"
-												className="size-9 p-0 text-lg leading-none"
-												aria-label="Choose emoji"
-											/>
-										}
-									>
-										{editIcon ?? (
-											<SmilePlusIcon className="size-4 text-muted-foreground" />
-										)}
-									</PopoverTrigger>
-									<PopoverContent className="w-auto p-0" align="start">
-										<div className="flex h-[300px] w-[288px] flex-col">
-											<EmojiPicker
-												className="min-h-0 flex-1"
-												onEmojiSelect={({ emoji }) => {
-													setEditIcon(emoji);
-													setIconPickerOpen(false);
-												}}
-											>
-												<EmojiPickerSearch placeholder="Search emoji…" />
-												<EmojiPickerContent />
-											</EmojiPicker>
-											{editIcon ? (
-												<div className="border-t p-1">
-													<Button
-														type="button"
-														variant="ghost"
-														size="sm"
-														className="w-full justify-start text-muted-foreground"
-														onClick={() => {
-															setEditIcon(null);
-															setIconPickerOpen(false);
-														}}
-													>
-														Remove emoji
-													</Button>
-												</div>
-											) : null}
-										</div>
-									</PopoverContent>
-								</Popover>
+					{editOpen ? (
+						<form
+							className="flex flex-col gap-4"
+							onSubmit={(event) => {
+								event.preventDefault();
+								saveEdit();
+							}}
+						>
+							<div className="flex items-end gap-3">
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="edit-workspace-emoji">Emoji</Label>
+									<WorkspaceIconPicker
+										id="edit-workspace-emoji"
+										icon={editIcon}
+										onIconChange={setEditIcon}
+									/>
+								</div>
+								<div className="flex flex-1 flex-col gap-2">
+									<Label htmlFor="edit-workspace-name">Name</Label>
+									<Input
+										id="edit-workspace-name"
+										value={editName}
+										onChange={(event) => setEditName(event.target.value)}
+									/>
+								</div>
 							</div>
-							<div className="flex flex-1 flex-col gap-2">
-								<Label htmlFor="edit-workspace-name">Name</Label>
-								<Input
-									id="edit-workspace-name"
-									value={editName}
-									onChange={(event) => setEditName(event.target.value)}
-								/>
-							</div>
-						</div>
-						<ResponsiveDialogFooter>
-							<Button type="submit" disabled={!editName.trim() || busy}>
-								{busy ? "Saving…" : "Save"}
-							</Button>
-						</ResponsiveDialogFooter>
-					</form>
+							<ResponsiveDialogFooter>
+								<Button type="submit" disabled={!editName.trim() || busy}>
+									{busy ? "Saving..." : "Save"}
+								</Button>
+							</ResponsiveDialogFooter>
+						</form>
+					) : null}
 				</ResponsiveDialog>
 
-				<MembersDialog open={membersOpen} onOpenChange={setMembersOpen} />
+				{membersOpen ? (
+					<MembersDialog open={membersOpen} onOpenChange={setMembersOpen} />
+				) : null}
 
 				<DestructiveConfirmationDialog
 					open={deleteOpen}

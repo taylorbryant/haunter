@@ -10,6 +10,7 @@ import {
 	SmilePlusIcon,
 	Trash2Icon,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
@@ -72,7 +73,17 @@ import type { PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { cn } from "@/lib/utils";
-import { PageIconPanel } from "./page-icon-picker";
+
+const PageIconPanel = dynamic(
+	() =>
+		import("./page-icon-panel").then((mod) => ({
+			default: mod.PageIconPanel,
+		})),
+	{
+		ssr: false,
+		loading: () => <div className="h-[300px] w-[288px]" aria-hidden />,
+	},
+);
 
 type TreeNode = PageMeta & { children: TreeNode[] };
 

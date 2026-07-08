@@ -1,6 +1,12 @@
 "use client";
 
-import { HistoryIcon, MoreHorizontalIcon, Share2Icon } from "lucide-react";
+import {
+	HistoryIcon,
+	MoreHorizontalIcon,
+	Share2Icon,
+	XIcon,
+} from "lucide-react";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,17 +19,41 @@ import {
 	DrawerTitle,
 	DrawerTrigger,
 } from "@/components/ui/drawer";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
-import {
-	PageHistoryButton,
-	PageHistoryDialog,
-} from "@/features/pages/components/page-history-dialog";
-import {
-	ShareButton,
-	ShareDrawer,
-} from "@/features/shares/components/share-button";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { useIsMobile } from "@/hooks/use-mobile";
+
+const PageHistoryDialog = dynamic(
+	() =>
+		import("@/features/pages/components/page-history-dialog").then(
+			(mod) => mod.PageHistoryDialog,
+		),
+	{ ssr: false },
+);
+
+const ShareDrawer = dynamic(
+	() =>
+		import("@/features/shares/components/share-button").then(
+			(mod) => mod.ShareDrawer,
+		),
+	{ ssr: false },
+);
+
+const SharePanel = dynamic(
+	() =>
+		import("@/features/shares/components/share-button").then(
+			(mod) => mod.SharePanel,
+		),
+	{
+		ssr: false,
+		loading: () => <p className="text-muted-foreground text-sm">Loading...</p>,
+	},
+);
 
 /**
  * The header's page-scoped actions. Desktop shows the History and Share
@@ -41,10 +71,51 @@ export function HeaderPageActions() {
 	const [shareOpen, setShareOpen] = useState(false);
 
 	if (!isMobile) {
+		if (!pageId || !canEdit || !synced) return null;
+
 		return (
 			<>
-				<PageHistoryButton />
-				<ShareButton />
+				<Button
+					variant="ghost"
+					size="sm"
+					className="text-muted-foreground"
+					onClick={() => setHistoryOpen(true)}
+				>
+					<HistoryIcon />
+					<span className="sr-only sm:not-sr-only">History</span>
+				</Button>
+				<Popover modal open={shareOpen} onOpenChange={setShareOpen}>
+					<PopoverTrigger
+						render={
+							<Button
+								variant="ghost"
+								size="sm"
+								className="text-muted-foreground"
+							/>
+						}
+					>
+						<Share2Icon />
+						Share
+					</PopoverTrigger>
+					{shareOpen ? (
+						<PopoverContent align="end" className="w-80">
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								className="absolute top-1.5 right-1.5 text-muted-foreground"
+								onClick={() => setShareOpen(false)}
+							>
+								<XIcon />
+								<span className="sr-only">Close</span>
+							</Button>
+							<SharePanel pageId={pageId} active={shareOpen} />
+						</PopoverContent>
+					) : null}
+				</Popover>
+				{historyOpen ? (
+					<PageHistoryDialog pageId={pageId} onOpenChange={setHistoryOpen} />
+				) : null}
 			</>
 		);
 	}
@@ -105,11 +176,13 @@ export function HeaderPageActions() {
 			{historyOpen ? (
 				<PageHistoryDialog pageId={pageId} onOpenChange={setHistoryOpen} />
 			) : null}
-			<ShareDrawer
-				pageId={pageId}
-				open={shareOpen}
-				onOpenChange={setShareOpen}
-			/>
+			{shareOpen ? (
+				<ShareDrawer
+					pageId={pageId}
+					open={shareOpen}
+					onOpenChange={setShareOpen}
+				/>
+			) : null}
 		</>
 	);
 }
