@@ -6,7 +6,15 @@ import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
-import { type Editor, getSnapshot, loadSnapshot, Tldraw } from "tldraw";
+import {
+	createTLStore,
+	defaultBindingUtils,
+	defaultShapeUtils,
+	type Editor,
+	getSnapshot,
+	loadSnapshot,
+	Tldraw,
+} from "tldraw";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
 	getCanvasQueryOptions,
@@ -56,6 +64,10 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	const flushRef = useRef<() => void>(() => {});
 	// Last server updatedAt this client saw: the optimistic-concurrency base.
 	const baseUpdatedAtRef = useRef<string | null>(null);
+	const localStoreRef = useRef<{
+		canvasId: string;
+		store: ReturnType<typeof createTLStore>;
+	} | null>(null);
 	if (canvasQuery.data && baseUpdatedAtRef.current === null) {
 		baseUpdatedAtRef.current = canvasQuery.data.updatedAt;
 	}
@@ -99,6 +111,19 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	// Legacy/empty rows without a schema crash tldraw's migrator; treat them
 	// as a fresh canvas instead.
 	const snapshot = loadableSnapshot(stored);
+	// Seed tldraw once. Saving mirrors snapshots into React Query, and feeding
+	// that changing object back through the `snapshot` prop makes tldraw rebuild.
+	if (!localStoreRef.current || localStoreRef.current.canvasId !== canvasId) {
+		localStoreRef.current = {
+			canvasId,
+			store: createTLStore({
+				shapeUtils: defaultShapeUtils,
+				bindingUtils: defaultBindingUtils,
+				snapshot,
+			}),
+		};
+	}
+	const localStore = localStoreRef.current.store;
 
 	function handleMount(editor: Editor) {
 		editor.user.updateUserPreferences({
@@ -186,7 +211,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		<div className="relative h-full w-full">
 			<Tldraw
 				licenseKey={TLDRAW_LICENSE_KEY}
-				snapshot={snapshot}
+				store={localStore}
 				onMount={handleMount}
 			/>
 			{saveState === "saving" ? (
