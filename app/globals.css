@@ -256,65 +256,194 @@
 	margin-block: 1px;
 }
 
-/* Notion keeps unordered lists visually consistent across nesting. BlockNote's
-   default CSS cycles disc/circle/square markers by depth, so pin every
-   bullet-list marker back to the same round dot. */
+/* Notion cycles unordered list markers by nesting depth:
+   solid bullet -> outlined bullet -> square bullet, then repeats. */
 .bn-shadcn .bn-block-content[data-content-type="bulletListItem"]::before {
 	content: "•";
 }
 
 .bn-shadcn
-	.bn-block-outer[data-prev-type="bulletListItem"]
+	.bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
 	> .bn-block
-	> .bn-block-content::before {
-	content: "•";
+	> .bn-block-content[data-content-type="bulletListItem"]::before {
+	content: "◦";
 }
 
 .bn-shadcn
-	.bn-block-outer:not([data-prev-type])
+	.bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]::before {
+	content: "▪\FE0E";
+}
+
+.bn-shadcn
+	.bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
 	> .bn-block
 	> .bn-block-content[data-content-type="bulletListItem"]::before {
 	content: "•";
 }
 
 .bn-shadcn
-	[data-content-type="bulletListItem"]
+	.bn-block-content[data-content-type="bulletListItem"]
 	~ .bn-block-group
-	> .bn-block-outer[data-prev-type="bulletListItem"]
+	> .bn-block-outer
 	> .bn-block
-	> .bn-block-content::before {
-	content: "•";
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]::before {
+	content: "◦";
 }
 
 .bn-shadcn
-	[data-content-type="bulletListItem"]
+	.bn-block-content[data-content-type="bulletListItem"]
 	~ .bn-block-group
-	> .bn-block-outer:not([data-prev-type])
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]::before {
+	content: "▪\FE0E";
+}
+
+.bn-shadcn
+	.bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
 	> .bn-block
 	> .bn-block-content[data-content-type="bulletListItem"]::before {
 	content: "•";
 }
 
 .bn-shadcn
-	[data-content-type="bulletListItem"]
+	.bn-block-content[data-content-type="bulletListItem"]
 	~ .bn-block-group
-	[data-content-type="bulletListItem"]
-	~ .bn-block-group
-	> .bn-block-outer[data-prev-type="bulletListItem"]
+	> .bn-block-outer
 	> .bn-block
-	> .bn-block-content::before {
-	content: "•";
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]::before {
+	content: "◦";
 }
 
 .bn-shadcn
-	[data-content-type="bulletListItem"]
+	.bn-block-content[data-content-type="bulletListItem"]
 	~ .bn-block-group
-	[data-content-type="bulletListItem"]
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
 	~ .bn-block-group
-	> .bn-block-outer:not([data-prev-type])
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
+	> .bn-block
+	> .bn-block-content[data-content-type="bulletListItem"]
+	~ .bn-block-group
+	> .bn-block-outer
 	> .bn-block
 	> .bn-block-content[data-content-type="bulletListItem"]::before {
-	content: "•";
+	content: "▪\FE0E";
 }
 
 /* Code blocks: turn BlockNote's absolute-positioned language picker into
