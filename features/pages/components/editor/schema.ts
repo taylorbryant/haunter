@@ -128,10 +128,11 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			const sourceNodes =
 				rendered.dom instanceof DocumentFragment
 					? Array.from(rendered.dom.childNodes)
-					: [rendered.dom];
+					: Array.from(rendered.dom.children);
 			const selectWrapper = sourceNodes.find(
 				(node): node is HTMLElement =>
-					node instanceof HTMLElement && node.querySelector("select") !== null,
+					node instanceof HTMLElement &&
+					node.querySelector(":scope > select") !== null,
 			);
 			const languageSelect = selectWrapper?.querySelector("select");
 			const pre = sourceNodes.find(
@@ -144,8 +145,8 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				element.setAttribute("spellcheck", "false");
 			}
 
-			const header = document.createElement("div");
-			header.className = "haunter-code-block-header";
+			const header = selectWrapper ?? document.createElement("div");
+			header.classList.add("haunter-code-block-header");
 			header.contentEditable = "false";
 			header.style.setProperty("display", "flex");
 			header.style.setProperty("width", "100%");
@@ -163,8 +164,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				languageSelect.style.setProperty("max-width", "min(220px, 60%)");
 				languageSelect.style.setProperty("min-width", "0");
 				languageSelect.style.setProperty("flex-shrink", "1");
-				header.appendChild(languageSelect);
-			} else {
+			} else if (!selectWrapper) {
 				header.appendChild(document.createElement("span"));
 			}
 
@@ -202,30 +202,18 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			expandButton.addEventListener("click", handleExpand);
 			header.appendChild(expandButton);
 
-			const shell = document.createElement("div");
-			shell.className = "haunter-code-block-shell";
-			shell.style.setProperty("display", "flex");
-			shell.style.setProperty("width", "100%");
-			shell.style.setProperty("min-width", "0");
-			shell.style.setProperty("flex-direction", "column");
-			shell.style.setProperty("align-items", "stretch");
-			shell.style.setProperty("overflow", "hidden");
-			shell.style.setProperty(
-				"background-color",
-				"var(--prosemirror-highlight-bg, #282a36)",
-			);
-			shell.style.setProperty("color", "var(--prosemirror-highlight, #f8f8f2)");
-			shell.appendChild(header);
 			if (pre) {
+				pre.style.setProperty("order", "2");
 				pre.style.setProperty("width", "100%");
 				pre.style.setProperty("min-width", "0");
 				pre.style.setProperty("margin", "0");
-				shell.appendChild(pre);
+			}
+			if (!selectWrapper && rendered.dom instanceof DocumentFragment) {
+				rendered.dom.insertBefore(header, pre ?? null);
 			}
 
 			return {
 				...rendered,
-				dom: shell,
 				destroy: () => {
 					expandButton.removeEventListener("click", handleExpand);
 					rendered.destroy?.();
