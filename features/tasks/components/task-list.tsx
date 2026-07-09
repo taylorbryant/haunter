@@ -268,7 +268,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 								/>
 								{/* Stacks title over the chips on mobile; sm+ lays them out
 							    side by side on one line. */}
-								<div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+								<div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
 									<div className="min-w-0 flex-1">
 										{editingId === task.id ? (
 											<input
