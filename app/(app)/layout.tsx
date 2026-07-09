@@ -19,10 +19,9 @@ import {
 	SidebarTrigger,
 } from "@/components/ui/sidebar";
 import {
-	getPageQueryOptions,
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
-import { getPageUseCase, listPagesUseCase } from "@/features/pages/use-cases";
+import { listPagesUseCase } from "@/features/pages/use-cases";
 import { hasAppAccessSession } from "@/lib/auth";
 import { auth } from "@/lib/better-auth";
 import {
@@ -33,8 +32,7 @@ import { ADMIN_ROLE } from "@/ports/auth";
 
 function routeIds(path: string | null) {
 	const workspaceId = path?.match(/^\/w\/([^/?#]+)/)?.[1] ?? null;
-	const pageId = path?.match(/\/p\/([^/?#]+)/)?.[1] ?? null;
-	return { workspaceId, pageId };
+	return { workspaceId };
 }
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -65,11 +63,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 	const isAdmin = session.user.role === ADMIN_ROLE;
 	const activeWorkspaceId = session.session?.activeOrganizationId ?? null;
 	const queryClient = makeQueryClient();
-	const { workspaceId, pageId } = routeIds(requestedPath);
+	const { workspaceId } = routeIds(requestedPath);
 	const workspaces = await auth.api.listOrganizations({ headers: headerList });
 
 	if (workspaceId && activeWorkspaceId === workspaceId) {
-		const prefetches = [
+		await Promise.allSettled([
 			queryClient.prefetchQuery(
 				serverUseCaseQueryOptions(
 					listPagesQueryOptions(workspaceId),
@@ -78,20 +76,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 					{ workspaceId },
 				),
 			),
-		];
-		if (pageId) {
-			prefetches.push(
-				queryClient.prefetchQuery(
-					serverUseCaseQueryOptions(
-						getPageQueryOptions(pageId),
-						getPageUseCase,
-						ctx,
-						{ id: pageId },
-					),
-				),
-			);
-		}
-		await Promise.allSettled(prefetches);
+		]);
 	}
 
 	return (
