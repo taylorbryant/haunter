@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
-import { authClient } from "@/client/auth-client";
+import { useCurrentUser } from "@/components/app-session-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCollabSession } from "@/features/collab/client/session";
 import { cursorColorFor, pageRoomId } from "@/features/collab/lib/room";
@@ -76,11 +76,11 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// but the UI must not pretend edits will stick.
 	const readOnly = !useCanEditWorkspace();
 	// Cursor identity shown to collaborators when Liveblocks is configured.
-	const session = authClient.useSession();
-	const collabUser = session.data
+	const currentUser = useCurrentUser();
+	const collabUser = currentUser
 		? {
-				name: session.data.user.name || session.data.user.email || "Member",
-				color: cursorColorFor(session.data.user.id),
+				name: currentUser.name || currentUser.email || "Member",
+				color: cursorColorFor(currentUser.id),
 			}
 		: undefined;
 	// One shared room per page carries both the document and the title.
@@ -306,7 +306,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					collab={collabRoom}
 					collabUser={collabUser}
 					focusRequest={editorFocusRequest}
-					currentUserId={session.data?.user.id ?? null}
+					currentUserId={currentUser?.id ?? null}
 					flushMetadataSave={flushTitleSave}
 					onSaveStateChange={setPageSaveState}
 					onConflict={handleConflict}

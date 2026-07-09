@@ -19,6 +19,7 @@ export type AuthUser = {
 	id: string;
 	email?: string;
 	name?: string;
+	image?: string | null;
 	tenantId?: string;
 	organizationId?: string;
 	accessStatus?: AccessStatus;

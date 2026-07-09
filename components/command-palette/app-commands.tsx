@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/client/auth-client";
+import { useAppSession } from "@/components/app-session-provider";
 import {
 	CommandRegistration,
 	useCommand,
@@ -23,8 +24,7 @@ export function AppCommands({ isAdmin }: { isAdmin: boolean }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
-	const organizationsQuery = authClient.useListOrganizations();
-	const workspaces = organizationsQuery.data ?? [];
+	const workspaces = useAppSession()?.workspaces ?? [];
 
 	useCommand(
 		workspaceId

@@ -12,6 +12,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { useAppSession } from "@/components/app-session-provider";
 import { useCommand } from "@/components/command-palette/registry";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { GhostLogo } from "@/components/ghost-logo";
@@ -93,7 +94,7 @@ export function WorkspaceSwitcher({
 }) {
 	const { isMobile } = useSidebar();
 	const router = useRouter();
-	const organizationsQuery = authClient.useListOrganizations();
+	const appSession = useAppSession();
 	const [busy, setBusy] = useState(false);
 
 	const [dialogOpen, setDialogOpen] = useState(false);
@@ -104,14 +105,13 @@ export function WorkspaceSwitcher({
 	const [deleteOpen, setDeleteOpen] = useState(false);
 	const [membersOpen, setMembersOpen] = useState(false);
 
-	const workspaces = organizationsQuery.data ?? [];
+	const workspaces = appSession?.workspaces ?? [];
 	const active = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
 	// Only offer management actions the caller's role allows; the server
 	// enforces this regardless (Better Auth AC: update is admin+, delete is
 	// owner-only).
-	const activeMemberQuery = authClient.useActiveMember();
-	const myRole = activeMemberQuery.data?.role ?? null;
+	const myRole = appSession?.workspaceRole ?? null;
 	const canEditWorkspace = canManageMembers(myRole);
 	const canDeleteWorkspace = myRole === "owner";
 
@@ -184,7 +184,6 @@ export function WorkspaceSwitcher({
 			return;
 		}
 		await authClient.organization.setActive({ organizationId: data.id });
-		await organizationsQuery.refetch?.();
 		setBusy(false);
 		setName("");
 		setDialogOpen(false);
@@ -199,7 +198,6 @@ export function WorkspaceSwitcher({
 			organizationId: active.id,
 			data: { name: trimmed, logo: editIcon ?? undefined },
 		});
-		await organizationsQuery.refetch?.();
 		setBusy(false);
 		setEditOpen(false);
 		router.refresh();
@@ -210,7 +208,6 @@ export function WorkspaceSwitcher({
 		const deletedId = active.id;
 		setBusy(true);
 		await authClient.organization.delete({ organizationId: deletedId });
-		await organizationsQuery.refetch?.();
 		setBusy(false);
 		setDeleteOpen(false);
 		// Leaving the deleted workspace: switch to another one, or land on the

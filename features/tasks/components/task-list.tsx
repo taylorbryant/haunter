@@ -2,10 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { authClient } from "@/client/auth-client";
+import { useCurrentUser } from "@/components/app-session-provider";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,6 @@ import {
 	listTasksQueryOptions,
 	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
-import { TaskComposer } from "@/features/tasks/components/task-composer";
 import type {
 	TaskFilter,
 	TaskScope,
@@ -29,6 +29,14 @@ import { formatDueDateLabel } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
 const TASK_PAGE_SIZE = 50;
+
+const TaskComposer = dynamic(
+	() =>
+		import("@/features/tasks/components/task-composer").then(
+			(mod) => mod.TaskComposer,
+		),
+	{ ssr: false },
+);
 
 const FILTERS: { value: TaskFilter; label: string }[] = [
 	{ value: "open", label: "Open" },
@@ -60,7 +68,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 	const searchParams = useSearchParams();
 	// Viewers see the list but get no add/toggle/edit/delete controls.
 	const canEdit = useCanEditWorkspace();
-	const session = authClient.useSession();
+	const currentUser = useCurrentUser();
 	const filter = readTaskFilter(searchParams.get("filter"));
 	const scope = readTaskScope(searchParams.get("scope"));
 	const [limit, setLimit] = useState(TASK_PAGE_SIZE);
@@ -181,7 +189,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 		<div className="flex flex-col gap-4">
 			{!canEdit ? null : composing ? (
 				<TaskComposer
-					currentUserId={session.data?.user.id ?? null}
+					currentUserId={currentUser?.id ?? null}
 					onSubmit={createTask}
 					onCancel={() => setComposing(false)}
 				/>
@@ -323,6 +331,10 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
 									<div className="flex items-center gap-1 sm:shrink-0">
 										<AssigneePicker
 											value={task.assigneeId}
+											label={
+												task.assigneeName ??
+												(task.assigneeId ? "Assigned" : null)
+											}
 											disabled={!canEdit}
 											onChange={(next) =>
 												updateMutation.mutate(

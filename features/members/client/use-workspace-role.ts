@@ -1,6 +1,6 @@
 "use client";
 
-import { authClient } from "@/client/auth-client";
+import { useAppSession } from "@/components/app-session-provider";
 import { canEditContent } from "@/lib/org-access";
 
 /**
@@ -10,6 +10,6 @@ import { canEditContent } from "@/lib/org-access";
  * enforces the same rule regardless.
  */
 export function useCanEditWorkspace(): boolean {
-	const member = authClient.useActiveMember();
-	return member.isPending ? false : canEditContent(member.data?.role);
+	const session = useAppSession();
+	return canEditContent(session?.workspaceRole);
 }

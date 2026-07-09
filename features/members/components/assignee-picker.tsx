@@ -1,6 +1,7 @@
 "use client";
 
 import { CircleUserRoundIcon } from "lucide-react";
+import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -16,33 +17,17 @@ function initials(text: string) {
 	return text.trim().slice(0, 2).toUpperCase();
 }
 
-/**
- * Compact assignee chip + member dropdown. `value` is a user id or null.
- * Renders a static chip when `disabled` (viewers) and an invisible-until-
- * hover "assign" affordance when unassigned, mirroring the due-date chip.
- */
-export function AssigneePicker({
-	value,
-	onChange,
-	disabled = false,
-	className,
+function AssigneeChip({
+	label,
+	image,
 }: {
-	value: string | null;
-	onChange: (next: string | null) => void;
-	disabled?: boolean;
-	className?: string;
+	label: string | null;
+	image?: string | null;
 }) {
-	const orgQuery = authClient.useActiveOrganization();
-	const members = orgQuery.data?.members ?? [];
-	const current = members.find((member) => member.userId === value) ?? null;
-	const label = current
-		? current.user?.name || current.user?.email || "Member"
-		: null;
-
-	const chip = label ? (
+	return label ? (
 		<span className="flex items-center gap-1">
 			<Avatar className="size-4 rounded-full bg-primary/15 text-[9px] text-primary">
-				<AvatarImage src={current?.user?.image ?? undefined} alt="" />
+				<AvatarImage src={image ?? undefined} alt="" />
 				<AvatarFallback className="bg-transparent text-inherit">
 					{initials(label)}
 				</AvatarFallback>
@@ -55,10 +40,103 @@ export function AssigneePicker({
 			Assign
 		</span>
 	);
+}
+
+function ResolvedAssigneeChip({ value }: { value: string | null }) {
+	const orgQuery = authClient.useActiveOrganization();
+	const members = orgQuery.data?.members ?? [];
+	const current = members.find((member) => member.userId === value) ?? null;
+	const label = current
+		? current.user?.name || current.user?.email || "Member"
+		: value
+			? "Assigned"
+			: null;
+
+	return <AssigneeChip label={label} image={current?.user?.image ?? null} />;
+}
+
+function AssigneePickerContent({
+	value,
+	onChange,
+	onClose,
+}: {
+	value: string | null;
+	onChange: (next: string | null) => void;
+	onClose: () => void;
+}) {
+	const orgQuery = authClient.useActiveOrganization();
+	const members = orgQuery.data?.members ?? [];
+
+	return (
+		<DropdownMenuContent align="end" className="w-48">
+			{members.map((member) => {
+				const name = member.user?.name || member.user?.email || "Member";
+				return (
+					<DropdownMenuItem
+						key={member.id}
+						onClick={() => {
+							onChange(member.userId);
+							onClose();
+						}}
+					>
+						<Avatar className="size-5 rounded-full bg-primary/15 text-[10px] text-primary">
+							<AvatarImage src={member.user?.image ?? undefined} alt="" />
+							<AvatarFallback className="bg-transparent text-inherit">
+								{initials(name)}
+							</AvatarFallback>
+						</Avatar>
+						<span className="truncate">{name}</span>
+					</DropdownMenuItem>
+				);
+			})}
+			{value !== null ? (
+				<>
+					<DropdownMenuSeparator />
+					<DropdownMenuItem
+						className="text-muted-foreground"
+						onClick={() => {
+							onChange(null);
+							onClose();
+						}}
+					>
+						Unassign
+					</DropdownMenuItem>
+				</>
+			) : null}
+		</DropdownMenuContent>
+	);
+}
+
+/**
+ * Compact assignee chip + member dropdown. `value` is a user id or null.
+ * Renders a static chip when `disabled` (viewers) and an invisible-until-
+ * hover "assign" affordance when unassigned, mirroring the due-date chip.
+ */
+export function AssigneePicker({
+	value,
+	label,
+	onChange,
+	disabled = false,
+	className,
+}: {
+	value: string | null;
+	label?: string | null;
+	onChange: (next: string | null) => void;
+	disabled?: boolean;
+	className?: string;
+}) {
+	const [open, setOpen] = useState(false);
+	const chip =
+		label !== undefined ? (
+			<AssigneeChip label={label} />
+		) : (
+			<ResolvedAssigneeChip value={value} />
+		);
+	const ariaLabel = label ?? (value ? "Assigned" : "Assign");
 
 	if (disabled) {
 		// Viewers: show who owns it, nothing clickable; hide when unassigned.
-		return label ? (
+		return value !== null ? (
 			<span
 				className={cn(
 					"flex shrink-0 items-center rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground text-xs",
@@ -71,15 +149,17 @@ export function AssigneePicker({
 	}
 
 	return (
-		<DropdownMenu>
+		<DropdownMenu open={open} onOpenChange={setOpen}>
 			<DropdownMenuTrigger
 				render={
 					<button
 						type="button"
-						aria-label={label ? `Assigned to ${label}` : "Assign"}
+						aria-label={
+							ariaLabel === "Assign" ? "Assign" : `Assigned to ${ariaLabel}`
+						}
 						className={cn(
 							"flex shrink-0 cursor-pointer items-center rounded-md px-1.5 py-0.5 text-xs",
-							label
+							value !== null
 								? "bg-muted text-muted-foreground"
 								: // Touch devices have no hover to reveal the affordance, so
 									// keep it visible there (pointer-coarse).
@@ -91,36 +171,13 @@ export function AssigneePicker({
 			>
 				{chip}
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="w-48">
-				{members.map((member) => {
-					const name = member.user?.name || member.user?.email || "Member";
-					return (
-						<DropdownMenuItem
-							key={member.id}
-							onClick={() => onChange(member.userId)}
-						>
-							<Avatar className="size-5 rounded-full bg-primary/15 text-[10px] text-primary">
-								<AvatarImage src={member.user?.image ?? undefined} alt="" />
-								<AvatarFallback className="bg-transparent text-inherit">
-									{initials(name)}
-								</AvatarFallback>
-							</Avatar>
-							<span className="truncate">{name}</span>
-						</DropdownMenuItem>
-					);
-				})}
-				{value !== null ? (
-					<>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem
-							className="text-muted-foreground"
-							onClick={() => onChange(null)}
-						>
-							Unassign
-						</DropdownMenuItem>
-					</>
-				) : null}
-			</DropdownMenuContent>
+			{open ? (
+				<AssigneePickerContent
+					value={value}
+					onChange={onChange}
+					onClose={() => setOpen(false)}
+				/>
+			) : null}
 		</DropdownMenu>
 	);
 }

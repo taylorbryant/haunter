@@ -1,34 +1,43 @@
 "use client";
 
-import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { authClient } from "@/client/auth-client";
-import { useActiveWorkspaceHint } from "@/components/active-workspace-provider";
+import { useAppSession } from "@/components/app-session-provider";
 
 export function useWorkspaceRouteSync(
 	workspaceId: string | null,
 	options: { syncActive?: boolean } = {},
 ) {
-	const serverHint = useActiveWorkspaceHint();
-	const activeQuery = authClient.useActiveOrganization();
-	const activeId = activeQuery.data?.id ?? null;
-	const synced =
-		workspaceId !== null &&
-		(activeQuery.isPending
-			? serverHint === workspaceId
-			: activeId === workspaceId);
+	const router = useRouter();
+	const activeId = useAppSession()?.activeWorkspaceId ?? null;
+	const [pendingWorkspaceId, setPendingWorkspaceId] = useState<string | null>(
+		null,
+	);
+	const synced = workspaceId !== null && activeId === workspaceId;
+
+	useEffect(() => {
+		if (pendingWorkspaceId !== null && activeId === pendingWorkspaceId) {
+			setPendingWorkspaceId(null);
+		}
+	}, [activeId, pendingWorkspaceId]);
 
 	useEffect(() => {
 		if (
 			options.syncActive !== true ||
 			workspaceId === null ||
-			activeQuery.isPending ||
-			activeId === workspaceId
+			activeId === workspaceId ||
+			pendingWorkspaceId === workspaceId
 		) {
 			return;
 		}
 
-		void authClient.organization.setActive({ organizationId: workspaceId });
-	}, [options.syncActive, activeQuery.isPending, activeId, workspaceId]);
+		setPendingWorkspaceId(workspaceId);
+		void authClient.organization
+			.setActive({ organizationId: workspaceId })
+			.then(() => router.refresh())
+			.catch(() => setPendingWorkspaceId(null));
+	}, [options.syncActive, activeId, pendingWorkspaceId, workspaceId, router]);
 
 	return { synced };
 }

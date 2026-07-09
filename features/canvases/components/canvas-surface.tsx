@@ -15,13 +15,13 @@ import {
 	loadSnapshot,
 	Tldraw,
 } from "tldraw";
+import { useCurrentUser } from "@/components/app-session-provider";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
 	getCanvasQueryOptions,
 	saveCanvasSnapshotMutationOptions,
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
-import { authClient } from "@/client/auth-client";
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
 import {
 	type CanvasCollabUser,
@@ -244,12 +244,12 @@ function CollabCanvasSurface({
 	const queryClient = useQueryClient();
 	const saveMutation = useMutation(saveCanvasSnapshotMutationOptions());
 	// Cursor identity shown to the other people on this canvas.
-	const session = authClient.useSession();
-	const collabUser: CanvasCollabUser | undefined = session.data
+	const currentUser = useCurrentUser();
+	const collabUser: CanvasCollabUser | undefined = currentUser
 		? {
-				id: session.data.user.id,
-				name: session.data.user.name || session.data.user.email || "Member",
-				color: cursorColorFor(session.data.user.id),
+				id: currentUser.id,
+				name: currentUser.name || currentUser.email || "Member",
+				color: cursorColorFor(currentUser.id),
 			}
 		: undefined;
 	const storeWithStatus = useCollabCanvasStore(room, snapshot, collabUser);

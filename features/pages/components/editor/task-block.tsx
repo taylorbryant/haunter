@@ -134,6 +134,7 @@ function TaskBlockView({
 			>
 				<AssigneePicker
 					value={shownAssignee === "" ? null : shownAssignee}
+					label={shownAssignee === "" ? null : "Assigned"}
 					disabled={readOnly}
 					onChange={(next) => update({ assignee: next ?? "" })}
 				/>

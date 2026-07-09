@@ -1,10 +1,13 @@
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
-import { headers } from "next/headers";
 import { makeQueryClient } from "@/client";
+import { listTasksQueryOptions } from "@/features/tasks/client/queries";
 import { TaskList } from "@/features/tasks/components/task-list";
-import { listTasks } from "@/features/tasks/contracts";
 import type { TaskFilter, TaskScope } from "@/features/tasks/schemas";
-import { createServerReactQuery } from "@/lib/server-react-query";
+import { listTasksUseCase } from "@/features/tasks/use-cases";
+import {
+	getAppRequestContext,
+	serverUseCaseQueryOptions,
+} from "@/lib/server-react-query";
 
 const TASK_PAGE_SIZE = 50;
 
@@ -29,21 +32,22 @@ export default async function TasksPage({
 	params: Promise<{ workspaceId: string }>;
 	searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-	const [{ workspaceId }, query, headerList] = await Promise.all([
+	const [{ workspaceId }, query, ctx] = await Promise.all([
 		params,
 		searchParams,
-		headers(),
+		getAppRequestContext(),
 	]);
 	const filter = readTaskFilter(readSingle(query.filter));
 	const scope = readTaskScope(readSingle(query.scope));
 	const queryClient = makeQueryClient();
-	const serverRq = createServerReactQuery(headerList);
 
 	await queryClient.prefetchQuery(
-		serverRq(listTasks).queryOptions({
-			path: { workspaceId },
-			query: { filter, scope, limit: TASK_PAGE_SIZE },
-		}),
+		serverUseCaseQueryOptions(
+			listTasksQueryOptions(workspaceId, filter, scope, TASK_PAGE_SIZE),
+			listTasksUseCase,
+			ctx,
+			{ workspaceId, filter, scope, limit: TASK_PAGE_SIZE },
+		),
 	);
 
 	return (

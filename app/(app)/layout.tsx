@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { makeQueryClient } from "@/client";
 import { ActiveWorkspaceHintProvider } from "@/components/active-workspace-provider";
+import { AppSessionProvider } from "@/components/app-session-provider";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppCommands } from "@/components/command-palette/app-commands";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
@@ -17,10 +18,17 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { getPage, listPages } from "@/features/pages/contracts";
+import {
+	getPageQueryOptions,
+	listPagesQueryOptions,
+} from "@/features/pages/client/queries";
+import { getPageUseCase, listPagesUseCase } from "@/features/pages/use-cases";
 import { hasAppAccessSession } from "@/lib/auth";
 import { auth } from "@/lib/better-auth";
-import { createServerReactQuery } from "@/lib/server-react-query";
+import {
+	getAppRequestContext,
+	serverUseCaseQueryOptions,
+} from "@/lib/server-react-query";
 import { ADMIN_ROLE } from "@/ports/auth";
 
 function routeIds(path: string | null) {
@@ -30,8 +38,12 @@ function routeIds(path: string | null) {
 }
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-	const headerList = await headers();
-	const session = await auth.api.getSession({ headers: headerList });
+	const [headerList, cookieStore, ctx] = await Promise.all([
+		headers(),
+		cookies(),
+		getAppRequestContext(),
+	]);
+	const session = ctx.auth;
 	const requestedPath = headerList.get("x-requested-path");
 
 	if (!session) {
@@ -48,24 +60,34 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 		redirect("/waitlist");
 	}
 
-	const cookieStore = await cookies();
 	const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
 	const isAdmin = session.user.role === ADMIN_ROLE;
+	const activeWorkspaceId = session.session?.activeOrganizationId ?? null;
 	const queryClient = makeQueryClient();
 	const { workspaceId, pageId } = routeIds(requestedPath);
+	const workspaces = await auth.api.listOrganizations({ headers: headerList });
 
-	if (workspaceId && session.session.activeOrganizationId === workspaceId) {
-		const serverRq = createServerReactQuery(headerList);
+	if (workspaceId && activeWorkspaceId === workspaceId) {
 		const prefetches = [
 			queryClient.prefetchQuery(
-				serverRq(listPages).queryOptions({ path: { workspaceId } }),
+				serverUseCaseQueryOptions(
+					listPagesQueryOptions(workspaceId),
+					listPagesUseCase,
+					ctx,
+					{ workspaceId },
+				),
 			),
 		];
 		if (pageId) {
 			prefetches.push(
 				queryClient.prefetchQuery(
-					serverRq(getPage).queryOptions({ path: { id: pageId } }),
+					serverUseCaseQueryOptions(
+						getPageQueryOptions(pageId),
+						getPageUseCase,
+						ctx,
+						{ id: pageId },
+					),
 				),
 			);
 		}
@@ -74,37 +96,54 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>
-			<ActiveWorkspaceHintProvider
-				value={session.session.activeOrganizationId ?? null}
+			<AppSessionProvider
+				value={{
+					user: {
+						id: session.user.id,
+						name: session.user.name ?? "",
+						email: session.user.email ?? "",
+						image: session.user.image ?? null,
+					},
+					activeWorkspaceId,
+					workspaceRole: ctx.membership?.role ?? null,
+					workspaces: workspaces.map((workspace) => ({
+						id: workspace.id,
+						name: workspace.name,
+						logo: workspace.logo ?? null,
+					})),
+					isAdmin,
+				}}
 			>
-				<CommandRegistryProvider>
-					<SidebarProvider defaultOpen={defaultOpen}>
-						<AppCommands isAdmin={isAdmin} />
-						<AppSidebar
-							user={{
-								name: session.user.name,
-								email: session.user.email,
-								image: session.user.image ?? null,
-							}}
-							isAdmin={isAdmin}
-						/>
-						<SidebarInset>
-							<header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-3 backdrop-blur-sm">
-								<SidebarTrigger />
-								<Separator
-									orientation="vertical"
-									className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-								/>
-								<HeaderBreadcrumbs />
-								<HeaderSaveIndicator />
-								<HeaderPresence />
-								<HeaderPageActions />
-							</header>
-							<div className="min-w-0 flex-1">{children}</div>
-						</SidebarInset>
-					</SidebarProvider>
-				</CommandRegistryProvider>
-			</ActiveWorkspaceHintProvider>
+				<ActiveWorkspaceHintProvider value={activeWorkspaceId}>
+					<CommandRegistryProvider>
+						<SidebarProvider defaultOpen={defaultOpen}>
+							<AppCommands isAdmin={isAdmin} />
+							<AppSidebar
+								user={{
+									name: session.user.name ?? "",
+									email: session.user.email ?? "",
+									image: session.user.image ?? null,
+								}}
+								isAdmin={isAdmin}
+							/>
+							<SidebarInset>
+								<header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-3 backdrop-blur-sm">
+									<SidebarTrigger />
+									<Separator
+										orientation="vertical"
+										className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+									/>
+									<HeaderBreadcrumbs />
+									<HeaderSaveIndicator />
+									<HeaderPresence />
+									<HeaderPageActions />
+								</header>
+								<div className="min-w-0 flex-1">{children}</div>
+							</SidebarInset>
+						</SidebarProvider>
+					</CommandRegistryProvider>
+				</ActiveWorkspaceHintProvider>
+			</AppSessionProvider>
 		</HydrationBoundary>
 	);
 }

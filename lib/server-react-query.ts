@@ -1,27 +1,35 @@
 import "server-only";
 
-import { createNextClient } from "@beignet/next";
-import { createReactQuery } from "@beignet/react-query";
+import type { QueryKey } from "@tanstack/react-query";
+import { cache } from "react";
+import type { AppContext } from "@/app-context";
+import { getServer } from "@/server";
 
-function requestBaseUrl(headers: Headers): string | undefined {
-	const host = headers.get("x-forwarded-host") ?? headers.get("host");
-	if (!host) return undefined;
-	const protocol =
-		headers.get("x-forwarded-proto") ??
-		(host.startsWith("localhost") || host.startsWith("127.0.0.1")
-			? "http"
-			: "https");
-	return `${protocol}://${host}`;
-}
+type UseCase<TInput, TOutput> = {
+	run(args: { ctx: AppContext; input: TInput }): Promise<TOutput>;
+};
 
-export function createServerReactQuery(headers: Headers) {
-	const cookie = headers.get("cookie");
-	const apiClient = createNextClient({
-		baseUrl: requestBaseUrl(headers),
-		headers: async (): Promise<Record<string, string>> =>
-			cookie ? { cookie } : {},
-		validateInput: true,
-	});
+type QueryOptionsLike = {
+	queryKey: QueryKey;
+};
 
-	return createReactQuery(apiClient);
+export const getAppRequestContext = cache(async () => {
+	const server = await getServer();
+	return server.createContextFromNext();
+});
+
+export function serverUseCaseQueryOptions<
+	TInput,
+	TOutput,
+	TOptions extends QueryOptionsLike,
+>(
+	options: TOptions,
+	useCase: UseCase<TInput, TOutput>,
+	ctx: AppContext,
+	input: TInput,
+): TOptions & { queryFn: () => Promise<TOutput> } {
+	return {
+		...options,
+		queryFn: () => useCase.run({ ctx, input }),
+	};
 }
