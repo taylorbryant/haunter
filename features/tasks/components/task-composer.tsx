@@ -157,6 +157,7 @@ export function TaskComposer({
 				<div className="flex items-center gap-1.5">
 					<AssigneePicker
 						value={assigneeId}
+						label={assigneeId ? "Assigned" : null}
 						onChange={(next) => {
 							setAssigneeTouched(true);
 							setAssigneeId(next);

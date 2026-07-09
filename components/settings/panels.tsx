@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { authClient } from "@/client/auth-client";
+import { useCurrentUser } from "@/components/app-session-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -66,13 +67,14 @@ type ProfileValues = {
 };
 
 export function ProfilePanel() {
-	const session = authClient.useSession();
+	const user = useCurrentUser();
 	const [saved, setSaved] = useState(false);
+	const [avatar, setAvatarValue] = useState(user?.image ?? null);
 	const form = useForm<ProfileValues>({
 		defaultValues: { name: "", email: "" },
 		values: {
-			name: session.data?.user.name ?? "",
-			email: session.data?.user.email ?? "",
+			name: user?.name ?? "",
+			email: user?.email ?? "",
 		},
 	});
 
@@ -92,7 +94,7 @@ export function ProfilePanel() {
 			return;
 		}
 
-		if (values.email !== session.data?.user.email) {
+		if (values.email !== user?.email) {
 			const changed = await authClient.changeEmail({ newEmail: values.email });
 			if (changed.error) {
 				form.setError(
@@ -106,17 +108,14 @@ export function ProfilePanel() {
 			}
 		}
 
-		await session.refetch();
 		setSaved(true);
 	});
-
-	const user = session.data?.user;
 
 	async function setAvatar(image: string | null) {
 		setSaved(false);
 		// Better Auth accepts null to clear the image.
 		await authClient.updateUser({ image: image as string | undefined });
-		await session.refetch();
+		setAvatarValue(image);
 	}
 
 	async function useGravatar() {
@@ -132,7 +131,7 @@ export function ProfilePanel() {
 			/>
 			<div className="flex items-center gap-4">
 				<Avatar className="size-14">
-					<AvatarImage src={user?.image ?? undefined} alt="" />
+					<AvatarImage src={avatar ?? undefined} alt="" />
 					<AvatarFallback className="text-base">
 						{(user?.name ?? "?").trim().slice(0, 2).toUpperCase() || "?"}
 					</AvatarFallback>
@@ -147,7 +146,7 @@ export function ProfilePanel() {
 						>
 							Use Gravatar
 						</Button>
-						{user?.image ? (
+						{avatar ? (
 							<Button
 								type="button"
 								variant="ghost"
@@ -271,8 +270,7 @@ export function AppearancePanel() {
 
 export function DeleteAccountPanel() {
 	const router = useRouter();
-	const session = authClient.useSession();
-	const email = session.data?.user.email ?? "";
+	const email = useCurrentUser()?.email ?? "";
 	const [confirm, setConfirm] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);

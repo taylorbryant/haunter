@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -20,6 +19,7 @@ import {
 	listTasksQueryOptions,
 	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
+import { TaskComposer } from "@/features/tasks/components/task-composer";
 import type {
 	TaskFilter,
 	TaskScope,
@@ -29,14 +29,6 @@ import { formatDueDateLabel } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
 const TASK_PAGE_SIZE = 50;
-
-const TaskComposer = dynamic(
-	() =>
-		import("@/features/tasks/components/task-composer").then(
-			(mod) => mod.TaskComposer,
-		),
-	{ ssr: false },
-);
 
 const FILTERS: { value: TaskFilter; label: string }[] = [
 	{ value: "open", label: "Open" },

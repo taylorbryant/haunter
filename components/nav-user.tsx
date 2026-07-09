@@ -8,11 +8,11 @@ import {
 	SettingsIcon,
 	SunIcon,
 } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { useCommand } from "@/components/command-palette/registry";
+import { SettingsDialog } from "@/components/settings-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,12 +40,6 @@ import {
 	useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-
-const SettingsDialog = dynamic(
-	() =>
-		import("@/components/settings-dialog").then((mod) => mod.SettingsDialog),
-	{ ssr: false },
-);
 
 const THEME_OPTIONS = [
 	{ value: "system", icon: MonitorIcon, label: "System" },

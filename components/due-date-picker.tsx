@@ -1,9 +1,9 @@
 "use client";
 
 import { CalendarIcon } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
 	Popover,
 	PopoverContent,
@@ -11,18 +11,6 @@ import {
 } from "@/components/ui/popover";
 import { formatDueDateLabel, parseIsoDate, toIsoDate } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
-
-const Calendar = dynamic(
-	() => import("@/components/ui/calendar").then((mod) => mod.Calendar),
-	{
-		ssr: false,
-		loading: () => (
-			<div className="flex h-72 w-72 items-center justify-center text-muted-foreground text-sm">
-				Loading…
-			</div>
-		),
-	},
-);
 
 /**
  * Due-date chip that opens a calendar. `value` is a `YYYY-MM-DD` string or
