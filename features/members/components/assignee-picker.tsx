@@ -3,6 +3,7 @@
 import { CircleUserRoundIcon } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { useCurrentUser } from "@/components/app-session-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
 	DropdownMenu,
@@ -14,22 +15,28 @@ import {
 import { cn } from "@/lib/utils";
 
 function initials(text: string) {
-	return text.trim().slice(0, 2).toUpperCase();
+	const parts = text.trim().split(/\s+/).filter(Boolean);
+	if (parts.length >= 2) {
+		return `${parts[0]?.[0] ?? ""}${parts[parts.length - 1]?.[0] ?? ""}`.toUpperCase();
+	}
+	return (parts[0] ?? "").slice(0, 2).toUpperCase();
 }
 
 function AssigneeChip({
 	label,
+	avatarLabel,
 	image,
 }: {
 	label: string | null;
+	avatarLabel?: string | null;
 	image?: string | null;
 }) {
 	return label ? (
 		<span className="flex items-center gap-1">
 			<Avatar className="size-4 rounded-full bg-primary/15 text-[9px] text-primary">
 				<AvatarImage src={image ?? undefined} alt="" />
-				<AvatarFallback className="bg-transparent text-inherit">
-					{initials(label)}
+				<AvatarFallback className="bg-transparent font-medium text-[8px] text-inherit leading-none">
+					{initials(avatarLabel || label)}
 				</AvatarFallback>
 			</Avatar>
 			<span className="max-w-24 truncate">{label}</span>
@@ -43,6 +50,7 @@ function AssigneeChip({
 }
 
 function ResolvedAssigneeChip({ value }: { value: string | null }) {
+	const currentUser = useCurrentUser();
 	const orgQuery = authClient.useActiveOrganization();
 	const members = orgQuery.data?.members ?? [];
 	const current = members.find((member) => member.userId === value) ?? null;
@@ -51,8 +59,16 @@ function ResolvedAssigneeChip({ value }: { value: string | null }) {
 		: value
 			? "Assigned"
 			: null;
+	const currentUserLabel =
+		value === currentUser?.id ? currentUser.name || currentUser.email : null;
 
-	return <AssigneeChip label={label} image={current?.user?.image ?? null} />;
+	return (
+		<AssigneeChip
+			label={label}
+			avatarLabel={currentUserLabel}
+			image={current?.user?.image ?? null}
+		/>
+	);
 }
 
 function AssigneePickerContent({
@@ -81,7 +97,7 @@ function AssigneePickerContent({
 					>
 						<Avatar className="size-5 rounded-full bg-primary/15 text-[10px] text-primary">
 							<AvatarImage src={member.user?.image ?? undefined} alt="" />
-							<AvatarFallback className="bg-transparent text-inherit">
+							<AvatarFallback className="bg-transparent font-medium text-[9px] text-inherit leading-none">
 								{initials(name)}
 							</AvatarFallback>
 						</Avatar>
@@ -126,13 +142,17 @@ export function AssigneePicker({
 	className?: string;
 }) {
 	const [open, setOpen] = useState(false);
+	const currentUser = useCurrentUser();
+	const currentUserLabel =
+		value === currentUser?.id ? currentUser.name || currentUser.email : null;
 	const chip =
 		label !== undefined ? (
-			<AssigneeChip label={label} />
+			<AssigneeChip label={label} avatarLabel={currentUserLabel} />
 		) : (
 			<ResolvedAssigneeChip value={value} />
 		);
-	const ariaLabel = label ?? (value ? "Assigned" : "Assign");
+	const ariaLabel =
+		currentUserLabel ?? label ?? (value ? "Assigned" : "Assign");
 
 	if (disabled) {
 		// Viewers: show who owns it, nothing clickable; hide when unassigned.
