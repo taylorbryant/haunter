@@ -2,7 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import {
+	type KeyboardEvent,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCollabSession } from "@/features/collab/client/session";
@@ -68,6 +74,16 @@ const ReadOnlyEditor = dynamic(() => import("./editor/read-only-editor"), {
 
 const TITLE_SAVE_DELAY_MS = 500;
 
+function normalizeTitleInput(value: string) {
+	return value.replace(/[\r\n]+/g, " ");
+}
+
+function resizeTitleTextarea(textarea: HTMLTextAreaElement | null) {
+	if (!textarea) return;
+	textarea.style.height = "0px";
+	textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
 export function PageEditor({ pageId }: { pageId: string }) {
 	const queryClient = useQueryClient();
 	const pageQuery = useQuery(getPageQueryOptions(pageId));
@@ -93,7 +109,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	);
 
 	const [title, setTitle] = useState<string | null>(null);
-	const titleInputRef = useRef<HTMLInputElement | null>(null);
+	const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const titleDraftRef = useRef<string | null>(null);
 	const titleSavePromiseRef = useRef<Promise<string | null> | null>(null);
@@ -138,6 +154,13 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		}, 1000);
 	}, [sharedTitle, queryClient]);
 
+	// Local typing wins while in flight; otherwise the shared live title;
+	// otherwise the database copy.
+	const shownTitle = title ?? sharedTitle ?? pageQuery.data?.title ?? "";
+	useLayoutEffect(() => {
+		resizeTitleTextarea(titleInputRef.current);
+	});
+
 	async function handleConflict() {
 		// Refetch first so the remounted editor initializes from the newer doc.
 		await invalidatePage(queryClient, pageId);
@@ -176,19 +199,17 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	}
 
 	const page = pageQuery.data;
-	// Local typing wins while in flight; otherwise the shared live title;
-	// otherwise the database copy.
-	const shownTitle = title ?? sharedTitle ?? page.title;
 
 	function handleTitleChange(next: string) {
-		setTitle(next);
-		titleDraftRef.current = next;
+		const normalized = normalizeTitleInput(next);
+		setTitle(normalized);
+		titleDraftRef.current = normalized;
 		// Collaborators see every keystroke; the database write is debounced.
-		pushTitle(next);
+		pushTitle(normalized);
 		if (titleTimeoutRef.current) clearTimeout(titleTimeoutRef.current);
 		titleTimeoutRef.current = setTimeout(() => {
 			titleTimeoutRef.current = null;
-			void saveTitle(next);
+			void saveTitle(normalized);
 		}, TITLE_SAVE_DELAY_MS);
 	}
 
@@ -242,9 +263,11 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		return pendingTitle !== null ? saveTitle(pendingTitle) : null;
 	}
 
-	function handleTitleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+	function handleTitleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+		if (event.key !== "Enter") return;
+
+		event.preventDefault();
 		if (
-			event.key !== "Enter" ||
 			event.shiftKey ||
 			event.metaKey ||
 			event.ctrlKey ||
@@ -253,8 +276,6 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		) {
 			return;
 		}
-
-		event.preventDefault();
 		setEditorFocusRequest((count) => count + 1);
 	}
 
@@ -273,13 +294,18 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					<PageIconButton pageId={pageId} icon={page.icon} />
 				</div>
 				<div className="mb-2 px-0 md:px-[54px]">
-					<input
+					<textarea
 						ref={titleInputRef}
-						className="keyboard-focus-ring w-full rounded-md border-none bg-transparent font-bold text-3xl outline-none placeholder:text-muted-foreground/60"
+						className="keyboard-focus-ring block max-h-none min-h-[2.25rem] w-full resize-none overflow-hidden rounded-md border-none bg-transparent font-bold text-3xl leading-tight outline-none placeholder:text-muted-foreground/60"
 						value={shownTitle}
 						placeholder="Untitled"
 						readOnly={readOnly}
-						onChange={(event) => handleTitleChange(event.target.value)}
+						rows={1}
+						wrap="soft"
+						onChange={(event) => {
+							handleTitleChange(event.target.value);
+							resizeTitleTextarea(event.currentTarget);
+						}}
 						onKeyDown={handleTitleKeyDown}
 						aria-label="Page title"
 					/>
