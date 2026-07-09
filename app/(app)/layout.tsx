@@ -11,7 +11,7 @@ import { HeaderPresence } from "@/components/header-presence";
 import { HeaderSaveIndicator } from "@/components/header-save-indicator";
 import { HeaderPageActions } from "@/components/header-page-actions";
 import { NotificationCenter } from "@/features/notifications/components/notification-center";
-import { NotificationTimezoneSync } from "@/features/notifications/components/notification-timezone-sync";
+import { NotificationTimezoneInitializer } from "@/features/notifications/components/notification-timezone-initializer";
 import { Separator } from "@/components/ui/separator";
 import {
 	SidebarInset,
@@ -65,7 +65,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 			}}
 		>
 			<ActiveWorkspaceHintProvider value={activeWorkspaceId}>
-				<NotificationTimezoneSync />
+				<NotificationTimezoneInitializer />
 				<CommandRegistryProvider>
 					<SidebarProvider defaultOpen={defaultOpen}>
 						<AppCommands isAdmin={isAdmin} />

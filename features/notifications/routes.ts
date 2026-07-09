@@ -3,6 +3,7 @@ import { defineRouteGroup } from "@beignet/next";
 import type { AppContext } from "@/app-context";
 import {
 	getNotificationSettings,
+	initializeNotificationTimezone,
 	listNotifications,
 	markAllNotificationsRead,
 	markNotificationRead,
@@ -13,6 +14,7 @@ import {
 } from "@/features/notifications/contracts";
 import {
 	getNotificationSettingsUseCase,
+	initializeNotificationTimezoneUseCase,
 	listNotificationsUseCase,
 	markAllNotificationsReadUseCase,
 	markNotificationReadUseCase,
@@ -38,6 +40,10 @@ export const notificationRoutes = defineRouteGroup<AppContext>()({
 		{
 			contract: updateNotificationSettings,
 			useCase: updateNotificationSettingsUseCase,
+		},
+		{
+			contract: initializeNotificationTimezone,
+			useCase: initializeNotificationTimezoneUseCase,
 		},
 		{ contract: subscribePush, useCase: subscribePushUseCase },
 		{ contract: unsubscribePush, useCase: unsubscribePushUseCase },

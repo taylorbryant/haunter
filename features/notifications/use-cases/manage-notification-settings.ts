@@ -2,6 +2,7 @@ import "@beignet/core/server-only";
 import { z } from "zod";
 import { appError } from "@/features/shared/errors";
 import {
+	InitializeNotificationTimezoneSchema,
 	isValidTimezone,
 	NotificationSettingsSchema,
 	UpdateNotificationPreferencesSchema,
@@ -10,7 +11,11 @@ import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 
 function withPushSettings(
-	preferences: { overdueTasksEnabled: boolean; timezone: string },
+	preferences: {
+		overdueTasksEnabled: boolean;
+		timezone: string;
+		timezoneConfigured: boolean;
+	},
 	push: { isConfigured(): boolean; publicKey(): string | null },
 ) {
 	return {
@@ -39,12 +44,28 @@ export const updateNotificationSettingsUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
 		if (input.timezone && !isValidTimezone(input.timezone)) {
-			throw appError("PushUnavailable", {
-				message: "Choose a valid timezone.",
-			});
+			throw appError("InvalidTimezone");
 		}
 		return withPushSettings(
 			await ctx.ports.notificationInbox.updatePreferences(user.id, input),
+			ctx.ports.webPush,
+		);
+	});
+
+export const initializeNotificationTimezoneUseCase = useCase
+	.command("notifications.initializeTimezone")
+	.input(InitializeNotificationTimezoneSchema)
+	.output(NotificationSettingsSchema)
+	.run(async ({ ctx, input }) => {
+		const user = requireUser(ctx);
+		if (!isValidTimezone(input.timezone)) {
+			throw appError("InvalidTimezone");
+		}
+		return withPushSettings(
+			await ctx.ports.notificationInbox.initializeTimezone(
+				user.id,
+				input.timezone,
+			),
 			ctx.ports.webPush,
 		);
 	});

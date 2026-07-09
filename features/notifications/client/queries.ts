@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
 	getNotificationSettings,
+	initializeNotificationTimezone,
 	listNotifications,
 	markAllNotificationsRead,
 	markNotificationRead,
@@ -28,6 +29,8 @@ export const markAllNotificationsReadMutationOptions = () =>
 	rq(markAllNotificationsRead).mutationOptions();
 export const updateNotificationSettingsMutationOptions = () =>
 	rq(updateNotificationSettings).mutationOptions();
+export const initializeNotificationTimezoneMutationOptions = () =>
+	rq(initializeNotificationTimezone).mutationOptions();
 export const subscribePushMutationOptions = () =>
 	rq(subscribePush).mutationOptions();
 export const unsubscribePushMutationOptions = () =>

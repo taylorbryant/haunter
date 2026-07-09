@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
 	ListNotificationsInputSchema,
 	ListNotificationsOutputSchema,
+	InitializeNotificationTimezoneSchema,
 	MarkNotificationsReadOutputSchema,
 	NotificationIdInputSchema,
 	NotificationSettingsSchema,
@@ -48,6 +49,13 @@ export const getNotificationSettings = notifications
 export const updateNotificationSettings = notifications
 	.patch("/api/notification-settings")
 	.body(UpdateNotificationPreferencesSchema)
+	.errors({ InvalidTimezone: errors.InvalidTimezone })
+	.responses({ 200: NotificationSettingsSchema });
+
+export const initializeNotificationTimezone = notifications
+	.post("/api/notification-settings/timezone/initialize")
+	.body(InitializeNotificationTimezoneSchema)
+	.errors({ InvalidTimezone: errors.InvalidTimezone })
 	.responses({ 200: NotificationSettingsSchema });
 
 export const subscribePush = notifications

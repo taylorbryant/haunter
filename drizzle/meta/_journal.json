@@ -141,6 +141,13 @@
 			"when": 1783626896714,
 			"tag": "0019_majestic_terrax",
 			"breakpoints": true
+		},
+		{
+			"idx": 20,
+			"version": "6",
+			"when": 1783631009575,
+			"tag": "0020_silky_dreadnoughts",
+			"breakpoints": true
 		}
 	]
 }

@@ -71,8 +71,13 @@ export function createDrizzleNotificationRepository(
 			? {
 					overdueTasksEnabled: row.overdueTasksEnabled,
 					timezone: row.timezone,
+					timezoneConfigured: row.timezoneConfigured,
 				}
-			: { overdueTasksEnabled: true, timezone: "UTC" };
+			: {
+					overdueTasksEnabled: true,
+					timezone: "UTC",
+					timezoneConfigured: false,
+				};
 	}
 
 	return {
@@ -185,7 +190,13 @@ export function createDrizzleNotificationRepository(
 		async updatePreferences(userId, input) {
 			const current = await readPreferences(userId);
 			const now = new Date().toISOString();
-			const values = { ...current, ...input };
+			const values = {
+				overdueTasksEnabled:
+					input.overdueTasksEnabled ?? current.overdueTasksEnabled,
+				timezone: input.timezone ?? current.timezone,
+				timezoneConfigured:
+					input.timezone === undefined ? current.timezoneConfigured : true,
+			};
 			const [row] = await db
 				.insert(schema.notificationPreferences)
 				.values({ userId, ...values, createdAt: now, updatedAt: now })
@@ -198,7 +209,33 @@ export function createDrizzleNotificationRepository(
 			return {
 				overdueTasksEnabled: row.overdueTasksEnabled,
 				timezone: row.timezone,
+				timezoneConfigured: row.timezoneConfigured,
 			};
+		},
+
+		async initializeTimezone(userId, timezone) {
+			const now = new Date().toISOString();
+			await db
+				.insert(schema.notificationPreferences)
+				.values({
+					userId,
+					overdueTasksEnabled: true,
+					timezone,
+					timezoneConfigured: true,
+					createdAt: now,
+					updatedAt: now,
+				})
+				.onConflictDoNothing();
+			await db
+				.update(schema.notificationPreferences)
+				.set({ timezone, timezoneConfigured: true, updatedAt: now })
+				.where(
+					and(
+						eq(schema.notificationPreferences.userId, userId),
+						eq(schema.notificationPreferences.timezoneConfigured, false),
+					),
+				);
+			return readPreferences(userId);
 		},
 
 		async findOverdueCandidates(cutoffDate, limit) {

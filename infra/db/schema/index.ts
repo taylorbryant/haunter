@@ -323,6 +323,9 @@ export const notificationPreferences = sqliteTable("notification_preferences", {
 		.notNull()
 		.default(true),
 	timezone: text("timezone").notNull().default("UTC"),
+	timezoneConfigured: integer("timezone_configured", { mode: "boolean" })
+		.notNull()
+		.default(false),
 	createdAt: text("created_at").notNull(),
 	updatedAt: text("updated_at").notNull(),
 });

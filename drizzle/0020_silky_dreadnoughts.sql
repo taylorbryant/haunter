@@ -1,0 +1,1 @@
+ALTER TABLE `notification_preferences` ADD `timezone_configured` integer DEFAULT false NOT NULL;

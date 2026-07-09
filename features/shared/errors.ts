@@ -51,6 +51,11 @@ export const errors = defineErrors({
 		status: 422,
 		message: "Push notifications are not available",
 	},
+	InvalidTimezone: {
+		code: "INVALID_TIMEZONE",
+		status: 422,
+		message: "Choose a valid timezone",
+	},
 	CanvasNotFound: {
 		code: "CANVAS_NOT_FOUND",
 		status: 404,

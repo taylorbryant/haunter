@@ -45,6 +45,7 @@ export const NotificationIdInputSchema = z.object({
 export const NotificationPreferencesSchema = z.object({
 	overdueTasksEnabled: z.boolean(),
 	timezone: z.string().min(1).max(100),
+	timezoneConfigured: z.boolean(),
 });
 export type NotificationPreferences = z.infer<
 	typeof NotificationPreferencesSchema
@@ -63,6 +64,10 @@ export const UpdateNotificationPreferencesSchema = z
 	.refine((value) => Object.keys(value).length > 0, {
 		message: "At least one notification preference is required.",
 	});
+
+export const InitializeNotificationTimezoneSchema = z.object({
+	timezone: z.string().min(1).max(100),
+});
 
 export const PushSubscriptionSchema = z.object({
 	endpoint: z.string().url().max(2048),

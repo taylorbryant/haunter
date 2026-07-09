@@ -3,29 +3,37 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import {
+	initializeNotificationTimezoneMutationOptions,
 	invalidateNotificationSettings,
 	notificationSettingsQueryOptions,
-	updateNotificationSettingsMutationOptions,
 } from "@/features/notifications/client/queries";
+import { getBrowserTimezone } from "@/features/notifications/client/timezone";
 
-export function NotificationTimezoneSync() {
+export function NotificationTimezoneInitializer() {
 	const queryClient = useQueryClient();
 	const settings = useQuery(notificationSettingsQueryOptions());
-	const updateSettings = useMutation(
-		updateNotificationSettingsMutationOptions(),
-	);
+	const initializeTimezone = useMutation({
+		...initializeNotificationTimezoneMutationOptions(),
+		retry: 2,
+	});
 	const attempted = useRef(false);
 
 	useEffect(() => {
-		if (!settings.data || attempted.current) return;
+		if (
+			!settings.data ||
+			settings.data.timezoneConfigured ||
+			attempted.current
+		) {
+			return;
+		}
 		attempted.current = true;
-		const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-		if (!timezone || timezone === settings.data.timezone) return;
-		updateSettings.mutate(
+		const timezone = getBrowserTimezone();
+		if (!timezone) return;
+		initializeTimezone.mutate(
 			{ body: { timezone } },
 			{ onSuccess: () => invalidateNotificationSettings(queryClient) },
 		);
-	}, [queryClient, settings.data, updateSettings]);
+	}, [initializeTimezone, queryClient, settings.data]);
 
 	return null;
 }

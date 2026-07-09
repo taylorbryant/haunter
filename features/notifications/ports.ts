@@ -10,6 +10,11 @@ export type NotificationCursor = {
 	id: string;
 };
 
+export type NotificationPreferencesUpdate = {
+	overdueTasksEnabled?: boolean;
+	timezone?: string;
+};
+
 export type OverdueTaskCandidate = TaskOverdueNotificationPayload & {
 	userId: string;
 	workspaceId: string;
@@ -38,7 +43,11 @@ export interface NotificationRepository {
 	getPreferences(userId: string): Promise<NotificationPreferences>;
 	updatePreferences(
 		userId: string,
-		input: Partial<NotificationPreferences>,
+		input: NotificationPreferencesUpdate,
+	): Promise<NotificationPreferences>;
+	initializeTimezone(
+		userId: string,
+		timezone: string,
 	): Promise<NotificationPreferences>;
 	findOverdueCandidates(
 		cutoffDate: string,

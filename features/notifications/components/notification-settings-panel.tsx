@@ -20,6 +20,7 @@ import {
 	pushAvailable,
 	serializePushSubscription,
 } from "@/features/notifications/client/push";
+import { getBrowserTimezone } from "@/features/notifications/client/timezone";
 
 type PushState = "checking" | "enabled" | "disabled" | "unavailable";
 
@@ -33,8 +34,13 @@ export function NotificationSettingsPanel() {
 	const unsubscribe = useMutation(unsubscribePushMutationOptions());
 	const testPush = useMutation(testPushMutationOptions());
 	const [pushState, setPushState] = useState<PushState>("checking");
+	const [browserTimezone, setBrowserTimezone] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 	const pending = subscribe.isPending || unsubscribe.isPending;
+
+	useEffect(() => {
+		setBrowserTimezone(getBrowserTimezone());
+	}, []);
 
 	useEffect(() => {
 		let active = true;
@@ -56,6 +62,24 @@ export function NotificationSettingsPanel() {
 			{ body: { overdueTasksEnabled: checked } },
 			{ onSuccess: () => invalidateNotificationSettings(queryClient) },
 		);
+	}
+
+	async function useCurrentTimezone() {
+		if (!browserTimezone) return;
+		setMessage(null);
+		try {
+			await updateSettings.mutateAsync({
+				body: { timezone: browserTimezone },
+			});
+			await invalidateNotificationSettings(queryClient);
+			setMessage(`Delivery timezone updated to ${browserTimezone}.`);
+		} catch (error) {
+			setMessage(
+				error instanceof Error
+					? error.message
+					: "Timezone could not be updated.",
+			);
+		}
 	}
 
 	async function updatePush(checked: boolean) {
@@ -121,6 +145,7 @@ export function NotificationSettingsPanel() {
 				<PanelHeader title="Notifications" />
 				<Skeleton className="h-16 w-full" />
 				<Skeleton className="h-16 w-full" />
+				<Skeleton className="h-16 w-full" />
 			</Panel>
 		);
 	}
@@ -154,6 +179,30 @@ export function NotificationSettingsPanel() {
 					onCheckedChange={updateOverdueTasks}
 				/>
 			</div>
+			<div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+				<div className="flex min-w-0 flex-col gap-0.5">
+					<p className="font-medium text-sm">Delivery timezone</p>
+					<p className="text-muted-foreground text-sm">
+						Overdue reminders arrive around 9:00 AM in{" "}
+						{value?.timezone ?? "UTC"}.
+					</p>
+				</div>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					className="shrink-0"
+					disabled={
+						!browserTimezone ||
+						updateSettings.isPending ||
+						(Boolean(value?.timezoneConfigured) &&
+							browserTimezone === value?.timezone)
+					}
+					onClick={useCurrentTimezone}
+				>
+					Use current timezone
+				</Button>
+			</div>
 			<div className="flex items-center justify-between gap-4">
 				<div className="flex min-w-0 flex-col gap-0.5">
 					<label
@@ -164,7 +213,7 @@ export function NotificationSettingsPanel() {
 					</label>
 					<p className="text-muted-foreground text-sm">
 						{pushSupported
-							? `Uses ${value?.timezone ?? "UTC"} for delivery.`
+							? "Receive overdue reminders when Haunter is closed."
 							: "Push is unavailable in this browser or installation."}
 					</p>
 				</div>
