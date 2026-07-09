@@ -52,6 +52,7 @@ import {
 	SidebarMenuAction,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	SidebarMenuSkeleton,
 	SidebarMenuSub,
 	useSidebar,
 } from "@/components/ui/sidebar";
@@ -625,7 +626,17 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			) : null}
 			<SidebarGroupContent>
 				{!synced || pagesQuery.isPending ? (
-					<p className="px-2 text-sidebar-foreground/50 text-xs">Loading…</p>
+					<div aria-busy="true" aria-live="polite" className="py-1">
+						<span className="sr-only">Loading pages</span>
+						{[0, 1, 2, 3].map((index) => (
+							<SidebarMenuSkeleton
+								key={index}
+								showIcon
+								className="opacity-70"
+								aria-hidden="true"
+							/>
+						))}
+					</div>
 				) : tree.length === 0 ? (
 					<p className="px-2 text-sidebar-foreground/50 text-xs">
 						{canEdit ? "No pages yet. Create one." : "No pages yet."}
