@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { use } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 
 /**
@@ -27,7 +28,27 @@ export default function WorkspaceLayout({
 	const { workspaceId } = use(params);
 	const { synced } = useWorkspaceRouteSync(workspaceId, { syncActive: true });
 
-	if (!synced) return null;
+	if (!synced) return <WorkspaceSyncFallback />;
 
 	return <>{children}</>;
+}
+
+function WorkspaceSyncFallback() {
+	return (
+		<div
+			className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-10"
+			aria-hidden
+		>
+			<div className="mb-6 px-0 md:px-[54px]">
+				<Skeleton className="h-8 w-1/2 max-w-xs" />
+			</div>
+			<div className="flex flex-col gap-3 px-0 md:px-[54px]">
+				<Skeleton className="h-4 w-11/12" />
+				<Skeleton className="h-4 w-4/5" />
+				<Skeleton className="h-4 w-full" />
+				<Skeleton className="mt-5 h-4 w-3/4" />
+				<Skeleton className="h-4 w-2/5" />
+			</div>
+		</div>
+	);
 }

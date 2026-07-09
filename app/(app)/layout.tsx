@@ -18,9 +18,7 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/ui/sidebar";
-import {
-	listPagesQueryOptions,
-} from "@/features/pages/client/queries";
+import { listPagesQueryOptions } from "@/features/pages/client/queries";
 import { listPagesUseCase } from "@/features/pages/use-cases";
 import { hasAppAccessSession } from "@/lib/auth";
 import { auth } from "@/lib/better-auth";

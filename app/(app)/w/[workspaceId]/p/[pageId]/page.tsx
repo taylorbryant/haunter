@@ -1,4 +1,6 @@
+import { isAppError } from "@beignet/core/errors";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { notFound } from "next/navigation";
 import { makeQueryClient } from "@/client";
 import { getPageQueryOptions } from "@/features/pages/client/queries";
 import { PageEditor } from "@/features/pages/components/page-editor";
@@ -21,14 +23,24 @@ export default async function PagePage({
 	const activeWorkspaceId = ctx.auth?.session?.activeOrganizationId ?? null;
 
 	if (activeWorkspaceId === workspaceId) {
-		await queryClient.prefetchQuery(
-			serverUseCaseQueryOptions(
-				getPageQueryOptions(pageId),
-				getPageUseCase,
-				ctx,
-				{ id: pageId },
-			),
-		);
+		try {
+			const page = await queryClient.fetchQuery(
+				serverUseCaseQueryOptions(
+					getPageQueryOptions(pageId),
+					getPageUseCase,
+					ctx,
+					{ id: pageId },
+				),
+			);
+			if (page.workspaceId !== workspaceId) {
+				notFound();
+			}
+		} catch (error) {
+			if (isAppError(error) && error.code === "PAGE_NOT_FOUND") {
+				notFound();
+			}
+			throw error;
+		}
 	}
 
 	return (
