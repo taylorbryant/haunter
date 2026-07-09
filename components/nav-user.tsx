@@ -219,9 +219,7 @@ export function NavUser({
 						</DropdownMenuContent>
 					</DropdownMenu>
 				)}
-				{settingsOpen ? (
-					<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-				) : null}
+				<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 			</SidebarMenuItem>
 		</SidebarMenu>
 	);
