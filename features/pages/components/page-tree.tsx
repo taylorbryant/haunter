@@ -59,6 +59,7 @@ import { useCanEditWorkspace } from "@/features/members/client/use-workspace-rol
 import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
+	getPageQueryOptions,
 	invalidatePages,
 	invalidateTrash,
 	listPagesQueryOptions,
@@ -257,6 +258,14 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		);
 	}
 
+	const prefetchPage = useCallback(
+		(pageId: string) => {
+			if (pageId === activePageId) return;
+			void queryClient.prefetchQuery(getPageQueryOptions(pageId));
+		},
+		[activePageId, queryClient],
+	);
+
 	function siblingsOf(parentId: string | null): TreeNode[] {
 		return parentId === null ? tree : (nodesById.get(parentId)?.children ?? []);
 	}
@@ -415,6 +424,9 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							render={
 								<Link
 									href={`/w/${workspaceId}/p/${node.id}`}
+									onFocus={() => prefetchPage(node.id)}
+									onPointerDown={() => prefetchPage(node.id)}
+									onPointerEnter={() => prefetchPage(node.id)}
 									// On mobile, tapping a page navigates and closes the
 									// sidebar sheet so the page is visible immediately.
 									onClick={() => {
