@@ -41,6 +41,16 @@ export const errors = defineErrors({
 		status: 422,
 		message: "This task lives in a page; edit it in the editor",
 	},
+	NotificationNotFound: {
+		code: "NOTIFICATION_NOT_FOUND",
+		status: 404,
+		message: "Notification not found",
+	},
+	PushUnavailable: {
+		code: "PUSH_UNAVAILABLE",
+		status: 422,
+		message: "Push notifications are not available",
+	},
 	CanvasNotFound: {
 		code: "CANVAS_NOT_FOUND",
 		status: 404,

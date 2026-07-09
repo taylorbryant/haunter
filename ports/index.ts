@@ -15,6 +15,10 @@ import type { AgentAdminRepository } from "@/features/agents/ports";
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import type { MemberRepository } from "@/features/members/ports";
+import type {
+	NotificationRepository,
+	WebPushPort,
+} from "@/features/notifications/ports";
 import type { pagePolicy } from "@/features/pages/policy";
 import type {
 	PageLinkRepository,
@@ -39,6 +43,7 @@ export type AppTransactionPorts = {
 	canvases: CanvasRepository;
 	idempotency: IdempotencyPort;
 	members: MemberRepository;
+	notificationInbox: NotificationRepository;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
 	pageVersions: PageVersionRepository;
@@ -58,6 +63,8 @@ export type AppPorts = {
 	idempotency: IdempotencyPort;
 	logger: LoggerPort;
 	members: MemberRepository;
+	notificationInbox: NotificationRepository;
+	notifications: import("@beignet/core/notifications").NotificationPort;
 	mailer: MailerPort;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
@@ -68,4 +75,5 @@ export type AppPorts = {
 	tasks: TaskRepository;
 	uow: UnitOfWorkPort<AppTransactionPorts>;
 	storage: StoragePort;
+	webPush: WebPushPort;
 };

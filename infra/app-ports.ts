@@ -37,6 +37,8 @@ export const appPorts = definePorts<AppPorts>()({
 		"logger",
 		"mailer",
 		"members",
+		"notificationInbox",
+		"notifications",
 		"pageLinks",
 		"pages",
 		"pageVersions",
@@ -46,5 +48,6 @@ export const appPorts = definePorts<AppPorts>()({
 		"tasks",
 		"uow",
 		"storage",
+		"webPush",
 	],
 });

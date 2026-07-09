@@ -27,6 +27,13 @@ export const env = createEnv({
 			.enum(["development", "test", "production"])
 			.default("development"),
 		APP_URL: z.string().url().default("http://localhost:3000"),
+		CRON_SECRET: z.string().min(1).optional(),
+		WEB_PUSH_PUBLIC_KEY: z.string().min(1).optional(),
+		WEB_PUSH_PRIVATE_KEY: z.string().min(1).optional(),
+		WEB_PUSH_SUBJECT: z
+			.string()
+			.regex(/^(mailto:|https:\/\/)/)
+			.default("mailto:notifications@haunter.app"),
 		DEVTOOLS_ENABLED: BooleanEnv.optional(),
 		BETTER_AUTH_SECRET: isProductionRuntime
 			? BetterAuthSecret

@@ -2,6 +2,7 @@
 
 import {
 	BotIcon,
+	BellIcon,
 	PaletteIcon,
 	Trash2Icon,
 	UserIcon,
@@ -39,6 +40,7 @@ import {
 	SidebarProvider,
 } from "@/components/ui/sidebar";
 import { AgentsPanel } from "@/features/agents/components/agents-panel";
+import { NotificationSettingsPanel } from "@/features/notifications/components/notification-settings-panel";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const SECTIONS = [
@@ -48,6 +50,12 @@ const SECTIONS = [
 		label: "Appearance",
 		icon: PaletteIcon,
 		panel: AppearancePanel,
+	},
+	{
+		id: "notifications",
+		label: "Notifications",
+		icon: BellIcon,
+		panel: NotificationSettingsPanel,
 	},
 	{
 		id: "agents",

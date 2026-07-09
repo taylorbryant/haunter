@@ -305,8 +305,94 @@ export const tasks = sqliteTable(
 			table.dueDate,
 			table.createdAt,
 		),
+		overdueNotificationIdx: index("tasks_overdue_notification_idx").on(
+			table.completed,
+			table.dueDate,
+			table.assigneeId,
+		),
 		pageIdx: index("tasks_page_idx").on(table.pageId),
 		userIdx: index("tasks_user_idx").on(table.userId),
+	}),
+);
+
+export const notificationPreferences = sqliteTable("notification_preferences", {
+	userId: text("user_id")
+		.primaryKey()
+		.references(() => user.id, { onDelete: "cascade" }),
+	overdueTasksEnabled: integer("overdue_tasks_enabled", { mode: "boolean" })
+		.notNull()
+		.default(true),
+	timezone: text("timezone").notNull().default("UTC"),
+	createdAt: text("created_at").notNull(),
+	updatedAt: text("updated_at").notNull(),
+});
+
+export const pushSubscriptions = sqliteTable(
+	"push_subscriptions",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		endpoint: text("endpoint").notNull(),
+		expirationTime: integer("expiration_time"),
+		p256dh: text("p256dh").notNull(),
+		auth: text("auth").notNull(),
+		createdAt: text("created_at").notNull(),
+		updatedAt: text("updated_at").notNull(),
+	},
+	(table) => ({
+		endpointIdx: uniqueIndex("push_subscriptions_endpoint_idx").on(
+			table.endpoint,
+		),
+		userIdx: index("push_subscriptions_user_idx").on(table.userId),
+	}),
+);
+
+export const notifications = sqliteTable(
+	"notifications",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		kind: text("kind").notNull(),
+		entityId: text("entity_id").notNull(),
+		entityVersion: text("entity_version").notNull(),
+		payload: text("payload").notNull(),
+		readAt: text("read_at"),
+		createdAt: text("created_at").notNull(),
+		pushState: text("push_state").notNull().default("pending"),
+		pushAttempts: integer("push_attempts").notNull().default(0),
+		pushNextAttemptAt: text("push_next_attempt_at"),
+		pushLeaseUntil: text("push_lease_until"),
+		pushDeliveredAt: text("push_delivered_at"),
+	},
+	(table) => ({
+		dedupeIdx: uniqueIndex("notifications_dedupe_idx").on(
+			table.userId,
+			table.kind,
+			table.entityId,
+			table.entityVersion,
+		),
+		userCreatedIdx: index("notifications_user_created_idx").on(
+			table.userId,
+			table.createdAt,
+			table.id,
+		),
+		userUnreadIdx: index("notifications_user_unread_idx").on(
+			table.userId,
+			table.readAt,
+			table.createdAt,
+		),
+		pushPendingIdx: index("notifications_push_pending_idx").on(
+			table.pushState,
+			table.pushNextAttemptAt,
+			table.pushLeaseUntil,
+		),
 	}),
 );
 

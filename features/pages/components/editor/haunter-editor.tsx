@@ -28,7 +28,7 @@ import {
 	LightbulbIcon,
 	PenToolIcon,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Awareness } from "y-protocols/awareness";
@@ -275,6 +275,7 @@ export default function HaunterEditor({
 }: HaunterEditorProps) {
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const queryClient = useQueryClient();
 	const isMobile = useIsMobile();
 	const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -355,6 +356,43 @@ export default function HaunterEditor({
 		if (!firstBlock) return;
 		focusBlockContentOnNextFrame(editor, firstBlock.id);
 	}, [editor, editable, focusRequest]);
+
+	const focusedNotificationBlockRef = useRef<string | null>(null);
+	const notificationBlockId = searchParams.get("block");
+	useEffect(() => {
+		if (
+			!notificationBlockId ||
+			focusedNotificationBlockRef.current === notificationBlockId
+		) {
+			return;
+		}
+		let attempts = 0;
+		let timeout: ReturnType<typeof setTimeout> | null = null;
+		const focus = () => {
+			if (!editor.getBlock(notificationBlockId)) {
+				attempts += 1;
+				if (attempts < 30) timeout = setTimeout(focus, 100);
+				return;
+			}
+			focusedNotificationBlockRef.current = notificationBlockId;
+			requestAnimationFrame(() => {
+				const element = Array.from(
+					document.querySelectorAll<HTMLElement>("[data-id]"),
+				).find((candidate) => candidate.dataset.id === notificationBlockId);
+				element?.scrollIntoView({ behavior: "smooth", block: "center" });
+				if (editable) focusBlockContentOnNextFrame(editor, notificationBlockId);
+			});
+
+			// The query parameter is an arrival instruction, not persistent page state.
+			const url = new URL(window.location.href);
+			url.searchParams.delete("block");
+			window.history.replaceState(window.history.state, "", url);
+		};
+		focus();
+		return () => {
+			if (timeout) clearTimeout(timeout);
+		};
+	}, [editor, editable, notificationBlockId]);
 
 	const saveMutation = useMutation(savePageContentMutationOptions());
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

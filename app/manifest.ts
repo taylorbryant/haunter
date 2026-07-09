@@ -4,6 +4,7 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
 	return {
 		name: "Haunter",
+		id: "/",
 		short_name: "Haunter",
 		description: "Personal notes: pages, tasks, code, and canvases.",
 		start_url: "/",

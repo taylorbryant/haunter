@@ -31,6 +31,7 @@ export const starterDatabaseProvider = createProvider<{
 			| "canvases"
 			| "idempotency"
 			| "members"
+			| "notificationInbox"
 			| "pageLinks"
 			| "pages"
 			| "pageVersions"
