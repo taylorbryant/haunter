@@ -1,19 +1,13 @@
 "use client";
 
 import {
-	CheckIcon,
 	ListTodoIcon,
 	PlusIcon,
 	ShieldCheckIcon,
 	Trash2Icon,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { authClient } from "@/client/auth-client";
-import { useAppSession } from "@/components/app-session-provider";
-import {
-	CommandRegistration,
-	useCommand,
-} from "@/components/command-palette/registry";
+import { useCommand } from "@/components/command-palette/registry";
 
 /**
  * Registers the always-available palette commands — navigation and workspace
@@ -24,7 +18,6 @@ export function AppCommands({ isAdmin }: { isAdmin: boolean }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
-	const workspaces = useAppSession()?.workspaces ?? [];
 
 	useCommand(
 		workspaceId
@@ -74,28 +67,5 @@ export function AppCommands({ isAdmin }: { isAdmin: boolean }) {
 		},
 	);
 
-	return (
-		<>
-			{workspaces.map((workspace) => (
-				<CommandRegistration
-					key={workspace.id}
-					command={{
-						id: `workspace.switch.${workspace.id}`,
-						title: `Switch to ${workspace.name}`,
-						group: "Switch workspace",
-						keywords: "workspace organization",
-						icon: workspace.id === workspaceId ? CheckIcon : undefined,
-						run: async () => {
-							if (workspace.id !== workspaceId) {
-								await authClient.organization.setActive({
-									organizationId: workspace.id,
-								});
-							}
-							router.push(`/w/${workspace.id}`);
-						},
-					}}
-				/>
-			))}
-		</>
-	);
+	return null;
 }

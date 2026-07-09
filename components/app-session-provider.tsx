@@ -9,17 +9,10 @@ export type AppSessionUser = {
 	image: string | null;
 };
 
-export type AppWorkspaceSummary = {
-	id: string;
-	name: string;
-	logo: string | null;
-};
-
 export type AppSessionValue = {
 	user: AppSessionUser;
 	activeWorkspaceId: string | null;
 	workspaceRole: string | null;
-	workspaces: AppWorkspaceSummary[];
 	isAdmin: boolean;
 };
 

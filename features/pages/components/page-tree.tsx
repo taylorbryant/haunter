@@ -88,6 +88,12 @@ const PageIconPanel = dynamic(
 );
 
 type TreeNode = PageMeta & { children: TreeNode[] };
+const PAGE_TREE_SKELETON_ROWS = [
+	"page-tree-a",
+	"page-tree-b",
+	"page-tree-c",
+	"page-tree-d",
+];
 
 function buildTree(pages: PageMeta[]): TreeNode[] {
 	const nodes = new Map<string, TreeNode>(
@@ -628,9 +634,9 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 				{!synced || pagesQuery.isPending ? (
 					<div aria-busy="true" aria-live="polite" className="py-1">
 						<span className="sr-only">Loading pages</span>
-						{[0, 1, 2, 3].map((index) => (
+						{PAGE_TREE_SKELETON_ROWS.map((id) => (
 							<SidebarMenuSkeleton
-								key={index}
+								key={id}
 								showIcon
 								className="opacity-70"
 								aria-hidden="true"
