@@ -673,5 +673,36 @@ describe("task assignment", () => {
 		);
 		expect(firstPage.items).toHaveLength(1);
 		expect(firstPage.hasMore).toBe(true);
+
+		await tester.run(
+			createTaskUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "Due today",
+				dueDate: "2026-07-09",
+			},
+			{ ctx },
+		);
+		await tester.run(
+			createTaskUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "Due later",
+				dueDate: "2026-07-10",
+			},
+			{ ctx },
+		);
+
+		const dueToday = await tester.run(
+			listTasksUseCase,
+			{
+				workspaceId: workspace.id,
+				filter: "open",
+				scope: "mine",
+				dueOnOrBefore: "2026-07-09",
+			},
+			{ ctx },
+		);
+		expect(dueToday.items.map((item) => item.title)).toEqual(["Due today"]);
 	});
 });

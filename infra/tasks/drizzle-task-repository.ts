@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import type {
 	ListTasksOptions,
 	NewTask,
@@ -51,6 +51,9 @@ export function createDrizzleTaskRepository(
 			}
 			if (options.assigneeId) {
 				conditions.push(eq(schema.tasks.assigneeId, options.assigneeId));
+			}
+			if (options.dueOnOrBefore) {
+				conditions.push(lte(schema.tasks.dueDate, options.dueOnOrBefore));
 			}
 
 			let query = db

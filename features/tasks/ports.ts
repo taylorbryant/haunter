@@ -22,6 +22,7 @@ export type UpdateTaskData = {
 
 export type ListTasksOptions = {
 	assigneeId?: string;
+	dueOnOrBefore?: string;
 	limit?: number;
 };
 

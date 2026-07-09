@@ -40,6 +40,9 @@ export function createTestTaskRepository(options?: {
 						matches(task, filter) &&
 						(!listOptions.assigneeId ||
 							task.assigneeId === listOptions.assigneeId) &&
+						(!listOptions.dueOnOrBefore ||
+							(task.dueDate !== null &&
+								task.dueDate <= listOptions.dueOnOrBefore)) &&
 						(task.pageId === null || !trashedPageIds.has(task.pageId)),
 				)
 				.sort((left, right) => {

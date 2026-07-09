@@ -3,6 +3,7 @@ import { z } from "zod";
 import { errors } from "@/features/shared/errors";
 import {
 	CreateTaskInputSchema,
+	DueDateSchema,
 	ListTasksOutputSchema,
 	TaskFilterSchema,
 	TaskIdInputSchema,
@@ -31,6 +32,7 @@ export const listTasks = tasks
 		z.object({
 			filter: TaskFilterSchema.optional(),
 			scope: TaskScopeSchema.optional(),
+			dueOnOrBefore: DueDateSchema.optional(),
 			limit: z.coerce.number().int().min(1).max(200).optional(),
 		}),
 	)

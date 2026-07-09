@@ -174,7 +174,7 @@ export function WorkspaceSwitcher({
 	async function switchTo(id: string) {
 		if (id === activeWorkspaceId) return;
 		await authClient.organization.setActive({ organizationId: id });
-		router.push(`/w/${id}`);
+		router.push(`/w/${id}/today`);
 	}
 
 	async function create() {
@@ -194,7 +194,7 @@ export function WorkspaceSwitcher({
 		setBusy(false);
 		setName("");
 		setDialogOpen(false);
-		router.push(`/w/${data.id}`);
+		router.push(`/w/${data.id}/today`);
 	}
 
 	async function saveEdit() {
@@ -224,7 +224,7 @@ export function WorkspaceSwitcher({
 		const next = workspaces.find((w) => w.id !== deletedId);
 		if (next) {
 			await authClient.organization.setActive({ organizationId: next.id });
-			router.push(`/w/${next.id}`);
+			router.push(`/w/${next.id}/today`);
 		} else {
 			router.push("/");
 		}

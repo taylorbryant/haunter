@@ -16,6 +16,7 @@ export const listTasksUseCase = useCase
 			input.filter,
 			{
 				assigneeId: input.scope === "mine" ? user.id : undefined,
+				dueOnOrBefore: input.dueOnOrBefore,
 				limit: input.limit + 1,
 			},
 		);

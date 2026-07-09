@@ -13,11 +13,12 @@ export function listTasksQueryOptions(
 	filter: TaskFilter,
 	scope: TaskScope = "everyone",
 	limit = 50,
+	options: { dueOnOrBefore?: string } = {},
 ) {
 	return {
 		...rq(listTasks).queryOptions({
 			path: { workspaceId },
-			query: { filter, scope, limit },
+			query: { filter, scope, limit, ...options },
 		}),
 		// Shared workspaces: pick up other members' changes without a manual
 		// reload. Paused automatically while the tab is in the background.

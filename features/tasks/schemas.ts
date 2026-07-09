@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const DueDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
+export const DueDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
 	message: "Due date must be YYYY-MM-DD",
 });
 
@@ -37,6 +37,7 @@ export const ListTasksInputSchema = z.object({
 	workspaceId: z.string().min(1),
 	filter: TaskFilterSchema,
 	scope: TaskScopeSchema,
+	dueOnOrBefore: DueDateSchema.optional(),
 	limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 

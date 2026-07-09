@@ -53,11 +53,13 @@ export function HeaderBreadcrumbs() {
 		return null;
 	}
 
-	const section = pathname.endsWith("/tasks")
-		? "Tasks"
-		: pathname.endsWith("/trash")
-			? "Trash"
-			: null;
+	const section = pathname.endsWith("/today")
+		? "Today"
+		: pathname.endsWith("/tasks")
+			? "Tasks"
+			: pathname.endsWith("/trash")
+				? "Trash"
+				: null;
 	const trail = pageId ? pageTrail(pagesQuery.data?.items ?? [], pageId) : [];
 	const leafId = section ?? trail[trail.length - 1]?.id ?? null;
 

@@ -1,6 +1,11 @@
 "use client";
 
-import { ListTodoIcon, ShieldCheckIcon, Trash2Icon } from "lucide-react";
+import {
+	ListTodoIcon,
+	ShieldCheckIcon,
+	SunIcon,
+	Trash2Icon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NavUser } from "@/components/nav-user";
@@ -43,6 +48,26 @@ export function AppSidebar({
 				<WorkspaceSwitcher activeWorkspaceId={activeWorkspaceId} />
 				<SidebarMenu>
 					<SearchCommand />
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							render={
+								<Link
+									href={
+										activeWorkspaceId ? `/w/${activeWorkspaceId}/today` : "/"
+									}
+									onClick={closeSheetOnMobile}
+								/>
+							}
+							isActive={
+								activeWorkspaceId !== null &&
+								pathname === `/w/${activeWorkspaceId}/today`
+							}
+							tooltip="Today"
+						>
+							<SunIcon />
+							<span>Today</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							render={

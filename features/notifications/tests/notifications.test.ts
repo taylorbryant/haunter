@@ -6,10 +6,8 @@ import type {
 } from "@/features/notifications/ports";
 import type { Notification } from "@/features/notifications/schemas";
 import { isValidTimezone } from "@/features/notifications/schemas";
-import {
-	localDateAndHour,
-	processOverdueNotifications,
-} from "@/features/tasks/schedules/check-overdue";
+import { processOverdueNotifications } from "@/features/tasks/schedules/check-overdue";
+import { localDateAndHour } from "@/lib/timezone";
 
 const USER_ID = "user_test";
 const WORKSPACE_ID = "workspace_test";

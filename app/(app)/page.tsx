@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/better-auth";
 
 /**
- * The homepage is My Tasks: send the user to their workspace's task list in
+ * The homepage is Today: send the user to their workspace's daily view in
  * ONE server-side hop. This used to be a client component that fetched the
  * org list, POSTed set-active, and then client-redirected — three serial
  * round trips of blank screen on every cold load (worst on mobile).
@@ -24,7 +24,7 @@ export default async function HomePage() {
 	const target =
 		organizations.find((org) => org.id === activeId) ?? organizations[0];
 	if (target) {
-		redirect(`/w/${target.id}/tasks`);
+		redirect(`/w/${target.id}/today`);
 	}
 
 	return (

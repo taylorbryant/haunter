@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarIcon, XIcon } from "lucide-react";
+import { CalendarIcon, PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -47,6 +47,8 @@ export function TaskComposer({
 	currentUserId,
 	onSubmit,
 	onCancel,
+	defaultDueDate = null,
+	mode = "full",
 }: {
 	currentUserId: string | null;
 	onSubmit: (input: {
@@ -54,11 +56,15 @@ export function TaskComposer({
 		dueDate: string | null;
 		assigneeId?: string | null;
 	}) => Promise<boolean>;
-	onCancel: () => void;
+	onCancel?: () => void;
+	defaultDueDate?: string | null;
+	mode?: "full" | "compact";
 }) {
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [text, setText] = useState("");
-	const [manualDate, setManualDate] = useState<string | null>(null);
+	// Undefined means untouched, so a parsed phrase can override the contextual
+	// default. Null means the user explicitly cleared the date.
+	const [manualDate, setManualDate] = useState<string | null | undefined>();
 	// Set when the user dismisses a detected phrase so it stays dismissed.
 	const [ignoredMatchText, setIgnoredMatchText] = useState<string | null>(null);
 	const [assigneeId, setAssigneeId] = useState<string | null>(currentUserId);
@@ -76,7 +82,12 @@ export function TaskComposer({
 			? parsed.match
 			: null;
 	// A manually picked date wins over the parsed one.
-	const dueDate = manualDate ?? (activeMatch ? parsed.dueDate : null);
+	const dueDate =
+		manualDate !== undefined
+			? manualDate
+			: activeMatch
+				? parsed.dueDate
+				: defaultDueDate;
 	const title = activeMatch ? parsed.title : text.trim();
 
 	async function submit() {
@@ -94,7 +105,7 @@ export function TaskComposer({
 		setPending(false);
 		if (ok) {
 			setText("");
-			setManualDate(null);
+			setManualDate(undefined);
 			setIgnoredMatchText(null);
 			setAssigneeId(currentUserId);
 			setAssigneeTouched(false);
@@ -112,6 +123,57 @@ export function TaskComposer({
 		setManualDate(date ? toIsoDate(date) : null);
 		setPickerOpen(false);
 		inputRef.current?.focus();
+	}
+
+	if (mode === "compact") {
+		return (
+			<div className="flex min-w-0 items-center gap-2 border-b py-2">
+				<div className="relative min-w-0 flex-1">
+					{activeMatch ? (
+						<div
+							aria-hidden
+							className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre font-medium text-base text-foreground leading-6 sm:text-sm"
+						>
+							{text.slice(0, activeMatch.index)}
+							<span className="-mx-0.5 rounded-sm bg-primary/10 px-0.5 py-0.5">
+								{activeMatch.text}
+							</span>
+							{text.slice(activeMatch.index + activeMatch.text.length)}
+						</div>
+					) : null}
+					<input
+						ref={inputRef}
+						value={text}
+						placeholder="Add a task for today…"
+						aria-label="Add a task"
+						className={cn(
+							"keyboard-focus-ring relative w-full rounded-sm bg-transparent font-medium text-base leading-6 outline-none [--keyboard-focus-ring-size:2px] placeholder:text-muted-foreground sm:text-sm",
+							activeMatch && "text-transparent caret-foreground",
+						)}
+						onChange={(event) => setText(event.target.value)}
+						onKeyDown={(event) => {
+							if (event.key === "Enter") submit();
+						}}
+					/>
+				</div>
+				{dueDate ? (
+					<span className="hidden shrink-0 items-center gap-1 text-muted-foreground text-xs sm:flex">
+						<CalendarIcon className="size-3.5" aria-hidden="true" />
+						{dueDate === defaultDueDate ? "Today" : humanizeDueDate(dueDate)}
+					</span>
+				) : null}
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon-sm"
+					aria-label={pending ? "Adding task" : "Add task"}
+					disabled={!title || pending}
+					onClick={submit}
+				>
+					<PlusIcon />
+				</Button>
+			</div>
+		);
 	}
 
 	return (
@@ -138,8 +200,8 @@ export function TaskComposer({
 					) : null}
 					<input
 						ref={inputRef}
-						// biome-ignore lint/a11y/noAutofocus: the composer is opened by an explicit user action
-						autoFocus
+						// biome-ignore lint/a11y/noAutofocus: full composer opens after an explicit user action
+						autoFocus={mode === "full"}
 						value={text}
 						placeholder="Task name, e.g. “buy groceries tomorrow”"
 						aria-label="Task name"
@@ -150,7 +212,7 @@ export function TaskComposer({
 						onChange={(event) => setText(event.target.value)}
 						onKeyDown={(event) => {
 							if (event.key === "Enter") submit();
-							if (event.key === "Escape") onCancel();
+							if (event.key === "Escape") onCancel?.();
 						}}
 					/>
 				</div>
@@ -242,7 +304,12 @@ export function TaskComposer({
 			</div>
 			<Separator />
 			<div className="flex items-center justify-end gap-2 p-2">
-				<Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					onClick={() => onCancel?.()}
+				>
 					Cancel
 				</Button>
 				<Button
