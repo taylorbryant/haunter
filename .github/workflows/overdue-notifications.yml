@@ -12,10 +12,11 @@ jobs:
     steps:
       - name: Reconcile overdue notifications
         env:
+          HAUNTER_APP_URL: ${{ vars.APP_URL || 'https://haunter.app' }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           curl --fail-with-body --silent --show-error \
             --retry 2 --retry-all-errors \
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
-            https://haunter.app/api/cron/tasks/check-overdue
+            "${HAUNTER_APP_URL%/}/api/cron/tasks/check-overdue"

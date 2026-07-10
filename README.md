@@ -20,6 +20,8 @@ syntax-highlighted code/SQL blocks, and embedded tldraw canvases. Built on [Beig
   on every content save, keyed by the block's own id) and standalone quick-add
   tasks. Toggling a task in Tasks writes through to the source page
   document; toggling in the editor syncs on autosave.
+- **Notifications** surface assigned overdue tasks in-app after 9:00 AM in the
+  user's timezone, with optional Web Push for subscribed devices.
 - **Canvases** are tldraw documents embedded as blocks; snapshots persist
   per-canvas with a debounce, and the tldraw chunk loads only when a canvas
   block renders.
@@ -42,7 +44,10 @@ setting is ignored once an approved administrator exists.
 bun beignet db migrate
 ```
 
-The starter ships its initial Drizzle migration in `drizzle/`, so the first run only applies it. After you change `infra/db/schema/`, run `bun beignet db generate` and `bun beignet db migrate` together.
+The repository keeps every Drizzle migration in `drizzle/`; a clean database
+applies the full checked-in migration history, while an existing database only
+applies migrations it has not seen. After changing `infra/db/schema/`, run
+`bun beignet db generate` and `bun beignet db migrate` together.
 
 ## Start the app
 
@@ -73,12 +78,12 @@ the browser receives a session containing the new access status.
 bun beignet routes
 bun run lint
 bun beignet lint
-bun beignet doctor
+bun beignet doctor --strict
 bun run test
 bun run typecheck
 ```
 
-`routes` shows the contracts Beignet can inspect. `bun beignet lint` checks dependency direction. `doctor` catches route, OpenAPI, and resource drift.
+`routes` shows the contracts Beignet can inspect. `bun beignet lint` checks dependency direction. `doctor --strict` catches route, OpenAPI, and resource drift and treats warnings as failures.
 `bun run lint` runs Biome over the starter; use `bun run format` to apply formatting.
 
 ## Coding agents
@@ -106,7 +111,7 @@ bun run test
 bun run lint
 bun run typecheck
 bun beignet lint
-bun beignet doctor
+bun beignet doctor --strict
 ```
 
 `make feature` creates a contract-to-test vertical slice with Drizzle schema and repository files, so regenerate and migrate the database before running the app against the new feature.
@@ -114,10 +119,17 @@ Use `bun beignet make feature projects --recipe full-slice` when you want a rich
 
 ## App map
 
-- `features/workspaces/`, `features/pages/`, `features/tasks/`, and
-  `features/canvases/` are the four vertical slices. Each owns its
-  `contracts.ts`, `schemas.ts`, `ports.ts`, `policy.ts`, `use-cases/`,
-  `routes.ts`, `client/`, `components/`, and `tests/`.
+- `features/admin/`, `features/agents/`, `features/canvases/`,
+  `features/notifications/`, `features/pages/`, `features/shares/`,
+  `features/tasks/`, and `features/workspaces/` are server-backed product
+  slices. Each owns only the contracts, schemas, ports, policies, use cases,
+  routes, client helpers, components, workflows, and tests its behavior needs.
+- `features/collab/`, `features/members/`, `features/today/`, and
+  `features/waitlist/` are supporting slices that compose existing contracts,
+  provide focused ports or helpers, or own route-level UI. They intentionally
+  do not mirror a full server slice.
+- `features/shared/` contains the small cross-feature error and authorization
+  primitives; feature-specific behavior stays with its owning slice.
 - `features/pages/components/editor/schema.ts` is the single extension point
   for the block model (code block config, task block, canvas block). Future
   executable cells plug in here as a new block spec.
@@ -125,13 +137,12 @@ Use `bun beignet make feature projects --recipe full-slice` when you want a rich
   (`extract-task-blocks`, `patch-task-block`, `reconcile-page-tasks`) that keep
   task rows and page documents in sync. The reconciliation runs inside the
   `pages.saveContent` transaction.
-- `features/shared/errors.ts` keeps application errors together;
-  `features/shared/authorization.ts` owns the shared owner-check policy helper.
 - `ports/` defines app-owned dependencies (repositories, gate, auth).
 - `infra/` implements ports: one Drizzle repository per feature under
   `infra/<feature>/`, wired in `infra/db/repositories.ts`.
 - `infra/db/schema/` contains the Drizzle schema, `drizzle/` contains the checked-in migrations.
 - `server/routes.ts` keeps the central route registry and OpenAPI contract list.
+- `server/schedules.ts` and `server/tasks.ts` register operational workflows.
 - `server/context.ts` declares the context blueprint shared by the server and route tests.
 - `server/providers.ts` wires devtools, Better Auth, pino, Drizzle/libSQL, and the starter database provider.
 - `lib/env.ts` validates deployment configuration at startup.
@@ -142,6 +153,34 @@ Use `bun beignet make feature projects --recipe full-slice` when you want a rich
 - `client/` owns the typed API client, React Query helpers, and the Better Auth client.
 - `features/<feature>/client/` may own feature-specific data-fetching helpers and hooks.
 
+## Notification deployment
+
+The hourly workflow in `.github/workflows/overdue-notifications.yml` calls the
+protected overdue-task schedule. Configure these GitHub Actions values:
+
+- Repository secret `CRON_SECRET`: the same non-empty value as `CRON_SECRET`
+  in the deployed app.
+- Repository variable `APP_URL`: the deployed origin, such as
+  `https://haunter.example.com`. It defaults to `https://haunter.app` for this
+  repository.
+
+In-app overdue notifications are created by that schedule. To also deliver Web
+Push while Haunter is closed, generate a VAPID key pair and set all three
+values in the deployed app:
+
+```bash
+bunx web-push generate-vapid-keys
+```
+
+```env
+WEB_PUSH_PUBLIC_KEY=...
+WEB_PUSH_PRIVATE_KEY=...
+WEB_PUSH_SUBJECT=mailto:notifications@example.com
+```
+
+Without the VAPID configuration, the notification center still works and push
+delivery is skipped. Users enable push separately for each device in Settings.
+
 ## Before deploying
 
 - Keep `SQLITE_DB_URL=file:local.db` for local libSQL development or point it at a hosted libSQL database such as Turso.
@@ -149,6 +188,7 @@ Use `bun beignet make feature projects --recipe full-slice` when you want a rich
 - Run `bun beignet db reset` to rebuild a local SQLite database from the checked-in migrations.
 - Remove `DEVTOOLS_ENABLED=true` in production unless you add authentication and stricter redaction.
 - Set `APP_URL`, `BETTER_AUTH_SECRET`, `LOG_LEVEL`, and service-specific integration variables in your hosting environment.
+- Configure the notification schedule and VAPID values above if overdue reminders should run in production.
 - On a fresh installation, set `BOOTSTRAP_ADMIN_EMAIL` before the owner first signs in; leave it unset on established installations.
 - Set `BETTER_AUTH_TRUSTED_ORIGINS` before serving auth across multiple origins.
 - Review the starter authorization policy before exposing user-owned data.
