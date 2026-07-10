@@ -1,8 +1,9 @@
 import { ImageResponse } from "next/og";
 import { ghostSvgDataUri } from "@/lib/ghost-mark";
 
-// iOS home-screen icon. 180x180, opaque white (iOS ignores transparency and
-// rounds the corners itself). Next injects <link rel="apple-touch-icon">.
+// iOS home-screen icon. The high-luminance mark on an opaque graphite field
+// stays legible when iOS derives dark, tinted, and clear Home Screen variants.
+// iOS rounds the corners itself; Next injects <link rel="apple-touch-icon">.
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
@@ -16,11 +17,15 @@ export default function AppleIcon() {
 				height: "100%",
 				alignItems: "center",
 				justifyContent: "center",
-				background: "#ffffff",
+				background: "#171717",
 			}}
 		>
 			{/* biome-ignore lint/a11y/useAltText: satori img, not DOM */}
-			<img width={inner} height={inner} src={ghostSvgDataUri(inner)} />
+			<img
+				width={inner}
+				height={inner}
+				src={ghostSvgDataUri(inner, "#ffffff")}
+			/>
 		</div>,
 		{ ...size },
 	);
