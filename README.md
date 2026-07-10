@@ -1,22 +1,24 @@
 # Haunter <img src="app/icon.svg" alt="" width="28" height="28" align="top">
 
 A personal notes app — Notion-style nested pages and block editor, Todoist-style
-tasks that roll up into a per-workspace "My Tasks" view, syntax-highlighted
-code/SQL blocks, and embedded tldraw canvases. Built on [Beignet](https://beignetjs.com)
+tasks that roll up into a focused Today home and per-workspace Tasks view,
+syntax-highlighted code/SQL blocks, and embedded tldraw canvases. Built on [Beignet](https://beignetjs.com)
 (contract-first, scaffolded with `@beignet/cli`).
 
-![Haunter — a weekly page with tasks, an inline page mention, and a syntax-highlighted SQL block](docs/screenshot.png)
+![Haunter — the demo Start here page with navigation, task blocks, a callout, and syntax-highlighted SQL](docs/screenshot.png)
 
 ## Features
 
 - **Workspaces** separate work and personal notes; each has its own page tree
   and task list.
+- **Today** keeps overdue and due-today tasks beside recently edited pages in a
+  focused daily home.
 - **Pages** nest arbitrarily and are edited with a BlockNote editor
   (headings, lists, code blocks with shiki highlighting, tasks, canvases) that
   autosaves with a debounce.
 - **Tasks** exist two ways: task blocks inside pages (reconciled into task rows
   on every content save, keyed by the block's own id) and standalone quick-add
-  tasks. Toggling a task in My Tasks writes through to the source page
+  tasks. Toggling a task in Tasks writes through to the source page
   document; toggling in the editor syncs on autosave.
 - **Canvases** are tldraw documents embedded as blocks; snapshots persist
   per-canvas with a debounce, and the tldraw chunk loads only when a canvas
