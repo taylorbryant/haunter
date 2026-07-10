@@ -1,5 +1,5 @@
 import "@beignet/core/server-only";
-import { contractsFromRoutes, defineRoutes } from "@beignet/next";
+import { contractsFromRoutes, defineRoutes } from "@beignet/core/server";
 import type { AppContext } from "@/app-context";
 import { adminRoutes } from "@/features/admin/routes";
 import { agentRoutes } from "@/features/agents/routes";

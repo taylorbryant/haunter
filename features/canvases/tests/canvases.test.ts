@@ -4,7 +4,7 @@ import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestTenant,
 	createTestUserActor,
-} from "@beignet/core/ports/testing";
+} from "@beignet/core/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,

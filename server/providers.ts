@@ -3,11 +3,11 @@ import { createDevtoolsProvider } from "@beignet/devtools";
 import { createAuthBetterAuthProvider } from "@beignet/provider-auth-better-auth";
 import { createInlineNotificationsProvider } from "@beignet/core/notifications";
 import { createDrizzleSqliteProvider } from "@beignet/provider-db-drizzle/sqlite";
-import { pinoLoggerProvider } from "@beignet/provider-logger-pino";
-import { resendMailProvider } from "@beignet/provider-mail-resend";
-import { upstashRateLimitProvider } from "@beignet/provider-rate-limit-upstash";
+import { createPinoLoggerProvider } from "@beignet/provider-logger-pino";
+import { createResendMailProvider } from "@beignet/provider-mail-resend";
+import { createUpstashRateLimitProvider } from "@beignet/provider-rate-limit-upstash";
 import { createLocalStorageProvider } from "@beignet/provider-storage-local";
-import { vercelBlobStorageProvider } from "@beignet/provider-storage-vercel-blob";
+import { createVercelBlobStorageProvider } from "@beignet/provider-storage-vercel-blob";
 import { starterDatabaseProvider } from "@/infra/db/provider";
 import * as schema from "@/infra/db/schema";
 import { memoryRateLimitProvider } from "@/infra/rate-limit/memory-rate-limit-provider";
@@ -21,7 +21,7 @@ const drizzleSqliteProvider = createDrizzleSqliteProvider({ schema });
 export const providers = [
 	createDevtoolsProvider(),
 	createAuthBetterAuthProvider<AuthUser, AuthSessionMetadata>(auth),
-	pinoLoggerProvider,
+	createPinoLoggerProvider(),
 	drizzleSqliteProvider,
 	starterDatabaseProvider,
 	createInlineNotificationsProvider(),
@@ -29,12 +29,12 @@ export const providers = [
 	// Vercel Blob in deployed environments (local disk doesn't survive
 	// serverless); the local provider keeps dev working with zero setup.
 	env.BLOB_READ_WRITE_TOKEN
-		? vercelBlobStorageProvider
+		? createVercelBlobStorageProvider()
 		: createLocalStorageProvider(),
-	resendMailProvider,
+	createResendMailProvider(),
 	// Durable, shared rate limiting in deployed environments; the in-process
 	// limiter keeps dev and tests working without Upstash credentials.
 	env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN
-		? upstashRateLimitProvider
+		? createUpstashRateLimitProvider()
 		: memoryRateLimitProvider,
 ] as const;

@@ -1,5 +1,5 @@
 import "@beignet/core/server-only";
-import { defineRouteGroup } from "@beignet/next";
+import { defineRouteGroup } from "@beignet/core/server";
 import type { AppContext } from "@/app-context";
 import { onboard } from "@/features/workspaces/contracts";
 import { onboardUserUseCase } from "@/features/workspaces/use-cases";

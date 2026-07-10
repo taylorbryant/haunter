@@ -3,7 +3,7 @@ import { createUseCaseTester } from "@beignet/core/application";
 import {
 	createTestTenant,
 	createTestUserActor,
-} from "@beignet/core/ports/testing";
+} from "@beignet/core/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
