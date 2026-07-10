@@ -65,12 +65,18 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 			<ul className="flex flex-col divide-y">
 				{items.map((page) => (
 					<li key={page.id} className="flex items-center gap-3 py-2">
-						<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+						{page.icon ? (
+							<span
+								className="flex size-4 shrink-0 items-center justify-center"
+								aria-hidden="true"
+							>
+								{page.icon}
+							</span>
+						) : (
+							<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+						)}
 						<div className="min-w-0 flex-1">
-							<p className="truncate text-sm">
-								{page.icon ? `${page.icon} ` : ""}
-								{page.title || "Untitled"}
-							</p>
+							<p className="truncate text-sm">{page.title || "Untitled"}</p>
 							{page.deletedAt ? (
 								<p className="text-muted-foreground text-xs">
 									Deleted {new Date(page.deletedAt).toLocaleString()}

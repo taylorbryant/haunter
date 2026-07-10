@@ -26,9 +26,17 @@ export function Backlinks({ pageId }: { pageId: string }) {
 							href={`/w/${item.workspaceId}/p/${item.id}`}
 							className="flex items-center gap-1.5 rounded px-1 py-1 text-sm hover:bg-muted"
 						>
-							<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+							{item.icon ? (
+								<span
+									className="flex size-4 shrink-0 items-center justify-center"
+									aria-hidden="true"
+								>
+									{item.icon}
+								</span>
+							) : (
+								<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+							)}
 							<span className="truncate font-medium underline decoration-muted-foreground/40 underline-offset-4">
-								{item.icon ? `${item.icon} ` : ""}
 								{item.title || "Untitled"}
 							</span>
 						</Link>

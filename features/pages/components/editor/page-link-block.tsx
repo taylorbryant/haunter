@@ -43,9 +43,17 @@ function PageLink({
 			// the <a> itself, but a plain child span overrides cleanly.
 			className="haunter-page-link inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
 		>
-			<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+			{page.icon ? (
+				<span
+					className="flex size-4 shrink-0 items-center justify-center"
+					aria-hidden="true"
+				>
+					{page.icon}
+				</span>
+			) : (
+				<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+			)}
 			<span className="min-w-0 truncate font-medium text-foreground underline decoration-muted-foreground/40 underline-offset-4">
-				{page.icon ? `${page.icon} ` : ""}
 				{page.title || "Untitled"}
 			</span>
 		</Link>
