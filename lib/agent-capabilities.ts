@@ -24,6 +24,18 @@ export const agentCapabilities = [
 		input: { type: "object", properties: {} },
 	},
 	{
+		name: "list_pages",
+		description:
+			"List every active page in one workspace as lightweight metadata, including hierarchy. Call list_workspaces first to get a workspaceId.",
+		input: {
+			type: "object",
+			required: ["workspaceId"],
+			properties: {
+				workspaceId: { type: "string" },
+			},
+		},
+	},
+	{
 		name: "search_pages",
 		description:
 			"Full-text search across the pages of one workspace. Returns page ids and titles.",
@@ -49,6 +61,21 @@ export const agentCapabilities = [
 		},
 	},
 	{
+		name: "create_page",
+		description:
+			"Create a page in a workspace, optionally nested under another page and initialized from markdown. Call list_workspaces first to get a workspaceId.",
+		input: {
+			type: "object",
+			required: ["workspaceId", "title"],
+			properties: {
+				workspaceId: { type: "string" },
+				title: { type: "string", minLength: 1, maxLength: 300 },
+				parentPageId: { type: "string", format: "uuid" },
+				markdown: { type: "string", maxLength: 100_000 },
+			},
+		},
+	},
+	{
 		name: "append_to_page",
 		description:
 			"Append markdown content to the end of a page. Supports headings, paragraphs, bullet/numbered lists, task items (- [ ] title, optionally with a '(due: YYYY-MM-DD)' suffix), code fences, blockquotes (rendered as callouts), and dividers.",
@@ -65,6 +92,11 @@ export const agentCapabilities = [
 ];
 
 const WorkspaceScopedArgs = z.object({ workspaceId: z.string().min(1) });
+const CreatePageArgs = WorkspaceScopedArgs.extend({
+	title: z.string().trim().min(1).max(300),
+	parentPageId: z.string().uuid().optional(),
+	markdown: z.string().min(1).max(100_000).optional(),
+});
 const SearchArgs = WorkspaceScopedArgs.extend({
 	query: z.string().min(1).max(200),
 });
@@ -108,11 +140,14 @@ type ExecuteInput = {
 	agentSession: { userId: string | null };
 };
 
-export async function executeAgentCapability({
-	capability,
-	arguments: args,
-	agentSession,
-}: ExecuteInput): Promise<unknown> {
+type AgentCapabilityDependencies = {
+	getServer?: () => Promise<AppServer>;
+};
+
+export async function executeAgentCapability(
+	{ capability, arguments: args, agentSession }: ExecuteInput,
+	dependencies: AgentCapabilityDependencies = {},
+): Promise<unknown> {
 	const userId = agentSession.userId;
 	if (!userId) {
 		throw new APIError("FORBIDDEN", {
@@ -149,10 +184,29 @@ export async function executeAgentCapability({
 		return { workspaces };
 	}
 
-	const { getServer } = await import("@/server");
-	const server = await getServer();
+	const server = dependencies.getServer
+		? await dependencies.getServer()
+		: await import("@/server").then(({ getServer }) => getServer());
 
 	switch (capability) {
+		case "list_pages": {
+			const input = WorkspaceScopedArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { listPagesUseCase } = await import("@/features/pages/use-cases");
+			const result = await listPagesUseCase.run({
+				ctx,
+				input: { workspaceId: input.workspaceId },
+			});
+			return {
+				pages: result.items.map((page) => ({
+					pageId: page.id,
+					title: page.title,
+					icon: page.icon,
+					parentPageId: page.parentPageId,
+					updatedAt: page.updatedAt,
+				})),
+			};
+		}
 		case "search_pages": {
 			const input = SearchArgs.parse(args);
 			const ctx = await createAgentContext(server, userId, input.workspaceId);
@@ -184,6 +238,51 @@ export async function executeAgentCapability({
 				title: page.title,
 				markdown: blocksToMarkdown(page.content),
 				updatedAt: page.updatedAt,
+			};
+		}
+		case "create_page": {
+			const input = CreatePageArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const initialContent = input.markdown
+				? await import("@/features/pages/lib/markdown").then(
+						({ markdownToBlocks }) => markdownToBlocks(input.markdown ?? ""),
+					)
+				: null;
+			if (initialContent && initialContent.length === 0) {
+				throw new APIError("BAD_REQUEST", {
+					message: "The markdown produced no page content.",
+				});
+			}
+			const { createPageUseCase, savePageContentUseCase } = await import(
+				"@/features/pages/use-cases"
+			);
+			const page = await createPageUseCase.run({
+				ctx,
+				input: {
+					workspaceId: input.workspaceId,
+					title: input.title,
+					...(input.parentPageId ? { parentPageId: input.parentPageId } : {}),
+				},
+			});
+
+			let updatedAt = page.updatedAt;
+			if (initialContent) {
+				const saved = await savePageContentUseCase.run({
+					ctx,
+					input: {
+						id: page.id,
+						content: initialContent,
+						baseUpdatedAt: page.updatedAt,
+					},
+				});
+				updatedAt = saved.updatedAt;
+			}
+
+			return {
+				pageId: page.id,
+				title: page.title,
+				parentPageId: page.parentPageId,
+				updatedAt,
 			};
 		}
 		case "append_to_page": {

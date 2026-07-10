@@ -35,16 +35,18 @@ const adminUsers = createDrizzleAdminUserRepository(db);
 
 const authRateLimitStorage = createAuthRateLimitStorage();
 
+const authBaseURL = env.BETTER_AUTH_URL ?? env.APP_URL;
+
 const trustedOrigins = [
 	env.APP_URL,
-	env.BETTER_AUTH_URL,
+	authBaseURL,
 	...(env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",")
 		.map((origin) => origin.trim())
 		.filter(Boolean) ?? []),
 ];
 
 export const auth = betterAuth({
-	baseURL: env.BETTER_AUTH_URL,
+	baseURL: authBaseURL,
 	secret: env.BETTER_AUTH_SECRET,
 	trustedOrigins: [...new Set(trustedOrigins)],
 	database: drizzleAdapter(db, {
@@ -122,7 +124,7 @@ export const auth = betterAuth({
 		agentAuth({
 			providerName: "haunter",
 			providerDescription:
-				"Haunter notes: read, search, and append to pages in workspaces the acting user belongs to.",
+				"Haunter notes: list, create, read, search, and append to pages in workspaces the acting user belongs to.",
 			modes: ["delegated"],
 			capabilities: agentCapabilities,
 			onExecute: executeAgentCapability,
