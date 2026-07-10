@@ -35,18 +35,16 @@ const adminUsers = createDrizzleAdminUserRepository(db);
 
 const authRateLimitStorage = createAuthRateLimitStorage();
 
-const authBaseURL = env.BETTER_AUTH_URL ?? env.APP_URL;
-
 const trustedOrigins = [
 	env.APP_URL,
-	authBaseURL,
+	env.BETTER_AUTH_URL,
 	...(env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",")
 		.map((origin) => origin.trim())
 		.filter(Boolean) ?? []),
 ];
 
 export const auth = betterAuth({
-	baseURL: authBaseURL,
+	baseURL: env.BETTER_AUTH_URL,
 	secret: env.BETTER_AUTH_SECRET,
 	trustedOrigins: [...new Set(trustedOrigins)],
 	database: drizzleAdapter(db, {

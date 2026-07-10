@@ -38,10 +38,12 @@ export const env = createEnv({
 		BETTER_AUTH_SECRET: isProductionRuntime
 			? BetterAuthSecret
 			: BetterAuthSecret.default(LOCAL_BETTER_AUTH_SECRET),
-		// Optional override for deployments where auth is served from a different
-		// origin. The normal case uses APP_URL so discovery can never silently
-		// advertise localhost while the rest of the app is deployed elsewhere.
-		BETTER_AUTH_URL: z.string().url().optional(),
+		// Auth has its own canonical origin. Local development defaults to the
+		// Next.js dev server; production must configure it explicitly so protocol
+		// discovery can never advertise localhost.
+		BETTER_AUTH_URL: isProductionRuntime
+			? z.string().url()
+			: z.string().url().default("http://localhost:3000"),
 		BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
 		BOOTSTRAP_ADMIN_EMAIL: z
 			.string()
