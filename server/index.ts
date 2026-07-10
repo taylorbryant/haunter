@@ -51,7 +51,7 @@ export const getServer = createNextServerLoader(() =>
 			createSecurityHeadersHooks<AppContext>(),
 			createErrorReportingHooks<AppContext>(),
 			createIdempotencyHooks<AppContext>(),
-			// Enforces contract.meta.rateLimit. Vercel's edge normalizes
+			// Enforces contract.meta.rateLimit. The Vercel edge normalizes
 			// x-forwarded-for (client IP first), so the first entry is trusted
 			// here; locally the header is absent and ip scopes share one bucket.
 			createRateLimitHooks<AppContext>({
