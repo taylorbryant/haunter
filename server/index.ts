@@ -3,6 +3,7 @@ import {
 	createErrorReportingHooks,
 	createIdempotencyHooks,
 	createRateLimitHooks,
+	createSecurityHeadersHooks,
 	type ServerHook,
 } from "@beignet/core/server";
 import { createNextServer, createNextServerLoader } from "@beignet/next";
@@ -47,6 +48,7 @@ export const getServer = createNextServerLoader(() =>
 			},
 		},
 		hooks: [
+			createSecurityHeadersHooks<AppContext>(),
 			createErrorReportingHooks<AppContext>(),
 			createIdempotencyHooks<AppContext>(),
 			// Enforces contract.meta.rateLimit. Vercel's edge normalizes
