@@ -34,7 +34,7 @@ function EmojiPickerSearch({
 			<EmojiPickerPrimitive.Search
 				data-slot="emoji-picker-search"
 				className={cn(
-					"h-9 w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+					"h-9 w-full bg-transparent text-base outline-hidden placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm",
 					className,
 				)}
 				{...props}
