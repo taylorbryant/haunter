@@ -2,7 +2,7 @@ import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import { patchTaskBlock } from "@/features/tasks/lib/patch-task-block";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { TaskSchema, UpdateTaskInputSchema } from "../schemas";
 
@@ -11,10 +11,10 @@ export const updateTaskUseCase = useCase
 	.input(UpdateTaskInputSchema)
 	.output(TaskSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
 		return ctx.ports.uow.transaction(async (tx) => {
-			const task = await tx.tasks.findById(input.id);
+			const task = await tx.tasks.findById(scope, input.id);
 			if (!task) {
 				throw appError("TaskNotFound", { details: { id: input.id } });
 			}
@@ -41,7 +41,7 @@ export const updateTaskUseCase = useCase
 			}
 
 			const now = new Date().toISOString();
-			const updated = await tx.tasks.update(task.id, {
+			const updated = await tx.tasks.update(scope, task.id, {
 				...(input.title !== undefined ? { title: input.title } : {}),
 				...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
 				...(input.assigneeId !== undefined
@@ -63,7 +63,7 @@ export const updateTaskUseCase = useCase
 					input.dueDate !== undefined ||
 					input.assigneeId !== undefined)
 			) {
-				const page = await tx.pages.findById(task.pageId);
+				const page = await tx.pages.findById(scope, task.pageId);
 				if (page) {
 					const { blocks, found } = patchTaskBlock(
 						page.content,
@@ -82,6 +82,7 @@ export const updateTaskUseCase = useCase
 					// will orphan-delete it. Update the row anyway.
 					if (found) {
 						await tx.pages.saveContent(
+							scope,
 							page.id,
 							JSON.stringify(blocks),
 							extractPageSearchText(blocks),

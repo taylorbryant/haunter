@@ -1,9 +1,11 @@
 import "@beignet/core/server-only";
+import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { NewPageShare, ShareRepository } from "@/features/shares/ports";
 import type { PageShare } from "@/features/shares/schemas";
 import * as schema from "@/infra/db/schema";
+import { assertPageInScope } from "@/infra/db/tenant-scope";
 
 type ShareRow = typeof schema.pageShares.$inferSelect;
 
@@ -22,11 +24,16 @@ export function createDrizzleShareRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): ShareRepository {
 	return {
-		async findByPage(pageId: string) {
+		async findByPage(scope, pageId: string) {
 			const [row] = await db
 				.select()
 				.from(schema.pageShares)
-				.where(eq(schema.pageShares.pageId, pageId))
+				.where(
+					and(
+						eq(schema.pageShares.pageId, pageId),
+						eq(schema.pageShares.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.limit(1);
 
 			return row ? toShare(row) : null;
@@ -40,11 +47,12 @@ export function createDrizzleShareRepository(
 
 			return row ? toShare(row) : null;
 		},
-		async create(input: NewPageShare) {
+		async create(scope, input: NewPageShare) {
+			await assertPageInScope(db, scope, input.pageId);
 			const share = {
 				id: crypto.randomUUID(),
 				pageId: input.pageId,
-				workspaceId: input.workspaceId,
+				workspaceId: tenantScopeId(scope),
 				token: input.token,
 				createdBy: input.createdBy,
 				createdAt: new Date().toISOString(),
@@ -60,10 +68,15 @@ export function createDrizzleShareRepository(
 
 			return toShare(row);
 		},
-		async deleteByPage(pageId: string) {
+		async deleteByPage(scope, pageId: string) {
 			await db
 				.delete(schema.pageShares)
-				.where(eq(schema.pageShares.pageId, pageId));
+				.where(
+					and(
+						eq(schema.pageShares.pageId, pageId),
+						eq(schema.pageShares.workspaceId, tenantScopeId(scope)),
+					),
+				);
 		},
 	};
 }

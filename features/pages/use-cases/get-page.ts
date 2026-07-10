@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { PageIdInputSchema, PageSchema } from "../schemas";
 
@@ -9,9 +9,9 @@ export const getPageUseCase = useCase
 	.input(PageIdInputSchema)
 	.output(PageSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
-		const page = await ctx.ports.pages.findById(input.id);
+		const page = await ctx.ports.pages.findById(scope, input.id);
 		if (!page || page.deletedAt !== null) {
 			throw appError("PageNotFound", { details: { id: input.id } });
 		}

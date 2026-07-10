@@ -1,4 +1,8 @@
-import { requireTenantId } from "@beignet/core/ports";
+import {
+	requireTenantScope,
+	tenantScopeId,
+	type TenantScope,
+} from "@beignet/core/ports";
 import type { AppContext } from "@/app-context";
 import { appError } from "@/features/shared/errors";
 import {
@@ -77,25 +81,32 @@ export function requireUser(ctx: AppContext): AuthUser {
  * unit of access.
  */
 export function requireActiveWorkspaceId(ctx: AppContext): string {
-	requireUser(ctx);
-	return requireTenantId(ctx);
+	return tenantScopeId(requireActiveWorkspaceScope(ctx));
 }
 
 /**
- * Assert the requested workspace is the caller's active workspace, then return
- * its id. Cross-workspace access (a member acting outside their active org) is
- * refused — one active tenant at a time.
+ * Return the request's already-resolved tenant as an opaque repository scope.
+ * Route workspace ids are selectors only; they never become repository scope
+ * unless they match the authenticated session's active organization.
  */
-export function requireActiveWorkspace(
+export function requireActiveWorkspaceScope(
 	ctx: AppContext,
-	workspaceId: string,
-): string {
-	const activeId = requireActiveWorkspaceId(ctx);
-	if (activeId !== workspaceId) {
+	workspaceId?: string,
+): TenantScope {
+	requireUser(ctx);
+	const scope = requireTenantScope(ctx, {
+		error: () =>
+			appError("Forbidden", {
+				message: "Select a workspace before continuing.",
+			}),
+	});
+
+	if (workspaceId !== undefined && tenantScopeId(scope) !== workspaceId) {
 		throw appError("Forbidden", {
 			message: "You do not have access to this workspace.",
 			details: { workspaceId },
 		});
 	}
-	return workspaceId;
+
+	return scope;
 }

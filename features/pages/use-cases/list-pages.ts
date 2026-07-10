@@ -1,5 +1,5 @@
 import "@beignet/core/server-only";
-import { requireActiveWorkspace } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { ListPagesInputSchema, ListPagesOutputSchema } from "../schemas";
 
@@ -8,8 +8,8 @@ export const listPagesUseCase = useCase
 	.input(ListPagesInputSchema)
 	.output(ListPagesOutputSchema)
 	.run(async ({ ctx, input }) => {
-		requireActiveWorkspace(ctx, input.workspaceId);
+		const scope = requireActiveWorkspaceScope(ctx, input.workspaceId);
 
-		const items = await ctx.ports.pages.listMetaByWorkspace(input.workspaceId);
+		const items = await ctx.ports.pages.listMetaByWorkspace(scope);
 		return { items };
 	});

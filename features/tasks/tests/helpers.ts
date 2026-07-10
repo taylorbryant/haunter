@@ -20,14 +20,15 @@ export function createTestTaskRepository(options?: {
 
 	return {
 		async listByWorkspace(
-			workspaceId: string,
+			scope,
 			filter: TaskFilter,
 			listOptions: ListTasksOptions = {},
 		) {
+			const workspaceId = tenantScopeId(scope);
 			const trashedPageIds = new Set<string>();
 			for (const task of tasks.values()) {
 				if (task.pageId && options?.pages) {
-					const page = await options.pages.findMetaById(task.pageId);
+					const page = await options.pages.findMetaById(scope, task.pageId);
 					if (page?.deletedAt) {
 						trashedPageIds.add(task.pageId);
 					}
@@ -59,27 +60,30 @@ export function createTestTaskRepository(options?: {
 				items.map(async (task) => ({
 					...task,
 					pageTitle: task.pageId
-						? ((await options?.pages?.findMetaById(task.pageId))?.title ?? null)
+						? ((await options?.pages?.findMetaById(scope, task.pageId))
+								?.title ?? null)
 						: null,
 					// Name resolution needs the user table; tests assert on ids.
 					assigneeName: null,
 				})),
 			);
 		},
-		async listByPage(pageId: string) {
+		async listByPage(scope, pageId: string) {
 			return Array.from(tasks.values()).filter(
-				(task) => task.pageId === pageId,
+				(task) =>
+					task.workspaceId === tenantScopeId(scope) && task.pageId === pageId,
 			);
 		},
-		async findById(id: string) {
-			return tasks.get(id) ?? null;
+		async findById(scope, id: string) {
+			const task = tasks.get(id);
+			return task?.workspaceId === tenantScopeId(scope) ? task : null;
 		},
-		async create(input: NewTask) {
+		async create(scope, input: NewTask) {
 			const now = new Date().toISOString();
 			const task: Task = {
 				id: crypto.randomUUID(),
 				userId: input.userId,
-				workspaceId: input.workspaceId,
+				workspaceId: tenantScopeId(scope),
 				pageId: input.pageId,
 				sourceBlockId: input.sourceBlockId,
 				title: input.title,
@@ -93,9 +97,9 @@ export function createTestTaskRepository(options?: {
 			tasks.set(task.id, task);
 			return task;
 		},
-		async update(id: string, input: UpdateTaskData) {
+		async update(scope, id: string, input: UpdateTaskData) {
 			const task = tasks.get(id);
-			if (!task) {
+			if (!task || task.workspaceId !== tenantScopeId(scope)) {
 				throw new Error(`Task not found: ${id}`);
 			}
 
@@ -103,20 +107,29 @@ export function createTestTaskRepository(options?: {
 			tasks.set(id, next);
 			return next;
 		},
-		async delete(id: string) {
-			tasks.delete(id);
-		},
-		async deleteByIds(ids: string[]) {
-			for (const id of ids) {
+		async delete(scope, id: string) {
+			if (tasks.get(id)?.workspaceId === tenantScopeId(scope)) {
 				tasks.delete(id);
 			}
 		},
-		async deleteByPageIds(pageIds: string[]) {
+		async deleteByIds(scope, ids: string[]) {
+			for (const id of ids) {
+				if (tasks.get(id)?.workspaceId === tenantScopeId(scope)) {
+					tasks.delete(id);
+				}
+			}
+		},
+		async deleteByPageIds(scope, pageIds: string[]) {
 			for (const task of Array.from(tasks.values())) {
-				if (task.pageId !== null && pageIds.includes(task.pageId)) {
+				if (
+					task.workspaceId === tenantScopeId(scope) &&
+					task.pageId !== null &&
+					pageIds.includes(task.pageId)
+				) {
 					tasks.delete(task.id);
 				}
 			}
 		},
 	};
 }
+import { tenantScopeId } from "@beignet/core/ports";

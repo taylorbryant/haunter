@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
 import {
 	and,
@@ -19,6 +20,7 @@ import type {
 import type { BlockJson, Page, PageMeta } from "@/features/pages/schemas";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import * as schema from "@/infra/db/schema";
+import { assertPageInScope } from "@/infra/db/tenant-scope";
 
 type PageRow = typeof schema.pages.$inferSelect;
 
@@ -74,7 +76,8 @@ export function createDrizzlePageRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): PageRepository {
 	return {
-		async listMetaByWorkspace(workspaceId: string) {
+		async listMetaByWorkspace(scope) {
+			const workspaceId = tenantScopeId(scope);
 			const rows = await db
 				.select(metaColumns)
 				.from(schema.pages)
@@ -88,7 +91,8 @@ export function createDrizzlePageRepository(
 
 			return rows.map(toPageMeta);
 		},
-		async listHierarchyByWorkspace(workspaceId: string) {
+		async listHierarchyByWorkspace(scope) {
+			const workspaceId = tenantScopeId(scope);
 			return db
 				.select({
 					id: schema.pages.id,
@@ -97,7 +101,8 @@ export function createDrizzlePageRepository(
 				.from(schema.pages)
 				.where(eq(schema.pages.workspaceId, workspaceId));
 		},
-		async listTrashedMetaByWorkspace(workspaceId: string) {
+		async listTrashedMetaByWorkspace(scope) {
+			const workspaceId = tenantScopeId(scope);
 			const rows = await db
 				.select(metaColumns)
 				.from(schema.pages)
@@ -111,38 +116,50 @@ export function createDrizzlePageRepository(
 
 			return rows.map(toPageMeta);
 		},
-		async findById(id: string) {
+		async findById(scope, id: string) {
 			const [row] = await db
 				.select()
 				.from(schema.pages)
-				.where(eq(schema.pages.id, id))
+				.where(
+					and(
+						eq(schema.pages.id, id),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.limit(1);
 
 			return row ? toPage(row) : null;
 		},
-		async findMetaById(id: string) {
+		async findMetaById(scope, id: string) {
 			const [row] = await db
 				.select(metaColumns)
 				.from(schema.pages)
-				.where(eq(schema.pages.id, id))
+				.where(
+					and(
+						eq(schema.pages.id, id),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.limit(1);
 
 			return row ? toPageMeta(row) : null;
 		},
-		async findMetaByIds(ids: string[]) {
+		async findMetaByIds(scope, ids: string[]) {
 			if (ids.length === 0) return [];
 			const rows = await db
 				.select(metaColumns)
 				.from(schema.pages)
-				.where(inArray(schema.pages.id, ids));
+				.where(
+					and(
+						inArray(schema.pages.id, ids),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+					),
+				);
 
 			return rows.map(toPageMeta);
 		},
-		async searchByWorkspace(
-			workspaceId: string,
-			needle: string,
-			limit: number,
-		) {
+		async searchByWorkspace(scope, needle: string, limit: number) {
+			const workspaceId = tenantScopeId(scope);
 			const pattern = `%${needle.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 			const rows = await db
 				.select({
@@ -173,18 +190,21 @@ export function createDrizzlePageRepository(
 				searchText: searchTextForRow(row),
 			}));
 		},
-		async listIdsByParent(parentPageId: string) {
+		async listIdsByParent(scope, parentPageId: string) {
 			const rows = await db
 				.select({ id: schema.pages.id })
 				.from(schema.pages)
-				.where(eq(schema.pages.parentPageId, parentPageId));
+				.where(
+					and(
+						eq(schema.pages.parentPageId, parentPageId),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+					),
+				);
 
 			return rows.map((row) => row.id);
 		},
-		async maxPositionForParent(
-			workspaceId: string,
-			parentPageId: string | null,
-		) {
+		async maxPositionForParent(scope, parentPageId: string | null) {
+			const workspaceId = tenantScopeId(scope);
 			const [row] = await db
 				.select({
 					position: sql<number | null>`max(${schema.pages.position})`,
@@ -202,12 +222,15 @@ export function createDrizzlePageRepository(
 
 			return row?.position ?? 0;
 		},
-		async create(input: NewPage) {
+		async create(scope, input: NewPage) {
+			if (input.parentPageId !== null) {
+				await assertPageInScope(db, scope, input.parentPageId);
+			}
 			const now = new Date().toISOString();
 			const page = {
 				id: crypto.randomUUID(),
 				userId: input.userId,
-				workspaceId: input.workspaceId,
+				workspaceId: tenantScopeId(scope),
 				parentPageId: input.parentPageId,
 				title: input.title,
 				icon: null,
@@ -225,11 +248,19 @@ export function createDrizzlePageRepository(
 
 			return toPageMeta(row);
 		},
-		async update(id: string, input: UpdatePageData) {
+		async update(scope, id: string, input: UpdatePageData) {
+			if (input.parentPageId !== undefined && input.parentPageId !== null) {
+				await assertPageInScope(db, scope, input.parentPageId);
+			}
 			const [row] = await db
 				.update(schema.pages)
 				.set({ ...input, updatedAt: new Date().toISOString() })
-				.where(eq(schema.pages.id, id))
+				.where(
+					and(
+						eq(schema.pages.id, id),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.returning(metaColumns);
 
 			if (!row) {
@@ -238,11 +269,21 @@ export function createDrizzlePageRepository(
 
 			return toPageMeta(row);
 		},
-		async saveContent(id: string, contentJson: string, searchText: string) {
+		async saveContent(
+			scope,
+			id: string,
+			contentJson: string,
+			searchText: string,
+		) {
 			const [current] = await db
 				.select({ updatedAt: schema.pages.updatedAt })
 				.from(schema.pages)
-				.where(eq(schema.pages.id, id))
+				.where(
+					and(
+						eq(schema.pages.id, id),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.limit(1);
 			if (!current) {
 				throw new Error(`Failed to save content for page ${id}`);
@@ -256,7 +297,12 @@ export function createDrizzlePageRepository(
 			const [row] = await db
 				.update(schema.pages)
 				.set({ content: contentJson, searchText, updatedAt })
-				.where(eq(schema.pages.id, id))
+				.where(
+					and(
+						eq(schema.pages.id, id),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.returning({ id: schema.pages.id });
 
 			if (!row) {
@@ -266,6 +312,7 @@ export function createDrizzlePageRepository(
 			return { updatedAt };
 		},
 		async saveContentIf(
+			scope,
 			id: string,
 			contentJson: string,
 			searchText: string,
@@ -285,6 +332,7 @@ export function createDrizzlePageRepository(
 				.where(
 					and(
 						eq(schema.pages.id, id),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
 						eq(schema.pages.updatedAt, baseUpdatedAt),
 					),
 				)
@@ -292,21 +340,33 @@ export function createDrizzlePageRepository(
 
 			return row ? { updatedAt } : null;
 		},
-		async setDeletedByIds(ids: string[], deletedAt: string | null) {
+		async setDeletedByIds(scope, ids: string[], deletedAt: string | null) {
 			if (ids.length === 0) return;
 			await db
 				.update(schema.pages)
 				.set({ deletedAt, updatedAt: new Date().toISOString() })
-				.where(inArray(schema.pages.id, ids));
+				.where(
+					and(
+						inArray(schema.pages.id, ids),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+					),
+				);
 		},
-		async deleteByIds(ids: string[]) {
+		async deleteByIds(scope, ids: string[]) {
 			if (ids.length === 0) return;
-			await db.delete(schema.pages).where(inArray(schema.pages.id, ids));
-		},
-		async deleteByWorkspace(workspaceId: string) {
 			await db
 				.delete(schema.pages)
-				.where(eq(schema.pages.workspaceId, workspaceId));
+				.where(
+					and(
+						inArray(schema.pages.id, ids),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+					),
+				);
+		},
+		async deleteByWorkspace(scope) {
+			await db
+				.delete(schema.pages)
+				.where(eq(schema.pages.workspaceId, tenantScopeId(scope)));
 		},
 	};
 }

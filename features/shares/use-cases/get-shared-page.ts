@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { createTenant, createTenantScope } from "@beignet/core/ports";
 import { appError } from "@/features/shared/errors";
 import { useCase } from "@/lib/use-case";
 import { rewriteFileUrls } from "../lib/rewrite-file-urls";
@@ -20,7 +21,9 @@ export const getSharedPageUseCase = useCase
 			throw appError("ShareNotFound");
 		}
 
-		const page = await ctx.ports.pages.findById(share.pageId);
+		// The persisted capability, not request input, establishes this scope.
+		const scope = createTenantScope(createTenant(share.workspaceId));
+		const page = await ctx.ports.pages.findById(scope, share.pageId);
 		if (!page || page.deletedAt !== null) {
 			throw appError("ShareNotFound");
 		}

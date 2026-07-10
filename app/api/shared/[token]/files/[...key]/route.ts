@@ -1,3 +1,4 @@
+import { createTenant, createTenantScope } from "@beignet/core/ports";
 import { getServer } from "@/server";
 import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
 import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
@@ -32,7 +33,9 @@ export async function GET(
 	const tokenLimited = await enforceSharedFileTokenRateLimit(server, token);
 	if (tokenLimited) return tokenLimited;
 
-	const page = await server.ports.pages.findById(share.pageId);
+	// The persisted capability, not request input, establishes this scope.
+	const scope = createTenantScope(createTenant(share.workspaceId));
+	const page = await server.ports.pages.findById(scope, share.pageId);
 	if (!page || page.deletedAt !== null) {
 		return new Response(null, { status: 404 });
 	}

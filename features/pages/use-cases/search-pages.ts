@@ -1,5 +1,5 @@
 import "@beignet/core/server-only";
-import { requireActiveWorkspaceId } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import {
 	type PageMeta,
@@ -42,7 +42,7 @@ export const searchPagesUseCase = useCase
 	.input(SearchPagesInputSchema)
 	.output(SearchPagesOutputSchema)
 	.run(async ({ ctx, input }) => {
-		const workspaceId = requireActiveWorkspaceId(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 		const query = input.q.trim();
 		const needle = query.toLowerCase();
 		if (needle.length < 2) {
@@ -50,7 +50,7 @@ export const searchPagesUseCase = useCase
 		}
 
 		const candidates = await ctx.ports.pages.searchByWorkspace(
-			workspaceId,
+			scope,
 			query,
 			CANDIDATE_LIMIT,
 		);

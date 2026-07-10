@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { DeletePageOutputSchema, PageIdInputSchema } from "../schemas";
 import { collectSubtreeIds } from "./delete-page";
@@ -11,24 +11,20 @@ export const purgePageUseCase = useCase
 	.input(PageIdInputSchema)
 	.output(DeletePageOutputSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
 		await ctx.ports.uow.transaction(async (tx) => {
-			const page = await tx.pages.findMetaById(input.id);
+			const page = await tx.pages.findMetaById(scope, input.id);
 			if (!page) {
 				throw appError("PageNotFound", { details: { id: input.id } });
 			}
 
 			await ctx.gate.authorize("pages.delete", page);
 
-			const subtree = await collectSubtreeIds(
-				tx.pages,
-				page.workspaceId,
-				page.id,
-			);
-			await tx.canvases.deleteByPageIds(subtree);
-			await tx.tasks.deleteByPageIds(subtree);
+			const subtree = await collectSubtreeIds(tx.pages, scope, page.id);
+			await tx.canvases.deleteByPageIds(scope, subtree);
+			await tx.tasks.deleteByPageIds(scope, subtree);
 			// Delete children before parents so the self-FK never dangles.
-			await tx.pages.deleteByIds(subtree.reverse());
+			await tx.pages.deleteByIds(scope, subtree.reverse());
 		});
 	});

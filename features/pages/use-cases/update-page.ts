@@ -1,12 +1,14 @@
 import "@beignet/core/server-only";
+import type { TenantScope } from "@beignet/core/ports";
 import type { PageRepository } from "@/features/pages/ports";
 import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { PageMetaSchema, UpdatePageInputSchema } from "../schemas";
 
 async function assertNotDescendant(
 	pages: Pick<PageRepository, "findMetaById">,
+	scope: TenantScope,
 	pageId: string,
 	newParentId: string,
 ) {
@@ -22,7 +24,7 @@ async function assertNotDescendant(
 		if (seen.has(currentId)) break;
 		seen.add(currentId);
 
-		const current = await pages.findMetaById(currentId);
+		const current = await pages.findMetaById(scope, currentId);
 		currentId = current?.parentPageId ?? null;
 	}
 }
@@ -32,10 +34,10 @@ export const updatePageUseCase = useCase
 	.input(UpdatePageInputSchema)
 	.output(PageMetaSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
 		return ctx.ports.uow.transaction(async (tx) => {
-			const page = await tx.pages.findMetaById(input.id);
+			const page = await tx.pages.findMetaById(scope, input.id);
 			if (!page || page.deletedAt !== null) {
 				throw appError("PageNotFound", { details: { id: input.id } });
 			}
@@ -47,20 +49,16 @@ export const updatePageUseCase = useCase
 				input.parentPageId !== null &&
 				input.parentPageId !== page.parentPageId
 			) {
-				const parent = await tx.pages.findMetaById(input.parentPageId);
-				if (
-					!parent ||
-					parent.workspaceId !== page.workspaceId ||
-					parent.deletedAt !== null
-				) {
+				const parent = await tx.pages.findMetaById(scope, input.parentPageId);
+				if (!parent || parent.deletedAt !== null) {
 					throw appError("PageNotFound", {
 						details: { id: input.parentPageId },
 					});
 				}
-				await assertNotDescendant(tx.pages, page.id, input.parentPageId);
+				await assertNotDescendant(tx.pages, scope, page.id, input.parentPageId);
 			}
 
-			return tx.pages.update(input.id, {
+			return tx.pages.update(scope, input.id, {
 				...(input.title !== undefined ? { title: input.title } : {}),
 				...(input.icon !== undefined ? { icon: input.icon } : {}),
 				...(input.parentPageId !== undefined

@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
+import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type {
 	NewPageVersion,
 	PageVersionRepository,
@@ -11,6 +12,7 @@ import type {
 	PageVersionMeta,
 } from "@/features/pages/schemas";
 import * as schema from "@/infra/db/schema";
+import { assertPageInScope } from "@/infra/db/tenant-scope";
 
 type VersionRow = typeof schema.pageVersions.$inferSelect;
 
@@ -45,7 +47,7 @@ export function createDrizzlePageVersionRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): PageVersionRepository {
 	return {
-		async listMetaByPage(pageId: string) {
+		async listMetaByPage(scope, pageId: string) {
 			const rows = await db
 				.select({
 					version: metaColumns,
@@ -59,16 +61,26 @@ export function createDrizzlePageVersionRepository(
 					schema.user,
 					eq(schema.pageVersions.createdBy, schema.user.id),
 				)
-				.where(eq(schema.pageVersions.pageId, pageId))
+				.where(
+					and(
+						eq(schema.pageVersions.pageId, pageId),
+						eq(schema.pageVersions.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.orderBy(desc(schema.pageVersions.createdAt));
 
 			return rows.map((row) => toMeta(row.version, row.createdByName));
 		},
-		async findById(id: string): Promise<PageVersion | null> {
+		async findById(scope, id: string): Promise<PageVersion | null> {
 			const [row] = await db
 				.select()
 				.from(schema.pageVersions)
-				.where(eq(schema.pageVersions.id, id))
+				.where(
+					and(
+						eq(schema.pageVersions.id, id),
+						eq(schema.pageVersions.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.limit(1);
 
 			if (!row) return null;
@@ -77,21 +89,27 @@ export function createDrizzlePageVersionRepository(
 				content: JSON.parse(row.content) as BlockJson[],
 			};
 		},
-		async latestCreatedAt(pageId: string) {
+		async latestCreatedAt(scope, pageId: string) {
 			const [row] = await db
 				.select({ createdAt: schema.pageVersions.createdAt })
 				.from(schema.pageVersions)
-				.where(eq(schema.pageVersions.pageId, pageId))
+				.where(
+					and(
+						eq(schema.pageVersions.pageId, pageId),
+						eq(schema.pageVersions.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.orderBy(desc(schema.pageVersions.createdAt))
 				.limit(1);
 
 			return row?.createdAt ?? null;
 		},
-		async create(input: NewPageVersion) {
+		async create(scope, input: NewPageVersion) {
+			await assertPageInScope(db, scope, input.pageId);
 			const version = {
 				id: crypto.randomUUID(),
 				pageId: input.pageId,
-				workspaceId: input.workspaceId,
+				workspaceId: tenantScopeId(scope),
 				title: input.title,
 				icon: input.icon,
 				content: input.contentJson,
@@ -110,21 +128,29 @@ export function createDrizzlePageVersionRepository(
 
 			return toMeta(row, null);
 		},
-		async prune(pageId: string, keep: number) {
+		async prune(scope, pageId: string, keep: number) {
 			// SQLite can't OFFSET without LIMIT (and drizzle drops limit(-1)),
 			// so slice in JS — retention keeps this list ~50 rows at most.
 			const rows = await db
 				.select({ id: schema.pageVersions.id })
 				.from(schema.pageVersions)
-				.where(eq(schema.pageVersions.pageId, pageId))
+				.where(
+					and(
+						eq(schema.pageVersions.pageId, pageId),
+						eq(schema.pageVersions.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.orderBy(desc(schema.pageVersions.createdAt));
 			const stale = rows.slice(keep);
 
 			if (stale.length > 0) {
 				await db.delete(schema.pageVersions).where(
-					inArray(
-						schema.pageVersions.id,
-						stale.map((row) => row.id),
+					and(
+						inArray(
+							schema.pageVersions.id,
+							stale.map((row) => row.id),
+						),
+						eq(schema.pageVersions.workspaceId, tenantScopeId(scope)),
 					),
 				);
 			}

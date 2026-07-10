@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
+import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestTenant,
 	createTestUserActor,
@@ -78,52 +79,52 @@ async function createFixture(
 	});
 	const tester = createUseCaseTester<AppContext>(createTestContext);
 	const ctx = await tester.ctx();
+	const scope = createTenantScope(createTestTenant(workspaceId));
 
-	return { pages, tasks, workspaceId, tester, ctx };
+	return { pages, tasks, workspaceId, scope, tester, ctx };
 }
 
 describe("onboarding", () => {
 	it("seeds an empty workspace and is a no-op on the next call", async () => {
-		const { pages, workspaceId, tester, ctx } = await createFixture();
+		const { pages, workspaceId, scope, tester, ctx } = await createFixture();
 
 		const first = await tester.run(onboardUserUseCase, {}, { ctx });
 		expect(first.workspaceId).toBe(workspaceId);
 		expect(first.pageId).not.toBeNull();
 
-		const seeded = await pages.listMetaByWorkspace(workspaceId);
+		const seeded = await pages.listMetaByWorkspace(scope);
 		expect(seeded.length).toBeGreaterThan(0);
 
 		const second = await tester.run(onboardUserUseCase, {}, { ctx });
 		expect(second.pageId).toBeNull();
-		expect(await pages.listMetaByWorkspace(workspaceId)).toHaveLength(
-			seeded.length,
-		);
+		expect(await pages.listMetaByWorkspace(scope)).toHaveLength(seeded.length);
 	});
 
 	it("does not re-seed a workspace whose pages are all trashed", async () => {
-		const { pages, workspaceId, tester, ctx } = await createFixture();
+		const { pages, scope, tester, ctx } = await createFixture();
 
 		const first = await tester.run(onboardUserUseCase, {}, { ctx });
 		expect(first.pageId).not.toBeNull();
 
 		// Trash everything, as a user clearing out the starter content would.
-		const seeded = await pages.listMetaByWorkspace(workspaceId);
+		const seeded = await pages.listMetaByWorkspace(scope);
 		await pages.setDeletedByIds(
+			scope,
 			seeded.map((page) => page.id),
 			new Date().toISOString(),
 		);
 
 		const again = await tester.run(onboardUserUseCase, {}, { ctx });
 		expect(again.pageId).toBeNull();
-		expect(await pages.listMetaByWorkspace(workspaceId)).toHaveLength(0);
+		expect(await pages.listMetaByWorkspace(scope)).toHaveLength(0);
 	});
 
 	it("is a no-op for read-only members", async () => {
-		const { pages, workspaceId, tester, ctx } = await createFixture("viewer");
+		const { pages, scope, tester, ctx } = await createFixture("viewer");
 
 		const result = await tester.run(onboardUserUseCase, {}, { ctx });
 		expect(result.pageId).toBeNull();
-		expect(await pages.listMetaByWorkspace(workspaceId)).toHaveLength(0);
+		expect(await pages.listMetaByWorkspace(scope)).toHaveLength(0);
 	});
 
 	it("blocks waitlisted users that have not been admitted to a workspace", async () => {

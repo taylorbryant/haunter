@@ -21,12 +21,14 @@ export async function reconcilePageDerivations(
 		pageLinks: PageLinkRepository;
 		tasks: TaskRepository;
 	},
+	scope: TenantScope,
 	page: PageMeta,
 	content: BlockJson[],
 	options: { defaultTaskAssigneeId?: string | null } = {},
 ): Promise<{ tasksChanged: boolean; linksChanged: boolean }> {
 	const tasksChanged = await reconcilePageTasks(
 		{ members: tx.members, tasks: tx.tasks },
+		scope,
 		page,
 		content,
 		{ defaultAssigneeId: options.defaultTaskAssigneeId },
@@ -37,13 +39,10 @@ export async function reconcilePageDerivations(
 	const targetIds = extractPageLinks(content).filter(
 		(targetId) => targetId !== page.id,
 	);
-	const targets = await tx.pages.findMetaByIds(targetIds);
-	const validTargets = new Set(
-		targets
-			.filter((target) => target.workspaceId === page.workspaceId)
-			.map((target) => target.id),
-	);
+	const targets = await tx.pages.findMetaByIds(scope, targetIds);
+	const validTargets = new Set(targets.map((target) => target.id));
 	const linksChanged = await tx.pageLinks.replaceForSource(
+		scope,
 		page.id,
 		page.userId,
 		targetIds.filter((targetId) => validTargets.has(targetId)),
@@ -51,3 +50,4 @@ export async function reconcilePageDerivations(
 
 	return { tasksChanged, linksChanged };
 }
+import type { TenantScope } from "@beignet/core/ports";

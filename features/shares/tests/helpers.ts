@@ -5,10 +5,13 @@ export function createTestShareRepository(): ShareRepository {
 	const shares = new Map<string, PageShare>();
 
 	return {
-		async findByPage(pageId: string) {
+		async findByPage(scope, pageId: string) {
 			return (
-				Array.from(shares.values()).find((share) => share.pageId === pageId) ??
-				null
+				Array.from(shares.values()).find(
+					(share) =>
+						share.workspaceId === tenantScopeId(scope) &&
+						share.pageId === pageId,
+				) ?? null
 			);
 		},
 		async findByToken(token: string) {
@@ -17,11 +20,11 @@ export function createTestShareRepository(): ShareRepository {
 				null
 			);
 		},
-		async create(input: NewPageShare) {
+		async create(scope, input: NewPageShare) {
 			const share: PageShare = {
 				id: crypto.randomUUID(),
 				pageId: input.pageId,
-				workspaceId: input.workspaceId,
+				workspaceId: tenantScopeId(scope),
 				token: input.token,
 				createdBy: input.createdBy,
 				createdAt: new Date().toISOString(),
@@ -29,12 +32,16 @@ export function createTestShareRepository(): ShareRepository {
 			shares.set(share.id, share);
 			return share;
 		},
-		async deleteByPage(pageId: string) {
+		async deleteByPage(scope, pageId: string) {
 			for (const share of Array.from(shares.values())) {
-				if (share.pageId === pageId) {
+				if (
+					share.workspaceId === tenantScopeId(scope) &&
+					share.pageId === pageId
+				) {
 					shares.delete(share.id);
 				}
 			}
 		},
 	};
 }
+import { tenantScopeId } from "@beignet/core/ports";

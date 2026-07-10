@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { ListBacklinksOutputSchema, PageIdInputSchema } from "../schemas";
 
@@ -10,15 +10,18 @@ export const listBacklinksUseCase = useCase
 	.input(PageIdInputSchema)
 	.output(ListBacklinksOutputSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
-		const page = await ctx.ports.pages.findMetaById(input.id);
+		const page = await ctx.ports.pages.findMetaById(scope, input.id);
 		if (!page || page.deletedAt !== null) {
 			throw appError("PageNotFound", { details: { id: input.id } });
 		}
 
 		await ctx.gate.authorize("pages.read", page);
 
-		const items = await ctx.ports.pageLinks.listBacklinkSources(input.id);
+		const items = await ctx.ports.pageLinks.listBacklinkSources(
+			scope,
+			input.id,
+		);
 		return { items };
 	});

@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { createTenant, createTenantScope } from "@beignet/core/ports";
 import { appError } from "@/features/shared/errors";
 import { useCase } from "@/lib/use-case";
 import { SharedCanvasInputSchema, SharedCanvasSchema } from "../schemas";
@@ -18,10 +19,12 @@ export const getSharedCanvasUseCase = useCase
 			throw appError("ShareNotFound");
 		}
 
+		// The persisted capability, not request input, establishes this scope.
+		const scope = createTenantScope(createTenant(share.workspaceId));
 		// Both lookups depend only on the share row, so run them together.
 		const [page, canvas] = await Promise.all([
-			ctx.ports.pages.findMetaById(share.pageId),
-			ctx.ports.canvases.findById(input.id),
+			ctx.ports.pages.findMetaById(scope, share.pageId),
+			ctx.ports.canvases.findById(scope, input.id),
 		]);
 		if (!page || page.deletedAt !== null) {
 			throw appError("ShareNotFound");

@@ -1,8 +1,8 @@
+import type { TenantScope } from "@beignet/core/ports";
 import type { Task, TaskFilter, TaskWithPage } from "@/features/tasks/schemas";
 
 export type NewTask = {
 	userId: string;
-	workspaceId: string;
 	pageId: string | null;
 	sourceBlockId: string | null;
 	title: string;
@@ -29,15 +29,15 @@ export type ListTasksOptions = {
 export interface TaskRepository {
 	/** Workspace tasks, optionally narrowed to an assignee and bounded by limit. */
 	listByWorkspace(
-		workspaceId: string,
+		scope: TenantScope,
 		filter: TaskFilter,
 		options?: ListTasksOptions,
 	): Promise<TaskWithPage[]>;
-	listByPage(pageId: string): Promise<Task[]>;
-	findById(id: string): Promise<Task | null>;
-	create(input: NewTask): Promise<Task>;
-	update(id: string, input: UpdateTaskData): Promise<Task>;
-	delete(id: string): Promise<void>;
-	deleteByIds(ids: string[]): Promise<void>;
-	deleteByPageIds(pageIds: string[]): Promise<void>;
+	listByPage(scope: TenantScope, pageId: string): Promise<Task[]>;
+	findById(scope: TenantScope, id: string): Promise<Task | null>;
+	create(scope: TenantScope, input: NewTask): Promise<Task>;
+	update(scope: TenantScope, id: string, input: UpdateTaskData): Promise<Task>;
+	delete(scope: TenantScope, id: string): Promise<void>;
+	deleteByIds(scope: TenantScope, ids: string[]): Promise<void>;
+	deleteByPageIds(scope: TenantScope, pageIds: string[]): Promise<void>;
 }

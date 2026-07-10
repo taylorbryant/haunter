@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestTenant,
 	createTestUserActor,
@@ -55,7 +56,8 @@ function createUploadFixture(role: string) {
 		extra: { membership: { role } },
 	});
 
-	return { auth, createContext, pages, workspace };
+	const scope = createTenantScope(createTestTenant(workspace.id));
+	return { auth, createContext, pages, scope, workspace };
 }
 
 function uploadFile() {
@@ -77,11 +79,9 @@ async function runAttachmentAuthorization(ctx: AppContext, pageId: string) {
 
 describe("page attachment uploads", () => {
 	it("allows editors to attach files to active pages", async () => {
-		const { auth, createContext, pages, workspace } =
-			createUploadFixture("owner");
-		const page = await pages.create({
+		const { auth, createContext, pages, scope } = createUploadFixture("owner");
+		const page = await pages.create(scope, {
 			userId: auth.user.id,
-			workspaceId: workspace.id,
 			parentPageId: null,
 			title: "Notes",
 			position: 1,
@@ -93,11 +93,9 @@ describe("page attachment uploads", () => {
 	});
 
 	it("denies viewers attaching files to pages", async () => {
-		const { auth, createContext, pages, workspace } =
-			createUploadFixture("viewer");
-		const page = await pages.create({
+		const { auth, createContext, pages, scope } = createUploadFixture("viewer");
+		const page = await pages.create(scope, {
 			userId: auth.user.id,
-			workspaceId: workspace.id,
 			parentPageId: null,
 			title: "Notes",
 			position: 1,
@@ -112,16 +110,14 @@ describe("page attachment uploads", () => {
 	});
 
 	it("denies attaching files to trashed pages", async () => {
-		const { auth, createContext, pages, workspace } =
-			createUploadFixture("owner");
-		const page = await pages.create({
+		const { auth, createContext, pages, scope } = createUploadFixture("owner");
+		const page = await pages.create(scope, {
 			userId: auth.user.id,
-			workspaceId: workspace.id,
 			parentPageId: null,
 			title: "Notes",
 			position: 1,
 		});
-		await pages.setDeletedByIds([page.id], new Date().toISOString());
+		await pages.setDeletedByIds(scope, [page.id], new Date().toISOString());
 
 		await expect(
 			runAttachmentAuthorization(createContext(), page.id),

@@ -1,7 +1,11 @@
 import { defineUpload } from "@beignet/core/uploads";
 import { z } from "zod";
 import type { AppContext } from "@/app-context";
-import { requireActiveWorkspaceId, requireUser } from "@/lib/auth";
+import {
+	requireActiveWorkspaceId,
+	requireActiveWorkspaceScope,
+	requireUser,
+} from "@/lib/auth";
 
 export const AttachmentUploadMetadataSchema = z.object({
 	pageId: z.string().uuid(),
@@ -32,7 +36,8 @@ export const AttachmentUpload = defineUpload<
 		cacheControl: "private, max-age=31536000, immutable",
 	},
 	async authorize({ ctx, metadata }) {
-		const page = await ctx.ports.pages.findMetaById(metadata.pageId);
+		const scope = requireActiveWorkspaceScope(ctx);
+		const page = await ctx.ports.pages.findMetaById(scope, metadata.pageId);
 		if (!page || page.deletedAt !== null) return false;
 
 		const decision = await ctx.gate.inspect("pages.update", page);

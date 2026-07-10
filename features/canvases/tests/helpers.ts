@@ -5,15 +5,16 @@ export function createTestCanvasRepository(): CanvasRepository {
 	const canvases = new Map<string, Canvas>();
 
 	return {
-		async findById(id: string) {
-			return canvases.get(id) ?? null;
+		async findById(scope, id: string) {
+			const canvas = canvases.get(id);
+			return canvas?.workspaceId === tenantScopeId(scope) ? canvas : null;
 		},
-		async create(input: NewCanvas) {
+		async create(scope, input: NewCanvas) {
 			const now = new Date().toISOString();
 			const canvas: Canvas = {
 				id: crypto.randomUUID(),
 				userId: input.userId,
-				workspaceId: input.workspaceId,
+				workspaceId: tenantScopeId(scope),
 				pageId: input.pageId,
 				snapshot: {},
 				createdAt: now,
@@ -22,9 +23,9 @@ export function createTestCanvasRepository(): CanvasRepository {
 			canvases.set(canvas.id, canvas);
 			return canvas;
 		},
-		async saveSnapshot(id: string, snapshotJson: string) {
+		async saveSnapshot(scope, id: string, snapshotJson: string) {
 			const canvas = canvases.get(id);
-			if (!canvas) {
+			if (!canvas || canvas.workspaceId !== tenantScopeId(scope)) {
 				throw new Error(`Canvas not found: ${id}`);
 			}
 
@@ -37,12 +38,13 @@ export function createTestCanvasRepository(): CanvasRepository {
 			return { updatedAt };
 		},
 		async saveSnapshotIf(
+			scope,
 			id: string,
 			snapshotJson: string,
 			baseUpdatedAt: string,
 		) {
 			const canvas = canvases.get(id);
-			if (!canvas) {
+			if (!canvas || canvas.workspaceId !== tenantScopeId(scope)) {
 				throw new Error(`Canvas not found: ${id}`);
 			}
 			if (canvas.updatedAt !== baseUpdatedAt) {
@@ -60,12 +62,16 @@ export function createTestCanvasRepository(): CanvasRepository {
 			});
 			return { updatedAt };
 		},
-		async deleteByPageIds(pageIds: string[]) {
+		async deleteByPageIds(scope, pageIds: string[]) {
 			for (const canvas of Array.from(canvases.values())) {
-				if (pageIds.includes(canvas.pageId)) {
+				if (
+					canvas.workspaceId === tenantScopeId(scope) &&
+					pageIds.includes(canvas.pageId)
+				) {
 					canvases.delete(canvas.id);
 				}
 			}
 		},
 	};
 }
+import { tenantScopeId } from "@beignet/core/ports";

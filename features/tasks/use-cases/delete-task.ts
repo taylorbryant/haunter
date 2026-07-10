@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { DeleteTaskOutputSchema, TaskIdInputSchema } from "../schemas";
 
@@ -9,10 +9,10 @@ export const deleteTaskUseCase = useCase
 	.input(TaskIdInputSchema)
 	.output(DeleteTaskOutputSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
 		await ctx.ports.uow.transaction(async (tx) => {
-			const task = await tx.tasks.findById(input.id);
+			const task = await tx.tasks.findById(scope, input.id);
 			if (!task) {
 				throw appError("TaskNotFound", { details: { id: input.id } });
 			}
@@ -24,6 +24,6 @@ export const deleteTaskUseCase = useCase
 				throw appError("TaskNotEditable", { details: { id: input.id } });
 			}
 
-			await tx.tasks.delete(task.id);
+			await tx.tasks.delete(scope, task.id);
 		});
 	});

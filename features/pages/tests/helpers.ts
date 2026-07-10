@@ -16,10 +16,18 @@ export function createTestPageLinkRepository(deps: {
 
 	return {
 		async replaceForSource(
+			scope,
 			sourcePageId: string,
 			_userId: string,
 			targetPageIds: string[],
 		) {
+			if (!(await deps.pages.findMetaById(scope, sourcePageId))) {
+				throw new Error(`Page ${sourcePageId} is outside the tenant scope`);
+			}
+			const targets = await deps.pages.findMetaByIds(scope, targetPageIds);
+			if (targets.length !== new Set(targetPageIds).size) {
+				throw new Error("Page links cannot cross tenant boundaries");
+			}
 			const current = linksBySource.get(sourcePageId) ?? [];
 			const currentIds = [...current].sort();
 			const nextIds = [...targetPageIds].sort();
@@ -32,11 +40,11 @@ export function createTestPageLinkRepository(deps: {
 			linksBySource.set(sourcePageId, [...targetPageIds]);
 			return true;
 		},
-		async listBacklinkSources(targetPageId: string) {
+		async listBacklinkSources(scope, targetPageId: string) {
 			const sources: PageMeta[] = [];
 			for (const [sourcePageId, targets] of linksBySource) {
 				if (!targets.includes(targetPageId)) continue;
-				const source = await deps.pages.findMetaById(sourcePageId);
+				const source = await deps.pages.findMetaById(scope, sourcePageId);
 				if (source && source.deletedAt === null) {
 					sources.push(source);
 				}
@@ -57,7 +65,8 @@ export function createTestPageRepository(): PageRepository {
 	}
 
 	return {
-		async listMetaByWorkspace(workspaceId: string) {
+		async listMetaByWorkspace(scope) {
+			const workspaceId = tenantScopeId(scope);
 			return Array.from(pages.values())
 				.filter(
 					(page) => page.workspaceId === workspaceId && page.deletedAt === null,
@@ -65,7 +74,8 @@ export function createTestPageRepository(): PageRepository {
 				.sort((left, right) => left.position - right.position)
 				.map(toMeta);
 		},
-		async listHierarchyByWorkspace(workspaceId: string) {
+		async listHierarchyByWorkspace(scope) {
+			const workspaceId = tenantScopeId(scope);
 			return Array.from(pages.values())
 				.filter((page) => page.workspaceId === workspaceId)
 				.map((page) => ({
@@ -73,7 +83,8 @@ export function createTestPageRepository(): PageRepository {
 					parentPageId: page.parentPageId,
 				}));
 		},
-		async listTrashedMetaByWorkspace(workspaceId: string) {
+		async listTrashedMetaByWorkspace(scope) {
+			const workspaceId = tenantScopeId(scope);
 			return Array.from(pages.values())
 				.filter(
 					(page) => page.workspaceId === workspaceId && page.deletedAt !== null,
@@ -81,24 +92,25 @@ export function createTestPageRepository(): PageRepository {
 				.sort((left, right) => left.position - right.position)
 				.map(toMeta);
 		},
-		async findById(id: string) {
-			return pages.get(id) ?? null;
-		},
-		async findMetaById(id: string) {
+		async findById(scope, id: string) {
 			const page = pages.get(id);
-			return page ? toMeta(page) : null;
+			return page?.workspaceId === tenantScopeId(scope) ? page : null;
 		},
-		async findMetaByIds(ids: string[]) {
+		async findMetaById(scope, id: string) {
+			const page = pages.get(id);
+			return page?.workspaceId === tenantScopeId(scope) ? toMeta(page) : null;
+		},
+		async findMetaByIds(scope, ids: string[]) {
 			const wanted = new Set(ids);
 			return Array.from(pages.values())
-				.filter((page) => wanted.has(page.id))
+				.filter(
+					(page) =>
+						page.workspaceId === tenantScopeId(scope) && wanted.has(page.id),
+				)
 				.map(toMeta);
 		},
-		async searchByWorkspace(
-			workspaceId: string,
-			needle: string,
-			limit: number,
-		) {
+		async searchByWorkspace(scope, needle: string, limit: number) {
+			const workspaceId = tenantScopeId(scope);
 			const lowered = needle.toLowerCase();
 			return Array.from(pages.values())
 				.filter(
@@ -117,15 +129,17 @@ export function createTestPageRepository(): PageRepository {
 					searchText: extractPageSearchText(page.content),
 				}));
 		},
-		async listIdsByParent(parentPageId: string) {
+		async listIdsByParent(scope, parentPageId: string) {
 			return Array.from(pages.values())
-				.filter((page) => page.parentPageId === parentPageId)
+				.filter(
+					(page) =>
+						page.workspaceId === tenantScopeId(scope) &&
+						page.parentPageId === parentPageId,
+				)
 				.map((page) => page.id);
 		},
-		async maxPositionForParent(
-			workspaceId: string,
-			parentPageId: string | null,
-		) {
+		async maxPositionForParent(scope, parentPageId: string | null) {
+			const workspaceId = tenantScopeId(scope);
 			return Array.from(pages.values())
 				.filter(
 					(page) =>
@@ -135,12 +149,12 @@ export function createTestPageRepository(): PageRepository {
 				)
 				.reduce((max, page) => Math.max(max, page.position), 0);
 		},
-		async create(input: NewPage) {
+		async create(scope, input: NewPage) {
 			const now = new Date().toISOString();
 			const page: Page = {
 				id: crypto.randomUUID(),
 				userId: input.userId,
-				workspaceId: input.workspaceId,
+				workspaceId: tenantScopeId(scope),
 				parentPageId: input.parentPageId,
 				title: input.title,
 				icon: null,
@@ -153,9 +167,9 @@ export function createTestPageRepository(): PageRepository {
 			pages.set(page.id, page);
 			return toMeta(page);
 		},
-		async update(id: string, input: UpdatePageData) {
+		async update(scope, id: string, input: UpdatePageData) {
 			const page = pages.get(id);
-			if (!page) {
+			if (!page || page.workspaceId !== tenantScopeId(scope)) {
 				throw new Error(`Page not found: ${id}`);
 			}
 
@@ -163,9 +177,14 @@ export function createTestPageRepository(): PageRepository {
 			pages.set(id, next);
 			return toMeta(next);
 		},
-		async saveContent(id: string, contentJson: string, _searchText: string) {
+		async saveContent(
+			scope,
+			id: string,
+			contentJson: string,
+			_searchText: string,
+		) {
 			const page = pages.get(id);
-			if (!page) {
+			if (!page || page.workspaceId !== tenantScopeId(scope)) {
 				throw new Error(`Page not found: ${id}`);
 			}
 
@@ -176,13 +195,14 @@ export function createTestPageRepository(): PageRepository {
 			return { updatedAt };
 		},
 		async saveContentIf(
+			scope,
 			id: string,
 			contentJson: string,
 			_searchText: string,
 			baseUpdatedAt: string,
 		) {
 			const page = pages.get(id);
-			if (!page) {
+			if (!page || page.workspaceId !== tenantScopeId(scope)) {
 				throw new Error(`Page not found: ${id}`);
 			}
 			if (page.updatedAt !== baseUpdatedAt) {
@@ -196,10 +216,10 @@ export function createTestPageRepository(): PageRepository {
 			pages.set(id, { ...page, content: JSON.parse(contentJson), updatedAt });
 			return { updatedAt };
 		},
-		async setDeletedByIds(ids: string[], deletedAt: string | null) {
+		async setDeletedByIds(scope, ids: string[], deletedAt: string | null) {
 			for (const id of ids) {
 				const page = pages.get(id);
-				if (page) {
+				if (page?.workspaceId === tenantScopeId(scope)) {
 					pages.set(id, {
 						...page,
 						deletedAt,
@@ -208,12 +228,15 @@ export function createTestPageRepository(): PageRepository {
 				}
 			}
 		},
-		async deleteByIds(ids: string[]) {
+		async deleteByIds(scope, ids: string[]) {
 			for (const id of ids) {
-				pages.delete(id);
+				if (pages.get(id)?.workspaceId === tenantScopeId(scope)) {
+					pages.delete(id);
+				}
 			}
 		},
-		async deleteByWorkspace(workspaceId: string) {
+		async deleteByWorkspace(scope) {
+			const workspaceId = tenantScopeId(scope);
 			for (const page of Array.from(pages.values())) {
 				if (page.workspaceId === workspaceId) {
 					pages.delete(page.id);
@@ -224,29 +247,39 @@ export function createTestPageRepository(): PageRepository {
 }
 
 export function createTestPageVersionRepository(): PageVersionRepository {
-	const versions = new Map<string, PageVersion>();
+	type StoredVersion = PageVersion & { workspaceId: string };
+	const versions = new Map<string, StoredVersion>();
 
-	function metasByPage(pageId: string): PageVersion[] {
+	function versionsByPage(scopeId: string, pageId: string): StoredVersion[] {
 		return Array.from(versions.values())
-			.filter((version) => version.pageId === pageId)
+			.filter(
+				(version) =>
+					version.workspaceId === scopeId && version.pageId === pageId,
+			)
 			.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 	}
 
 	return {
-		async listMetaByPage(pageId: string) {
-			return metasByPage(pageId).map(({ content: _content, ...meta }) => ({
-				...meta,
-			}));
+		async listMetaByPage(scope, pageId: string) {
+			return versionsByPage(tenantScopeId(scope), pageId).map(
+				({ content: _content, workspaceId: _workspaceId, ...meta }) => ({
+					...meta,
+				}),
+			);
 		},
-		async findById(id: string) {
-			return versions.get(id) ?? null;
+		async findById(scope, id: string) {
+			const version = versions.get(id);
+			if (!version || version.workspaceId !== tenantScopeId(scope)) return null;
+			const { workspaceId: _workspaceId, ...result } = version;
+			return result;
 		},
-		async latestCreatedAt(pageId: string) {
-			return metasByPage(pageId)[0]?.createdAt ?? null;
+		async latestCreatedAt(scope, pageId: string) {
+			return versionsByPage(tenantScopeId(scope), pageId)[0]?.createdAt ?? null;
 		},
-		async create(input: NewPageVersion) {
-			const version: PageVersion = {
+		async create(scope, input: NewPageVersion) {
+			const version: StoredVersion = {
 				id: crypto.randomUUID(),
+				workspaceId: tenantScopeId(scope),
 				pageId: input.pageId,
 				title: input.title,
 				icon: input.icon,
@@ -257,13 +290,16 @@ export function createTestPageVersionRepository(): PageVersionRepository {
 				content: JSON.parse(input.contentJson),
 			};
 			versions.set(version.id, version);
-			const { content: _content, ...meta } = version;
+			const { content: _content, workspaceId: _workspaceId, ...meta } = version;
 			return meta;
 		},
-		async prune(pageId: string, keep: number) {
-			for (const stale of metasByPage(pageId).slice(keep)) {
+		async prune(scope, pageId: string, keep: number) {
+			for (const stale of versionsByPage(tenantScopeId(scope), pageId).slice(
+				keep,
+			)) {
 				versions.delete(stale.id);
 			}
 		},
 	};
 }
+import { tenantScopeId } from "@beignet/core/ports";

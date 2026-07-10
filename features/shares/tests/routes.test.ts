@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { createMemoryRateLimiter, createStaticAuth } from "@beignet/core/ports";
+import {
+	createMemoryRateLimiter,
+	createStaticAuth,
+	createTenant,
+	createTenantScope,
+} from "@beignet/core/ports";
 import {
 	createIdempotencyHooks,
 	createRateLimitHooks,
@@ -33,9 +38,9 @@ describe("shareRoutes rate limiting", () => {
 		const workspaceId = crypto.randomUUID().replaceAll("-", "");
 		const pages = createTestPageRepository();
 		const shares = createTestShareRepository();
-		const page = await pages.create({
+		const scope = createTenantScope(createTenant(workspaceId));
+		const page = await pages.create(scope, {
 			userId: "user_test",
-			workspaceId,
 			parentPageId: null,
 			title: "Limited",
 			position: 1,

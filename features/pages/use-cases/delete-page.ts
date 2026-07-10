@@ -1,18 +1,19 @@
 import "@beignet/core/server-only";
+import type { TenantScope } from "@beignet/core/ports";
 import type { PageRepository } from "@/features/pages/ports";
 import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { DeletePageOutputSchema, PageIdInputSchema } from "../schemas";
 
 /** Collect the page and all descendants with a single workspace hierarchy read. */
 export async function collectSubtreeIds(
 	pages: Pick<PageRepository, "listHierarchyByWorkspace">,
-	workspaceId: string,
+	scope: TenantScope,
 	rootId: string,
 ): Promise<string[]> {
 	const childrenByParent = new Map<string, string[]>();
-	for (const row of await pages.listHierarchyByWorkspace(workspaceId)) {
+	for (const row of await pages.listHierarchyByWorkspace(scope)) {
 		if (!row.parentPageId) continue;
 		const children = childrenByParent.get(row.parentPageId) ?? [];
 		children.push(row.id);
@@ -34,21 +35,17 @@ export const deletePageUseCase = useCase
 	.input(PageIdInputSchema)
 	.output(DeletePageOutputSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
 		await ctx.ports.uow.transaction(async (tx) => {
-			const page = await tx.pages.findMetaById(input.id);
+			const page = await tx.pages.findMetaById(scope, input.id);
 			if (!page || page.deletedAt !== null) {
 				throw appError("PageNotFound", { details: { id: input.id } });
 			}
 
 			await ctx.gate.authorize("pages.delete", page);
 
-			const subtree = await collectSubtreeIds(
-				tx.pages,
-				page.workspaceId,
-				page.id,
-			);
-			await tx.pages.setDeletedByIds(subtree, new Date().toISOString());
+			const subtree = await collectSubtreeIds(tx.pages, scope, page.id);
+			await tx.pages.setDeletedByIds(scope, subtree, new Date().toISOString());
 		});
 	});

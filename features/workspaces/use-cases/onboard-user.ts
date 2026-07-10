@@ -1,7 +1,7 @@
 import "@beignet/core/server-only";
 import { reconcilePageDerivations } from "@/features/pages/lib/apply-page-content";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
-import { requireActiveWorkspaceId, requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { canEditContent } from "@/lib/org-access";
 import { useCase } from "@/lib/use-case";
 import { buildOnboardingPages } from "../lib/onboarding-content";
@@ -20,7 +20,8 @@ export const onboardUserUseCase = useCase
 	.output(OnboardOutputSchema)
 	.run(async ({ ctx }) => {
 		const user = requireUser(ctx);
-		const workspaceId = requireActiveWorkspaceId(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
+		const workspaceId = scope.id;
 
 		// Seeding writes pages, so read-only members never seed — a viewer
 		// signing into a not-yet-seeded shared workspace is a no-op, not an
@@ -34,8 +35,8 @@ export const onboardUserUseCase = useCase
 			// trashes everything shouldn't get the welcome content re-seeded on
 			// their next sign-in.
 			const [live, trashed] = await Promise.all([
-				tx.pages.listMetaByWorkspace(workspaceId),
-				tx.pages.listTrashedMetaByWorkspace(workspaceId),
+				tx.pages.listMetaByWorkspace(scope),
+				tx.pages.listTrashedMetaByWorkspace(scope),
 			]);
 			if (live.length > 0 || trashed.length > 0) {
 				return { workspaceId, pageId: null };
@@ -47,21 +48,21 @@ export const onboardUserUseCase = useCase
 			let welcomePageId: string | null = null;
 			let position = 1;
 			for (const page of pages) {
-				const created = await tx.pages.create({
+				const created = await tx.pages.create(scope, {
 					userId: user.id,
-					workspaceId,
 					parentPageId: null,
 					title: page.title,
 					position,
 				});
 				if (welcomePageId === null) welcomePageId = created.id;
-				await tx.pages.update(created.id, { icon: page.icon });
+				await tx.pages.update(scope, created.id, { icon: page.icon });
 				await tx.pages.saveContent(
+					scope,
 					created.id,
 					JSON.stringify(page.content),
 					extractPageSearchText(page.content),
 				);
-				await reconcilePageDerivations(tx, created, page.content, {
+				await reconcilePageDerivations(tx, scope, created, page.content, {
 					defaultTaskAssigneeId: user.id,
 				});
 				position += 1;

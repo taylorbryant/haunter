@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { CanvasIdInputSchema, CanvasSchema } from "../schemas";
 
@@ -9,20 +9,16 @@ export const getCanvasUseCase = useCase
 	.input(CanvasIdInputSchema)
 	.output(CanvasSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
-		const canvas = await ctx.ports.canvases.findById(input.id);
+		const canvas = await ctx.ports.canvases.findById(scope, input.id);
 		if (!canvas) {
 			throw appError("CanvasNotFound", { details: { id: input.id } });
 		}
 
 		await ctx.gate.authorize("canvases.read", canvas);
-		const page = await ctx.ports.pages.findMetaById(canvas.pageId);
-		if (
-			!page ||
-			page.deletedAt !== null ||
-			page.workspaceId !== canvas.workspaceId
-		) {
+		const page = await ctx.ports.pages.findMetaById(scope, canvas.pageId);
+		if (!page || page.deletedAt !== null) {
 			throw appError("CanvasNotFound", { details: { id: input.id } });
 		}
 

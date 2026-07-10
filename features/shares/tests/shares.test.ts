@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
+import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestAnonymousActor,
 	createTestTenant,
@@ -94,9 +95,9 @@ async function createFixture(role = "owner") {
 	const canvases = createTestCanvasRepository();
 	// Better Auth org ids are nanoid-style, not UUIDs.
 	const workspaceId = crypto.randomUUID().replaceAll("-", "");
-	const page = await pages.create({
+	const scope = createTenantScope(createTestTenant(workspaceId));
+	const page = await pages.create(scope, {
 		userId: "user_test",
-		workspaceId,
 		parentPageId: null,
 		title: "Public notes",
 		position: 1,
@@ -111,6 +112,7 @@ async function createFixture(role = "owner") {
 		},
 	];
 	await pages.saveContent(
+		scope,
 		page.id,
 		JSON.stringify(content),
 		extractPageSearchText(content),
@@ -132,6 +134,7 @@ async function createFixture(role = "owner") {
 		shares,
 		canvases,
 		workspaceId,
+		scope,
 		page,
 		tester,
 		ctx,
@@ -214,7 +217,7 @@ describe("page shares", () => {
 	});
 
 	it("a trashed page reads as gone even with a live token", async () => {
-		const { pages, page, tester, ctx, anonymous, anonymousCtx } =
+		const { pages, scope, page, tester, ctx, anonymous, anonymousCtx } =
 			await createFixture();
 
 		const share = await tester.run(
@@ -222,7 +225,7 @@ describe("page shares", () => {
 			{ pageId: page.id },
 			{ ctx },
 		);
-		await pages.setDeletedByIds([page.id], new Date().toISOString());
+		await pages.setDeletedByIds(scope, [page.id], new Date().toISOString());
 
 		await expect(
 			anonymous.run(
@@ -245,7 +248,7 @@ describe("page shares", () => {
 	});
 
 	it("rewrites embedded file URLs to the share-scoped route", async () => {
-		const { pages, page, tester, ctx, anonymous, anonymousCtx } =
+		const { pages, scope, page, tester, ctx, anonymous, anonymousCtx } =
 			await createFixture();
 		const key = `pages/ws/${page.id}/img.png`;
 
@@ -258,6 +261,7 @@ describe("page shares", () => {
 			},
 		];
 		await pages.saveContent(
+			scope,
 			page.id,
 			JSON.stringify(content),
 			extractPageSearchText(content),
@@ -287,7 +291,7 @@ describe("page shares", () => {
 		const {
 			pages,
 			canvases,
-			workspaceId,
+			scope,
 			page,
 			tester,
 			ctx,
@@ -295,25 +299,23 @@ describe("page shares", () => {
 			anonymousCtx,
 		} = await createFixture();
 
-		const onSharedPage = await canvases.create({
+		const onSharedPage = await canvases.create(scope, {
 			userId: "user_test",
-			workspaceId,
 			pageId: page.id,
 		});
 		await canvases.saveSnapshot(
+			scope,
 			onSharedPage.id,
 			JSON.stringify({ store: { shape: 1 } }),
 		);
-		const otherPage = await pages.create({
+		const otherPage = await pages.create(scope, {
 			userId: "user_test",
-			workspaceId,
 			parentPageId: null,
 			title: "Not shared",
 			position: 2,
 		});
-		const elsewhere = await canvases.create({
+		const elsewhere = await canvases.create(scope, {
 			userId: "user_test",
-			workspaceId,
 			pageId: otherPage.id,
 		});
 
@@ -340,7 +342,7 @@ describe("page shares", () => {
 		).rejects.toThrow(/no longer available/);
 	});
 
-	it("members of another workspace cannot publish someone else's page", async () => {
+	it("treats another workspace's page as not found", async () => {
 		const { pages, shares, page } = await createFixture();
 
 		const outsider = createTester({
@@ -357,7 +359,7 @@ describe("page shares", () => {
 				{ pageId: page.id },
 				{ ctx: outsiderCtx },
 			),
-		).rejects.toThrow("You do not have access to this page.");
+		).rejects.toThrow("Page not found");
 	});
 });
 

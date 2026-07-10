@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
-import { requireActiveWorkspace, requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { CreateTaskInputSchema, TaskSchema } from "../schemas";
 
@@ -12,7 +12,7 @@ export const createTaskUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
 		await ctx.gate.authorize("tasks.create");
-		requireActiveWorkspace(ctx, input.workspaceId);
+		const scope = requireActiveWorkspaceScope(ctx, input.workspaceId);
 
 		return ctx.ports.uow.transaction(async (tx) => {
 			// Quick-add means "a task for me" unless the caller says otherwise;
@@ -30,9 +30,8 @@ export const createTaskUseCase = useCase
 				}
 			}
 
-			return tx.tasks.create({
+			return tx.tasks.create(scope, {
 				userId: user.id,
-				workspaceId: input.workspaceId,
 				pageId: null,
 				sourceBlockId: null,
 				title: input.title,

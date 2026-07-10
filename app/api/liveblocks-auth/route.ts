@@ -1,5 +1,6 @@
 import { Liveblocks } from "@liveblocks/node";
 import { parseRoomId } from "@/features/collab/lib/room";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { getServer } from "@/server";
 
@@ -43,19 +44,23 @@ export async function POST(req: Request) {
 			if (!body?.room || !target) {
 				return new Response(null, { status: 403 });
 			}
+			const scope = requireActiveWorkspaceScope(ctx);
 
 			const workspaceId =
 				target.kind === "page"
 					? await ctx.ports.pages
-							.findById(target.id)
+							.findById(scope, target.id)
 							.then((page) =>
 								page && page.deletedAt === null ? page.workspaceId : null,
 							)
 					: await ctx.ports.canvases
-							.findById(target.id)
+							.findById(scope, target.id)
 							.then(async (canvas) => {
 								if (!canvas) return null;
-								const page = await ctx.ports.pages.findMetaById(canvas.pageId);
+								const page = await ctx.ports.pages.findMetaById(
+									scope,
+									canvas.pageId,
+								);
 								return page &&
 									page.deletedAt === null &&
 									page.workspaceId === canvas.workspaceId

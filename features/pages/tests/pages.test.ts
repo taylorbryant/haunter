@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
+import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestTenant,
 	createTestUserActor,
@@ -110,8 +111,9 @@ async function createFixture(userId = "user_test") {
 	};
 	const tester = createTester(userId, pages, workspace.id, tasks);
 	const ctx = await tester.ctx();
+	const scope = createTenantScope(createTestTenant(workspace.id));
 
-	return { pages, tasks, workspace, tester, ctx };
+	return { pages, tasks, workspace, scope, tester, ctx };
 }
 
 describe("pages use cases", () => {
@@ -252,13 +254,15 @@ describe("pages use cases", () => {
 		);
 		// A page in a different workspace, seeded directly (the tenant guard
 		// forbids creating it through the use case from this context).
-		const foreign = await pages.create({
-			userId: "user_test",
-			workspaceId: crypto.randomUUID(),
-			parentPageId: null,
-			title: "B",
-			position: 1,
-		});
+		const foreign = await pages.create(
+			createTenantScope(createTestTenant(crypto.randomUUID())),
+			{
+				userId: "user_test",
+				parentPageId: null,
+				title: "B",
+				position: 1,
+			},
+		);
 
 		await expect(
 			tester.run(
@@ -349,7 +353,7 @@ describe("pages use cases", () => {
 	});
 
 	it("purges a trashed subtree with its tasks", async () => {
-		const { pages, tester, ctx, workspace } = await createFixture();
+		const { pages, scope, tester, ctx, workspace } = await createFixture();
 
 		const root = await tester.run(
 			createPageUseCase,
@@ -382,11 +386,11 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 		expect(trash.items).toEqual([]);
-		expect(await pages.findMetaById(root.id)).toBeNull();
+		expect(await pages.findMetaById(scope, root.id)).toBeNull();
 	});
 
 	it("hides tasks from trashed pages in the workspace task list", async () => {
-		const { workspace, tester, ctx, tasks } = await createFixture();
+		const { workspace, scope, tester, ctx, tasks } = await createFixture();
 
 		const page = await tester.run(
 			createPageUseCase,
@@ -410,13 +414,13 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 
-		expect(await tasks.listByWorkspace(workspace.id, "all")).toHaveLength(1);
+		expect(await tasks.listByWorkspace(scope, "all")).toHaveLength(1);
 
 		await tester.run(deletePageUseCase, { id: page.id }, { ctx });
-		expect(await tasks.listByWorkspace(workspace.id, "all")).toHaveLength(0);
+		expect(await tasks.listByWorkspace(scope, "all")).toHaveLength(0);
 
 		await tester.run(restorePageUseCase, { id: page.id }, { ctx });
-		expect(await tasks.listByWorkspace(workspace.id, "all")).toHaveLength(1);
+		expect(await tasks.listByWorkspace(scope, "all")).toHaveLength(1);
 	});
 
 	it("deletes a page and all of its descendants", async () => {
@@ -457,7 +461,7 @@ describe("pages use cases", () => {
 		expect(listed.items.map((item) => item.id)).toEqual([sibling.id]);
 	});
 
-	it("denies reading a page in another workspace", async () => {
+	it("treats a page in another workspace as not found", async () => {
 		const { pages, workspace, tester, ctx } = await createFixture();
 
 		const page = await tester.run(
@@ -472,7 +476,7 @@ describe("pages use cases", () => {
 
 		await expect(
 			intruder.run(getPageUseCase, { id: page.id }, { ctx: intruderCtx }),
-		).rejects.toThrow("You do not have access to this page.");
+		).rejects.toThrow("Page not found");
 	});
 
 	it("lets a viewer read but not edit or create pages", async () => {
@@ -782,13 +786,15 @@ describe("pages use cases", () => {
 
 		// A page in a different workspace must not surface in this workspace's
 		// search, even though its title matches.
-		await pages.create({
-			userId: "user_other",
-			workspaceId: crypto.randomUUID(),
-			parentPageId: null,
-			title: "Their meeting agenda",
-			position: 1,
-		});
+		await pages.create(
+			createTenantScope(createTestTenant(crypto.randomUUID())),
+			{
+				userId: "user_other",
+				parentPageId: null,
+				title: "Their meeting agenda",
+				position: 1,
+			},
+		);
 
 		// "sql" appears only in the code block's language prop, not its text.
 		const snippets = await tester.run(
@@ -909,7 +915,7 @@ describe("page versioning", () => {
 	});
 
 	it("restore snapshots the current state, applies the version, and reconciles tasks", async () => {
-		const { tasks, workspace, tester, ctx } = await createFixture();
+		const { tasks, workspace, scope, tester, ctx } = await createFixture();
 		const page = await tester.run(
 			createPageUseCase,
 			{ workspaceId: workspace.id, title: "Restorable" },
@@ -927,7 +933,7 @@ describe("page versioning", () => {
 			{ id: page.id, content: [block("b2", "No more tasks")] },
 			{ ctx },
 		);
-		expect(await tasks.listByPage(page.id)).toHaveLength(0);
+		expect(await tasks.listByPage(scope, page.id)).toHaveLength(0);
 
 		const versions = await tester.run(
 			listPageVersionsUseCase,
@@ -946,7 +952,7 @@ describe("page versioning", () => {
 		// The doc is back on v1 and its task row is reconciled back into being.
 		const restored = await tester.run(getPageUseCase, { id: page.id }, { ctx });
 		expect(restored.content).toEqual([taskBlock("t1", "Old task")]);
-		expect(await tasks.listByPage(page.id)).toHaveLength(1);
+		expect(await tasks.listByPage(scope, page.id)).toHaveLength(1);
 
 		// The pre-restore state was preserved as a "restore" version.
 		const after = await tester.run(

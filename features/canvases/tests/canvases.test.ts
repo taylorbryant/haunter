@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
+import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestTenant,
 	createTestUserActor,
@@ -82,9 +83,9 @@ async function createFixture(userId = "user_test") {
 		id: crypto.randomUUID().replaceAll("-", ""),
 		name: "Work",
 	};
-	const page = await pages.create({
+	const scope = createTenantScope(createTestTenant(workspace.id));
+	const page = await pages.create(scope, {
 		userId,
-		workspaceId: workspace.id,
 		parentPageId: null,
 		title: "Diagrams",
 		position: 1,
@@ -92,7 +93,7 @@ async function createFixture(userId = "user_test") {
 	const tester = createTester(userId, { canvases, pages }, workspace.id);
 	const ctx = await tester.ctx();
 
-	return { canvases, pages, workspace, page, tester, ctx };
+	return { canvases, pages, workspace, scope, page, tester, ctx };
 }
 
 describe("canvases use cases", () => {
@@ -187,10 +188,10 @@ describe("canvases use cases", () => {
 				{ workspaceId: workspace.id, pageId: page.id },
 				{ ctx: intruderCtx },
 			),
-		).rejects.toThrow("You do not have access to this page.");
+		).rejects.toThrow("You do not have access to this workspace.");
 	});
 
-	it("denies reading a canvas in another workspace", async () => {
+	it("treats a canvas in another workspace as not found", async () => {
 		const { canvases, pages, workspace, page, tester, ctx } =
 			await createFixture("user_owner");
 
@@ -209,18 +210,19 @@ describe("canvases use cases", () => {
 
 		await expect(
 			intruder.run(getCanvasUseCase, { id: canvas.id }, { ctx: intruderCtx }),
-		).rejects.toThrow("You do not have access to this canvas.");
+		).rejects.toThrow("Canvas not found");
 	});
 
 	it("treats canvases on trashed pages as gone", async () => {
-		const { pages, workspace, page, tester, ctx } = await createFixture();
+		const { pages, workspace, scope, page, tester, ctx } =
+			await createFixture();
 		const canvas = await tester.run(
 			createCanvasUseCase,
 			{ workspaceId: workspace.id, pageId: page.id },
 			{ ctx },
 		);
 
-		await pages.setDeletedByIds([page.id], new Date().toISOString());
+		await pages.setDeletedByIds(scope, [page.id], new Date().toISOString());
 
 		await expect(
 			tester.run(getCanvasUseCase, { id: canvas.id }, { ctx }),
@@ -242,7 +244,8 @@ describe("canvases use cases", () => {
 	});
 
 	it("deletes a page's canvases when the page is purged", async () => {
-		const { canvases, workspace, page, tester, ctx } = await createFixture();
+		const { canvases, workspace, scope, page, tester, ctx } =
+			await createFixture();
 
 		const canvas = await tester.run(
 			createCanvasUseCase,
@@ -252,6 +255,6 @@ describe("canvases use cases", () => {
 
 		await tester.run(purgePageUseCase, { id: page.id }, { ctx });
 
-		expect(await canvases.findById(canvas.id)).toBeNull();
+		expect(await canvases.findById(scope, canvas.id)).toBeNull();
 	});
 });

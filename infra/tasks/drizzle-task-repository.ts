@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
 import { and, asc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import type {
@@ -9,6 +10,7 @@ import type {
 } from "@/features/tasks/ports";
 import type { Task, TaskFilter, TaskWithPage } from "@/features/tasks/schemas";
 import * as schema from "@/infra/db/schema";
+import { assertPageInScope } from "@/infra/db/tenant-scope";
 
 type TaskRow = typeof schema.tasks.$inferSelect;
 
@@ -34,10 +36,11 @@ export function createDrizzleTaskRepository(
 ): TaskRepository {
 	return {
 		async listByWorkspace(
-			workspaceId: string,
+			scope,
 			filter: TaskFilter,
 			options: ListTasksOptions = {},
 		): Promise<TaskWithPage[]> {
+			const workspaceId = tenantScopeId(scope);
 			const conditions = [
 				eq(schema.tasks.workspaceId, workspaceId),
 				// Hide tasks whose source page is in the trash. Standalone tasks
@@ -66,7 +69,13 @@ export function createDrizzleTaskRepository(
 					>`COALESCE(NULLIF(${schema.user.name}, ''), ${schema.user.email})`,
 				})
 				.from(schema.tasks)
-				.leftJoin(schema.pages, eq(schema.tasks.pageId, schema.pages.id))
+				.leftJoin(
+					schema.pages,
+					and(
+						eq(schema.tasks.pageId, schema.pages.id),
+						eq(schema.tasks.workspaceId, schema.pages.workspaceId),
+					),
+				)
 				.leftJoin(schema.user, eq(schema.tasks.assigneeId, schema.user.id))
 				.where(and(...conditions))
 				.orderBy(
@@ -87,29 +96,42 @@ export function createDrizzleTaskRepository(
 				assigneeName: row.assigneeName ?? null,
 			}));
 		},
-		async listByPage(pageId: string) {
+		async listByPage(scope, pageId: string) {
 			const rows = await db
 				.select()
 				.from(schema.tasks)
-				.where(eq(schema.tasks.pageId, pageId));
+				.where(
+					and(
+						eq(schema.tasks.pageId, pageId),
+						eq(schema.tasks.workspaceId, tenantScopeId(scope)),
+					),
+				);
 
 			return rows.map(toTask);
 		},
-		async findById(id: string) {
+		async findById(scope, id: string) {
 			const [row] = await db
 				.select()
 				.from(schema.tasks)
-				.where(eq(schema.tasks.id, id))
+				.where(
+					and(
+						eq(schema.tasks.id, id),
+						eq(schema.tasks.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.limit(1);
 
 			return row ? toTask(row) : null;
 		},
-		async create(input: NewTask) {
+		async create(scope, input: NewTask) {
+			if (input.pageId !== null) {
+				await assertPageInScope(db, scope, input.pageId);
+			}
 			const now = new Date().toISOString();
 			const task = {
 				id: crypto.randomUUID(),
 				userId: input.userId,
-				workspaceId: input.workspaceId,
+				workspaceId: tenantScopeId(scope),
 				pageId: input.pageId,
 				sourceBlockId: input.sourceBlockId,
 				title: input.title,
@@ -128,11 +150,16 @@ export function createDrizzleTaskRepository(
 
 			return toTask(row);
 		},
-		async update(id: string, input: UpdateTaskData) {
+		async update(scope, id: string, input: UpdateTaskData) {
 			const [row] = await db
 				.update(schema.tasks)
 				.set({ ...input, updatedAt: new Date().toISOString() })
-				.where(eq(schema.tasks.id, id))
+				.where(
+					and(
+						eq(schema.tasks.id, id),
+						eq(schema.tasks.workspaceId, tenantScopeId(scope)),
+					),
+				)
 				.returning();
 
 			if (!row) {
@@ -141,18 +168,37 @@ export function createDrizzleTaskRepository(
 
 			return toTask(row);
 		},
-		async delete(id: string) {
-			await db.delete(schema.tasks).where(eq(schema.tasks.id, id));
+		async delete(scope, id: string) {
+			await db
+				.delete(schema.tasks)
+				.where(
+					and(
+						eq(schema.tasks.id, id),
+						eq(schema.tasks.workspaceId, tenantScopeId(scope)),
+					),
+				);
 		},
-		async deleteByIds(ids: string[]) {
+		async deleteByIds(scope, ids: string[]) {
 			if (ids.length === 0) return;
-			await db.delete(schema.tasks).where(inArray(schema.tasks.id, ids));
+			await db
+				.delete(schema.tasks)
+				.where(
+					and(
+						inArray(schema.tasks.id, ids),
+						eq(schema.tasks.workspaceId, tenantScopeId(scope)),
+					),
+				);
 		},
-		async deleteByPageIds(pageIds: string[]) {
+		async deleteByPageIds(scope, pageIds: string[]) {
 			if (pageIds.length === 0) return;
 			await db
 				.delete(schema.tasks)
-				.where(inArray(schema.tasks.pageId, pageIds));
+				.where(
+					and(
+						inArray(schema.tasks.pageId, pageIds),
+						eq(schema.tasks.workspaceId, tenantScopeId(scope)),
+					),
+				);
 		},
 	};
 }

@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { reconcilePageDerivations } from "../lib/apply-page-content";
 import { extractPageSearchText } from "../lib/extract-page-text";
@@ -20,9 +20,10 @@ export const savePageContentUseCase = useCase
 	.output(SavePageContentOutputSchema)
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
 		return ctx.ports.uow.transaction(async (tx) => {
-			const page = await tx.pages.findMetaById(input.id);
+			const page = await tx.pages.findMetaById(scope, input.id);
 			if (!page || page.deletedAt !== null) {
 				throw appError("PageNotFound", { details: { id: input.id } });
 			}
@@ -32,23 +33,25 @@ export const savePageContentUseCase = useCase
 			// Checkpoint the pre-save state (not the incoming one) at most once
 			// per interval, so history always contains a restore point that
 			// predates the current editing burst.
-			const latestVersionAt = await tx.pageVersions.latestCreatedAt(page.id);
+			const latestVersionAt = await tx.pageVersions.latestCreatedAt(
+				scope,
+				page.id,
+			);
 			const due =
 				latestVersionAt === null ||
 				Date.now() - Date.parse(latestVersionAt) >= CHECKPOINT_INTERVAL_MS;
 			if (due) {
-				const current = await tx.pages.findById(page.id);
+				const current = await tx.pages.findById(scope, page.id);
 				if (current && current.content.length > 0) {
-					await tx.pageVersions.create({
+					await tx.pageVersions.create(scope, {
 						pageId: page.id,
-						workspaceId: page.workspaceId,
 						title: current.title,
 						icon: current.icon,
 						contentJson: JSON.stringify(current.content),
 						cause: "checkpoint",
 						createdBy: user.id,
 					});
-					await tx.pageVersions.prune(page.id, VERSION_RETENTION);
+					await tx.pageVersions.prune(scope, page.id, VERSION_RETENTION);
 				}
 			}
 
@@ -60,12 +63,13 @@ export const savePageContentUseCase = useCase
 			const searchText = extractPageSearchText(input.content);
 			const result = input.baseUpdatedAt
 				? await tx.pages.saveContentIf(
+						scope,
 						input.id,
 						contentJson,
 						searchText,
 						input.baseUpdatedAt,
 					)
-				: await tx.pages.saveContent(input.id, contentJson, searchText);
+				: await tx.pages.saveContent(scope, input.id, contentJson, searchText);
 			if (result === null) {
 				throw appError("StaleWrite", { details: { id: input.id } });
 			}
@@ -74,6 +78,7 @@ export const savePageContentUseCase = useCase
 			// outgoing page links.
 			const derivations = await reconcilePageDerivations(
 				tx,
+				scope,
 				page,
 				input.content,
 				{ defaultTaskAssigneeId: user.id },

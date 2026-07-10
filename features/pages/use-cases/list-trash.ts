@@ -1,5 +1,5 @@
 import "@beignet/core/server-only";
-import { requireActiveWorkspace } from "@/lib/auth";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { ListTrashInputSchema, ListTrashOutputSchema } from "../schemas";
 
@@ -12,11 +12,9 @@ export const listTrashUseCase = useCase
 	.input(ListTrashInputSchema)
 	.output(ListTrashOutputSchema)
 	.run(async ({ ctx, input }) => {
-		requireActiveWorkspace(ctx, input.workspaceId);
+		const scope = requireActiveWorkspaceScope(ctx, input.workspaceId);
 
-		const trashed = await ctx.ports.pages.listTrashedMetaByWorkspace(
-			input.workspaceId,
-		);
+		const trashed = await ctx.ports.pages.listTrashedMetaByWorkspace(scope);
 		const trashedIds = new Set(trashed.map((page) => page.id));
 		const items = trashed
 			.filter(

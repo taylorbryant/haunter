@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
+import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { PageLinkRepository } from "@/features/pages/ports";
 import * as schema from "@/infra/db/schema";
 
@@ -22,10 +23,41 @@ export function createDrizzlePageLinkRepository(
 ): PageLinkRepository {
 	return {
 		async replaceForSource(
+			scope,
 			sourcePageId: string,
 			userId: string,
 			targetPageIds: string[],
 		) {
+			const workspaceId = tenantScopeId(scope);
+			const [source] = await db
+				.select({ id: schema.pages.id })
+				.from(schema.pages)
+				.where(
+					and(
+						eq(schema.pages.id, sourcePageId),
+						eq(schema.pages.workspaceId, workspaceId),
+					),
+				)
+				.limit(1);
+			if (!source) {
+				throw new Error(`Page ${sourcePageId} is outside the tenant scope`);
+			}
+
+			if (targetPageIds.length > 0) {
+				const targets = await db
+					.select({ id: schema.pages.id })
+					.from(schema.pages)
+					.where(
+						and(
+							inArray(schema.pages.id, targetPageIds),
+							eq(schema.pages.workspaceId, workspaceId),
+						),
+					);
+				if (targets.length !== new Set(targetPageIds).size) {
+					throw new Error("Page links cannot cross tenant boundaries");
+				}
+			}
+
 			const current = await db
 				.select({ targetPageId: schema.pageLinks.targetPageId })
 				.from(schema.pageLinks)
@@ -56,7 +88,7 @@ export function createDrizzlePageLinkRepository(
 			);
 			return true;
 		},
-		async listBacklinkSources(targetPageId: string) {
+		async listBacklinkSources(scope, targetPageId: string) {
 			const rows = await db
 				.select(metaColumns)
 				.from(schema.pageLinks)
@@ -67,6 +99,7 @@ export function createDrizzlePageLinkRepository(
 				.where(
 					and(
 						eq(schema.pageLinks.targetPageId, targetPageId),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
 						isNull(schema.pages.deletedAt),
 					),
 				)

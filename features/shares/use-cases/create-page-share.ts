@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import { appError } from "@/features/shared/errors";
-import { requireUser } from "@/lib/auth";
+import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { PageIdInputSchema, PageShareSchema } from "../schemas";
 
@@ -19,9 +19,10 @@ export const createPageShareUseCase = useCase
 	.output(PageShareSchema)
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
+		const scope = requireActiveWorkspaceScope(ctx);
 
 		return ctx.ports.uow.transaction(async (tx) => {
-			const page = await tx.pages.findMetaById(input.pageId);
+			const page = await tx.pages.findMetaById(scope, input.pageId);
 			if (!page || page.deletedAt !== null) {
 				throw appError("PageNotFound", { details: { id: input.pageId } });
 			}
@@ -29,12 +30,11 @@ export const createPageShareUseCase = useCase
 			// Publishing a page is an editor-level action on that page.
 			await ctx.gate.authorize("pages.update", page);
 
-			const existing = await tx.shares.findByPage(input.pageId);
+			const existing = await tx.shares.findByPage(scope, input.pageId);
 			if (existing) return existing;
 
-			return tx.shares.create({
+			return tx.shares.create(scope, {
 				pageId: page.id,
-				workspaceId: page.workspaceId,
 				token: generateToken(),
 				createdBy: user.id,
 			});

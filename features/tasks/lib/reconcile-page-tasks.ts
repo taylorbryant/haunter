@@ -48,13 +48,14 @@ async function validateTaskBlock(
  */
 export async function reconcilePageTasks(
 	ports: TaskReconciliationPorts,
+	scope: TenantScope,
 	page: PageMeta,
 	content: BlockJson[],
 	options: ReconcilePageTasksOptions = {},
 ): Promise<boolean> {
 	const now = new Date().toISOString();
 	const found = extractTaskBlocks(content);
-	const existing = await ports.tasks.listByPage(page.id);
+	const existing = await ports.tasks.listByPage(scope, page.id);
 	const existingByBlockId = new Map(
 		existing
 			.filter((task) => task.sourceBlockId !== null)
@@ -82,7 +83,7 @@ export async function reconcilePageTasks(
 			await Promise.all(
 				assigneeIds.map(async (assigneeId) => {
 					const role = await ports.members.findRole(
-						page.workspaceId,
+						tenantScopeId(scope),
 						assigneeId,
 					);
 					return role === null ? null : assigneeId;
@@ -101,9 +102,8 @@ export async function reconcilePageTasks(
 
 		if (!current) {
 			changed = true;
-			await ports.tasks.create({
+			await ports.tasks.create(scope, {
 				userId: page.userId,
-				workspaceId: page.workspaceId,
 				pageId: page.id,
 				sourceBlockId: block.blockId,
 				title: block.title,
@@ -123,7 +123,7 @@ export async function reconcilePageTasks(
 
 		if (rowChanged) {
 			changed = true;
-			await ports.tasks.update(current.id, {
+			await ports.tasks.update(scope, current.id, {
 				title: block.title,
 				completed: block.checked,
 				dueDate: block.due,
@@ -146,8 +146,9 @@ export async function reconcilePageTasks(
 
 	if (orphanIds.length > 0) {
 		changed = true;
-		await ports.tasks.deleteByIds(orphanIds);
+		await ports.tasks.deleteByIds(scope, orphanIds);
 	}
 
 	return changed;
 }
+import { tenantScopeId, type TenantScope } from "@beignet/core/ports";
