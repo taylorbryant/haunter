@@ -31,6 +31,11 @@ bun install
 cp .env.example .env.local
 ```
 
+For a fresh installation, set `BOOTSTRAP_ADMIN_EMAIL` in `.env.local` to the
+email address that should own the installation. After that address completes
+OTP verification, Haunter approves it as the first app-wide administrator. The
+setting is ignored once an approved administrator exists.
+
 ## Prepare the database
 
 ```bash
@@ -45,7 +50,21 @@ The starter ships its initial Drizzle migration in `drizzle/`, so the first run 
 bun run dev
 ```
 
-Open http://localhost:3000/sign-up, create the first account, then create a workspace from the sidebar switcher and add your first page.
+Open http://localhost:3000/sign-in and request a code for the configured
+bootstrap email. In local development, the code is printed in the server
+console. Verifying it creates the approved administrator account and continues
+through workspace onboarding.
+
+If the account was created before `BOOTSTRAP_ADMIN_EMAIL` was configured, leave
+it on the waitlist and run the recovery task:
+
+```bash
+bun run bootstrap-admin --email owner@example.com
+```
+
+The task only promotes an OTP-verified account when no approved administrator
+exists. Sign out from the waitlist page and sign back in after it completes so
+the browser receives a session containing the new access status.
 
 ## First checks
 
@@ -130,5 +149,6 @@ Use `bun beignet make feature projects --recipe full-slice` when you want a rich
 - Run `bun beignet db reset` to rebuild a local SQLite database from the checked-in migrations.
 - Remove `DEVTOOLS_ENABLED=true` in production unless you add authentication and stricter redaction.
 - Set `APP_URL`, `BETTER_AUTH_SECRET`, `LOG_LEVEL`, and service-specific integration variables in your hosting environment.
+- On a fresh installation, set `BOOTSTRAP_ADMIN_EMAIL` before the owner first signs in; leave it unset on established installations.
 - Set `BETTER_AUTH_TRUSTED_ORIGINS` before serving auth across multiple origins.
 - Review the starter authorization policy before exposing user-owned data.

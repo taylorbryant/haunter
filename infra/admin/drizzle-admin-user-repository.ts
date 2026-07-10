@@ -4,7 +4,11 @@ import { and, asc, eq } from "drizzle-orm";
 import type { AdminUserRepository } from "@/features/admin/ports";
 import type { WaitlistUser } from "@/features/admin/schemas";
 import * as schema from "@/infra/db/schema";
-import { ACCESS_STATUS_APPROVED, ACCESS_STATUS_WAITLISTED } from "@/ports/auth";
+import {
+	ACCESS_STATUS_APPROVED,
+	ACCESS_STATUS_WAITLISTED,
+	ADMIN_ROLE,
+} from "@/ports/auth";
 
 type UserRow = {
 	id: string;
@@ -29,10 +33,30 @@ const selection = {
 	createdAt: schema.user.createdAt,
 } as const;
 
+const bootstrapSelection = {
+	id: schema.user.id,
+	email: schema.user.email,
+	name: schema.user.name,
+} as const;
+
 export function createDrizzleAdminUserRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): AdminUserRepository {
 	return {
+		async hasAdmin() {
+			const [row] = await db
+				.select({ id: schema.user.id })
+				.from(schema.user)
+				.where(
+					and(
+						eq(schema.user.role, ADMIN_ROLE),
+						eq(schema.user.accessStatus, ACCESS_STATUS_APPROVED),
+					),
+				)
+				.limit(1);
+			return Boolean(row);
+		},
+
 		async listWaitlisted() {
 			const rows = await db
 				.select(selection)
@@ -57,6 +81,58 @@ export function createDrizzleAdminUserRepository(
 				)
 				.returning(selection);
 			return row ? toWaitlistUser(row) : null;
+		},
+
+		async bootstrap(email: string) {
+			const normalizedEmail = email.trim().toLowerCase();
+			const [existingAdmin] = await db
+				.select(bootstrapSelection)
+				.from(schema.user)
+				.where(
+					and(
+						eq(schema.user.role, ADMIN_ROLE),
+						eq(schema.user.accessStatus, ACCESS_STATUS_APPROVED),
+					),
+				)
+				.limit(1);
+
+			if (existingAdmin) {
+				return existingAdmin.email.toLowerCase() === normalizedEmail
+					? {
+							status: "already-admin" as const,
+							user: existingAdmin,
+						}
+					: { status: "admin-exists" as const };
+			}
+
+			const [target] = await db
+				.select(bootstrapSelection)
+				.from(schema.user)
+				.where(
+					and(
+						eq(schema.user.email, normalizedEmail),
+						eq(schema.user.emailVerified, true),
+					),
+				)
+				.limit(1);
+			if (!target) return { status: "user-not-found" as const };
+
+			const [bootstrapped] = await db
+				.update(schema.user)
+				.set({
+					accessStatus: ACCESS_STATUS_APPROVED,
+					role: ADMIN_ROLE,
+					updatedAt: new Date(),
+				})
+				.where(eq(schema.user.id, target.id))
+				.returning(bootstrapSelection);
+
+			return bootstrapped
+				? {
+						status: "bootstrapped" as const,
+						user: bootstrapped,
+					}
+				: { status: "user-not-found" as const };
 		},
 	};
 }

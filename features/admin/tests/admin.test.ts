@@ -12,6 +12,7 @@ import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import {
 	approveWaitlistUserUseCase,
+	bootstrapAdminUseCase,
 	listWaitlistUseCase,
 } from "@/features/admin/use-cases";
 import { appPorts } from "@/infra/app-ports";
@@ -28,7 +29,7 @@ async function createAdminFixture(
 	const seed = options.seed ?? [];
 	const userOption =
 		options.user === undefined ? { role: ADMIN_ROLE } : options.user;
-	const { repository, statusOf } = createTestAdminUserRepository(seed);
+	const { repository, roleOf, statusOf } = createTestAdminUserRepository(seed);
 
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
@@ -72,7 +73,7 @@ async function createAdminFixture(
 	const tester = createUseCaseTester<AppContext>(createTestContext);
 	const ctx = await tester.ctx();
 
-	return { tester, ctx, mailer: fixture.mailer, statusOf };
+	return { tester, ctx, mailer: fixture.mailer, roleOf, statusOf };
 }
 
 describe("admin waitlist", () => {
@@ -182,5 +183,102 @@ describe("admin waitlist", () => {
 		await expect(tester.run(listWaitlistUseCase, {}, { ctx })).rejects.toThrow(
 			/Authentication required/i,
 		);
+	});
+});
+
+describe("admin bootstrap", () => {
+	it("promotes one verified waitlisted account", async () => {
+		const { tester, ctx, roleOf, statusOf } = await createAdminFixture({
+			user: null,
+			seed: [{ id: "u_owner", email: "owner@example.com", name: "Owner" }],
+		});
+
+		const result = await tester.run(
+			bootstrapAdminUseCase,
+			{ email: " OWNER@example.com " },
+			{ ctx },
+		);
+
+		expect(result).toEqual({
+			status: "bootstrapped",
+			user: {
+				id: "u_owner",
+				email: "owner@example.com",
+				name: "Owner",
+			},
+		});
+		expect(statusOf("u_owner")).toBe(ACCESS_STATUS_APPROVED);
+		expect(roleOf("u_owner")).toBe(ADMIN_ROLE);
+	});
+
+	it("is idempotent for the configured administrator", async () => {
+		const { tester, ctx } = await createAdminFixture({
+			user: null,
+			seed: [
+				{
+					id: "u_owner",
+					email: "owner@example.com",
+					name: "Owner",
+					accessStatus: ACCESS_STATUS_APPROVED,
+					role: ADMIN_ROLE,
+				},
+			],
+		});
+
+		const result = await tester.run(
+			bootstrapAdminUseCase,
+			{ email: "owner@example.com" },
+			{ ctx },
+		);
+
+		expect(result.status).toBe("already-admin");
+	});
+
+	it("refuses to replace an existing administrator", async () => {
+		const { tester, ctx, roleOf, statusOf } = await createAdminFixture({
+			user: null,
+			seed: [
+				{
+					id: "u_admin",
+					email: "admin@example.com",
+					accessStatus: ACCESS_STATUS_APPROVED,
+					role: ADMIN_ROLE,
+				},
+				{ id: "u_owner", email: "owner@example.com" },
+			],
+		});
+
+		const result = await tester.run(
+			bootstrapAdminUseCase,
+			{ email: "owner@example.com" },
+			{ ctx },
+		);
+
+		expect(result).toEqual({ status: "admin-exists" });
+		expect(statusOf("u_owner")).not.toBe(ACCESS_STATUS_APPROVED);
+		expect(roleOf("u_owner")).toBeNull();
+	});
+
+	it("requires an OTP-verified account", async () => {
+		const { tester, ctx, roleOf, statusOf } = await createAdminFixture({
+			user: null,
+			seed: [
+				{
+					id: "u_owner",
+					email: "owner@example.com",
+					emailVerified: false,
+				},
+			],
+		});
+
+		const result = await tester.run(
+			bootstrapAdminUseCase,
+			{ email: "owner@example.com" },
+			{ ctx },
+		);
+
+		expect(result).toEqual({ status: "user-not-found" });
+		expect(statusOf("u_owner")).not.toBe(ACCESS_STATUS_APPROVED);
+		expect(roleOf("u_owner")).toBeNull();
 	});
 });

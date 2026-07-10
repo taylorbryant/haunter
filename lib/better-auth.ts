@@ -4,6 +4,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, emailOTP, organization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/libsql";
+import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
 import {
@@ -14,7 +15,11 @@ import { createAuthRateLimitStorage } from "@/lib/auth-rate-limit";
 import { env } from "@/lib/env";
 import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
 import { accessControl, roles } from "@/lib/org-access";
-import { ACCESS_STATUS_APPROVED, ACCESS_STATUS_WAITLISTED } from "@/ports/auth";
+import {
+	ACCESS_STATUS_APPROVED,
+	ACCESS_STATUS_WAITLISTED,
+	ADMIN_ROLE,
+} from "@/ports/auth";
 
 const client = createClient({
 	url: env.SQLITE_DB_URL,
@@ -26,6 +31,7 @@ const client = createClient({
 await ensureDatabaseReady(client);
 
 const db = drizzle(client, { schema });
+const adminUsers = createDrizzleAdminUserRepository(db);
 
 const authRateLimitStorage = createAuthRateLimitStorage();
 
@@ -45,6 +51,34 @@ export const auth = betterAuth({
 		provider: "sqlite",
 		schema,
 	}),
+	databaseHooks: env.BOOTSTRAP_ADMIN_EMAIL
+		? {
+				user: {
+					create: {
+						async before(user) {
+							if (
+								!user.emailVerified ||
+								user.email.trim().toLowerCase() !== env.BOOTSTRAP_ADMIN_EMAIL ||
+								(await adminUsers.hasAdmin())
+							) {
+								return;
+							}
+
+							// OTP verification happens before Better Auth creates this row. Only
+							// the configured inbox owner can reach this hook, and the unique
+							// email constraint prevents two bootstrap rows from being created.
+							return {
+								data: {
+									...user,
+									accessStatus: ACCESS_STATUS_APPROVED,
+									role: ADMIN_ROLE,
+								},
+							};
+						},
+					},
+				},
+			}
+		: undefined,
 	plugins: [
 		// Passwordless auth: a 6-digit code emailed on sign-in (and sign-up —
 		// unknown emails create an account). The code verifies the address, so

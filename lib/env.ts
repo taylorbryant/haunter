@@ -40,6 +40,12 @@ export const env = createEnv({
 			: BetterAuthSecret.default(LOCAL_BETTER_AUTH_SECRET),
 		BETTER_AUTH_URL: z.string().url().default("http://localhost:3000"),
 		BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
+		BOOTSTRAP_ADMIN_EMAIL: z
+			.string()
+			.trim()
+			.toLowerCase()
+			.pipe(z.email())
+			.optional(),
 		SQLITE_DB_URL: z.string().default("file:local.db"),
 		SQLITE_DB_AUTH_TOKEN: z.string().optional(),
 		// Resend delivery for sign-in codes (the @beignet/provider-mail-resend
