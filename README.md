@@ -161,8 +161,9 @@ protected overdue-task schedule. Configure these GitHub Actions values:
 - Repository secret `CRON_SECRET`: the same non-empty value as `CRON_SECRET`
   in the deployed app.
 - Repository variable `APP_URL`: the deployed origin, such as
-  `https://haunter.example.com`. It defaults to `https://haunter.app` for this
-  repository.
+  `https://haunter.example.com`. It defaults to `https://www.haunter.app` for
+  this repository. Use the canonical origin directly; redirects are treated as
+  failures so the authorization header is never forwarded across hosts.
 
 In-app overdue notifications are created by that schedule. To also deliver Web
 Push while Haunter is closed, generate a VAPID key pair and set all three

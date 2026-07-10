@@ -12,11 +12,22 @@ jobs:
     steps:
       - name: Reconcile overdue notifications
         env:
-          HAUNTER_APP_URL: ${{ vars.APP_URL || 'https://haunter.app' }}
+          HAUNTER_APP_URL: ${{ vars.APP_URL || 'https://www.haunter.app' }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl --fail-with-body --silent --show-error \
+          response_file="${RUNNER_TEMP}/overdue-notifications-response.json"
+          http_status="$(curl --silent --show-error \
             --retry 2 --retry-all-errors \
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
-            "${HAUNTER_APP_URL%/}/api/cron/tasks/check-overdue"
+            --output "${response_file}" \
+            --write-out "%{http_code}" \
+            "${HAUNTER_APP_URL%/}/api/cron/tasks/check-overdue")"
+          cat "${response_file}"
+          case "${http_status}" in
+            2??) ;;
+            *)
+              echo "Unexpected HTTP status: ${http_status}" >&2
+              exit 1
+              ;;
+          esac
