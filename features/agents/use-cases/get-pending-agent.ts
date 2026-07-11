@@ -25,11 +25,19 @@ export const getPendingAgentUseCase = useCase
 		if (!row || (row.userId !== null && row.userId !== user.id)) {
 			throw appError("AgentNotFound");
 		}
+		const approvalId = await ctx.ports.agents.findCurrentApprovalIdByAgentId(
+			input.agentId,
+			new Date(),
+		);
+		if (!approvalId) {
+			throw appError("AgentNotFound");
+		}
 
 		const requested = row.grants.filter((grant) => grant.status === "pending");
 
 		return {
 			id: row.id,
+			approvalId,
 			name: row.name,
 			hostName: row.hostName,
 			requestedCapabilities: requested.map((grant) => ({

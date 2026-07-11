@@ -25,7 +25,7 @@ import {
 type Phase = "review" | "working" | "approved" | "denied" | "failed";
 
 async function decideCapabilityRequest(body: {
-	agent_id: string;
+	approval_id: string;
 	action: "approve" | "deny";
 	user_code?: string;
 	capabilities?: string[];
@@ -69,6 +69,7 @@ export function ApproveAgentCard({
 	const [error, setError] = useState("");
 
 	async function decide(action: "approve" | "deny") {
+		if (!query.data) return;
 		setPhase("working");
 		setError("");
 		const requested =
@@ -77,7 +78,7 @@ export function ApproveAgentCard({
 			(name) => !excluded.has(name),
 		);
 		const result = await decideCapabilityRequest({
-			agent_id: agentId,
+			approval_id: query.data.approvalId,
 			action,
 			...(action === "approve"
 				? { user_code: code.trim(), capabilities: approvedCapabilities }

@@ -46,6 +46,11 @@ export interface AgentAdminRepository {
 	 * Returns null when there is no approval decision left to make.
 	 */
 	findAwaitingApprovalById(agentId: string): Promise<AgentAdminRow | null>;
+	/** Latest unexpired device approval for an agent, if one exists. */
+	findCurrentApprovalIdByAgentId(
+		agentId: string,
+		now: Date,
+	): Promise<string | null>;
 	/** Best-effort audit write for a completed capability execution. */
 	recordActivity(activity: AgentActivityWrite): Promise<void>;
 	/** Most recent capability executions belonging to one user. */

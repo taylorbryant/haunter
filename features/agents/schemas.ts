@@ -54,6 +54,7 @@ export const RequestedCapabilitySchema = z.object({
 
 export const PendingAgentSchema = z.object({
 	id: z.string(),
+	approvalId: z.string(),
 	name: z.string(),
 	hostName: z.string().nullable(),
 	requestedCapabilities: z.array(RequestedCapabilitySchema),

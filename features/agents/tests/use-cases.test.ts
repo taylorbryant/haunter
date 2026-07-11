@@ -37,8 +37,13 @@ function agentRow(overrides: Partial<AgentAdminRow> = {}): AgentAdminRow {
 function createFixture(
 	rows: AgentAdminRow[],
 	activities: AgentActivityWrite[] = [],
+	currentApprovalIds?: Map<string, string | null>,
 ) {
-	const agents = createTestAgentAdminRepository(rows, activities);
+	const agents = createTestAgentAdminRepository(
+		rows,
+		activities,
+		currentApprovalIds,
+	);
 	const workspaceId = crypto.randomUUID().replaceAll("-", "");
 	const auth = {
 		user: {
@@ -125,6 +130,7 @@ describe("agents.getPending", () => {
 		expect(result.requestedCapabilities[0].description.length).toBeGreaterThan(
 			0,
 		);
+		expect(result.approvalId).toBe(`approval_${pending.id}`);
 	});
 
 	it("returns additional capability requests for an owned active agent", async () => {
@@ -160,6 +166,17 @@ describe("agents.getPending", () => {
 			grants: [{ capability: "list_tasks", status: "pending" }],
 		});
 		const tester = createFixture([active]);
+
+		await expect(
+			tester.run(getPendingAgentUseCase, { agentId: active.id }),
+		).rejects.toMatchObject({ code: "AGENT_NOT_FOUND" });
+	});
+
+	it("404s when no unexpired device approval remains", async () => {
+		const active = agentRow({
+			grants: [{ capability: "list_tasks", status: "pending" }],
+		});
+		const tester = createFixture([active], [], new Map([[active.id, null]]));
 
 		await expect(
 			tester.run(getPendingAgentUseCase, { agentId: active.id }),

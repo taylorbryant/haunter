@@ -7,6 +7,7 @@ import type {
 export function createTestAgentAdminRepository(
 	rows: AgentAdminRow[] = [],
 	activities: AgentActivityWrite[] = [],
+	currentApprovalIds?: Map<string, string | null>,
 ): AgentAdminRepository {
 	return {
 		async listByUser(userId: string) {
@@ -20,6 +21,11 @@ export function createTestAgentAdminRepository(
 					candidate.grants.some((grant) => grant.status === "pending"),
 			);
 			return row ?? null;
+		},
+		async findCurrentApprovalIdByAgentId(agentId) {
+			return currentApprovalIds?.has(agentId)
+				? (currentApprovalIds.get(agentId) ?? null)
+				: `approval_${agentId}`;
 		},
 		async recordActivity(activity) {
 			activities.push(activity);

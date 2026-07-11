@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import type {
 	AgentActivityWrite,
 	AgentAdminRepository,
@@ -100,6 +100,22 @@ export function createDrizzleAgentAdminRepository(
 			const agentGrants = grants.get(record.id) ?? [];
 			if (!agentGrants.some((grant) => grant.status === "pending")) return null;
 			return toRow(record, agentGrants);
+		},
+		async findCurrentApprovalIdByAgentId(agentId: string, now: Date) {
+			const [approval] = await db
+				.select({ id: schema.approvalRequest.id })
+				.from(schema.approvalRequest)
+				.where(
+					and(
+						eq(schema.approvalRequest.agentId, agentId),
+						eq(schema.approvalRequest.status, "pending"),
+						eq(schema.approvalRequest.method, "device_authorization"),
+						gte(schema.approvalRequest.expiresAt, now),
+					),
+				)
+				.orderBy(desc(schema.approvalRequest.createdAt))
+				.limit(1);
+			return approval?.id ?? null;
 		},
 		async recordActivity(activity: AgentActivityWrite) {
 			await db.insert(schema.agentActivity).values(activity);
