@@ -55,17 +55,28 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 		DELIVERY_LIMIT,
 	);
 	let deliveryGroups = 0;
+	const deliveryErrors: unknown[] = [];
 	for (const group of groupPending(pending)) {
 		const first = group[0];
 		if (!first) continue;
 		deliveryGroups += 1;
-		await ctx.ports.notifications.send(TaskOverdueNotification, {
-			userId: first.userId,
-			workspaceId: first.workspaceId,
-			notificationIds: group.map((item) => item.id),
-			attempt: Math.max(...group.map((item) => item.pushAttempts)) + 1,
-			items: group.map((item) => item.payload),
-		});
+		try {
+			await ctx.ports.notifications.send(TaskOverdueNotification, {
+				userId: first.userId,
+				workspaceId: first.workspaceId,
+				notificationIds: group.map((item) => item.id),
+				attempt: Math.max(...group.map((item) => item.pushAttempts)) + 1,
+				items: group.map((item) => item.payload),
+			});
+		} catch (error) {
+			deliveryErrors.push(error);
+		}
+	}
+	if (deliveryErrors.length > 0) {
+		throw new AggregateError(
+			deliveryErrors,
+			`Failed to deliver ${deliveryErrors.length} overdue notification group(s).`,
+		);
 	}
 
 	return { candidates: candidates.length, created, deliveryGroups };

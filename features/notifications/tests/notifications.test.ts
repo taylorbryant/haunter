@@ -28,7 +28,12 @@ function candidate(
 	};
 }
 
-function createScheduleFixture(candidates: OverdueTaskCandidate[]) {
+function createScheduleFixture(
+	candidates: OverdueTaskCandidate[],
+	options: {
+		deliveryError?: (payload: unknown) => Error | null;
+	} = {},
+) {
 	const createdKeys = new Set<string>();
 	const pending: PendingPushNotification[] = [];
 	const deliveries: unknown[] = [];
@@ -70,6 +75,8 @@ function createScheduleFixture(candidates: OverdueTaskCandidate[]) {
 			notifications: {
 				async send(_definition: unknown, payload: unknown) {
 					deliveries.push(payload);
+					const error = options.deliveryError?.(payload);
+					if (error) throw error;
 					return {
 						notificationName: "tasks.overdue",
 						payload,
@@ -130,6 +137,39 @@ describe("overdue notification schedule", () => {
 			new Date("2026-07-10T18:00:00.000Z"),
 		);
 		expect(todayResult.created).toBe(0);
+	});
+
+	it("attempts every delivery group before reporting failures", async () => {
+		const fixture = createScheduleFixture(
+			[
+				candidate({ userId: "user_failing", workspaceId: "workspace_a" }),
+				candidate({ userId: "user_delivered", workspaceId: "workspace_b" }),
+			],
+			{
+				deliveryError(payload) {
+					return (payload as { userId: string }).userId === "user_failing"
+						? new Error("Push provider unavailable")
+						: null;
+				},
+			},
+		);
+
+		let failure: unknown;
+		try {
+			await processOverdueNotifications(
+				fixture.ctx,
+				new Date("2026-07-10T14:00:00.000Z"),
+			);
+		} catch (error) {
+			failure = error;
+		}
+
+		expect(failure).toBeInstanceOf(AggregateError);
+		expect(
+			fixture.deliveries.map(
+				(delivery) => (delivery as { userId: string }).userId,
+			),
+		).toEqual(["user_failing", "user_delivered"]);
 	});
 
 	it("validates IANA timezones", () => {
