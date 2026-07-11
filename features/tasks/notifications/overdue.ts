@@ -16,20 +16,12 @@ export const TaskOverdueNotification = defineNotification("tasks.overdue", {
 	channels: {
 		push: async ({ payload, ctx, channel }) => {
 			const ids = payload.notificationIds;
-			const preferences = await ctx.ports.notificationInbox.getPreferences(
-				payload.userId,
-			);
-			if (
-				!preferences.overdueTasksEnabled ||
-				!ctx.ports.webPush.isConfigured()
-			) {
+			if (!ctx.ports.webPush.isConfigured()) {
 				await ctx.ports.notificationInbox.markPushSkipped(ids);
 				return {
 					channel,
 					status: "skipped",
-					reason: preferences.overdueTasksEnabled
-						? "Web Push is not configured."
-						: "Overdue notifications are disabled.",
+					reason: "Web Push is not configured.",
 				};
 			}
 

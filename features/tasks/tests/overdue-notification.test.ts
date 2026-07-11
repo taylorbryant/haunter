@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
+import { createInlineNotificationDispatcher } from "@beignet/core/notifications";
 import type { AppContext } from "@/app-context";
 import type { StoredPushSubscription } from "@/features/notifications/ports";
 import { TaskOverdueNotification } from "@/features/tasks/notifications/overdue";
+import { notificationPreferences } from "@/server/notification-preferences";
 
 const notificationId = crypto.randomUUID();
 const taskId = crypto.randomUUID();
@@ -25,6 +27,39 @@ function payload() {
 }
 
 describe("task overdue push channel", () => {
+	it("skips disabled notifications through the app preference evaluator", async () => {
+		const skipped: string[][] = [];
+		const ctx = {
+			ports: {
+				notificationInbox: {
+					async getPreferences() {
+						return { overdueTasksEnabled: false, timezone: "UTC" };
+					},
+					async markPushSkipped(ids: string[]) {
+						skipped.push(ids);
+					},
+				},
+			},
+		} as unknown as AppContext;
+		const notifications = createInlineNotificationDispatcher<AppContext>({
+			ctx,
+			preferences: notificationPreferences,
+			failureMode: "throw",
+		});
+
+		const result = await notifications.send(TaskOverdueNotification, payload());
+
+		expect(result.results).toEqual([
+			{
+				channel: "push",
+				status: "skipped",
+				reason: "Overdue notifications are disabled.",
+				details: { source: "preferences" },
+			},
+		]);
+		expect(skipped).toEqual([[notificationId]]);
+	});
+
 	it("skips delivery when the user has no subscribed device", async () => {
 		const skipped: string[][] = [];
 		const ctx = {
