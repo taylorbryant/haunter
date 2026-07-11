@@ -1,7 +1,8 @@
 import "@beignet/core/server-only";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import type {
+	AgentActivityWrite,
 	AgentAdminRepository,
 	AgentAdminRow,
 } from "@/features/agents/ports";
@@ -99,6 +100,46 @@ export function createDrizzleAgentAdminRepository(
 			const agentGrants = grants.get(record.id) ?? [];
 			if (!agentGrants.some((grant) => grant.status === "pending")) return null;
 			return toRow(record, agentGrants);
+		},
+		async recordActivity(activity: AgentActivityWrite) {
+			await db.insert(schema.agentActivity).values(activity);
+			await db
+				.delete(schema.agentActivity)
+				.where(
+					and(
+						eq(schema.agentActivity.userId, activity.userId),
+						lt(
+							schema.agentActivity.createdAt,
+							new Date(activity.createdAt.getTime() - 90 * 24 * 60 * 60 * 1000),
+						),
+					),
+				);
+		},
+		async listRecentActivityByUser(userId: string, limit: number) {
+			return db
+				.select({
+					id: schema.agentActivity.id,
+					agentId: schema.agentActivity.agentId,
+					agentName: schema.agent.name,
+					userId: schema.agentActivity.userId,
+					workspaceId: schema.agentActivity.workspaceId,
+					capability: schema.agentActivity.capability,
+					status: schema.agentActivity.status,
+					resourceType: schema.agentActivity.resourceType,
+					resourceId: schema.agentActivity.resourceId,
+					resourceLabel: schema.agentActivity.resourceLabel,
+					durationMs: schema.agentActivity.durationMs,
+					error: schema.agentActivity.error,
+					createdAt: schema.agentActivity.createdAt,
+				})
+				.from(schema.agentActivity)
+				.innerJoin(
+					schema.agent,
+					eq(schema.agentActivity.agentId, schema.agent.id),
+				)
+				.where(eq(schema.agentActivity.userId, userId))
+				.orderBy(desc(schema.agentActivity.createdAt))
+				.limit(limit);
 		},
 	};
 }

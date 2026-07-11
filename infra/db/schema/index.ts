@@ -189,6 +189,42 @@ export const agentCapabilityGrant = sqliteTable("agent_capability_grant", {
 	constraints: text("constraints"),
 });
 
+// App-owned execution history for Agent Auth capabilities. This intentionally
+// stores only derived resource metadata, never raw arguments or page content.
+export const agentActivity = sqliteTable(
+	"agent_activity",
+	{
+		id: text("id").primaryKey(),
+		agentId: text("agent_id")
+			.notNull()
+			.references(() => agent.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id").references(() => organization.id, {
+			onDelete: "set null",
+		}),
+		capability: text("capability").notNull(),
+		status: text("status", { enum: ["success", "error"] }).notNull(),
+		resourceType: text("resource_type", { enum: ["page", "task"] }),
+		resourceId: text("resource_id"),
+		resourceLabel: text("resource_label"),
+		durationMs: integer("duration_ms").notNull(),
+		error: text("error"),
+		createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	},
+	(table) => ({
+		userCreatedIdx: index("agent_activity_user_created_idx").on(
+			table.userId,
+			table.createdAt,
+		),
+		agentCreatedIdx: index("agent_activity_agent_created_idx").on(
+			table.agentId,
+			table.createdAt,
+		),
+	}),
+);
+
 export const approvalRequest = sqliteTable("approval_request", {
 	id: text("id").primaryKey(),
 	method: text("method").notNull(),

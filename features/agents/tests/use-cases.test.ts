@@ -11,7 +11,12 @@ import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import type { AgentAdminRow } from "../ports";
-import { getPendingAgentUseCase, listAgentsUseCase } from "../use-cases";
+import type { AgentActivityWrite } from "../ports";
+import {
+	getPendingAgentUseCase,
+	listAgentActivityUseCase,
+	listAgentsUseCase,
+} from "../use-cases";
 import { createTestAgentAdminRepository } from "./helpers";
 
 function agentRow(overrides: Partial<AgentAdminRow> = {}): AgentAdminRow {
@@ -29,8 +34,11 @@ function agentRow(overrides: Partial<AgentAdminRow> = {}): AgentAdminRow {
 	};
 }
 
-function createFixture(rows: AgentAdminRow[]) {
-	const agents = createTestAgentAdminRepository(rows);
+function createFixture(
+	rows: AgentAdminRow[],
+	activities: AgentActivityWrite[] = [],
+) {
+	const agents = createTestAgentAdminRepository(rows, activities);
 	const workspaceId = crypto.randomUUID().replaceAll("-", "");
 	const auth = {
 		user: {
@@ -156,5 +164,51 @@ describe("agents.getPending", () => {
 		await expect(
 			tester.run(getPendingAgentUseCase, { agentId: active.id }),
 		).rejects.toMatchObject({ code: "AGENT_NOT_FOUND" });
+	});
+});
+
+describe("agents.listActivity", () => {
+	it("returns only the caller's recent activity", async () => {
+		const mine = agentRow({ name: "Mine" });
+		const theirs = agentRow({ name: "Theirs", userId: "user_other" });
+		const baseActivity = {
+			workspaceId: "workspace_test",
+			capability: "create_task",
+			status: "success" as const,
+			resourceType: "task" as const,
+			resourceId: crypto.randomUUID(),
+			resourceLabel: "Prepare notes",
+			durationMs: 12,
+			error: null,
+		};
+		const tester = createFixture(
+			[mine, theirs],
+			[
+				{
+					...baseActivity,
+					id: crypto.randomUUID(),
+					agentId: mine.id,
+					userId: "user_test",
+					createdAt: new Date("2026-07-10T12:00:00.000Z"),
+				},
+				{
+					...baseActivity,
+					id: crypto.randomUUID(),
+					agentId: theirs.id,
+					userId: "user_other",
+					createdAt: new Date("2026-07-10T13:00:00.000Z"),
+				},
+			],
+		);
+
+		const result = await tester.run(listAgentActivityUseCase, { limit: 25 });
+
+		expect(result.items).toHaveLength(1);
+		expect(result.items[0]).toMatchObject({
+			agentId: mine.id,
+			agentName: "Mine",
+			capability: "create_task",
+			resourceLabel: "Prepare notes",
+		});
 	});
 });

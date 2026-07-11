@@ -1,6 +1,8 @@
 import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import {
+	ListAgentActivityInputSchema,
+	ListAgentActivityOutputSchema,
 	ListAgentsOutputSchema,
 	PendingAgentInputSchema,
 	PendingAgentSchema,
@@ -25,6 +27,17 @@ export const listAgents = agents
 	})
 	.responses({
 		200: ListAgentsOutputSchema,
+	});
+
+export const listAgentActivity = agents
+	.get("/api/agents/activity")
+	.query(ListAgentActivityInputSchema)
+	.meta({ rateLimit: { max: 120, windowSec: 60, scope: "user" } })
+	.errors({
+		Unauthorized: errors.Unauthorized,
+	})
+	.responses({
+		200: ListAgentActivityOutputSchema,
 	});
 
 // The device-approval page's read: the agent id comes from the verification

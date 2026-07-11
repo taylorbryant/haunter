@@ -148,6 +148,13 @@
 			"when": 1783631009575,
 			"tag": "0020_silky_dreadnoughts",
 			"breakpoints": true
+		},
+		{
+			"idx": 21,
+			"version": "6",
+			"when": 1783742350815,
+			"tag": "0021_bouncy_shadow_king",
+			"breakpoints": true
 		}
 	]
 }

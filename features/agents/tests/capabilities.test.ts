@@ -8,6 +8,8 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
+import type { AgentActivityWrite } from "@/features/agents/ports";
+import { createTestAgentAdminRepository } from "@/features/agents/tests/helpers";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import {
 	createTestPageLinkRepository,
@@ -28,6 +30,8 @@ async function createFixture() {
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
+	const activities: AgentActivityWrite[] = [];
+	const agents = createTestAgentAdminRepository([], activities);
 	const members = {
 		async findRole(candidateWorkspaceId: string, candidateUserId: string) {
 			return candidateWorkspaceId === workspaceId && candidateUserId === userId
@@ -38,6 +42,7 @@ async function createFixture() {
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
+			agents,
 			gate: appPorts.gate,
 			canvases,
 			members,
@@ -50,6 +55,7 @@ async function createFixture() {
 		transaction: {
 			ports: (ports) => ({
 				...ports,
+				agents,
 				canvases,
 				members,
 				pageLinks,
@@ -90,12 +96,13 @@ async function createFixture() {
 			{
 				capability,
 				arguments: args,
-				agentSession: { userId },
+				agentSession: { agentId: "agent_test", userId },
 			},
 			{ getServer: async () => server as never },
 		);
 
 	return {
+		activities,
 		execute,
 		pages,
 		scope: createTenantScope(createTestTenant(workspaceId)),
@@ -107,7 +114,8 @@ async function createFixture() {
 
 describe("Haunter agent capabilities", () => {
 	it("creates a page with markdown and returns it from list_pages", async () => {
-		const { execute, pages, scope, workspaceId } = await createFixture();
+		const { activities, execute, pages, scope, workspaceId } =
+			await createFixture();
 
 		const created = (await execute("create_page", {
 			workspaceId,
@@ -131,10 +139,21 @@ describe("Haunter agent capabilities", () => {
 			}),
 		);
 		expect(stored?.content).toHaveLength(2);
+		expect(activities).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					capability: "create_page",
+					status: "success",
+					resourceType: "page",
+					resourceId: created.pageId,
+					resourceLabel: "Agent notes",
+				}),
+			]),
+		);
 	});
 
 	it("does not create pages for a user outside the workspace", async () => {
-		const { execute } = await createFixture();
+		const { activities, execute } = await createFixture();
 
 		await expect(
 			execute("create_page", {
@@ -142,6 +161,14 @@ describe("Haunter agent capabilities", () => {
 				title: "Unauthorized",
 			}),
 		).rejects.toMatchObject({ status: "FORBIDDEN" });
+		expect(activities).toEqual([
+			expect.objectContaining({
+				capability: "create_page",
+				status: "error",
+				resourceType: "page",
+				resourceLabel: "Unauthorized",
+			}),
+		]);
 	});
 
 	it("creates, lists, updates, and completes a task as the acting user", async () => {

@@ -1,9 +1,17 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
-import { getPendingAgent, listAgents } from "@/features/agents/contracts";
+import {
+	getPendingAgent,
+	listAgentActivity,
+	listAgents,
+} from "@/features/agents/contracts";
 
 export function listAgentsQueryOptions() {
 	return rq(listAgents).queryOptions({});
+}
+
+export function listAgentActivityQueryOptions(limit = 25) {
+	return rq(listAgentActivity).queryOptions({ query: { limit } });
 }
 
 export function getPendingAgentQueryOptions(agentId: string) {

@@ -11,6 +11,28 @@ export type AgentAdminRow = {
 	createdAt: Date;
 };
 
+export type AgentActivityStatus = "success" | "error";
+export type AgentActivityResourceType = "page" | "task";
+
+export type AgentActivityWrite = {
+	id: string;
+	agentId: string;
+	userId: string;
+	workspaceId: string | null;
+	capability: string;
+	status: AgentActivityStatus;
+	resourceType: AgentActivityResourceType | null;
+	resourceId: string | null;
+	resourceLabel: string | null;
+	durationMs: number;
+	error: string | null;
+	createdAt: Date;
+};
+
+export type AgentActivityRow = AgentActivityWrite & {
+	agentName: string;
+};
+
 /**
  * Read-side repository for agent administration. All writes (approve, deny,
  * revoke) go through the agent-auth plugin's own /api/auth endpoints so its
@@ -24,4 +46,11 @@ export interface AgentAdminRepository {
 	 * Returns null when there is no approval decision left to make.
 	 */
 	findAwaitingApprovalById(agentId: string): Promise<AgentAdminRow | null>;
+	/** Best-effort audit write for a completed capability execution. */
+	recordActivity(activity: AgentActivityWrite): Promise<void>;
+	/** Most recent capability executions belonging to one user. */
+	listRecentActivityByUser(
+		userId: string,
+		limit: number,
+	): Promise<AgentActivityRow[]>;
 }

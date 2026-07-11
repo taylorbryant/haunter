@@ -1,7 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BotIcon } from "lucide-react";
+import {
+	BotIcon,
+	CircleCheckIcon,
+	CircleXIcon,
+	ExternalLinkIcon,
+} from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { Panel, PanelHeader } from "@/components/settings/panels";
@@ -10,9 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
 	invalidateAgents,
+	listAgentActivityQueryOptions,
 	listAgentsQueryOptions,
 } from "@/features/agents/client/queries";
-import type { AgentSummary } from "@/features/agents/schemas";
+import type { AgentActivity, AgentSummary } from "@/features/agents/schemas";
 
 function statusVariant(status: string) {
 	if (status === "active") return "default" as const;
@@ -26,6 +33,124 @@ function formatDate(iso: string) {
 		day: "numeric",
 		year: "numeric",
 	});
+}
+
+function formatActivityDate(iso: string) {
+	return new Date(iso).toLocaleString(undefined, {
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
+const activityLabels: Record<string, string> = {
+	list_workspaces: "Listed workspaces",
+	list_pages: "Listed pages",
+	search_pages: "Searched pages",
+	read_page: "Read a page",
+	create_page: "Created a page",
+	append_to_page: "Updated a page",
+	list_tasks: "Listed tasks",
+	create_task: "Created a task",
+	update_task: "Updated a task",
+	complete_task: "Completed a task",
+};
+
+function activityHref(activity: AgentActivity) {
+	if (!activity.workspaceId || activity.status !== "success") return null;
+	if (activity.resourceType === "page" && activity.resourceId) {
+		return `/w/${activity.workspaceId}/p/${activity.resourceId}`;
+	}
+	if (activity.resourceType === "task") {
+		return `/w/${activity.workspaceId}/tasks`;
+	}
+	return null;
+}
+
+function AgentActivityRow({ activity }: { activity: AgentActivity }) {
+	const href = activityHref(activity);
+	const label =
+		activityLabels[activity.capability] ??
+		activity.capability.replaceAll("_", " ");
+
+	return (
+		<div className="flex gap-3 border-b py-3 last:border-b-0">
+			{activity.status === "success" ? (
+				<CircleCheckIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+			) : (
+				<CircleXIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
+			)}
+			<div className="flex min-w-0 flex-1 flex-col gap-1">
+				<div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-sm">
+					<span className="font-medium">
+						{activity.status === "error" ? `Failed: ${label}` : label}
+					</span>
+					{activity.resourceLabel ? (
+						href ? (
+							<Link
+								href={href}
+								className="inline-flex min-w-0 items-center gap-1 text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground"
+							>
+								<span className="max-w-full truncate">
+									{activity.resourceLabel}
+								</span>
+								<ExternalLinkIcon className="size-3 shrink-0" />
+							</Link>
+						) : (
+							<span className="min-w-0 truncate text-muted-foreground">
+								{activity.resourceLabel}
+							</span>
+						)
+					) : null}
+				</div>
+				<p className="text-muted-foreground text-xs">
+					{activity.agentName} · {formatActivityDate(activity.createdAt)} ·{" "}
+					{activity.durationMs}ms
+				</p>
+				{activity.error ? (
+					<p className="line-clamp-2 text-destructive text-xs">
+						{activity.error}
+					</p>
+				) : null}
+			</div>
+		</div>
+	);
+}
+
+function AgentActivityList() {
+	const query = useQuery(listAgentActivityQueryOptions());
+
+	return (
+		<section className="flex flex-col gap-2">
+			<div className="flex flex-col gap-1">
+				<h3 className="font-medium text-sm">Recent activity</h3>
+				<p className="text-muted-foreground text-xs">
+					Capability executions from your connected agents.
+				</p>
+			</div>
+			{query.isPending ? (
+				<div className="flex flex-col gap-2 pt-1">
+					<Skeleton className="h-12 w-full" />
+					<Skeleton className="h-12 w-full" />
+				</div>
+			) : query.isError ? (
+				<p className="py-2 text-muted-foreground text-sm">
+					Recent agent activity could not be loaded.
+				</p>
+			) : query.data.items.length === 0 ? (
+				<p className="py-2 text-muted-foreground text-sm">
+					No agent activity yet.
+				</p>
+			) : (
+				<div>
+					{query.data.items.map((activity) => (
+						<AgentActivityRow key={activity.id} activity={activity} />
+					))}
+				</div>
+			)}
+		</section>
+	);
 }
 
 async function revokeAgent(agentId: string) {
@@ -145,6 +270,7 @@ export function AgentsPanel() {
 					))}
 				</div>
 			)}
+			<AgentActivityList />
 			{revoke.isError ? (
 				<p role="alert" className="text-destructive text-sm">
 					{revoke.error instanceof Error

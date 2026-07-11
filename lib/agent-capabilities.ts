@@ -2,6 +2,7 @@ import "@beignet/core/server-only";
 import { APIError } from "better-auth/api";
 import { z } from "zod";
 import type { AppContext, AppRuntimePorts } from "@/app-context";
+import { recordAgentActivity } from "@/features/agents/use-cases/record-agent-activity";
 import type { getServer } from "@/server";
 
 type AppServer = Awaited<ReturnType<typeof getServer>>;
@@ -250,14 +251,18 @@ async function createAgentContext(
 type ExecuteInput = {
 	capability: string;
 	arguments?: Record<string, unknown>;
-	agentSession: { userId: string | null };
+	agentSession: {
+		agentId: string;
+		userId: string | null;
+		agent?: { id: string; name: string };
+	};
 };
 
 type AgentCapabilityDependencies = {
 	getServer?: () => Promise<AppServer>;
 };
 
-export async function executeAgentCapability(
+async function runAgentCapability(
 	{ capability, arguments: args, agentSession }: ExecuteInput,
 	dependencies: AgentCapabilityDependencies = {},
 ): Promise<unknown> {
@@ -427,7 +432,12 @@ export async function executeAgentCapability(
 					baseUpdatedAt: page.updatedAt,
 				},
 			});
-			return { appendedBlocks: appended.length, updatedAt: saved.updatedAt };
+			return {
+				pageId: page.id,
+				title: page.title,
+				appendedBlocks: appended.length,
+				updatedAt: saved.updatedAt,
+			};
 		}
 		case "list_tasks": {
 			const input = ListTasksArgs.parse(args);
@@ -530,5 +540,52 @@ export async function executeAgentCapability(
 			throw new APIError("BAD_REQUEST", {
 				message: `Unknown capability: ${capability}`,
 			});
+	}
+}
+
+export async function executeAgentCapability(
+	input: ExecuteInput,
+	dependencies: AgentCapabilityDependencies = {},
+): Promise<unknown> {
+	const userId = input.agentSession.userId;
+	if (!userId) {
+		throw new APIError("FORBIDDEN", {
+			message: "This capability requires a delegated agent acting for a user.",
+		});
+	}
+
+	const server = dependencies.getServer
+		? await dependencies.getServer()
+		: await import("@/server").then(({ getServer }) => getServer());
+	const startedAt = Date.now();
+
+	try {
+		const result = await runAgentCapability(input, {
+			getServer: async () => server,
+		});
+		await recordAgentActivity({
+			server,
+			agentId: input.agentSession.agentId,
+			userId,
+			capability: input.capability,
+			args: input.arguments,
+			result,
+			status: "success",
+			durationMs: Date.now() - startedAt,
+			error: null,
+		});
+		return result;
+	} catch (error) {
+		await recordAgentActivity({
+			server,
+			agentId: input.agentSession.agentId,
+			userId,
+			capability: input.capability,
+			args: input.arguments,
+			status: "error",
+			durationMs: Date.now() - startedAt,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		throw error;
 	}
 }
