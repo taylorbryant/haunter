@@ -1,5 +1,6 @@
 import "@beignet/core/server-only";
 import {
+	createCsrfHooks,
 	createErrorReportingHooks,
 	createIdempotencyHooks,
 	createRateLimitHooks,
@@ -49,6 +50,7 @@ export const getServer = createNextServerLoader(() =>
 		},
 		hooks: [
 			createSecurityHeadersHooks<AppContext>(),
+			createCsrfHooks<AppContext>(),
 			createErrorReportingHooks<AppContext>(),
 			createIdempotencyHooks<AppContext>(),
 			// Enforces contract.meta.rateLimit. The Vercel edge normalizes

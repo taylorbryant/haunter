@@ -23,9 +23,11 @@ import {
 	unsubscribePushUseCase,
 	updateNotificationSettingsUseCase,
 } from "@/features/notifications/use-cases";
+import { routeAuth } from "@/server/auth-hooks";
 
 export const notificationRoutes = defineRouteGroup<AppContext>()({
 	name: "notifications",
+	hooks: [routeAuth.required()],
 	routes: [
 		{ contract: listNotifications, useCase: listNotificationsUseCase },
 		{ contract: markNotificationRead, useCase: markNotificationReadUseCase },

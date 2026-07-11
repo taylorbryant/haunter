@@ -112,15 +112,24 @@ export async function POST(
 	}
 
 	const server = await getServer();
-	const ctx = await server.createContextFromNext();
-	const limited = await enforceUploadRateLimit(server, req, ctx);
-	if (limited) return limited;
+	const handler = server
+		.rawRoute({
+			name: "uploads",
+			method: "POST",
+			path: "/api/uploads/:uploadName/:action",
+		})
+		.handle(async ({ ctx }) => {
+			const limited = await enforceUploadRateLimit(server, req, ctx);
+			if (limited) return limited;
 
-	const router = createUploadRouter({
-		uploads: uploadsFromRegistry(uploadRegistry),
-		ctx,
-		storage: server.ports.storage,
-	});
+			const router = createUploadRouter({
+				uploads: uploadsFromRegistry(uploadRegistry),
+				ctx,
+				storage: server.ports.storage,
+			});
 
-	return router.handleRequest(req, { uploadName, action });
+			return router.handleRequest(req, { uploadName, action });
+		});
+
+	return handler(req);
 }

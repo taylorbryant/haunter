@@ -24,6 +24,7 @@ const shares = defineContractGroup().namespace("shares").responses({
 export const getPageShare = shares
 	.get("/api/pages/:pageId/share")
 	.pathParams(PageIdInputSchema)
+	.meta({ auth: "required" })
 	.errors({
 		Unauthorized: errors.Unauthorized,
 		Forbidden: errors.Forbidden,
@@ -38,7 +39,10 @@ export const createPageShare = shares
 	.post("/api/pages/:pageId/share")
 	.pathParams(PageIdInputSchema)
 	.body(z.object({}))
-	.meta({ rateLimit: { max: 30, windowSec: 60, scope: "user" } })
+	.meta({
+		auth: "required",
+		rateLimit: { max: 30, windowSec: 60, scope: "user" },
+	})
 	.errors({
 		Unauthorized: errors.Unauthorized,
 		Forbidden: errors.Forbidden,
@@ -51,6 +55,7 @@ export const createPageShare = shares
 export const revokePageShare = shares
 	.delete("/api/pages/:pageId/share")
 	.pathParams(PageIdInputSchema)
+	.meta({ auth: "required" })
 	.errors({
 		Unauthorized: errors.Unauthorized,
 		Forbidden: errors.Forbidden,

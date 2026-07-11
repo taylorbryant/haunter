@@ -14,6 +14,7 @@ const ErrorResponseSchema = z.object({
 
 const admin = defineContractGroup()
 	.namespace("admin")
+	.meta({ auth: "required" })
 	.errors({ Unauthorized: errors.Unauthorized, Forbidden: errors.Forbidden })
 	.responses({
 		500: ErrorResponseSchema,

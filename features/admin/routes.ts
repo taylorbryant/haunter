@@ -6,9 +6,11 @@ import {
 	approveWaitlistUserUseCase,
 	listWaitlistUseCase,
 } from "@/features/admin/use-cases";
+import { routeAuth } from "@/server/auth-hooks";
 
 export const adminRoutes = defineRouteGroup<AppContext>()({
 	name: "admin",
+	hooks: [routeAuth.required()],
 	routes: [
 		{ contract: listWaitlist, useCase: listWaitlistUseCase },
 		{ contract: approveWaitlistUser, useCase: approveWaitlistUserUseCase },

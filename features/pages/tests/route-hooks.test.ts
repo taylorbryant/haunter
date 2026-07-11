@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createMemoryRateLimiter, createStaticAuth } from "@beignet/core/ports";
 import {
+	createCsrfHooks,
 	createIdempotencyHooks,
 	createRateLimitHooks,
 	defineRoutes,
@@ -86,6 +87,7 @@ async function createHookedTestApp(options: { auth: AppPorts["auth"] }) {
 		ports: fixture.ports,
 		context: appContext,
 		hooks: [
+			createCsrfHooks<AppContext>(),
 			createIdempotencyHooks<AppContext>(),
 			createRateLimitHooks<AppContext>({ ipSource: "x-forwarded-for-first" }),
 		],
@@ -111,6 +113,32 @@ function createSignedInAuth(
 }
 
 describe("page route hooks", () => {
+	it("rejects a cross-origin mutation", async () => {
+		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
+		const { app } = await createHookedTestApp({
+			auth: createSignedInAuth("user_csrf", workspace.id),
+		});
+
+		const response = await app.fetch("http://beignet.test/api/pages", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				origin: "https://attacker.example",
+			},
+			body: JSON.stringify({ workspaceId: workspace.id, title: "Blocked" }),
+		});
+		const body = (await response.json()) as {
+			code?: string;
+			details?: { reason?: string };
+		};
+
+		await app.stop();
+
+		expect(response.status).toBe(403);
+		expect(body.code).toBe("FORBIDDEN");
+		expect(body.details?.reason).toBe("untrusted_origin");
+	});
+
 	it("enforces meta.rateLimit with a 429 past the limit", async () => {
 		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
 		const { app } = await createHookedTestApp({

@@ -24,7 +24,9 @@ export const providers = [
 	createPinoLoggerProvider(),
 	drizzleSqliteProvider,
 	starterDatabaseProvider,
-	createInlineNotificationsProvider(),
+	// Failed channel results must fail the schedule invocation so production
+	// monitoring sees delivery failures; the inbox still owns retry timing.
+	createInlineNotificationsProvider({ failureMode: "throw" }),
 	webPushProvider,
 	// Vercel Blob in deployed environments (local disk doesn't survive
 	// serverless); the local provider keeps dev working with zero setup.

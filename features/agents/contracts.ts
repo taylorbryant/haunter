@@ -15,9 +15,12 @@ const ErrorResponseSchema = z.object({
 	requestId: z.string().optional(),
 });
 
-const agents = defineContractGroup().namespace("agents").responses({
-	500: ErrorResponseSchema,
-});
+const agents = defineContractGroup()
+	.namespace("agents")
+	.meta({ auth: "required" })
+	.responses({
+		500: ErrorResponseSchema,
+	});
 
 export const listAgents = agents
 	.get("/api/agents")

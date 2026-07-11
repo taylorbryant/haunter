@@ -11,9 +11,11 @@ import {
 	getCanvasUseCase,
 	saveCanvasSnapshotUseCase,
 } from "@/features/canvases/use-cases";
+import { routeAuth } from "@/server/auth-hooks";
 
 export const canvasRoutes = defineRouteGroup<AppContext>()({
 	name: "canvases",
+	hooks: [routeAuth.required()],
 	routes: [
 		{ contract: createCanvas, useCase: createCanvasUseCase },
 		{ contract: getCanvas, useCase: getCanvasUseCase },

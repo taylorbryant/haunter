@@ -106,4 +106,56 @@ describe("task overdue push channel", () => {
 		expect(sent).toHaveLength(1);
 		expect(delivered).toEqual([[notificationId]]);
 	});
+
+	it("reports a failed channel after recording its retry", async () => {
+		const subscription: StoredPushSubscription = {
+			id: crypto.randomUUID(),
+			userId: "user_test",
+			endpoint: "https://push.example.com/subscription",
+			expirationTime: null,
+			keys: { p256dh: "key", auth: "auth" },
+			createdAt: new Date().toISOString(),
+			updatedAt: new Date().toISOString(),
+		};
+		const failed: Array<{ ids: string[]; retryAt: string | null }> = [];
+		const ctx = {
+			ports: {
+				notificationInbox: {
+					async getPreferences() {
+						return { overdueTasksEnabled: true, timezone: "UTC" };
+					},
+					async listPushSubscriptions() {
+						return [subscription];
+					},
+					async claimPush() {
+						return true;
+					},
+					async countUnread() {
+						return 1;
+					},
+					async deletePushSubscription() {},
+					async markPushFailed(ids: string[], retryAt: string | null) {
+						failed.push({ ids, retryAt });
+					},
+				},
+				webPush: {
+					isConfigured: () => true,
+					async send() {
+						return { status: "failed" as const };
+					},
+				},
+			},
+		} as unknown as AppContext;
+		const result = await TaskOverdueNotification.channels.push({
+			notification: TaskOverdueNotification,
+			payload: payload(),
+			ctx,
+			channel: "push",
+		});
+
+		expect(result?.status).toBe("failed");
+		expect(failed).toHaveLength(1);
+		expect(failed[0]?.ids).toEqual([notificationId]);
+		expect(failed[0]?.retryAt).not.toBeNull();
+	});
 });

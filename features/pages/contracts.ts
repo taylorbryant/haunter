@@ -27,6 +27,7 @@ const ErrorResponseSchema = z.object({
 
 const pages = defineContractGroup()
 	.namespace("pages")
+	.meta({ auth: "required" })
 	.errors({ Unauthorized: errors.Unauthorized })
 	.responses({
 		500: ErrorResponseSchema,

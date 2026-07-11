@@ -11,9 +11,11 @@ import {
 	listAgentActivityUseCase,
 	listAgentsUseCase,
 } from "@/features/agents/use-cases";
+import { routeAuth } from "@/server/auth-hooks";
 
 export const agentRoutes = defineRouteGroup<AppContext>()({
 	name: "agents",
+	hooks: [routeAuth.required()],
 	routes: [
 		{ contract: listAgents, useCase: listAgentsUseCase },
 		{ contract: listAgentActivity, useCase: listAgentActivityUseCase },

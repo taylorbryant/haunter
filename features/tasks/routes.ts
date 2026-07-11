@@ -13,9 +13,11 @@ import {
 	listTasksUseCase,
 	updateTaskUseCase,
 } from "@/features/tasks/use-cases";
+import { routeAuth } from "@/server/auth-hooks";
 
 export const taskRoutes = defineRouteGroup<AppContext>()({
 	name: "tasks",
+	hooks: [routeAuth.required()],
 	routes: [
 		{ contract: listTasks, useCase: listTasksUseCase },
 		{ contract: createTask, useCase: createTaskUseCase },

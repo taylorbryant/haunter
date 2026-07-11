@@ -33,9 +33,11 @@ import {
 	searchPagesUseCase,
 	updatePageUseCase,
 } from "@/features/pages/use-cases";
+import { routeAuth } from "@/server/auth-hooks";
 
 export const pageRoutes = defineRouteGroup<AppContext>()({
 	name: "pages",
+	hooks: [routeAuth.required()],
 	routes: [
 		{ contract: listPages, useCase: listPagesUseCase },
 		{ contract: createPage, useCase: createPageUseCase },
