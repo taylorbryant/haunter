@@ -1,10 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
-import {
-	createTestTenant,
-	createTestUserActor,
-} from "@beignet/core/testing";
+import { createTestTenant, createTestUserActor } from "@beignet/core/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
@@ -80,6 +77,22 @@ async function createFixture(userId = "user_test") {
 			return organizationId === workspace.id && memberIds.has(candidateId)
 				? "member"
 				: null;
+		},
+		async listByWorkspace() {
+			return [
+				{
+					userId,
+					name: "Test User",
+					email: `${userId}@example.com`,
+					role: "owner",
+				},
+				{
+					userId: "user_teammate",
+					name: "Team Mate",
+					email: "teammate@example.com",
+					role: "member",
+				},
+			];
 		},
 	};
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
@@ -703,5 +716,21 @@ describe("task assignment", () => {
 			{ ctx },
 		);
 		expect(dueToday.items.map((item) => item.title)).toEqual(["Due today"]);
+
+		const dueRange = await tester.run(
+			listTasksUseCase,
+			{
+				workspaceId: workspace.id,
+				filter: "open",
+				scope: "mine",
+				dueOnOrAfter: "2026-07-09",
+				dueOnOrBefore: "2026-07-10",
+			},
+			{ ctx },
+		);
+		expect(dueRange.items.map((item) => item.title)).toEqual([
+			"Due today",
+			"Due later",
+		]);
 	});
 });

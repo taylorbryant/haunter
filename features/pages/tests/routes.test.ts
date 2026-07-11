@@ -62,6 +62,9 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 		async findRole() {
 			return "owner";
 		},
+		async listByWorkspace() {
+			return [];
+		},
 	};
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,

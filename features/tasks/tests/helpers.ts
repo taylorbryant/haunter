@@ -41,6 +41,9 @@ export function createTestTaskRepository(options?: {
 						matches(task, filter) &&
 						(!listOptions.assigneeId ||
 							task.assigneeId === listOptions.assigneeId) &&
+						(!listOptions.dueOnOrAfter ||
+							(task.dueDate !== null &&
+								task.dueDate >= listOptions.dueOnOrAfter)) &&
 						(!listOptions.dueOnOrBefore ||
 							(task.dueDate !== null &&
 								task.dueDate <= listOptions.dueOnOrBefore)) &&

@@ -33,13 +33,25 @@ export const TaskFilterSchema = z
 
 export const TaskScopeSchema = z.enum(["everyone", "mine"]).default("everyone");
 
-export const ListTasksInputSchema = z.object({
-	workspaceId: z.string().min(1),
-	filter: TaskFilterSchema,
-	scope: TaskScopeSchema,
-	dueOnOrBefore: DueDateSchema.optional(),
-	limit: z.coerce.number().int().min(1).max(200).default(50),
-});
+export const ListTasksInputSchema = z
+	.object({
+		workspaceId: z.string().min(1),
+		filter: TaskFilterSchema,
+		scope: TaskScopeSchema,
+		dueOnOrAfter: DueDateSchema.optional(),
+		dueOnOrBefore: DueDateSchema.optional(),
+		limit: z.coerce.number().int().min(1).max(200).default(50),
+	})
+	.refine(
+		(input) =>
+			!input.dueOnOrAfter ||
+			!input.dueOnOrBefore ||
+			input.dueOnOrAfter <= input.dueOnOrBefore,
+		{
+			message: "dueOnOrAfter must not be later than dueOnOrBefore",
+			path: ["dueOnOrAfter"],
+		},
+	);
 
 export const ListTasksOutputSchema = z.object({
 	items: z.array(TaskWithPageSchema),

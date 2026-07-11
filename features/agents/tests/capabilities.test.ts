@@ -38,6 +38,22 @@ async function createFixture() {
 				? "owner"
 				: null;
 		},
+		async listByWorkspace() {
+			return [
+				{
+					userId,
+					name: "Agent User",
+					email: "agent@example.com",
+					role: "owner",
+				},
+				{
+					userId: "user_teammate",
+					name: "Team Mate",
+					email: "teammate@example.com",
+					role: "member",
+				},
+			];
+		},
 	};
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
@@ -98,7 +114,11 @@ async function createFixture() {
 				arguments: args,
 				agentSession: { agentId: "agent_test", userId },
 			},
-			{ getServer: async () => server as never },
+			{
+				getServer: async () => server as never,
+				getTimezone: async () => "UTC",
+				now: () => new Date("2026-07-15T12:00:00.000Z"),
+			},
 		);
 
 	return {
@@ -113,6 +133,36 @@ async function createFixture() {
 }
 
 describe("Haunter agent capabilities", () => {
+	it("lists workspace members for task assignment", async () => {
+		const { execute, userId, workspaceId } = await createFixture();
+
+		const result = (await execute("list_workspace_members", {
+			workspaceId,
+		})) as {
+			members: Array<{
+				userId: string;
+				name: string;
+				email: string;
+				role: string;
+			}>;
+		};
+
+		expect(result.members).toEqual([
+			{
+				userId,
+				name: "Agent User",
+				email: "agent@example.com",
+				role: "owner",
+			},
+			{
+				userId: "user_teammate",
+				name: "Team Mate",
+				email: "teammate@example.com",
+				role: "member",
+			},
+		]);
+	});
+
 	it("creates a page with markdown and returns it from list_pages", async () => {
 		const { activities, execute, pages, scope, workspaceId } =
 			await createFixture();
@@ -194,6 +244,15 @@ describe("Haunter agent capabilities", () => {
 			workspaceId,
 			taskId: created.taskId,
 		})) as { completed: boolean; completedAt: string | null };
+		const completedStored = await tasks.findById(scope, created.taskId);
+		const reopened = (await execute("reopen_task", {
+			workspaceId,
+			taskId: created.taskId,
+		})) as { completed: boolean; completedAt: string | null };
+		const deleted = (await execute("delete_task", {
+			workspaceId,
+			taskId: created.taskId,
+		})) as { taskId: string; deleted: boolean };
 		const stored = await tasks.findById(scope, created.taskId);
 
 		expect(created.assigneeId).toBe(userId);
@@ -212,10 +271,62 @@ describe("Haunter agent capabilities", () => {
 		});
 		expect(completed.completed).toBe(true);
 		expect(completed.completedAt).not.toBeNull();
-		expect(stored).toMatchObject({
+		expect(completedStored).toMatchObject({
 			title: "Prepare release notes",
 			completed: true,
 			dueDate: null,
 		});
+		expect(reopened).toMatchObject({ completed: false, completedAt: null });
+		expect(deleted).toEqual({ taskId: created.taskId, deleted: true });
+		expect(stored).toBeNull();
+	});
+
+	it("filters tasks with timezone-aware due presets and explicit ranges", async () => {
+		const { execute, workspaceId } = await createFixture();
+		for (const [title, dueDate] of [
+			["Overdue", "2026-07-14"],
+			["Today", "2026-07-15"],
+			["Upcoming", "2026-07-16"],
+		] as const) {
+			await execute("create_task", { workspaceId, title, dueDate });
+		}
+		await execute("create_task", { workspaceId, title: "Undated" });
+
+		const titles = async (args: Record<string, unknown>) => {
+			const result = (await execute("list_tasks", {
+				workspaceId,
+				...args,
+			})) as { tasks: Array<{ title: string }> };
+			return result.tasks.map((task) => task.title);
+		};
+
+		expect(await titles({ due: "overdue" })).toEqual(["Overdue"]);
+		expect(await titles({ due: "today" })).toEqual(["Today"]);
+		expect(await titles({ due: "upcoming" })).toEqual(["Upcoming"]);
+		expect(
+			await titles({ dueOnOrAfter: "2026-07-15", dueOnOrBefore: "2026-07-16" }),
+		).toEqual(["Today", "Upcoming"]);
+	});
+
+	it("does not delete page-backed tasks", async () => {
+		const { execute, workspaceId } = await createFixture();
+		await execute("create_page", {
+			workspaceId,
+			title: "Protected tasks",
+			markdown: "- [ ] Keep this task",
+		});
+		const listed = (await execute("list_tasks", {
+			workspaceId,
+			scope: "everyone",
+		})) as { tasks: Array<{ taskId: string; pageId: string | null }> };
+		const pageTask = listed.tasks.find((task) => task.pageId !== null);
+		expect(pageTask).toBeDefined();
+
+		await expect(
+			execute("delete_task", {
+				workspaceId,
+				taskId: pageTask?.taskId,
+			}),
+		).rejects.toMatchObject({ code: "TASK_NOT_EDITABLE" });
 	});
 });

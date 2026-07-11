@@ -32,6 +32,7 @@ export const listTasks = tasks
 		z.object({
 			filter: TaskFilterSchema.optional(),
 			scope: TaskScopeSchema.optional(),
+			dueOnOrAfter: DueDateSchema.optional(),
 			dueOnOrBefore: DueDateSchema.optional(),
 			limit: z.coerce.number().int().min(1).max(200).optional(),
 		}),

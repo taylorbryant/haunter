@@ -25,6 +25,18 @@ export const agentCapabilities = [
 		input: { type: "object", properties: {} },
 	},
 	{
+		name: "list_workspace_members",
+		description:
+			"List the members of one workspace with user ids, names, emails, and roles. Use the returned userId as assigneeId when creating or updating tasks.",
+		input: {
+			type: "object",
+			required: ["workspaceId"],
+			properties: {
+				workspaceId: { type: "string" },
+			},
+		},
+	},
+	{
 		name: "list_pages",
 		description:
 			"List every active page in one workspace as lightweight metadata, including hierarchy. Call list_workspaces first to get a workspaceId.",
@@ -93,7 +105,7 @@ export const agentCapabilities = [
 	{
 		name: "list_tasks",
 		description:
-			"List tasks in one workspace. Defaults to open tasks assigned to the acting user; can include completed tasks, everyone's tasks, and a due-date cutoff.",
+			"List tasks in one workspace. Defaults to open tasks assigned to the acting user; supports completion/scope filters, explicit due-date ranges, and timezone-aware overdue, today, or upcoming presets.",
 		input: {
 			type: "object",
 			required: ["workspaceId"],
@@ -112,6 +124,16 @@ export const agentCapabilities = [
 				dueOnOrBefore: {
 					type: "string",
 					pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+				},
+				dueOnOrAfter: {
+					type: "string",
+					pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+				},
+				due: {
+					type: "string",
+					enum: ["overdue", "today", "upcoming"],
+					description:
+						"Timezone-aware preset. Upcoming means tomorrow and later. Do not combine with explicit due date bounds.",
 				},
 				limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
 			},
@@ -176,6 +198,32 @@ export const agentCapabilities = [
 			},
 		},
 	},
+	{
+		name: "reopen_task",
+		description:
+			"Reopen a completed task. For a page-backed task, the source task block is unchecked too.",
+		input: {
+			type: "object",
+			required: ["workspaceId", "taskId"],
+			properties: {
+				workspaceId: { type: "string" },
+				taskId: { type: "string", format: "uuid" },
+			},
+		},
+	},
+	{
+		name: "delete_task",
+		description:
+			"Permanently delete a standalone task. Page-backed tasks must be removed from their source page instead.",
+		input: {
+			type: "object",
+			required: ["workspaceId", "taskId"],
+			properties: {
+				workspaceId: { type: "string" },
+				taskId: { type: "string", format: "uuid" },
+			},
+		},
+	},
 ];
 
 const DueDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -195,8 +243,29 @@ const AppendArgs = ReadPageArgs.extend({
 const ListTasksArgs = WorkspaceScopedArgs.extend({
 	filter: z.enum(["open", "completed", "all"]).default("open"),
 	scope: z.enum(["mine", "everyone"]).default("mine"),
+	dueOnOrAfter: DueDate.optional(),
 	dueOnOrBefore: DueDate.optional(),
+	due: z.enum(["overdue", "today", "upcoming"]).optional(),
 	limit: z.number().int().min(1).max(200).default(50),
+}).superRefine((input, ctx) => {
+	if (input.due && (input.dueOnOrAfter || input.dueOnOrBefore)) {
+		ctx.addIssue({
+			code: "custom",
+			message: "Do not combine due with explicit due date bounds.",
+			path: ["due"],
+		});
+	}
+	if (
+		input.dueOnOrAfter &&
+		input.dueOnOrBefore &&
+		input.dueOnOrAfter > input.dueOnOrBefore
+	) {
+		ctx.addIssue({
+			code: "custom",
+			message: "dueOnOrAfter must not be later than dueOnOrBefore.",
+			path: ["dueOnOrAfter"],
+		});
+	}
 });
 const CreateTaskArgs = WorkspaceScopedArgs.extend({
 	title: z.string().trim().min(1).max(300),
@@ -218,6 +287,12 @@ const UpdateTaskArgs = WorkspaceScopedArgs.extend({
 const CompleteTaskArgs = WorkspaceScopedArgs.extend({
 	taskId: z.string().uuid(),
 });
+
+function addDays(date: string, days: number) {
+	const parsed = new Date(`${date}T00:00:00.000Z`);
+	parsed.setUTCDate(parsed.getUTCDate() + days);
+	return parsed.toISOString().slice(0, 10);
+}
 
 /**
  * Build an AppContext for an agent acting as `userId` inside `workspaceId`.
@@ -260,6 +335,8 @@ type ExecuteInput = {
 
 type AgentCapabilityDependencies = {
 	getServer?: () => Promise<AppServer>;
+	getTimezone?: (userId: string) => Promise<string>;
+	now?: () => Date;
 };
 
 async function runAgentCapability(
@@ -307,6 +384,15 @@ async function runAgentCapability(
 		: await import("@/server").then(({ getServer }) => getServer());
 
 	switch (capability) {
+		case "list_workspace_members": {
+			const input = WorkspaceScopedArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { listWorkspaceMembersUseCase } = await import(
+				"@/features/members/use-cases"
+			);
+			const result = await listWorkspaceMembersUseCase.run({ ctx, input });
+			return { members: result.items };
+		}
 		case "list_pages": {
 			const input = WorkspaceScopedArgs.parse(args);
 			const ctx = await createAgentContext(server, userId, input.workspaceId);
@@ -442,6 +528,24 @@ async function runAgentCapability(
 		case "list_tasks": {
 			const input = ListTasksArgs.parse(args);
 			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			let dueOnOrAfter = input.dueOnOrAfter;
+			let dueOnOrBefore = input.dueOnOrBefore;
+			if (input.due) {
+				const timezone = dependencies.getTimezone
+					? await dependencies.getTimezone(userId)
+					: (await ctx.ports.notificationInbox.getPreferences(userId)).timezone;
+				const { localDateAndHour } = await import("@/lib/timezone");
+				const today = localDateAndHour(
+					dependencies.now?.() ?? new Date(),
+					timezone,
+				).date;
+				if (input.due === "overdue") dueOnOrBefore = addDays(today, -1);
+				if (input.due === "today") {
+					dueOnOrAfter = today;
+					dueOnOrBefore = today;
+				}
+				if (input.due === "upcoming") dueOnOrAfter = addDays(today, 1);
+			}
 			const { listTasksUseCase } = await import("@/features/tasks/use-cases");
 			const result = await listTasksUseCase.run({
 				ctx,
@@ -450,9 +554,8 @@ async function runAgentCapability(
 					filter: input.filter,
 					scope: input.scope,
 					limit: input.limit,
-					...(input.dueOnOrBefore
-						? { dueOnOrBefore: input.dueOnOrBefore }
-						: {}),
+					...(dueOnOrAfter ? { dueOnOrAfter } : {}),
+					...(dueOnOrBefore ? { dueOnOrBefore } : {}),
 				},
 			});
 			return {
@@ -536,6 +639,32 @@ async function runAgentCapability(
 				updatedAt: task.updatedAt,
 			};
 		}
+		case "reopen_task": {
+			const input = CompleteTaskArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { updateTaskUseCase } = await import("@/features/tasks/use-cases");
+			const task = await updateTaskUseCase.run({
+				ctx,
+				input: { id: input.taskId, completed: false },
+			});
+			return {
+				taskId: task.id,
+				title: task.title,
+				completed: task.completed,
+				completedAt: task.completedAt,
+				updatedAt: task.updatedAt,
+			};
+		}
+		case "delete_task": {
+			const input = CompleteTaskArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { deleteTaskUseCase } = await import("@/features/tasks/use-cases");
+			await deleteTaskUseCase.run({
+				ctx,
+				input: { id: input.taskId },
+			});
+			return { taskId: input.taskId, deleted: true };
+		}
 		default:
 			throw new APIError("BAD_REQUEST", {
 				message: `Unknown capability: ${capability}`,
@@ -562,6 +691,8 @@ export async function executeAgentCapability(
 	try {
 		const result = await runAgentCapability(input, {
 			getServer: async () => server,
+			getTimezone: dependencies.getTimezone,
+			now: dependencies.now,
 		});
 		await recordAgentActivity({
 			server,

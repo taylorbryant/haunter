@@ -63,6 +63,9 @@ describe("shareRoutes rate limiting", () => {
 			async findRole() {
 				return "owner";
 			},
+			async listByWorkspace() {
+				return [];
+			},
 		};
 		const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 			base: appPorts,

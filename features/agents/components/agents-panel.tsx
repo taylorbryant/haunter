@@ -55,6 +55,9 @@ const activityLabels: Record<string, string> = {
 	create_task: "Created a task",
 	update_task: "Updated a task",
 	complete_task: "Completed a task",
+	reopen_task: "Reopened a task",
+	delete_task: "Deleted a task",
+	list_workspace_members: "Listed workspace members",
 };
 
 function activityHref(activity: AgentActivity) {

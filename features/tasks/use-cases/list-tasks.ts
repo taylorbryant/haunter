@@ -13,6 +13,7 @@ export const listTasksUseCase = useCase
 
 		const items = await ctx.ports.tasks.listByWorkspace(scope, input.filter, {
 			assigneeId: input.scope === "mine" ? user.id : undefined,
+			dueOnOrAfter: input.dueOnOrAfter,
 			dueOnOrBefore: input.dueOnOrBefore,
 			limit: input.limit + 1,
 		});

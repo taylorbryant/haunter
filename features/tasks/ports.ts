@@ -22,12 +22,13 @@ export type UpdateTaskData = {
 
 export type ListTasksOptions = {
 	assigneeId?: string;
+	dueOnOrAfter?: string;
 	dueOnOrBefore?: string;
 	limit?: number;
 };
 
 export interface TaskRepository {
-	/** Workspace tasks, optionally narrowed to an assignee and bounded by limit. */
+	/** Workspace tasks, optionally narrowed by assignee, due range, and limit. */
 	listByWorkspace(
 		scope: TenantScope,
 		filter: TaskFilter,

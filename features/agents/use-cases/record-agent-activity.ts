@@ -40,6 +40,8 @@ function activityResource(
 		"create_task",
 		"update_task",
 		"complete_task",
+		"reopen_task",
+		"delete_task",
 	].includes(capability);
 
 	if (pageCapability) {

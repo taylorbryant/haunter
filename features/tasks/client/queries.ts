@@ -13,7 +13,7 @@ export function listTasksQueryOptions(
 	filter: TaskFilter,
 	scope: TaskScope = "everyone",
 	limit = 50,
-	options: { dueOnOrBefore?: string } = {},
+	options: { dueOnOrAfter?: string; dueOnOrBefore?: string } = {},
 ) {
 	return {
 		...rq(listTasks).queryOptions({
