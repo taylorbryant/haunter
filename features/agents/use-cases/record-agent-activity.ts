@@ -35,6 +35,9 @@ function activityResource(
 		"read_page",
 		"create_page",
 		"append_to_page",
+		"update_page",
+		"archive_page",
+		"restore_page",
 	].includes(capability);
 	const taskCapability = [
 		"create_task",

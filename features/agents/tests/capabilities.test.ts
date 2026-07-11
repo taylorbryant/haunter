@@ -18,7 +18,10 @@ import {
 } from "@/features/pages/tests/helpers";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
-import { executeAgentCapability } from "@/lib/agent-capabilities";
+import {
+	agentCapabilities,
+	executeAgentCapability,
+} from "@/lib/agent-capabilities";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 
@@ -199,6 +202,125 @@ describe("Haunter agent capabilities", () => {
 					resourceLabel: "Agent notes",
 				}),
 			]),
+		);
+	});
+
+	it("updates page metadata and moves pages through the page use case", async () => {
+		const { execute, pages, scope, workspaceId } = await createFixture();
+		const parent = (await execute("create_page", {
+			workspaceId,
+			title: "Projects",
+		})) as { pageId: string };
+		const child = (await execute("create_page", {
+			workspaceId,
+			title: "Draft",
+		})) as { pageId: string };
+
+		const updated = (await execute("update_page", {
+			workspaceId,
+			pageId: child.pageId,
+			title: "Launch plan",
+			icon: "🚀",
+			parentPageId: parent.pageId,
+		})) as {
+			pageId: string;
+			title: string;
+			icon: string | null;
+			parentPageId: string | null;
+		};
+
+		expect(updated).toMatchObject({
+			pageId: child.pageId,
+			title: "Launch plan",
+			icon: "🚀",
+			parentPageId: parent.pageId,
+		});
+		expect(await pages.findMetaById(scope, child.pageId)).toMatchObject({
+			title: "Launch plan",
+			icon: "🚀",
+			parentPageId: parent.pageId,
+		});
+
+		await expect(
+			execute("update_page", {
+				workspaceId,
+				pageId: parent.pageId,
+				parentPageId: child.pageId,
+			}),
+		).rejects.toMatchObject({ code: "INVALID_PAGE_MOVE" });
+	});
+
+	it("archives and restores page subtrees without exposing permanent purge", async () => {
+		const { activities, execute, pages, scope, workspaceId } =
+			await createFixture();
+		const parent = (await execute("create_page", {
+			workspaceId,
+			title: "Archive me",
+		})) as { pageId: string };
+		const child = (await execute("create_page", {
+			workspaceId,
+			title: "Nested page",
+			parentPageId: parent.pageId,
+		})) as { pageId: string };
+
+		const archived = (await execute("archive_page", {
+			workspaceId,
+			pageId: parent.pageId,
+		})) as { pageId: string; title: string; archived: boolean };
+		const archivedList = (await execute("list_pages", { workspaceId })) as {
+			pages: Array<{ pageId: string }>;
+		};
+
+		expect(archived).toEqual({
+			pageId: parent.pageId,
+			title: "Archive me",
+			archived: true,
+		});
+		expect(archivedList.pages).toEqual([]);
+		expect(
+			(await pages.findMetaById(scope, parent.pageId))?.deletedAt,
+		).not.toBe(null);
+		expect((await pages.findMetaById(scope, child.pageId))?.deletedAt).not.toBe(
+			null,
+		);
+
+		const restored = (await execute("restore_page", {
+			workspaceId,
+			pageId: parent.pageId,
+		})) as { pageId: string; title: string; restored: boolean };
+
+		expect(restored).toMatchObject({
+			pageId: parent.pageId,
+			title: "Archive me",
+			restored: true,
+		});
+		expect(
+			(await pages.findMetaById(scope, parent.pageId))?.deletedAt,
+		).toBeNull();
+		expect(
+			(await pages.findMetaById(scope, child.pageId))?.deletedAt,
+		).toBeNull();
+		expect(activities).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					capability: "archive_page",
+					resourceType: "page",
+					resourceId: parent.pageId,
+					resourceLabel: "Archive me",
+				}),
+				expect.objectContaining({
+					capability: "restore_page",
+					resourceType: "page",
+					resourceId: parent.pageId,
+					resourceLabel: "Archive me",
+				}),
+			]),
+		);
+		expect(agentCapabilities.map(({ name }) => name)).not.toContain(
+			"purge_page",
+		);
+		expect(agentCapabilities.map(({ name }) => name)).not.toContain(
+			"delete_page",
 		);
 	});
 

@@ -51,6 +51,9 @@ const activityLabels: Record<string, string> = {
 	read_page: "Read a page",
 	create_page: "Created a page",
 	append_to_page: "Updated a page",
+	update_page: "Updated a page",
+	archive_page: "Archived a page",
+	restore_page: "Restored a page",
 	list_tasks: "Listed tasks",
 	create_task: "Created a task",
 	update_task: "Updated a task",
@@ -62,6 +65,9 @@ const activityLabels: Record<string, string> = {
 
 function activityHref(activity: AgentActivity) {
 	if (!activity.workspaceId || activity.status !== "success") return null;
+	if (activity.capability === "archive_page") {
+		return `/w/${activity.workspaceId}/trash`;
+	}
 	if (activity.resourceType === "page" && activity.resourceId) {
 		return `/w/${activity.workspaceId}/p/${activity.resourceId}`;
 	}

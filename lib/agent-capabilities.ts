@@ -103,6 +103,52 @@ export const agentCapabilities = [
 		},
 	},
 	{
+		name: "update_page",
+		description:
+			"Update a page's title, icon, or parent. Set icon to null to remove it or parentPageId to null to move the page to the workspace root.",
+		input: {
+			type: "object",
+			required: ["workspaceId", "pageId"],
+			properties: {
+				workspaceId: { type: "string" },
+				pageId: { type: "string", format: "uuid" },
+				title: { type: "string", minLength: 1, maxLength: 300 },
+				icon: {
+					anyOf: [{ type: "string", maxLength: 16 }, { type: "null" }],
+				},
+				parentPageId: {
+					anyOf: [{ type: "string", format: "uuid" }, { type: "null" }],
+				},
+			},
+		},
+	},
+	{
+		name: "archive_page",
+		description:
+			"Move a page and its descendants to the workspace trash. This is reversible and does not permanently delete content.",
+		input: {
+			type: "object",
+			required: ["workspaceId", "pageId"],
+			properties: {
+				workspaceId: { type: "string" },
+				pageId: { type: "string", format: "uuid" },
+			},
+		},
+	},
+	{
+		name: "restore_page",
+		description:
+			"Restore an archived page and its descendants. If its former parent is unavailable, the page is restored at the workspace root.",
+		input: {
+			type: "object",
+			required: ["workspaceId", "pageId"],
+			properties: {
+				workspaceId: { type: "string" },
+				pageId: { type: "string", format: "uuid" },
+			},
+		},
+	},
+	{
 		name: "list_tasks",
 		description:
 			"List tasks in one workspace. Defaults to open tasks assigned to the acting user; supports completion/scope filters, explicit due-date ranges, and timezone-aware overdue, today, or upcoming presets.",
@@ -240,6 +286,17 @@ const ReadPageArgs = WorkspaceScopedArgs.extend({ pageId: z.string().uuid() });
 const AppendArgs = ReadPageArgs.extend({
 	markdown: z.string().min(1).max(100_000),
 });
+const UpdatePageArgs = ReadPageArgs.extend({
+	title: z.string().trim().min(1).max(300).optional(),
+	icon: z.string().max(16).nullable().optional(),
+	parentPageId: z.string().uuid().nullable().optional(),
+}).refine(
+	(input) =>
+		input.title !== undefined ||
+		input.icon !== undefined ||
+		input.parentPageId !== undefined,
+	{ message: "Provide a title, icon, or parentPageId to update." },
+);
 const ListTasksArgs = WorkspaceScopedArgs.extend({
 	filter: z.enum(["open", "completed", "all"]).default("open"),
 	scope: z.enum(["mine", "everyone"]).default("mine"),
@@ -523,6 +580,62 @@ async function runAgentCapability(
 				title: page.title,
 				appendedBlocks: appended.length,
 				updatedAt: saved.updatedAt,
+			};
+		}
+		case "update_page": {
+			const input = UpdatePageArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { updatePageUseCase } = await import("@/features/pages/use-cases");
+			const page = await updatePageUseCase.run({
+				ctx,
+				input: {
+					id: input.pageId,
+					...(input.title !== undefined ? { title: input.title } : {}),
+					...(input.icon !== undefined ? { icon: input.icon } : {}),
+					...(input.parentPageId !== undefined
+						? { parentPageId: input.parentPageId }
+						: {}),
+				},
+			});
+			return {
+				pageId: page.id,
+				title: page.title,
+				icon: page.icon,
+				parentPageId: page.parentPageId,
+				updatedAt: page.updatedAt,
+			};
+		}
+		case "archive_page": {
+			const input = ReadPageArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { deletePageUseCase, getPageUseCase } = await import(
+				"@/features/pages/use-cases"
+			);
+			const page = await getPageUseCase.run({
+				ctx,
+				input: { id: input.pageId },
+			});
+			await deletePageUseCase.run({
+				ctx,
+				input: { id: input.pageId },
+			});
+			return { pageId: page.id, title: page.title, archived: true };
+		}
+		case "restore_page": {
+			const input = ReadPageArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { restorePageUseCase } = await import("@/features/pages/use-cases");
+			const page = await restorePageUseCase.run({
+				ctx,
+				input: { id: input.pageId },
+			});
+			return {
+				pageId: page.id,
+				title: page.title,
+				icon: page.icon,
+				parentPageId: page.parentPageId,
+				restored: true,
+				updatedAt: page.updatedAt,
 			};
 		}
 		case "list_tasks": {
