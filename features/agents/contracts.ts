@@ -28,8 +28,9 @@ export const listAgents = agents
 	});
 
 // The device-approval page's read: the agent id comes from the verification
-// link the agent hands its user, and only pending agents resolve. Approval
-// itself still requires the user code, checked by the agent-auth plugin.
+// link the agent hands its user. Initial registrations and active agents with
+// pending capability grants resolve; approval itself still requires the user
+// code, checked by the agent-auth plugin.
 export const getPendingAgent = agents
 	.get("/api/agents/pending/:agentId")
 	.pathParams(PendingAgentInputSchema)

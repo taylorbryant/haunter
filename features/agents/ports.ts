@@ -4,6 +4,7 @@ export type AgentAdminRow = {
 	name: string;
 	mode: string;
 	status: string;
+	userId: string | null;
 	hostName: string | null;
 	grants: { capability: string; status: string }[];
 	lastUsedAt: Date | null;
@@ -19,8 +20,8 @@ export interface AgentAdminRepository {
 	/** The user's agents (delegated agents carry userId once approved). */
 	listByUser(userId: string): Promise<AgentAdminRow[]>;
 	/**
-	 * A pending agent by id, with its pending capability requests — the
-	 * device-approval page's read. Returns null unless status is "pending".
+	 * An initial registration or active agent with pending capability requests.
+	 * Returns null when there is no approval decision left to make.
 	 */
-	findPendingById(agentId: string): Promise<AgentAdminRow | null>;
+	findAwaitingApprovalById(agentId: string): Promise<AgentAdminRow | null>;
 }

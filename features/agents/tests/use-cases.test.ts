@@ -1,9 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
-import {
-	createTestTenant,
-	createTestUserActor,
-} from "@beignet/core/testing";
+import { createTestTenant, createTestUserActor } from "@beignet/core/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
@@ -17,9 +14,7 @@ import type { AgentAdminRow } from "../ports";
 import { getPendingAgentUseCase, listAgentsUseCase } from "../use-cases";
 import { createTestAgentAdminRepository } from "./helpers";
 
-function agentRow(
-	overrides: Partial<AgentAdminRow & { userId: string | null }> = {},
-): AgentAdminRow & { userId: string | null } {
+function agentRow(overrides: Partial<AgentAdminRow> = {}): AgentAdminRow {
 	return {
 		id: crypto.randomUUID(),
 		name: "Test agent",
@@ -34,7 +29,7 @@ function agentRow(
 	};
 }
 
-function createFixture(rows: (AgentAdminRow & { userId: string | null })[]) {
+function createFixture(rows: AgentAdminRow[]) {
 	const agents = createTestAgentAdminRepository(rows);
 	const workspaceId = crypto.randomUUID().replaceAll("-", "");
 	const auth = {
@@ -124,8 +119,38 @@ describe("agents.getPending", () => {
 		);
 	});
 
-	it("404s for agents that are not pending", async () => {
+	it("returns additional capability requests for an owned active agent", async () => {
+		const active = agentRow({
+			grants: [
+				{ capability: "read_page", status: "active" },
+				{ capability: "list_tasks", status: "pending" },
+			],
+		});
+		const tester = createFixture([active]);
+
+		const result = await tester.run(getPendingAgentUseCase, {
+			agentId: active.id,
+		});
+
+		expect(result.requestedCapabilities.map((c) => c.name)).toEqual([
+			"list_tasks",
+		]);
+	});
+
+	it("404s when an agent has no pending capability requests", async () => {
 		const active = agentRow();
+		const tester = createFixture([active]);
+
+		await expect(
+			tester.run(getPendingAgentUseCase, { agentId: active.id }),
+		).rejects.toMatchObject({ code: "AGENT_NOT_FOUND" });
+	});
+
+	it("does not expose another user's active agent request", async () => {
+		const active = agentRow({
+			userId: "user_other",
+			grants: [{ capability: "list_tasks", status: "pending" }],
+		});
 		const tester = createFixture([active]);
 
 		await expect(

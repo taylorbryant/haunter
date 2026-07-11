@@ -12,6 +12,7 @@ type AgentRecord = {
 	name: string;
 	mode: string;
 	status: string;
+	userId: string | null;
 	hostName: string | null;
 	lastUsedAt: Date | null;
 	createdAt: Date;
@@ -54,6 +55,7 @@ export function createDrizzleAgentAdminRepository(
 		name: schema.agent.name,
 		mode: schema.agent.mode,
 		status: schema.agent.status,
+		userId: schema.agent.userId,
 		hostName: schema.agentHost.name,
 		lastUsedAt: schema.agent.lastUsedAt,
 		createdAt: schema.agent.createdAt,
@@ -76,7 +78,7 @@ export function createDrizzleAgentAdminRepository(
 				toRow(record, grants.get(record.id) ?? []),
 			);
 		},
-		async findPendingById(agentId: string) {
+		async findAwaitingApprovalById(agentId: string) {
 			const [record] = await db
 				.select(agentColumns)
 				.from(schema.agent)
@@ -85,13 +87,18 @@ export function createDrizzleAgentAdminRepository(
 					eq(schema.agent.hostId, schema.agentHost.id),
 				)
 				.where(
-					and(eq(schema.agent.id, agentId), eq(schema.agent.status, "pending")),
+					and(
+						eq(schema.agent.id, agentId),
+						inArray(schema.agent.status, ["pending", "active"]),
+					),
 				)
 				.limit(1);
 
 			if (!record) return null;
 			const grants = await grantsByAgent([record.id]);
-			return toRow(record, grants.get(record.id) ?? []);
+			const agentGrants = grants.get(record.id) ?? [];
+			if (!agentGrants.some((grant) => grant.status === "pending")) return null;
+			return toRow(record, agentGrants);
 		},
 	};
 }

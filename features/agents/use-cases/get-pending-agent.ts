@@ -9,19 +9,20 @@ import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 
 /**
- * A pending agent's approval details for the device-approval page. Any
- * signed-in user holding the verification link may view the request (the
- * agent has no owner yet — whoever approves becomes its user), but approval
- * itself requires the user code and is enforced by the agent-auth plugin.
+ * An agent approval request for the device-approval page. Initial registrations
+ * have no owner yet, so any signed-in user holding the verification link may
+ * review them. Additional capability requests belong to an active agent and
+ * are only visible to that agent's owner. Approval itself still requires the
+ * user code and is enforced by the agent-auth plugin.
  */
 export const getPendingAgentUseCase = useCase
 	.query("agents.getPending")
 	.input(PendingAgentInputSchema)
 	.output(PendingAgentSchema)
 	.run(async ({ ctx, input }) => {
-		requireUser(ctx);
-		const row = await ctx.ports.agents.findPendingById(input.agentId);
-		if (!row) {
+		const user = requireUser(ctx);
+		const row = await ctx.ports.agents.findAwaitingApprovalById(input.agentId);
+		if (!row || (row.userId !== null && row.userId !== user.id)) {
 			throw appError("AgentNotFound");
 		}
 
