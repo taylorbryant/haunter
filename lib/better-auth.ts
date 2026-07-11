@@ -122,7 +122,7 @@ export const auth = betterAuth({
 		agentAuth({
 			providerName: "haunter",
 			providerDescription:
-				"Haunter notes: list, create, read, search, and append to pages in workspaces the acting user belongs to.",
+				"Haunter productivity: manage pages and tasks in workspaces the acting user belongs to.",
 			modes: ["delegated"],
 			capabilities: agentCapabilities,
 			onExecute: executeAgentCapability,

@@ -99,6 +99,8 @@ async function createFixture() {
 		execute,
 		pages,
 		scope: createTenantScope(createTestTenant(workspaceId)),
+		tasks,
+		userId,
 		workspaceId,
 	};
 }
@@ -140,5 +142,53 @@ describe("Haunter agent capabilities", () => {
 				title: "Unauthorized",
 			}),
 		).rejects.toMatchObject({ status: "FORBIDDEN" });
+	});
+
+	it("creates, lists, updates, and completes a task as the acting user", async () => {
+		const { execute, tasks, scope, userId, workspaceId } =
+			await createFixture();
+
+		const created = (await execute("create_task", {
+			workspaceId,
+			title: "Prepare launch notes",
+			dueDate: "2026-07-15",
+		})) as { taskId: string; assigneeId: string | null };
+		const listed = (await execute("list_tasks", { workspaceId })) as {
+			tasks: Array<{ taskId: string; title: string }>;
+			hasMore: boolean;
+		};
+		const updated = (await execute("update_task", {
+			workspaceId,
+			taskId: created.taskId,
+			title: "Prepare release notes",
+			dueDate: null,
+		})) as { title: string; dueDate: string | null };
+		const completed = (await execute("complete_task", {
+			workspaceId,
+			taskId: created.taskId,
+		})) as { completed: boolean; completedAt: string | null };
+		const stored = await tasks.findById(scope, created.taskId);
+
+		expect(created.assigneeId).toBe(userId);
+		expect(listed).toMatchObject({
+			tasks: [
+				expect.objectContaining({
+					taskId: created.taskId,
+					title: "Prepare launch notes",
+				}),
+			],
+			hasMore: false,
+		});
+		expect(updated).toMatchObject({
+			title: "Prepare release notes",
+			dueDate: null,
+		});
+		expect(completed.completed).toBe(true);
+		expect(completed.completedAt).not.toBeNull();
+		expect(stored).toMatchObject({
+			title: "Prepare release notes",
+			completed: true,
+			dueDate: null,
+		});
 	});
 });

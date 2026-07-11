@@ -89,8 +89,95 @@ export const agentCapabilities = [
 			},
 		},
 	},
+	{
+		name: "list_tasks",
+		description:
+			"List tasks in one workspace. Defaults to open tasks assigned to the acting user; can include completed tasks, everyone's tasks, and a due-date cutoff.",
+		input: {
+			type: "object",
+			required: ["workspaceId"],
+			properties: {
+				workspaceId: { type: "string" },
+				filter: {
+					type: "string",
+					enum: ["open", "completed", "all"],
+					default: "open",
+				},
+				scope: {
+					type: "string",
+					enum: ["mine", "everyone"],
+					default: "mine",
+				},
+				dueOnOrBefore: {
+					type: "string",
+					pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+				},
+				limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
+			},
+		},
+	},
+	{
+		name: "create_task",
+		description:
+			"Create a standalone task in a workspace. The task is assigned to the acting user by default; dueDate uses YYYY-MM-DD.",
+		input: {
+			type: "object",
+			required: ["workspaceId", "title"],
+			properties: {
+				workspaceId: { type: "string" },
+				title: { type: "string", minLength: 1, maxLength: 300 },
+				dueDate: {
+					type: "string",
+					pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+				},
+				assigneeId: {
+					anyOf: [{ type: "string" }, { type: "null" }],
+				},
+			},
+		},
+	},
+	{
+		name: "update_task",
+		description:
+			"Update a task's title, due date, or assignee. Set dueDate or assigneeId to null to clear it. Page-backed task titles must still be edited in their page.",
+		input: {
+			type: "object",
+			required: ["workspaceId", "taskId"],
+			properties: {
+				workspaceId: { type: "string" },
+				taskId: { type: "string", format: "uuid" },
+				title: { type: "string", minLength: 1, maxLength: 300 },
+				dueDate: {
+					anyOf: [
+						{
+							type: "string",
+							pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+						},
+						{ type: "null" },
+					],
+				},
+				assigneeId: {
+					anyOf: [{ type: "string" }, { type: "null" }],
+				},
+			},
+		},
+	},
+	{
+		name: "complete_task",
+		description:
+			"Mark a task complete. For a page-backed task, the source task block is checked too.",
+		input: {
+			type: "object",
+			required: ["workspaceId", "taskId"],
+			properties: {
+				workspaceId: { type: "string" },
+				taskId: { type: "string", format: "uuid" },
+			},
+		},
+	},
 ];
 
+const DueDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const WorkspaceScopedArgs = z.object({ workspaceId: z.string().min(1) });
 const CreatePageArgs = WorkspaceScopedArgs.extend({
 	title: z.string().trim().min(1).max(300),
@@ -103,6 +190,32 @@ const SearchArgs = WorkspaceScopedArgs.extend({
 const ReadPageArgs = WorkspaceScopedArgs.extend({ pageId: z.string().uuid() });
 const AppendArgs = ReadPageArgs.extend({
 	markdown: z.string().min(1).max(100_000),
+});
+const ListTasksArgs = WorkspaceScopedArgs.extend({
+	filter: z.enum(["open", "completed", "all"]).default("open"),
+	scope: z.enum(["mine", "everyone"]).default("mine"),
+	dueOnOrBefore: DueDate.optional(),
+	limit: z.number().int().min(1).max(200).default(50),
+});
+const CreateTaskArgs = WorkspaceScopedArgs.extend({
+	title: z.string().trim().min(1).max(300),
+	dueDate: DueDate.optional(),
+	assigneeId: z.string().nullable().optional(),
+});
+const UpdateTaskArgs = WorkspaceScopedArgs.extend({
+	taskId: z.string().uuid(),
+	title: z.string().trim().min(1).max(300).optional(),
+	dueDate: DueDate.nullable().optional(),
+	assigneeId: z.string().nullable().optional(),
+}).refine(
+	(input) =>
+		input.title !== undefined ||
+		input.dueDate !== undefined ||
+		input.assigneeId !== undefined,
+	{ message: "Provide a title, dueDate, or assigneeId to update." },
+);
+const CompleteTaskArgs = WorkspaceScopedArgs.extend({
+	taskId: z.string().uuid(),
 });
 
 /**
@@ -315,6 +428,103 @@ export async function executeAgentCapability(
 				},
 			});
 			return { appendedBlocks: appended.length, updatedAt: saved.updatedAt };
+		}
+		case "list_tasks": {
+			const input = ListTasksArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { listTasksUseCase } = await import("@/features/tasks/use-cases");
+			const result = await listTasksUseCase.run({
+				ctx,
+				input: {
+					workspaceId: input.workspaceId,
+					filter: input.filter,
+					scope: input.scope,
+					limit: input.limit,
+					...(input.dueOnOrBefore
+						? { dueOnOrBefore: input.dueOnOrBefore }
+						: {}),
+				},
+			});
+			return {
+				tasks: result.items.map((task) => ({
+					taskId: task.id,
+					title: task.title,
+					completed: task.completed,
+					dueDate: task.dueDate,
+					assigneeId: task.assigneeId,
+					assigneeName: task.assigneeName,
+					pageId: task.pageId,
+					pageTitle: task.pageTitle,
+					completedAt: task.completedAt,
+					updatedAt: task.updatedAt,
+				})),
+				hasMore: result.hasMore,
+			};
+		}
+		case "create_task": {
+			const input = CreateTaskArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { createTaskUseCase } = await import("@/features/tasks/use-cases");
+			const task = await createTaskUseCase.run({
+				ctx,
+				input: {
+					workspaceId: input.workspaceId,
+					title: input.title,
+					...(input.dueDate ? { dueDate: input.dueDate } : {}),
+					...(input.assigneeId !== undefined
+						? { assigneeId: input.assigneeId }
+						: {}),
+				},
+			});
+			return {
+				taskId: task.id,
+				title: task.title,
+				completed: task.completed,
+				dueDate: task.dueDate,
+				assigneeId: task.assigneeId,
+				createdAt: task.createdAt,
+				updatedAt: task.updatedAt,
+			};
+		}
+		case "update_task": {
+			const input = UpdateTaskArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { updateTaskUseCase } = await import("@/features/tasks/use-cases");
+			const task = await updateTaskUseCase.run({
+				ctx,
+				input: {
+					id: input.taskId,
+					...(input.title !== undefined ? { title: input.title } : {}),
+					...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
+					...(input.assigneeId !== undefined
+						? { assigneeId: input.assigneeId }
+						: {}),
+				},
+			});
+			return {
+				taskId: task.id,
+				title: task.title,
+				completed: task.completed,
+				dueDate: task.dueDate,
+				assigneeId: task.assigneeId,
+				updatedAt: task.updatedAt,
+			};
+		}
+		case "complete_task": {
+			const input = CompleteTaskArgs.parse(args);
+			const ctx = await createAgentContext(server, userId, input.workspaceId);
+			const { updateTaskUseCase } = await import("@/features/tasks/use-cases");
+			const task = await updateTaskUseCase.run({
+				ctx,
+				input: { id: input.taskId, completed: true },
+			});
+			return {
+				taskId: task.id,
+				title: task.title,
+				completed: task.completed,
+				completedAt: task.completedAt,
+				updatedAt: task.updatedAt,
+			};
 		}
 		default:
 			throw new APIError("BAD_REQUEST", {
