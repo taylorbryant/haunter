@@ -46,6 +46,9 @@ async function createHookedTestApp(options: { auth: AppPorts["auth"] }) {
 		async findRole() {
 			return "owner";
 		},
+		async listForUser() {
+			return [];
+		},
 		async listByWorkspace() {
 			return [];
 		},

@@ -6,6 +6,7 @@
       "name": "haunter",
       "dependencies": {
         "@base-ui/react": "^1.6.0",
+        "@beignet/agent-auth-better-auth": "0.0.35",
         "@beignet/core": "0.0.35",
         "@beignet/devtools": "0.0.35",
         "@beignet/next": "0.0.35",
@@ -144,6 +145,8 @@
     "@base-ui/react": ["@base-ui/react@1.6.0", "", { "dependencies": { "@babel/runtime": "^7.29.2", "@base-ui/utils": "0.3.1", "@floating-ui/react-dom": "^2.1.8", "@floating-ui/utils": "^0.2.11", "use-sync-external-store": "^1.6.0" }, "peerDependencies": { "@date-fns/tz": "^1.2.0", "@types/react": "^17 || ^18 || ^19", "date-fns": "^4.0.0", "react": "^17 || ^18 || ^19", "react-dom": "^17 || ^18 || ^19" }, "optionalPeers": ["@date-fns/tz", "@types/react", "date-fns"] }, "sha512-/jzjTWJYXhRFO45Bev9lc3cHbmjzCMpUqbMZ2AgKy/z25mY9B6shGSNcXcjQar9n5doM0KYW1W8fcFv2jZBuMw=="],
 
     "@base-ui/utils": ["@base-ui/utils@0.3.1", "", { "dependencies": { "@babel/runtime": "^7.29.2", "@floating-ui/utils": "^0.2.11", "reselect": "^5.2.0", "use-sync-external-store": "^1.6.0" }, "peerDependencies": { "@types/react": "^17 || ^18 || ^19", "react": "^17 || ^18 || ^19", "react-dom": "^17 || ^18 || ^19" }, "optionalPeers": ["@types/react"] }, "sha512-gFFiltORVmW/N6IILTGxizP3PBpVpysqML1ALY5Vk0mH+7faVkCknOU31goYHN5Aoek2dkjxva1XOD2Ce9WuIg=="],
+
+    "@beignet/agent-auth-better-auth": ["@beignet/agent-auth-better-auth@0.0.35", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@better-auth/agent-auth": ">=0.6.2 <0.7.0", "better-auth": ">=1.4.0 <1.7.0", "zod": "^4.0.0" } }, "sha512-5iQAx+MBe2qPJZQgCr+SVzwmwh6vOpFYSK4s2UMPj+yyJctzc+AVlafub73pV4LjmPRsCiErs6I3B5IRqVjxFA=="],
 
     "@beignet/cli": ["@beignet/cli@0.0.35", "", { "dependencies": { "@beignet/core": "^0.0.35", "@clack/prompts": "^1.5.1", "@modelcontextprotocol/sdk": "^1.29.0", "@stricli/core": "^1.2.7", "jiti": "^2.7.0", "zod": "^4.0.0" }, "bin": { "beignet": "dist/index.js" } }, "sha512-QeXFxXCDuc7ONpbtwAB9OQcderyUnyh845ukAxdRlR4+DwumMgsd8zBSqoqpWcusHHzd6/v93eqWNIpwNFbE2A=="],
 

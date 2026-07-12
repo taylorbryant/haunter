@@ -7,9 +7,17 @@ export type WorkspaceMember = {
 	role: string;
 };
 
+export type UserWorkspace = {
+	id: string;
+	name: string;
+	role: string;
+};
+
 export interface MemberRepository {
 	/** The user's role in the organization, or null when they are not a member. */
 	findRole(organizationId: string, userId: string): Promise<string | null>;
+	/** Workspaces visible to one verified user. */
+	listForUser(userId: string): Promise<UserWorkspace[]>;
 	/** The tenant-scoped roster used for assignee discovery. */
 	listByWorkspace(scope: TenantScope): Promise<WorkspaceMember[]>;
 }

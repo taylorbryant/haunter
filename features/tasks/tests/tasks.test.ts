@@ -1,10 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
-import { createTestTenant, createTestUserActor } from "@beignet/core/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,
+	createTestTenant,
+	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
@@ -77,6 +78,9 @@ async function createFixture(userId = "user_test") {
 			return organizationId === workspace.id && memberIds.has(candidateId)
 				? "member"
 				: null;
+		},
+		async listForUser() {
+			return [];
 		},
 		async listByWorkspace() {
 			return [

@@ -1,16 +1,17 @@
+import { createBetterAuthAgentCapabilityAdapter } from "@beignet/agent-auth-better-auth";
+import type { AgentCapabilityExecutor } from "@beignet/core/agent-capabilities";
 import { agentAuth } from "@better-auth/agent-auth";
 import { createClient } from "@libsql/client";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError } from "better-auth/api";
 import { admin, emailOTP, organization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/libsql";
 import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
-import {
-	agentCapabilities,
-	executeAgentCapability,
-} from "@/lib/agent-capabilities";
+import type { AgentPrincipal } from "@/lib/agent-capabilities";
+import { agentCapabilityRegistry } from "@/lib/agent-capability-registry";
 import { createAuthRateLimitStorage } from "@/lib/auth-rate-limit";
 import { env } from "@/lib/env";
 import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
@@ -20,6 +21,7 @@ import {
 	ACCESS_STATUS_WAITLISTED,
 	ADMIN_ROLE,
 } from "@/ports/auth";
+import type { AgentCapabilityServer } from "@/server/agent-capabilities";
 
 const client = createClient({
 	url: env.SQLITE_DB_URL,
@@ -34,6 +36,52 @@ const db = drizzle(client, { schema });
 const adminUsers = createDrizzleAdminUserRepository(db);
 
 const authRateLimitStorage = createAuthRateLimitStorage();
+
+type HaunterAgentCapabilityExecutor = AgentCapabilityExecutor<
+	AgentPrincipal,
+	typeof agentCapabilityRegistry.definitions
+>;
+
+async function executeAgentCapabilityDynamic(
+	invocation: Parameters<HaunterAgentCapabilityExecutor["executeDynamic"]>[0],
+) {
+	const [{ createHaunterAgentCapabilityExecutor }, serverModule] =
+		await Promise.all([
+			import("@/server/agent-capabilities"),
+			import("@/server") as Promise<unknown>,
+		]);
+	const { getServer } = serverModule as {
+		getServer(): Promise<AgentCapabilityServer>;
+	};
+	return (
+		await createHaunterAgentCapabilityExecutor({ getServer })
+	).executeDynamic(invocation);
+}
+
+const lazyAgentCapabilityExecutor: HaunterAgentCapabilityExecutor = {
+	execute: (async (invocation) =>
+		executeAgentCapabilityDynamic(
+			invocation,
+		)) as HaunterAgentCapabilityExecutor["execute"],
+	executeDynamic: executeAgentCapabilityDynamic,
+};
+
+const agentCapabilityAdapter = createBetterAuthAgentCapabilityAdapter({
+	registry: agentCapabilityRegistry,
+	executor: lazyAgentCapabilityExecutor,
+	principal({ agentSession }) {
+		if (!agentSession.userId) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					"This capability requires a delegated agent acting for a user.",
+			});
+		}
+		return {
+			agentId: agentSession.agentId,
+			userId: agentSession.userId,
+		};
+	},
+});
 
 const trustedOrigins = [
 	env.APP_URL,
@@ -120,12 +168,11 @@ export const auth = betterAuth({
 		// as human requests. Delegated mode only — every agent acts for a real
 		// member and inherits at most that member's rights.
 		agentAuth({
+			...agentCapabilityAdapter,
 			providerName: "haunter",
 			providerDescription:
 				"Haunter productivity: manage pages and tasks in workspaces the acting user belongs to.",
 			modes: ["delegated"],
-			capabilities: agentCapabilities,
-			onExecute: executeAgentCapability,
 			// Lets agents self-register with an embedded key (OAuth-device-flow
 			// style) instead of requiring a pre-enrolled host. Registration
 			// alone grants nothing: delegated agents start pending with every

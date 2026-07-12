@@ -53,6 +53,9 @@ async function createShareRouteTestApp(
 		async findRole() {
 			return "owner";
 		},
+		async listForUser() {
+			return [];
+		},
 		async listByWorkspace() {
 			return [];
 		},

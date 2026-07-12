@@ -4,7 +4,7 @@ import {
 	PendingAgentSchema,
 } from "@/features/agents/schemas";
 import { appError } from "@/features/shared/errors";
-import { agentCapabilities } from "@/lib/agent-capabilities";
+import { agentCapabilities } from "@/lib/agent-capability-registry";
 import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 

@@ -1,7 +1,7 @@
 import "@beignet/core/server-only";
 import { createMemo } from "@beignet/core/memo";
-import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
 import { tenantScopeId } from "@beignet/core/ports";
+import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
 import { and, asc, eq } from "drizzle-orm";
 import type { MemberRepository } from "@/features/members/ports";
 import * as schema from "@/infra/db/schema";
@@ -32,6 +32,21 @@ export function createDrizzleMemberRepository(
 			},
 			{ name: "members.findRole" },
 		),
+		async listForUser(userId) {
+			return db
+				.select({
+					id: schema.organization.id,
+					name: schema.organization.name,
+					role: schema.member.role,
+				})
+				.from(schema.member)
+				.innerJoin(
+					schema.organization,
+					eq(schema.member.organizationId, schema.organization.id),
+				)
+				.where(eq(schema.member.userId, userId))
+				.orderBy(asc(schema.organization.name));
+		},
 		async listByWorkspace(scope) {
 			return db
 				.select({

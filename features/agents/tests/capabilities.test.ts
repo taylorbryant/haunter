@@ -18,12 +18,10 @@ import {
 } from "@/features/pages/tests/helpers";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
-import {
-	agentCapabilities,
-	executeAgentCapability,
-} from "@/lib/agent-capabilities";
+import { agentCapabilities } from "@/lib/agent-capability-registry";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
+import { executeAgentCapability } from "@/server/agent-capabilities";
 
 async function createFixture() {
 	const userId = "user_agent";
@@ -40,6 +38,9 @@ async function createFixture() {
 			return candidateWorkspaceId === workspaceId && candidateUserId === userId
 				? "owner"
 				: null;
+		},
+		async listForUser() {
+			return [{ id: workspaceId, name: "Test Workspace", role: "owner" }];
 		},
 		async listByWorkspace() {
 			return [
@@ -136,6 +137,24 @@ async function createFixture() {
 }
 
 describe("Haunter agent capabilities", () => {
+	it("lists the acting user's workspaces", async () => {
+		const { execute, workspaceId } = await createFixture();
+
+		await expect(execute("list_workspaces", {})).resolves.toEqual({
+			workspaces: [{ id: workspaceId, name: "Test Workspace", role: "owner" }],
+		});
+	});
+
+	it("rejects malformed capability input before execution", async () => {
+		const { execute, workspaceId } = await createFixture();
+
+		await expect(execute("create_page", { workspaceId })).rejects.toMatchObject(
+			{
+				code: "invalid_input",
+			},
+		);
+	});
+
 	it("lists workspace members for task assignment", async () => {
 		const { execute, userId, workspaceId } = await createFixture();
 
@@ -203,6 +222,41 @@ describe("Haunter agent capabilities", () => {
 				}),
 			]),
 		);
+	});
+
+	it("searches, reads, and appends page markdown", async () => {
+		const { execute, workspaceId } = await createFixture();
+		const created = (await execute("create_page", {
+			workspaceId,
+			title: "Searchable agent notes",
+			markdown: "# Original",
+		})) as { pageId: string };
+
+		const searched = (await execute("search_pages", {
+			workspaceId,
+			query: "Searchable",
+		})) as { pages: Array<{ pageId: string; title: string }> };
+		const before = (await execute("read_page", {
+			workspaceId,
+			pageId: created.pageId,
+		})) as { markdown: string };
+		const appended = (await execute("append_to_page", {
+			workspaceId,
+			pageId: created.pageId,
+			markdown: "Added paragraph",
+		})) as { appendedBlocks: number };
+		const after = (await execute("read_page", {
+			workspaceId,
+			pageId: created.pageId,
+		})) as { markdown: string };
+
+		expect(searched.pages).toContainEqual({
+			pageId: created.pageId,
+			title: "Searchable agent notes",
+		});
+		expect(before.markdown).toContain("# Original");
+		expect(appended.appendedBlocks).toBe(1);
+		expect(after.markdown).toContain("Added paragraph");
 	});
 
 	it("updates page metadata and moves pages through the page use case", async () => {

@@ -4,9 +4,8 @@ import type {
 	AgentActivityResourceType,
 	AgentActivityStatus,
 } from "@/features/agents/ports";
-import type { getServer } from "@/server";
 
-type AppServer = Awaited<ReturnType<typeof getServer>>;
+type AppServer = { ports: AppRuntimePorts };
 
 type ActivityResource = {
 	resourceType: AgentActivityResourceType | null;
