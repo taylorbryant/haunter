@@ -197,6 +197,11 @@ export function ApproveAgentCard({
 								<span className="font-medium font-mono text-sm">
 									{capability.name}
 								</span>
+								{capability.workspaceScope ? (
+									<span className="text-foreground text-xs">
+										Workspace: {capability.workspaceScope}
+									</span>
+								) : null}
 								<span className="text-muted-foreground text-sm">
 									{capability.description}
 								</span>

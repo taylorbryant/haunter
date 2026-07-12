@@ -18,10 +18,14 @@ import {
 } from "@/features/pages/tests/helpers";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
+import { createHaunterAgentAuthAdapter } from "@/lib/agent-auth-adapter";
 import { agentCapabilities } from "@/lib/agent-capability-registry";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
-import { executeAgentCapability } from "@/server/agent-capabilities";
+import {
+	createHaunterAgentCapabilityExecutor,
+	executeAgentCapability,
+} from "@/server/agent-capabilities";
 
 async function createFixture() {
 	const userId = "user_agent";
@@ -111,6 +115,11 @@ async function createFixture() {
 			return ctx;
 		},
 	};
+	const dependencies = {
+		getServer: async () => server as never,
+		getTimezone: async () => "UTC",
+		now: () => new Date("2026-07-15T12:00:00.000Z"),
+	};
 	const execute = (capability: string, args: Record<string, unknown>) =>
 		executeAgentCapability(
 			{
@@ -118,15 +127,12 @@ async function createFixture() {
 				arguments: args,
 				agentSession: { agentId: "agent_test", userId },
 			},
-			{
-				getServer: async () => server as never,
-				getTimezone: async () => "UTC",
-				now: () => new Date("2026-07-15T12:00:00.000Z"),
-			},
+			dependencies,
 		);
 
 	return {
 		activities,
+		createExecutor: () => createHaunterAgentCapabilityExecutor(dependencies),
 		execute,
 		pages,
 		scope: createTenantScope(createTestTenant(workspaceId)),
@@ -137,6 +143,52 @@ async function createFixture() {
 }
 
 describe("Haunter agent capabilities", () => {
+	it("requires workspace constraints on every workspace capability", async () => {
+		const { createExecutor } = await createFixture();
+		const adapter = createHaunterAgentAuthAdapter(await createExecutor());
+		if (!Array.isArray(adapter.capabilities)) {
+			throw new Error("Expected a static Agent Auth capability catalog.");
+		}
+
+		for (const capability of adapter.capabilities) {
+			expect(capability.requiredConstraints).toEqual(
+				capability.name === "list_workspaces" ? undefined : ["workspaceId"],
+			);
+		}
+	});
+
+	it("preserves grant authorization through the activity wrapper", async () => {
+		const { createExecutor, userId, workspaceId } = await createFixture();
+		const adapter = createHaunterAgentAuthAdapter(await createExecutor());
+		if (!adapter.onExecute) throw new Error("Expected an Agent Auth executor.");
+
+		const changedWorkspaceId = crypto.randomUUID().replaceAll("-", "");
+		let workspaceReads = 0;
+		const input = new Proxy(
+			{ workspaceId, title: "Constraint test" },
+			{
+				get(target, property, receiver) {
+					if (property === "workspaceId") {
+						workspaceReads += 1;
+						return workspaceReads === 1 ? workspaceId : changedWorkspaceId;
+					}
+					return Reflect.get(target, property, receiver);
+				},
+			},
+		);
+
+		await expect(
+			adapter.onExecute({
+				arguments: input,
+				capability: "create_page",
+				grant: { constraints: { workspaceId } },
+				agentSession: { agentId: "agent_test", userId },
+			} as never),
+		).rejects.toThrow(
+			'Constrained capability argument "workspaceId" changed during validation.',
+		);
+	});
+
 	it("lists the acting user's workspaces", async () => {
 		const { execute, workspaceId } = await createFixture();
 

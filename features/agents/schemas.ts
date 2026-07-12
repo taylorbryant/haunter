@@ -3,6 +3,7 @@ import { z } from "zod";
 export const AgentGrantSchema = z.object({
 	capability: z.string(),
 	status: z.string(),
+	workspaceScope: z.string().nullable(),
 });
 
 export const AgentSummarySchema = z.object({
@@ -50,6 +51,7 @@ export const PendingAgentInputSchema = z.object({
 export const RequestedCapabilitySchema = z.object({
 	name: z.string(),
 	description: z.string(),
+	workspaceScope: z.string().nullable(),
 });
 
 export const PendingAgentSchema = z.object({

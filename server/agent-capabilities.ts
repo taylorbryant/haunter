@@ -2,6 +2,7 @@ import "@beignet/core/server-only";
 import {
 	AgentCapabilityError,
 	createAgentCapabilityExecutor,
+	type DynamicAgentCapabilityInvocation,
 } from "@beignet/core/agent-capabilities";
 import { APIError } from "better-auth/api";
 import type { AppContext, AppRuntimePorts } from "@/app-context";
@@ -71,11 +72,9 @@ export async function createHaunterAgentCapabilityExecutor(
 
 	return {
 		...executor,
-		async executeDynamic(invocation: {
-			name: string;
-			principal: AgentPrincipal;
-			input: unknown;
-		}) {
+		async executeDynamic(
+			invocation: DynamicAgentCapabilityInvocation<AgentPrincipal>,
+		) {
 			const startedAt = Date.now();
 			try {
 				const result = await executor.executeDynamic(invocation);

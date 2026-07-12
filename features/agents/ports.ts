@@ -1,3 +1,9 @@
+export type AgentCapabilityGrant = {
+	capability: string;
+	status: string;
+	constraints: Record<string, unknown> | null;
+};
+
 /** An agent row with its host name and grants, shaped for admin reads. */
 export type AgentAdminRow = {
 	id: string;
@@ -6,7 +12,7 @@ export type AgentAdminRow = {
 	status: string;
 	userId: string | null;
 	hostName: string | null;
-	grants: { capability: string; status: string }[];
+	grants: AgentCapabilityGrant[];
 	lastUsedAt: Date | null;
 	createdAt: Date;
 };

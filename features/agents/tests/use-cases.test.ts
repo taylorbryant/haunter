@@ -26,7 +26,7 @@ function agentRow(overrides: Partial<AgentAdminRow> = {}): AgentAdminRow {
 		mode: "delegated",
 		status: "active",
 		hostName: "test-host",
-		grants: [{ capability: "read_page", status: "active" }],
+		grants: [{ capability: "read_page", status: "active", constraints: null }],
 		lastUsedAt: null,
 		createdAt: new Date("2026-07-01T00:00:00.000Z"),
 		userId: "user_test",
@@ -44,7 +44,18 @@ function createFixture(
 		activities,
 		currentApprovalIds,
 	);
-	const workspaceId = crypto.randomUUID().replaceAll("-", "");
+	const workspaceId = "workspace_test";
+	const members = {
+		async findRole() {
+			return "owner";
+		},
+		async listForUser() {
+			return [{ id: workspaceId, name: "Test Workspace", role: "owner" }];
+		},
+		async listByWorkspace() {
+			return [];
+		},
+	};
 	const auth = {
 		user: {
 			id: "user_test",
@@ -59,10 +70,11 @@ function createFixture(
 		overrides: {
 			gate: appPorts.gate,
 			agents,
+			members,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, agents }),
+			ports: (ports) => ({ ...ports, agents, members }),
 		},
 	});
 	const createTestContext = createTestContextFactory<
@@ -111,10 +123,22 @@ describe("agents.getPending", () => {
 			status: "pending",
 			userId: null,
 			grants: [
-				{ capability: "read_page", status: "pending" },
-				{ capability: "search_pages", status: "pending" },
+				{
+					capability: "read_page",
+					status: "pending",
+					constraints: { workspaceId: "workspace_test" },
+				},
+				{
+					capability: "search_pages",
+					status: "pending",
+					constraints: { workspaceId: "workspace_test" },
+				},
 				// Already-active grants are not part of the approval ask.
-				{ capability: "list_workspaces", status: "active" },
+				{
+					capability: "list_workspaces",
+					status: "active",
+					constraints: null,
+				},
 			],
 		});
 		const tester = createFixture([pending]);
@@ -130,14 +154,17 @@ describe("agents.getPending", () => {
 		expect(result.requestedCapabilities[0].description.length).toBeGreaterThan(
 			0,
 		);
+		expect(result.requestedCapabilities[0].workspaceScope).toBe(
+			"Test Workspace",
+		);
 		expect(result.approvalId).toBe(`approval_${pending.id}`);
 	});
 
 	it("returns additional capability requests for an owned active agent", async () => {
 		const active = agentRow({
 			grants: [
-				{ capability: "read_page", status: "active" },
-				{ capability: "list_tasks", status: "pending" },
+				{ capability: "read_page", status: "active", constraints: null },
+				{ capability: "list_tasks", status: "pending", constraints: null },
 			],
 		});
 		const tester = createFixture([active]);
@@ -163,7 +190,9 @@ describe("agents.getPending", () => {
 	it("does not expose another user's active agent request", async () => {
 		const active = agentRow({
 			userId: "user_other",
-			grants: [{ capability: "list_tasks", status: "pending" }],
+			grants: [
+				{ capability: "list_tasks", status: "pending", constraints: null },
+			],
 		});
 		const tester = createFixture([active]);
 
@@ -174,7 +203,9 @@ describe("agents.getPending", () => {
 
 	it("404s when no unexpired device approval remains", async () => {
 		const active = agentRow({
-			grants: [{ capability: "list_tasks", status: "pending" }],
+			grants: [
+				{ capability: "list_tasks", status: "pending", constraints: null },
+			],
 		});
 		const tester = createFixture([active], [], new Map([[active.id, null]]));
 

@@ -19,6 +19,25 @@ type AgentRecord = {
 	createdAt: Date;
 };
 
+function parseGrantConstraints(value: unknown): Record<string, unknown> | null {
+	if (value === null || value === undefined) return null;
+	if (typeof value === "object" && !Array.isArray(value)) {
+		return value as Record<string, unknown>;
+	}
+	if (typeof value !== "string") return null;
+
+	try {
+		const parsed: unknown = JSON.parse(value);
+		return parsed !== null &&
+			typeof parsed === "object" &&
+			!Array.isArray(parsed)
+			? (parsed as Record<string, unknown>)
+			: null;
+	} catch {
+		return null;
+	}
+}
+
 export function createDrizzleAgentAdminRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): AgentAdminRepository {
@@ -31,6 +50,7 @@ export function createDrizzleAgentAdminRepository(
 				agentId: schema.agentCapabilityGrant.agentId,
 				capability: schema.agentCapabilityGrant.capability,
 				status: schema.agentCapabilityGrant.status,
+				constraints: schema.agentCapabilityGrant.constraints,
 			})
 			.from(schema.agentCapabilityGrant)
 			.where(inArray(schema.agentCapabilityGrant.agentId, agentIds));
@@ -38,7 +58,11 @@ export function createDrizzleAgentAdminRepository(
 		const byAgent = new Map<string, AgentAdminRow["grants"]>();
 		for (const row of rows) {
 			const grants = byAgent.get(row.agentId) ?? [];
-			grants.push({ capability: row.capability, status: row.status });
+			grants.push({
+				capability: row.capability,
+				status: row.status,
+				constraints: parseGrantConstraints(row.constraints),
+			});
 			byAgent.set(row.agentId, grants);
 		}
 		return byAgent;

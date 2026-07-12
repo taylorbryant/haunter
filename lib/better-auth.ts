@@ -1,17 +1,16 @@
-import { createBetterAuthAgentCapabilityAdapter } from "@beignet/agent-auth-better-auth";
-import type { AgentCapabilityExecutor } from "@beignet/core/agent-capabilities";
 import { agentAuth } from "@better-auth/agent-auth";
 import { createClient } from "@libsql/client";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError } from "better-auth/api";
 import { admin, emailOTP, organization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/libsql";
 import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
-import type { AgentPrincipal } from "@/lib/agent-capabilities";
-import { agentCapabilityRegistry } from "@/lib/agent-capability-registry";
+import {
+	createHaunterAgentAuthAdapter,
+	type HaunterAgentCapabilityExecutor,
+} from "@/lib/agent-auth-adapter";
 import { createAuthRateLimitStorage } from "@/lib/auth-rate-limit";
 import { env } from "@/lib/env";
 import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
@@ -37,11 +36,6 @@ const adminUsers = createDrizzleAdminUserRepository(db);
 
 const authRateLimitStorage = createAuthRateLimitStorage();
 
-type HaunterAgentCapabilityExecutor = AgentCapabilityExecutor<
-	AgentPrincipal,
-	typeof agentCapabilityRegistry.definitions
->;
-
 async function executeAgentCapabilityDynamic(
 	invocation: Parameters<HaunterAgentCapabilityExecutor["executeDynamic"]>[0],
 ) {
@@ -66,22 +60,9 @@ const lazyAgentCapabilityExecutor: HaunterAgentCapabilityExecutor = {
 	executeDynamic: executeAgentCapabilityDynamic,
 };
 
-const agentCapabilityAdapter = createBetterAuthAgentCapabilityAdapter({
-	registry: agentCapabilityRegistry,
-	executor: lazyAgentCapabilityExecutor,
-	principal({ agentSession }) {
-		if (!agentSession.userId) {
-			throw new APIError("FORBIDDEN", {
-				message:
-					"This capability requires a delegated agent acting for a user.",
-			});
-		}
-		return {
-			agentId: agentSession.agentId,
-			userId: agentSession.userId,
-		};
-	},
-});
+const agentCapabilityAdapter = createHaunterAgentAuthAdapter(
+	lazyAgentCapabilityExecutor,
+);
 
 const trustedOrigins = [
 	env.APP_URL,

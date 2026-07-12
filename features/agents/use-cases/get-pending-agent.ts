@@ -3,6 +3,7 @@ import {
 	PendingAgentInputSchema,
 	PendingAgentSchema,
 } from "@/features/agents/schemas";
+import { grantWorkspaceScopeLabel } from "@/features/agents/grant-scope";
 import { appError } from "@/features/shared/errors";
 import { agentCapabilities } from "@/lib/agent-capability-registry";
 import { requireUser } from "@/lib/auth";
@@ -34,6 +35,10 @@ export const getPendingAgentUseCase = useCase
 		}
 
 		const requested = row.grants.filter((grant) => grant.status === "pending");
+		const workspaces = await ctx.ports.members.listForUser(user.id);
+		const workspaceNames = new Map(
+			workspaces.map((workspace) => [workspace.id, workspace.name]),
+		);
 
 		return {
 			id: row.id,
@@ -45,6 +50,7 @@ export const getPendingAgentUseCase = useCase
 				description:
 					agentCapabilities.find((c) => c.name === grant.capability)
 						?.description ?? "",
+				workspaceScope: grantWorkspaceScopeLabel(grant, workspaceNames),
 			})),
 			createdAt: row.createdAt.toISOString(),
 		};

@@ -205,11 +205,12 @@ function AgentRow({
 				<div className="flex flex-wrap gap-1">
 					{activeGrants.map((grant) => (
 						<Badge
-							key={grant.capability}
+							key={`${grant.capability}:${grant.workspaceScope ?? "global"}`}
 							variant="secondary"
 							className="font-mono"
 						>
 							{grant.capability}
+							{grant.workspaceScope ? ` · ${grant.workspaceScope}` : ""}
 						</Badge>
 					))}
 				</div>
