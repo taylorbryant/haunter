@@ -1,6 +1,4 @@
 import "@beignet/core/server-only";
-import { defineRouteGroup } from "@beignet/core/server";
-import type { AppContext } from "@/app-context";
 import {
 	createTask,
 	deleteTask,
@@ -13,9 +11,10 @@ import {
 	listTasksUseCase,
 	updateTaskUseCase,
 } from "@/features/tasks/use-cases";
+import { defineRouteGroup } from "@/lib/routes";
 import { routeAuth } from "@/server/auth-hooks";
 
-export const taskRoutes = defineRouteGroup<AppContext>()({
+export const taskRoutes = defineRouteGroup({
 	name: "tasks",
 	hooks: [routeAuth.required()],
 	routes: [

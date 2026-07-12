@@ -1,6 +1,4 @@
 import "@beignet/core/server-only";
-import { defineRouteGroup } from "@beignet/core/server";
-import type { AppContext } from "@/app-context";
 import {
 	getPendingAgent,
 	listAgentActivity,
@@ -11,9 +9,10 @@ import {
 	listAgentActivityUseCase,
 	listAgentsUseCase,
 } from "@/features/agents/use-cases";
+import { defineRouteGroup } from "@/lib/routes";
 import { routeAuth } from "@/server/auth-hooks";
 
-export const agentRoutes = defineRouteGroup<AppContext>()({
+export const agentRoutes = defineRouteGroup({
 	name: "agents",
 	hooks: [routeAuth.required()],
 	routes: [

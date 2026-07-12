@@ -1,7 +1,7 @@
 import "@beignet/core/server-only";
 import { createInlineNotificationsProvider } from "@beignet/core/notifications";
 import { createDevtoolsProvider } from "@beignet/devtools";
-import { createAuthBetterAuthProvider } from "@beignet/provider-auth-better-auth";
+import { createBetterAuthProvider } from "@beignet/provider-auth-better-auth";
 import { createDrizzleSqliteProvider } from "@beignet/provider-db-drizzle/sqlite";
 import { createPinoLoggerProvider } from "@beignet/provider-logger-pino";
 import { createResendMailProvider } from "@beignet/provider-mail-resend";
@@ -21,7 +21,7 @@ const drizzleSqliteProvider = createDrizzleSqliteProvider({ schema });
 
 export const providers = [
 	createDevtoolsProvider(),
-	createAuthBetterAuthProvider<AuthUser, AuthSessionMetadata>(auth),
+	createBetterAuthProvider<AuthUser, AuthSessionMetadata>(auth),
 	createPinoLoggerProvider(),
 	drizzleSqliteProvider,
 	starterDatabaseProvider,

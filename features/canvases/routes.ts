@@ -1,6 +1,4 @@
 import "@beignet/core/server-only";
-import { defineRouteGroup } from "@beignet/core/server";
-import type { AppContext } from "@/app-context";
 import {
 	createCanvas,
 	getCanvas,
@@ -11,9 +9,10 @@ import {
 	getCanvasUseCase,
 	saveCanvasSnapshotUseCase,
 } from "@/features/canvases/use-cases";
+import { defineRouteGroup } from "@/lib/routes";
 import { routeAuth } from "@/server/auth-hooks";
 
-export const canvasRoutes = defineRouteGroup<AppContext>()({
+export const canvasRoutes = defineRouteGroup({
 	name: "canvases",
 	hooks: [routeAuth.required()],
 	routes: [

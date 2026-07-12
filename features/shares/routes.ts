@@ -1,6 +1,4 @@
 import "@beignet/core/server-only";
-import { defineRouteGroup } from "@beignet/core/server";
-import type { AppContext } from "@/app-context";
 import {
 	createPageShare,
 	getPageShare,
@@ -15,9 +13,10 @@ import {
 	getSharedPageUseCase,
 	revokePageShareUseCase,
 } from "@/features/shares/use-cases";
+import { defineRouteGroup } from "@/lib/routes";
 import { routeAuth } from "@/server/auth-hooks";
 
-export const shareRoutes = defineRouteGroup<AppContext>()({
+export const shareRoutes = defineRouteGroup({
 	name: "shares",
 	routes: [
 		{

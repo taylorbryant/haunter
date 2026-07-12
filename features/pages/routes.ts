@@ -1,6 +1,4 @@
 import "@beignet/core/server-only";
-import { defineRouteGroup } from "@beignet/core/server";
-import type { AppContext } from "@/app-context";
 import {
 	createPage,
 	deletePage,
@@ -33,9 +31,10 @@ import {
 	searchPagesUseCase,
 	updatePageUseCase,
 } from "@/features/pages/use-cases";
+import { defineRouteGroup } from "@/lib/routes";
 import { routeAuth } from "@/server/auth-hooks";
 
-export const pageRoutes = defineRouteGroup<AppContext>()({
+export const pageRoutes = defineRouteGroup({
 	name: "pages",
 	hooks: [routeAuth.required()],
 	routes: [

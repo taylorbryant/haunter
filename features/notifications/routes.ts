@@ -1,6 +1,4 @@
 import "@beignet/core/server-only";
-import { defineRouteGroup } from "@beignet/core/server";
-import type { AppContext } from "@/app-context";
 import {
 	getNotificationSettings,
 	initializeNotificationTimezone,
@@ -23,9 +21,10 @@ import {
 	unsubscribePushUseCase,
 	updateNotificationSettingsUseCase,
 } from "@/features/notifications/use-cases";
+import { defineRouteGroup } from "@/lib/routes";
 import { routeAuth } from "@/server/auth-hooks";
 
-export const notificationRoutes = defineRouteGroup<AppContext>()({
+export const notificationRoutes = defineRouteGroup({
 	name: "notifications",
 	hooks: [routeAuth.required()],
 	routes: [
