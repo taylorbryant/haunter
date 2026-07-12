@@ -7,6 +7,7 @@ import {
 	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
+import { createBetterAuthAgentCapabilityTestContext } from "@beignet/agent-auth-better-auth/testing";
 import type { AppContext } from "@/app-context";
 import type { AgentActivityWrite } from "@/features/agents/ports";
 import { createTestAgentAdminRepository } from "@/features/agents/tests/helpers";
@@ -145,7 +146,7 @@ async function createFixture() {
 describe("Haunter agent capabilities", () => {
 	it("requires workspace constraints on every workspace capability", async () => {
 		const { createExecutor } = await createFixture();
-		const adapter = createHaunterAgentAuthAdapter(await createExecutor());
+		const adapter = createHaunterAgentAuthAdapter(createExecutor);
 		if (!Array.isArray(adapter.capabilities)) {
 			throw new Error("Expected a static Agent Auth capability catalog.");
 		}
@@ -157,9 +158,9 @@ describe("Haunter agent capabilities", () => {
 		}
 	});
 
-	it("preserves grant authorization through the activity wrapper", async () => {
+	it("preserves grant authorization with activity lifecycle hooks", async () => {
 		const { createExecutor, userId, workspaceId } = await createFixture();
-		const adapter = createHaunterAgentAuthAdapter(await createExecutor());
+		const adapter = createHaunterAgentAuthAdapter(createExecutor);
 		if (!adapter.onExecute) throw new Error("Expected an Agent Auth executor.");
 
 		const changedWorkspaceId = crypto.randomUUID().replaceAll("-", "");
@@ -178,15 +179,43 @@ describe("Haunter agent capabilities", () => {
 		);
 
 		await expect(
-			adapter.onExecute({
-				arguments: input,
-				capability: "create_page",
-				grant: { constraints: { workspaceId } },
-				agentSession: { agentId: "agent_test", userId },
-			} as never),
+			adapter.onExecute(
+				createBetterAuthAgentCapabilityTestContext({
+					arguments: input,
+					capability: "create_page",
+					constraints: { workspaceId },
+					agentId: "agent_test",
+					userId,
+				}),
+			),
 		).rejects.toThrow(
 			'Constrained capability argument "workspaceId" changed during validation.',
 		);
+	});
+
+	it("rejects stale broad grants after workspace constraints become required", async () => {
+		const { createExecutor, userId, workspaceId } = await createFixture();
+		let executorLoads = 0;
+		const adapter = createHaunterAgentAuthAdapter(async () => {
+			executorLoads += 1;
+			return createExecutor();
+		});
+		if (!adapter.onExecute) throw new Error("Expected an Agent Auth executor.");
+
+		await expect(
+			adapter.onExecute(
+				createBetterAuthAgentCapabilityTestContext({
+					arguments: { workspaceId, title: "Constraint test" },
+					capability: "create_page",
+					constraints: null,
+					agentId: "agent_test",
+					userId,
+				}),
+			),
+		).rejects.toThrow(
+			'The active grant for capability "create_page" is missing required constraints: workspaceId.',
+		);
+		expect(executorLoads).toBe(0);
 	});
 
 	it("lists the acting user's workspaces", async () => {

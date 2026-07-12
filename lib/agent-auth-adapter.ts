@@ -2,6 +2,7 @@ import "@beignet/core/server-only";
 import {
 	createBetterAuthAgentCapabilityAdapter,
 	type BetterAuthAgentCapabilityMetadata,
+	type CreateBetterAuthAgentCapabilityAdapterOptions,
 } from "@beignet/agent-auth-better-auth";
 import type { AgentCapabilityExecutor } from "@beignet/core/agent-capabilities";
 import { APIError } from "better-auth/api";
@@ -12,6 +13,11 @@ export type HaunterAgentCapabilityExecutor = AgentCapabilityExecutor<
 	AgentPrincipal,
 	typeof agentCapabilityRegistry.definitions
 >;
+
+type HaunterAgentCapabilityExecutorSource =
+	CreateBetterAuthAgentCapabilityAdapterOptions<
+		typeof agentCapabilityRegistry.definitions
+	>["executor"];
 
 type AgentCapabilityName =
 	(typeof agentCapabilityRegistry.definitions)[number]["name"];
@@ -51,7 +57,7 @@ export const agentCapabilityMetadata = {
 >;
 
 export function createHaunterAgentAuthAdapter(
-	executor: HaunterAgentCapabilityExecutor,
+	executor: HaunterAgentCapabilityExecutorSource,
 ) {
 	return createBetterAuthAgentCapabilityAdapter({
 		registry: agentCapabilityRegistry,

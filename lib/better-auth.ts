@@ -7,10 +7,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
-import {
-	createHaunterAgentAuthAdapter,
-	type HaunterAgentCapabilityExecutor,
-} from "@/lib/agent-auth-adapter";
+import { createHaunterAgentAuthAdapter } from "@/lib/agent-auth-adapter";
 import { createAuthRateLimitStorage } from "@/lib/auth-rate-limit";
 import { env } from "@/lib/env";
 import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
@@ -36,9 +33,7 @@ const adminUsers = createDrizzleAdminUserRepository(db);
 
 const authRateLimitStorage = createAuthRateLimitStorage();
 
-async function executeAgentCapabilityDynamic(
-	invocation: Parameters<HaunterAgentCapabilityExecutor["executeDynamic"]>[0],
-) {
+const agentCapabilityAdapter = createHaunterAgentAuthAdapter(async () => {
 	const [{ createHaunterAgentCapabilityExecutor }, serverModule] =
 		await Promise.all([
 			import("@/server/agent-capabilities"),
@@ -47,22 +42,8 @@ async function executeAgentCapabilityDynamic(
 	const { getServer } = serverModule as {
 		getServer(): Promise<AgentCapabilityServer>;
 	};
-	return (
-		await createHaunterAgentCapabilityExecutor({ getServer })
-	).executeDynamic(invocation);
-}
-
-const lazyAgentCapabilityExecutor: HaunterAgentCapabilityExecutor = {
-	execute: (async (invocation) =>
-		executeAgentCapabilityDynamic(
-			invocation,
-		)) as HaunterAgentCapabilityExecutor["execute"],
-	executeDynamic: executeAgentCapabilityDynamic,
-};
-
-const agentCapabilityAdapter = createHaunterAgentAuthAdapter(
-	lazyAgentCapabilityExecutor,
-);
+	return createHaunterAgentCapabilityExecutor({ getServer });
+});
 
 const trustedOrigins = [
 	env.APP_URL,

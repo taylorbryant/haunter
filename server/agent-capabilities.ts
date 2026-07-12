@@ -2,7 +2,6 @@ import "@beignet/core/server-only";
 import {
 	AgentCapabilityError,
 	createAgentCapabilityExecutor,
-	type DynamicAgentCapabilityInvocation,
 } from "@beignet/core/agent-capabilities";
 import { APIError } from "better-auth/api";
 import type { AppContext, AppRuntimePorts } from "@/app-context";
@@ -48,6 +47,29 @@ export async function createHaunterAgentCapabilityExecutor(
 	const executor = createAgentCapabilityExecutor({
 		registry,
 		instrumentation: server.ports,
+		hooks: [
+			async (event) => {
+				if (event.phase === "start") return;
+				const error =
+					event.phase === "error" ? executionError(event.error) : null;
+				await recordAgentActivity({
+					server,
+					agentId: event.principal.agentId,
+					userId: event.principal.userId,
+					capability: event.name,
+					args: inputRecord(event.input),
+					...(event.phase === "end" ? { result: event.output } : {}),
+					status: event.phase === "end" ? "success" : "error",
+					durationMs: event.durationMs,
+					error:
+						error instanceof Error
+							? error.message
+							: error
+								? String(error)
+								: null,
+				});
+			},
+		],
 		async createContext({ principal, input }) {
 			const workspaceId = inputRecord(input)?.workspaceId;
 			if (typeof workspaceId !== "string") {
@@ -70,43 +92,7 @@ export async function createHaunterAgentCapabilityExecutor(
 		},
 	});
 
-	return {
-		...executor,
-		async executeDynamic(
-			invocation: DynamicAgentCapabilityInvocation<AgentPrincipal>,
-		) {
-			const startedAt = Date.now();
-			try {
-				const result = await executor.executeDynamic(invocation);
-				await recordAgentActivity({
-					server,
-					agentId: invocation.principal.agentId,
-					userId: invocation.principal.userId,
-					capability: invocation.name,
-					args: inputRecord(invocation.input),
-					result,
-					status: "success",
-					durationMs: Date.now() - startedAt,
-					error: null,
-				});
-				return result;
-			} catch (error) {
-				const reported = executionError(error);
-				await recordAgentActivity({
-					server,
-					agentId: invocation.principal.agentId,
-					userId: invocation.principal.userId,
-					capability: invocation.name,
-					args: inputRecord(invocation.input),
-					status: "error",
-					durationMs: Date.now() - startedAt,
-					error:
-						reported instanceof Error ? reported.message : String(reported),
-				});
-				throw error;
-			}
-		},
-	};
+	return executor;
 }
 
 export async function executeAgentCapability(
