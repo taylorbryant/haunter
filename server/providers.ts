@@ -8,6 +8,7 @@ import { createResendMailProvider } from "@beignet/provider-mail-resend";
 import { createUpstashRateLimitProvider } from "@beignet/provider-rate-limit-upstash";
 import { createLocalStorageProvider } from "@beignet/provider-storage-local";
 import { createVercelBlobStorageProvider } from "@beignet/provider-storage-vercel-blob";
+import { databaseClient } from "@/infra/db/client";
 import { starterDatabaseProvider } from "@/infra/db/provider";
 import * as schema from "@/infra/db/schema";
 import { webPushProvider } from "@/infra/notifications/web-push-provider";
@@ -17,7 +18,10 @@ import { env } from "@/lib/env";
 import type { AuthSessionMetadata, AuthUser } from "@/ports/auth";
 import { notificationPreferences } from "@/server/notification-preferences";
 
-const drizzleSqliteProvider = createDrizzleSqliteProvider({ schema });
+const drizzleSqliteProvider = createDrizzleSqliteProvider({
+	schema,
+	client: databaseClient,
+});
 
 export const providers = [
 	createDevtoolsProvider(),

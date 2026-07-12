@@ -10,9 +10,9 @@ import {
 import { createNextServer, createNextServerLoader } from "@beignet/next";
 import type { AppContext } from "@/app-context";
 import { appPorts } from "@/infra/app-ports";
+import { closeDatabaseClient } from "@/infra/db/client";
 import { env } from "@/lib/env";
 import { appContext } from "./context";
-import { providers } from "./providers";
 import { routes } from "./routes";
 
 /**
@@ -38,16 +38,11 @@ const devStageTimingsHook: ServerHook<AppContext> = {
  * behind this loader keeps that import side-effect-free. The loader
  * memoizes, so every route shares one server instance at runtime.
  */
-export const getServer = createNextServerLoader(() =>
-	createNextServer({
+export const getServer = createNextServerLoader(async () => {
+	const { providers } = await import("./providers");
+	const server = await createNextServer({
 		ports: appPorts,
 		providers,
-		providerConfig: {
-			"drizzle-sqlite": {
-				DB_URL: env.SQLITE_DB_URL,
-				DB_AUTH_TOKEN: env.SQLITE_DB_AUTH_TOKEN,
-			},
-		},
 		hooks: [
 			createSecurityHeadersHooks<AppContext>(),
 			createCsrfHooks<AppContext>(),
@@ -79,5 +74,36 @@ export const getServer = createNextServerLoader(() =>
 				},
 			};
 		},
-	}),
-);
+	});
+	let stopPromise: Promise<void> | undefined;
+
+	return {
+		...server,
+		stop() {
+			stopPromise ??= stopServerAndDatabase(server);
+			return stopPromise;
+		},
+	};
+});
+
+async function stopServerAndDatabase(server: {
+	stop(): Promise<void>;
+}): Promise<void> {
+	const errors: unknown[] = [];
+	try {
+		await server.stop();
+	} catch (error) {
+		errors.push(error);
+	}
+
+	try {
+		await closeDatabaseClient();
+	} catch (error) {
+		errors.push(error);
+	}
+
+	if (errors.length === 1) throw errors[0];
+	if (errors.length > 1) {
+		throw new AggregateError(errors, "Server and database shutdown failed");
+	}
+}

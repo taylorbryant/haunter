@@ -1,10 +1,10 @@
 import { agentAuth } from "@better-auth/agent-auth";
-import { createClient } from "@libsql/client";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, emailOTP, organization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/libsql";
 import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
+import { databaseClient } from "@/infra/db/client";
 import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
 import { createHaunterAgentAuthAdapter } from "@/lib/agent-auth-adapter";
@@ -19,16 +19,11 @@ import {
 } from "@/ports/auth";
 import type { AgentCapabilityServer } from "@/server/agent-capabilities";
 
-const client = createClient({
-	url: env.SQLITE_DB_URL,
-	authToken: env.SQLITE_DB_AUTH_TOKEN,
-});
-
 // Auth routes can be the first thing to touch the database, before any
 // Beignet provider boots, so readiness is enforced here too.
-await ensureDatabaseReady(client);
+await ensureDatabaseReady(databaseClient);
 
-const db = drizzle(client, { schema });
+const db = drizzle(databaseClient, { schema });
 const adminUsers = createDrizzleAdminUserRepository(db);
 
 const authRateLimitStorage = createAuthRateLimitStorage();
