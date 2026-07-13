@@ -109,14 +109,16 @@ function TaskBlockView({
 			onBlur={handleBlur}
 			onKeyDownCapture={handleKeyDown}
 		>
-			<input
-				type="checkbox"
-				checked={checked}
-				disabled={readOnly}
-				onChange={(event) => update({ checked: event.target.checked })}
-				className={`mt-1 size-4 shrink-0 accent-primary ${readOnly ? "" : "cursor-pointer"}`}
-				aria-label={checked ? "Mark task open" : "Mark task done"}
-			/>
+			<span contentEditable={false} className="mt-1 flex size-4 shrink-0">
+				<input
+					type="checkbox"
+					checked={checked}
+					disabled={readOnly}
+					onChange={(event) => update({ checked: event.target.checked })}
+					className={`size-4 accent-primary ${readOnly ? "" : "cursor-pointer"}`}
+					aria-label={checked ? "Mark task open" : "Mark task done"}
+				/>
+			</span>
 			<div
 				ref={contentRef}
 				className={
