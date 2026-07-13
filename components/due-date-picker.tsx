@@ -119,6 +119,7 @@ export function DueDatePicker({
 						month={visibleMonth}
 						onMonthChange={setVisibleMonth}
 						onSelect={changeDate}
+						className="w-full sm:w-fit"
 					/>
 					<div className="flex min-w-36 flex-col gap-0.5 border-t p-2 sm:border-t-0 sm:border-l">
 						{DATE_PRESETS.map((preset) => {
