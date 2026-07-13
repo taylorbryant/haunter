@@ -46,10 +46,16 @@ export function AppSidebar({
 	return (
 		<Sidebar>
 			<SidebarHeader>
-				<WorkspaceSwitcher activeWorkspaceId={activeWorkspaceId} />
+				<div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-start">
+					<div className="min-w-0 flex-1 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex-none">
+						<WorkspaceSwitcher activeWorkspaceId={activeWorkspaceId} />
+					</div>
+					<SidebarMenu className="w-fit shrink-0 group-data-[collapsible=icon]:w-full">
+						<NotificationCenter />
+					</SidebarMenu>
+				</div>
 				<SidebarMenu>
 					<SearchCommand />
-					<NotificationCenter />
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							render={

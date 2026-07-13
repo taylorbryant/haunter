@@ -24,7 +24,6 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-	SidebarMenuBadge,
 	SidebarMenuButton,
 	SidebarMenuItem,
 	useSidebar,
@@ -208,15 +207,16 @@ export function NotificationCenter() {
 	const triggerContent = (
 		<>
 			<BellIcon />
-			<span>Notifications</span>
+			{unreadCount > 0 ? (
+				<span
+					className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 font-semibold text-[10px] text-primary-foreground leading-4"
+					aria-hidden
+				>
+					{unreadCount > 9 ? "9+" : unreadCount}
+				</span>
+			) : null}
 		</>
 	);
-	const badge =
-		unreadCount > 0 ? (
-			<SidebarMenuBadge aria-hidden>
-				{unreadCount > 9 ? "9+" : unreadCount}
-			</SidebarMenuBadge>
-		) : null;
 
 	const panel = (
 		<NotificationPanel
@@ -231,12 +231,14 @@ export function NotificationCenter() {
 
 	if (isMobile) {
 		return (
-			<SidebarMenuItem>
+			<SidebarMenuItem className="w-fit">
 				<Drawer showSwipeHandle open={open} onOpenChange={setOpen}>
 					<SidebarMenuButton
 						render={<DrawerTrigger />}
 						tooltip="Notifications"
+						title="Notifications"
 						aria-label={triggerLabel}
+						className="relative size-11! justify-center overflow-visible! p-0! md:size-8!"
 					>
 						{triggerContent}
 					</SidebarMenuButton>
@@ -248,18 +250,19 @@ export function NotificationCenter() {
 						{panel}
 					</DrawerContent>
 				</Drawer>
-				{badge}
 			</SidebarMenuItem>
 		);
 	}
 
 	return (
-		<SidebarMenuItem>
+		<SidebarMenuItem className="w-fit">
 			<Popover open={open} onOpenChange={setOpen}>
 				<SidebarMenuButton
 					render={<PopoverTrigger />}
 					tooltip="Notifications"
+					title="Notifications"
 					aria-label={triggerLabel}
+					className="relative size-8! justify-center overflow-visible! p-0!"
 				>
 					{triggerContent}
 				</SidebarMenuButton>
@@ -272,7 +275,6 @@ export function NotificationCenter() {
 					{panel}
 				</PopoverContent>
 			</Popover>
-			{badge}
 		</SidebarMenuItem>
 	);
 }
