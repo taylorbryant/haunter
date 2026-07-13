@@ -33,7 +33,8 @@ export function WorkspaceIconPicker({
 						id={id}
 						type="button"
 						variant="outline"
-						className="size-9 p-0 text-lg leading-none"
+						size="icon"
+						className="relative text-base leading-none after:absolute after:-inset-1.5 after:content-[''] sm:after:hidden"
 						aria-label="Choose emoji"
 					/>
 				}

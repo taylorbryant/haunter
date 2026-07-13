@@ -73,7 +73,7 @@ const WorkspaceIconPicker = dynamic(
 			<Button
 				type="button"
 				variant="outline"
-				className="size-9 p-0"
+				size="icon"
 				disabled
 				aria-hidden
 			/>
@@ -466,7 +466,7 @@ export function WorkspaceSwitcher({
 								}}
 							>
 								<div className="flex items-end gap-3">
-									<div className="flex flex-col gap-2">
+									<div className="flex shrink-0 flex-col gap-2">
 										<Label htmlFor="edit-workspace-emoji">Emoji</Label>
 										<WorkspaceIconPicker
 											id="edit-workspace-emoji"
