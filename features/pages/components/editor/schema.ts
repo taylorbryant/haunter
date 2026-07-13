@@ -6,6 +6,10 @@ import {
 	defaultBlockSpecs,
 	defaultInlineContentSpecs,
 } from "@blocknote/core";
+import {
+	CODE_BLOCK_LANGUAGES,
+	normalizeCodeBlockLanguage,
+} from "@/features/pages/lib/code-block-language";
 import { calloutBlockSpec } from "./callout-block";
 import { canvasBlockSpec } from "./canvas-block";
 import { OPEN_CODE_BLOCK_DIALOG_EVENT } from "./code-block-dialog-event";
@@ -19,22 +23,11 @@ import { taskBlockSpec } from "./task-block";
  * Languages offered in the code-block picker. The shiki bundle ships many
  * more; keep this list tight to bound the highlighter payload.
  */
-const LANGUAGES = [
-	"text",
-	"typescript",
-	"javascript",
-	"tsx",
-	"python",
-	"sql",
-	"shellscript",
-	"json",
-	"yaml",
-	"markdown",
-] as const;
+const LANGUAGE_IDS = new Set<string>(CODE_BLOCK_LANGUAGES.map(({ id }) => id));
 
 export const supportedLanguages = Object.fromEntries(
 	Object.entries(codeBlockOptions.supportedLanguages).filter(([id]) =>
-		(LANGUAGES as readonly string[]).includes(id),
+		LANGUAGE_IDS.has(id),
 	),
 );
 
@@ -135,6 +128,12 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 					node.querySelector(":scope > select") !== null,
 			);
 			const languageSelect = selectWrapper?.querySelector("select");
+			const normalizedLanguage = normalizeCodeBlockLanguage(
+				block.props.language,
+			);
+			if (languageSelect && normalizedLanguage) {
+				languageSelect.value = normalizedLanguage;
+			}
 			const pre = sourceNodes.find(
 				(node): node is HTMLPreElement => node instanceof HTMLPreElement,
 			);

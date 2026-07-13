@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Awareness } from "y-protocols/awareness";
 import { apiClient } from "@/client";
 import { createCanvas } from "@/features/canvases/contracts";
@@ -52,6 +52,10 @@ import {
 } from "@/features/pages/client/save-state";
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
+import {
+	normalizeCodeBlockLanguage,
+	normalizeCodeBlockLanguages,
+} from "@/features/pages/lib/code-block-language";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { reconcileTaskBlockProps } from "@/features/tasks/lib/reconcile-task-block-props";
@@ -72,6 +76,24 @@ type HaunterBlockNoteEditor = BlockNoteEditor<
 	(typeof editorSchema)["inlineContentSchema"],
 	(typeof editorSchema)["styleSchema"]
 >;
+
+function normalizeEditorCodeBlockLanguages(editor: HaunterBlockNoteEditor) {
+	const visit = (blocks: BlockJson[]) => {
+		for (const block of blocks) {
+			if (block.type === "codeBlock") {
+				const currentLanguage =
+					typeof block.props.language === "string" ? block.props.language : "";
+				const language = normalizeCodeBlockLanguage(currentLanguage);
+				if (language !== currentLanguage) {
+					editor.updateBlock(block.id, { props: { language } });
+				}
+			}
+			visit(block.children);
+		}
+	};
+
+	visit(editor.document as unknown as BlockJson[]);
+}
 
 function focusBlockContentOnNextFrame(
 	editor: HaunterBlockNoteEditor,
@@ -279,6 +301,10 @@ export default function HaunterEditor({
 	const queryClient = useQueryClient();
 	const isMobile = useIsMobile();
 	const [saveState, setSaveState] = useState<SaveState>("saved");
+	const normalizedInitialContent = useMemo(
+		() => normalizeCodeBlockLanguages(initialContent),
+		[initialContent],
+	);
 	// Last server updatedAt this editor saw: the optimistic-concurrency base.
 	const baseUpdatedAtRef = useRef<string | null>(updatedAt ?? null);
 
@@ -321,9 +347,9 @@ export default function HaunterEditor({
 		// BlockNote rejects an empty initialContent array; with collaboration
 		// the shared doc is the source of truth instead.
 		initialContent:
-			!collab && initialContent.length
+			!collab && normalizedInitialContent.length
 				? // The server stores the document verbatim; the editor owns its shape.
-					(initialContent as never)
+					(normalizedInitialContent as never)
 				: undefined,
 	});
 
@@ -332,10 +358,10 @@ export default function HaunterEditor({
 	useEffect(() => {
 		if (!collab || !shouldSeed || seededRef.current) return;
 		seededRef.current = true;
-		if (initialContent.length === 0) return;
+		if (normalizedInitialContent.length === 0) return;
 		collab.doc.getMap<boolean>("haunter-meta").set("seeded", true);
-		editor.replaceBlocks(editor.document, initialContent as never);
-	}, [collab, shouldSeed, editor, initialContent]);
+		editor.replaceBlocks(editor.document, normalizedInitialContent as never);
+	}, [collab, shouldSeed, editor, normalizedInitialContent]);
 
 	const reconciledVersionRef = useRef<string | null>(null);
 	useEffect(() => {
@@ -345,10 +371,10 @@ export default function HaunterEditor({
 
 		const { blocks, changed } = reconcileTaskBlockProps(
 			editor.document as unknown as BlockJson[],
-			initialContent,
+			normalizedInitialContent,
 		);
 		if (changed) editor.replaceBlocks(editor.document, blocks as never);
-	}, [collab, editor, initialContent, updatedAt]);
+	}, [collab, editor, normalizedInitialContent, updatedAt]);
 
 	useEffect(() => {
 		if (!focusRequest || !editable) return;
@@ -468,11 +494,12 @@ export default function HaunterEditor({
 		// Viewers must never autosave: with collaboration on, remote peers'
 		// edits also fire onChange here, and a viewer's save would just 403.
 		if (!editable) return;
+		normalizeEditorCodeBlockLanguages(editor);
 		dirtyRef.current = true;
 		reportState("pending");
 		if (timeoutRef.current) clearTimeout(timeoutRef.current);
 		timeoutRef.current = setTimeout(() => saveRef.current(), AUTOSAVE_DELAY_MS);
-	}, [reportState, editable]);
+	}, [editor, reportState, editable]);
 
 	// Flush any pending save when the page unmounts (navigation away).
 	useEffect(() => {

@@ -45,7 +45,7 @@ describe("blocksToMarkdown", () => {
 		expect(markdown).toContain("2. Second");
 		expect(markdown).toContain("> 💡 Remember");
 		expect(markdown).toContain("---");
-		expect(markdown).toContain("```ts\nconst a = 1;\n```");
+		expect(markdown).toContain("```typescript\nconst a = 1;\n```");
 	});
 
 	it("renders inline styles and links", () => {
@@ -123,9 +123,20 @@ describe("markdownToBlocks", () => {
 			due: "2026-07-10",
 		});
 		expect(blocks[3].props.checked).toBe(true);
-		expect(blocks[8].props.language).toBe("ts");
+		expect(blocks[8].props.language).toBe("typescript");
 		// Every block needs a stable id for BlockNote and task reconciliation.
 		for (const b of blocks) expect(b.id.length).toBeGreaterThan(0);
+	});
+
+	it("uses plain text for unsupported code fence languages", () => {
+		const [block] = markdownToBlocks(
+			"```something\nnot actually something-specific\n```",
+		);
+
+		expect(block).toMatchObject({
+			type: "codeBlock",
+			props: { language: "text" },
+		});
 	});
 
 	it("nests two-space-indented list items as children", () => {

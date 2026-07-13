@@ -1,4 +1,5 @@
 import type { BlockJson } from "@/features/pages/schemas";
+import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
 
 /**
  * Lossy blocks ⇄ markdown conversion for agent access. Hand-rolled rather
@@ -97,8 +98,7 @@ function blockToMarkdown(
 			return `${indent}- ${box} ${inline}${due}`;
 		}
 		case "codeBlock": {
-			const language =
-				typeof block.props.language === "string" ? block.props.language : "";
+			const language = normalizeCodeBlockLanguage(block.props.language);
 			return `\`\`\`${language}\n${plainText(block.content)}\n\`\`\``;
 		}
 		case "callout": {
@@ -302,9 +302,13 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 			i += 1; // closing fence
 			listStack = [];
 			roots.push(
-				makeBlock("codeBlock", { language: fence[1] ?? "" }, [
-					{ type: "text", text: body.join("\n"), styles: {} },
-				]),
+				makeBlock(
+					"codeBlock",
+					{
+						language: normalizeCodeBlockLanguage(fence[1]),
+					},
+					[{ type: "text", text: body.join("\n"), styles: {} }],
+				),
 			);
 			continue;
 		}
