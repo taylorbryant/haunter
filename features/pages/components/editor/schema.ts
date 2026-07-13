@@ -2,6 +2,7 @@ import { codeBlockOptions } from "@blocknote/code-block";
 import {
 	BlockNoteSchema,
 	createCodeBlockSpec,
+	createExtension,
 	createHeadingBlockSpec,
 	defaultBlockSpecs,
 	defaultInlineContentSpecs,
@@ -12,6 +13,7 @@ import {
 } from "@/features/pages/lib/code-block-language";
 import { calloutBlockSpec } from "./callout-block";
 import { canvasBlockSpec } from "./canvas-block";
+import { getCodeBlockUnindentRanges } from "./code-block-indent";
 import { OPEN_CODE_BLOCK_DIALOG_EVENT } from "./code-block-dialog-event";
 import { getHaunterHighlighter } from "./code-theme";
 import { dividerBlockSpec } from "./divider-block";
@@ -101,12 +103,49 @@ const baseCodeBlockSpec = createCodeBlockSpec({
 	createHighlighter: () => getHaunterHighlighter(),
 });
 
+const codeBlockUnindentExtension = createExtension({
+	key: "haunter-code-block-unindent",
+	keyboardShortcuts: {
+		"Shift-Tab": ({ editor }) =>
+			editor.transact((transaction) => {
+				const { $from, $to } = transaction.selection;
+				if (
+					$from.parent.type.name !== "codeBlock" ||
+					!$from.sameParent($to)
+				) {
+					return false;
+				}
+
+				const blockStart = $from.start();
+				const ranges = getCodeBlockUnindentRanges(
+					$from.parent.textContent,
+					$from.parentOffset,
+					$to.parentOffset,
+				);
+				for (const range of ranges.reverse()) {
+					transaction.delete(
+						blockStart + range.from,
+						blockStart + range.to,
+					);
+				}
+
+				// Consume Shift+Tab even when this line has no indentation so focus
+				// remains in the code block instead of moving through the page UI.
+				return true;
+			}),
+	},
+});
+
 // Mobile keyboards capitalize, autocorrect, and spellcheck inside code
 // blocks unless the DOM opts out, and BlockNote sets no input hints. They
 // must be set inside the node view's render — ProseMirror treats that DOM
 // as canonical, whereas attributes added from outside get reverted.
 const codeBlockSpec: typeof baseCodeBlockSpec = {
 	...baseCodeBlockSpec,
+	extensions: [
+		...(baseCodeBlockSpec.extensions ?? []),
+		codeBlockUnindentExtension,
+	],
 	implementation: {
 		...baseCodeBlockSpec.implementation,
 		render(
