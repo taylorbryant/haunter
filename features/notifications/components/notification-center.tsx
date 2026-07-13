@@ -23,6 +23,12 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+	SidebarMenuBadge,
+	SidebarMenuButton,
+	SidebarMenuItem,
+	useSidebar,
+} from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
 	invalidateNotifications,
@@ -31,7 +37,6 @@ import {
 	markNotificationReadMutationOptions,
 } from "@/features/notifications/client/queries";
 import type { Notification } from "@/features/notifications/schemas";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { formatDueDateLabel } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
@@ -149,7 +154,7 @@ function NotificationPanel({
 }
 
 export function NotificationCenter() {
-	const isMobile = useIsMobile();
+	const { isMobile, setOpenMobile } = useSidebar();
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const [open, setOpen] = useState(false);
@@ -179,6 +184,7 @@ export function NotificationCenter() {
 
 	function openNotification(item: Notification) {
 		setOpen(false);
+		if (isMobile) setOpenMobile(false);
 		if (item.readAt === null) {
 			markRead.mutate(
 				{ path: { id: item.id } },
@@ -195,26 +201,22 @@ export function NotificationCenter() {
 		);
 	}
 
-	const trigger = (
-		<Button
-			type="button"
-			variant="ghost"
-			size="icon-sm"
-			className="relative text-muted-foreground"
-			aria-label={
-				unreadCount > 0
-					? `${unreadCount} unread notifications`
-					: "Notifications"
-			}
-		>
+	const triggerLabel =
+		unreadCount > 0
+			? `${unreadCount} unread notifications`
+			: "Notifications";
+	const triggerContent = (
+		<>
 			<BellIcon />
-			{unreadCount > 0 ? (
-				<span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 font-semibold text-[10px] text-primary-foreground leading-4">
-					{unreadCount > 9 ? "9+" : unreadCount}
-				</span>
-			) : null}
-		</Button>
+			<span>Notifications</span>
+		</>
 	);
+	const badge =
+		unreadCount > 0 ? (
+			<SidebarMenuBadge aria-hidden>
+				{unreadCount > 9 ? "9+" : unreadCount}
+			</SidebarMenuBadge>
+		) : null;
 
 	const panel = (
 		<NotificationPanel
@@ -229,28 +231,48 @@ export function NotificationCenter() {
 
 	if (isMobile) {
 		return (
-			<Drawer showSwipeHandle open={open} onOpenChange={setOpen}>
-				<DrawerTrigger render={trigger} />
-				<DrawerContent className="h-[70dvh]">
-					<DrawerHeader className="sr-only">
-						<DrawerTitle>Notifications</DrawerTitle>
-						<DrawerDescription>Your recent notifications</DrawerDescription>
-					</DrawerHeader>
-					{panel}
-				</DrawerContent>
-			</Drawer>
+			<SidebarMenuItem>
+				<Drawer showSwipeHandle open={open} onOpenChange={setOpen}>
+					<SidebarMenuButton
+						render={<DrawerTrigger />}
+						tooltip="Notifications"
+						aria-label={triggerLabel}
+					>
+						{triggerContent}
+					</SidebarMenuButton>
+					<DrawerContent className="h-[70dvh]">
+						<DrawerHeader className="sr-only">
+							<DrawerTitle>Notifications</DrawerTitle>
+							<DrawerDescription>Your recent notifications</DrawerDescription>
+						</DrawerHeader>
+						{panel}
+					</DrawerContent>
+				</Drawer>
+				{badge}
+			</SidebarMenuItem>
 		);
 	}
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger render={trigger} />
-			<PopoverContent
-				align="end"
-				className="h-[min(520px,70dvh)] w-96 gap-0 overflow-hidden p-0"
-			>
-				{panel}
-			</PopoverContent>
-		</Popover>
+		<SidebarMenuItem>
+			<Popover open={open} onOpenChange={setOpen}>
+				<SidebarMenuButton
+					render={<PopoverTrigger />}
+					tooltip="Notifications"
+					aria-label={triggerLabel}
+				>
+					{triggerContent}
+				</SidebarMenuButton>
+				<PopoverContent
+					side="right"
+					align="start"
+					sideOffset={8}
+					className="h-[min(520px,70dvh)] w-96 gap-0 overflow-hidden p-0"
+				>
+					{panel}
+				</PopoverContent>
+			</Popover>
+			{badge}
+		</SidebarMenuItem>
 	);
 }

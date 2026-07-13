@@ -13,7 +13,10 @@ import {
 } from "@/features/pages/lib/code-block-language";
 import { calloutBlockSpec } from "./callout-block";
 import { canvasBlockSpec } from "./canvas-block";
-import { getCodeBlockUnindentRanges } from "./code-block-indent";
+import {
+	getCodeBlockIndentPositions,
+	getCodeBlockUnindentRanges,
+} from "./code-block-indent";
 import { OPEN_CODE_BLOCK_DIALOG_EVENT } from "./code-block-dialog-event";
 import { getHaunterHighlighter } from "./code-theme";
 import { dividerBlockSpec } from "./divider-block";
@@ -105,7 +108,30 @@ const baseCodeBlockSpec = createCodeBlockSpec({
 
 const codeBlockUnindentExtension = createExtension({
 	key: "haunter-code-block-unindent",
+	runsBefore: ["code-block-keyboard-shortcuts"],
 	keyboardShortcuts: {
+		Tab: ({ editor }) =>
+			editor.transact((transaction) => {
+				const { $from, $to } = transaction.selection;
+				if (
+					transaction.selection.empty ||
+					$from.parent.type.name !== "codeBlock" ||
+					!$from.sameParent($to)
+				) {
+					return false;
+				}
+
+				const blockStart = $from.start();
+				const positions = getCodeBlockIndentPositions(
+					$from.parent.textContent,
+					$from.parentOffset,
+					$to.parentOffset,
+				);
+				for (const position of positions.reverse()) {
+					transaction.insertText("  ", blockStart + position);
+				}
+				return true;
+			}),
 		"Shift-Tab": ({ editor }) =>
 			editor.transact((transaction) => {
 				const { $from, $to } = transaction.selection;

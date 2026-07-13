@@ -23,6 +23,7 @@ import {
 	SidebarRail,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { NotificationCenter } from "@/features/notifications/components/notification-center";
 import { PageTree } from "@/features/pages/components/page-tree";
 import { WorkspaceSwitcher } from "@/features/workspaces/components/workspace-switcher";
 
@@ -48,6 +49,7 @@ export function AppSidebar({
 				<WorkspaceSwitcher activeWorkspaceId={activeWorkspaceId} />
 				<SidebarMenu>
 					<SearchCommand />
+					<NotificationCenter />
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							render={

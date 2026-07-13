@@ -10,7 +10,6 @@ import { HeaderBreadcrumbs } from "@/components/header-breadcrumbs";
 import { HeaderPresence } from "@/components/header-presence";
 import { HeaderSaveIndicator } from "@/components/header-save-indicator";
 import { HeaderPageActions } from "@/components/header-page-actions";
-import { NotificationCenter } from "@/features/notifications/components/notification-center";
 import { NotificationTimezoneInitializer } from "@/features/notifications/components/notification-timezone-initializer";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -87,7 +86,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 								<HeaderBreadcrumbs />
 								<HeaderSaveIndicator />
 								<HeaderPresence />
-								<NotificationCenter />
 								<HeaderPageActions />
 							</header>
 							<div className="min-w-0 flex-1">{children}</div>

@@ -1,5 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { getCodeBlockUnindentRanges } from "../components/editor/code-block-indent";
+import {
+	getCodeBlockIndentPositions,
+	getCodeBlockUnindentRanges,
+} from "../components/editor/code-block-indent";
+
+function applyIndent(text: string, from: number, to: number): string {
+	const positions = getCodeBlockIndentPositions(text, from, to);
+	let result = text;
+	for (const position of positions.reverse()) {
+		result = `${result.slice(0, position)}  ${result.slice(position)}`;
+	}
+	return result;
+}
 
 function applyUnindent(text: string, from: number, to = from): string {
 	const ranges = getCodeBlockUnindentRanges(text, from, to);
@@ -36,5 +48,21 @@ describe("code block unindent", () => {
 
 	test("keeps a cursor at the start of an empty first line", () => {
 		expect(applyUnindent("\n  value", 0)).toBe("\n  value");
+	});
+});
+
+describe("code block indent", () => {
+	test("indents the full line containing a partial selection", () => {
+		expect(applyIndent("const value = 1;", 6, 11)).toBe("  const value = 1;");
+	});
+
+	test("indents every line touched by a selection", () => {
+		expect(applyIndent("one\ntwo\nthree", 1, 11)).toBe(
+			"  one\n  two\n  three",
+		);
+	});
+
+	test("does not include a line when the selection ends at its start", () => {
+		expect(applyIndent("one\ntwo", 0, 4)).toBe("  one\ntwo");
 	});
 });

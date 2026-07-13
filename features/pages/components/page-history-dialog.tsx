@@ -1,9 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeftIcon, HistoryIcon } from "lucide-react";
+import { ChevronLeftIcon } from "lucide-react";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +21,6 @@ import {
 	DrawerTitle,
 } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	getPageVersionQueryOptions,
 	invalidateBacklinks,
@@ -33,7 +31,6 @@ import {
 	restorePageVersionMutationOptions,
 } from "@/features/pages/client/queries";
 import { invalidateTasks } from "@/features/tasks/client/queries";
-import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
@@ -57,40 +54,6 @@ function versionSubtext(version: {
 }) {
 	const cause = version.cause === "restore" ? "Before a restore" : "Checkpoint";
 	return version.createdByName ? `${cause} · ${version.createdByName}` : cause;
-}
-
-/**
- * Desktop header "History" control: browse a page's checkpoints, preview
- * any of them read-only, and restore. Rendered on page routes for members
- * who can edit (restores are editor-gated server-side regardless). On
- * mobile the surface opens from the header's page actions menu instead.
- */
-export function PageHistoryButton() {
-	const pathname = usePathname();
-	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
-	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
-	const { synced } = useWorkspaceRouteSync(workspaceId);
-	const canEdit = useCanEditWorkspace();
-	const [open, setOpen] = useState(false);
-
-	if (!pageId || !canEdit || !synced) return null;
-
-	return (
-		<>
-			<Button
-				variant="ghost"
-				size="sm"
-				className="text-muted-foreground"
-				onClick={() => setOpen(true)}
-			>
-				<HistoryIcon />
-				<span className="sr-only sm:not-sr-only">History</span>
-			</Button>
-			{open ? (
-				<PageHistoryDialog pageId={pageId} onOpenChange={setOpen} />
-			) : null}
-		</>
-	);
 }
 
 export function PageHistoryDialog({
