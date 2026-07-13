@@ -239,12 +239,17 @@ export function createDrizzleNotificationRepository(
 		},
 
 		async findOverdueCandidates(cutoffDate, limit) {
-			const entityVersion = sql<string>`${schema.tasks.dueDate} || ':' || ${schema.tasks.assigneeId}`;
+			const entityVersion = sql<string>`CASE
+				WHEN ${schema.tasks.dueTime} IS NULL
+				THEN ${schema.tasks.dueDate} || ':' || ${schema.tasks.assigneeId}
+				ELSE ${schema.tasks.dueDate} || ':' || ${schema.tasks.dueTime} || ':' || ${schema.tasks.assigneeId}
+			END`;
 			const rows = await db
 				.select({
 					taskId: schema.tasks.id,
 					title: schema.tasks.title,
 					dueDate: schema.tasks.dueDate,
+					dueTime: schema.tasks.dueTime,
 					pageId: schema.tasks.pageId,
 					sourceBlockId: schema.tasks.sourceBlockId,
 					userId: schema.tasks.assigneeId,
@@ -287,7 +292,11 @@ export function createDrizzleNotificationRepository(
 						isNull(schema.notifications.id),
 					),
 				)
-				.orderBy(schema.tasks.dueDate, schema.tasks.createdAt)
+				.orderBy(
+					schema.tasks.dueDate,
+					schema.tasks.dueTime,
+					schema.tasks.createdAt,
+				)
 				.limit(limit);
 
 			return rows.filter(
@@ -305,11 +314,14 @@ export function createDrizzleNotificationRepository(
 					workspaceId: candidate.workspaceId,
 					kind: "task.overdue",
 					entityId: candidate.taskId,
-					entityVersion: `${candidate.dueDate}:${candidate.userId}`,
+					entityVersion: candidate.dueTime
+						? `${candidate.dueDate}:${candidate.dueTime}:${candidate.userId}`
+						: `${candidate.dueDate}:${candidate.userId}`,
 					payload: JSON.stringify({
 						taskId: candidate.taskId,
 						title: candidate.title,
 						dueDate: candidate.dueDate,
+						dueTime: candidate.dueTime,
 						pageId: candidate.pageId,
 						sourceBlockId: candidate.sourceBlockId,
 					}),

@@ -41,9 +41,23 @@ export const updateTaskUseCase = useCase
 			}
 
 			const now = new Date().toISOString();
+			const dueDate =
+				input.dueDate !== undefined ? input.dueDate : task.dueDate;
+			const dueTime =
+				input.dueDate === null
+					? null
+					: input.dueTime !== undefined
+						? input.dueTime
+						: task.dueTime;
+			if (dueTime !== null && dueDate === null) {
+				throw appError("InvalidTaskDue");
+			}
 			const updated = await tx.tasks.update(scope, task.id, {
 				...(input.title !== undefined ? { title: input.title } : {}),
 				...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
+				...(input.dueDate !== undefined || input.dueTime !== undefined
+					? { dueTime }
+					: {}),
 				...(input.assigneeId !== undefined
 					? { assigneeId: input.assigneeId }
 					: {}),
@@ -61,6 +75,7 @@ export const updateTaskUseCase = useCase
 				task.sourceBlockId !== null &&
 				(input.completed !== undefined ||
 					input.dueDate !== undefined ||
+					input.dueTime !== undefined ||
 					input.assigneeId !== undefined)
 			) {
 				const page = await tx.pages.findById(scope, task.pageId);
@@ -73,6 +88,9 @@ export const updateTaskUseCase = useCase
 								? { checked: input.completed }
 								: {}),
 							...(input.dueDate !== undefined ? { due: input.dueDate } : {}),
+							...(input.dueDate !== undefined || input.dueTime !== undefined
+								? { dueTime }
+								: {}),
 							...(input.assigneeId !== undefined
 								? { assignee: input.assigneeId }
 								: {}),

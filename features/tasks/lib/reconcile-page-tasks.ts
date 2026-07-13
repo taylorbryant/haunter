@@ -5,6 +5,7 @@ import type { TaskRepository } from "@/features/tasks/ports";
 import { extractTaskBlocks } from "./extract-task-blocks";
 
 const DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DUE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 type TaskReconciliationPorts = {
 	members: MemberRepository;
@@ -25,6 +26,19 @@ async function validateTaskBlock(
 		throw appError("InvalidPageContent", {
 			message: "Task due dates must be YYYY-MM-DD.",
 			details: { blockId: block.blockId, due: block.due },
+		});
+	}
+	if (
+		(block.dueTime !== null && !DUE_TIME_PATTERN.test(block.dueTime)) ||
+		(block.dueTime !== null && block.due === null)
+	) {
+		throw appError("InvalidPageContent", {
+			message: "Task due times must be HH:mm and include a due date.",
+			details: {
+				blockId: block.blockId,
+				due: block.due,
+				dueTime: block.dueTime,
+			},
 		});
 	}
 	if (
@@ -109,6 +123,7 @@ export async function reconcilePageTasks(
 				title: block.title,
 				completed: block.checked,
 				dueDate: block.due,
+				dueTime: block.dueTime,
 				assigneeId: block.resolvedAssigneeId,
 				completedAt: block.checked ? now : null,
 			});
@@ -119,6 +134,7 @@ export async function reconcilePageTasks(
 			current.title !== block.title ||
 			current.completed !== block.checked ||
 			current.dueDate !== block.due ||
+			current.dueTime !== block.dueTime ||
 			current.assigneeId !== block.resolvedAssigneeId;
 
 		if (rowChanged) {
@@ -127,6 +143,7 @@ export async function reconcilePageTasks(
 				title: block.title,
 				completed: block.checked,
 				dueDate: block.due,
+				dueTime: block.dueTime,
 				assigneeId: block.resolvedAssigneeId,
 				// Stamp/clear completedAt only when the completed state flips.
 				...(current.completed !== block.checked

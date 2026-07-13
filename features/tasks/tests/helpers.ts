@@ -55,6 +55,11 @@ export function createTestTaskRepository(options?: {
 					if (left.dueDate !== right.dueDate) {
 						return (left.dueDate ?? "").localeCompare(right.dueDate ?? "");
 					}
+					if (left.dueTime === null && right.dueTime !== null) return 1;
+					if (left.dueTime !== null && right.dueTime === null) return -1;
+					if (left.dueTime !== right.dueTime) {
+						return (left.dueTime ?? "").localeCompare(right.dueTime ?? "");
+					}
 					return left.createdAt.localeCompare(right.createdAt);
 				})
 				.slice(0, listOptions.limit);
@@ -92,6 +97,7 @@ export function createTestTaskRepository(options?: {
 				title: input.title,
 				completed: input.completed,
 				dueDate: input.dueDate,
+				dueTime: input.dueTime,
 				assigneeId: input.assigneeId,
 				completedAt: input.completedAt,
 				createdAt: now,

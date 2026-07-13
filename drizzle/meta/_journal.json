@@ -162,6 +162,13 @@
 			"when": 1783825263688,
 			"tag": "0022_scope_agent_grants",
 			"breakpoints": true
+		},
+		{
+			"idx": 23,
+			"version": "6",
+			"when": 1783979699754,
+			"tag": "0023_calm_micromax",
+			"breakpoints": true
 		}
 	]
 }

@@ -8,6 +8,7 @@ export type NewTask = {
 	title: string;
 	completed: boolean;
 	dueDate: string | null;
+	dueTime: string | null;
 	assigneeId: string | null;
 	completedAt: string | null;
 };
@@ -16,6 +17,7 @@ export type UpdateTaskData = {
 	title?: string;
 	completed?: boolean;
 	dueDate?: string | null;
+	dueTime?: string | null;
 	assigneeId?: string | null;
 	completedAt?: string | null;
 };

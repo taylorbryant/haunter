@@ -144,7 +144,7 @@ export const createPageCapability = defineAgentCapability("create_page", {
 
 export const appendToPageCapability = defineAgentCapability("append_to_page", {
 	description:
-		"Append markdown content to the end of a page. Supports headings, paragraphs, bullet/numbered lists, task items (- [ ] title, optionally with a '(due: YYYY-MM-DD)' suffix), code fences, blockquotes (rendered as callouts), and dividers.",
+		"Append markdown content to the end of a page. Supports headings, paragraphs, bullet/numbered lists, task items (- [ ] title, optionally with a '(due: YYYY-MM-DD)' or '(due: YYYY-MM-DD HH:mm)' suffix), code fences, blockquotes (rendered as callouts), and dividers.",
 	input: PageInput.extend({ markdown: z.string().min(1).max(100_000) }),
 	output: z.object({
 		pageId: z.string().uuid(),

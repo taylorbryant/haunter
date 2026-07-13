@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { createInlineNotificationDispatcher } from "@beignet/core/notifications";
+import {
+	createInlineNotificationDispatcher,
+	type NotificationPreferencesPort,
+} from "@beignet/core/notifications";
 import type { AppContext } from "@/app-context";
 import type { StoredPushSubscription } from "@/features/notifications/ports";
 import { TaskOverdueNotification } from "@/features/tasks/notifications/overdue";
@@ -19,6 +22,7 @@ function payload() {
 				taskId,
 				title: "Ship it",
 				dueDate: "2026-07-08",
+				dueTime: null,
 				pageId: null,
 				sourceBlockId: null,
 			},
@@ -43,7 +47,8 @@ describe("task overdue push channel", () => {
 		} as unknown as AppContext;
 		const notifications = createInlineNotificationDispatcher<AppContext>({
 			ctx,
-			preferences: notificationPreferences,
+			preferences:
+				notificationPreferences as NotificationPreferencesPort<AppContext>,
 			failureMode: "throw",
 		});
 

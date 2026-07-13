@@ -486,9 +486,14 @@ describe("Haunter agent capabilities", () => {
 			workspaceId,
 			title: "Prepare launch notes",
 			dueDate: "2026-07-15",
-		})) as { taskId: string; assigneeId: string | null };
+			dueTime: "14:00",
+		})) as {
+			taskId: string;
+			assigneeId: string | null;
+			dueTime: string | null;
+		};
 		const listed = (await execute("list_tasks", { workspaceId })) as {
-			tasks: Array<{ taskId: string; title: string }>;
+			tasks: Array<{ taskId: string; title: string; dueTime: string | null }>;
 			hasMore: boolean;
 		};
 		const updated = (await execute("update_task", {
@@ -496,7 +501,7 @@ describe("Haunter agent capabilities", () => {
 			taskId: created.taskId,
 			title: "Prepare release notes",
 			dueDate: null,
-		})) as { title: string; dueDate: string | null };
+		})) as { title: string; dueDate: string | null; dueTime: string | null };
 		const completed = (await execute("complete_task", {
 			workspaceId,
 			taskId: created.taskId,
@@ -513,11 +518,13 @@ describe("Haunter agent capabilities", () => {
 		const stored = await tasks.findById(scope, created.taskId);
 
 		expect(created.assigneeId).toBe(userId);
+		expect(created.dueTime).toBe("14:00");
 		expect(listed).toMatchObject({
 			tasks: [
 				expect.objectContaining({
 					taskId: created.taskId,
 					title: "Prepare launch notes",
+					dueTime: "14:00",
 				}),
 			],
 			hasMore: false,
@@ -525,6 +532,7 @@ describe("Haunter agent capabilities", () => {
 		expect(updated).toMatchObject({
 			title: "Prepare release notes",
 			dueDate: null,
+			dueTime: null,
 		});
 		expect(completed.completed).toBe(true);
 		expect(completed.completedAt).not.toBeNull();

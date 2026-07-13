@@ -91,9 +91,14 @@ function blockToMarkdown(
 			return `${indent}${ordinal}. ${inline}`;
 		case "task": {
 			const box = block.props.checked === true ? "[x]" : "[ ]";
+			const dueTime =
+				typeof block.props.dueTime === "string" &&
+				block.props.dueTime.length > 0
+					? ` ${block.props.dueTime}`
+					: "";
 			const due =
 				typeof block.props.due === "string" && block.props.due.length > 0
-					? ` (due: ${block.props.due})`
+					? ` (due: ${block.props.due}${dueTime})`
 					: "";
 			return `${indent}- ${box} ${inline}${due}`;
 		}
@@ -257,7 +262,8 @@ function makeBlock(
 }
 
 const TASK_LINE = /^- \[([ xX])\] (.*)$/;
-const DUE_SUFFIX = /\s*\(due:\s*(\d{4}-\d{2}-\d{2})\)\s*$/;
+const DUE_SUFFIX =
+	/\s*\(due:\s*(\d{4}-\d{2}-\d{2})(?:\s+(([01]\d|2[0-3]):[0-5]\d))?\)\s*$/;
 const BULLET_LINE = /^[-*] (.*)$/;
 const NUMBERED_LINE = /^\d+[.)] (.*)$/;
 const HEADING_LINE = /^(#{1,6}) (.*)$/;
@@ -353,15 +359,17 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 		if (task) {
 			let title = task[2];
 			let due = "";
+			let dueTime = "";
 			const dueMatch = DUE_SUFFIX.exec(title);
 			if (dueMatch) {
 				due = dueMatch[1];
+				dueTime = dueMatch[2] ?? "";
 				title = title.slice(0, dueMatch.index);
 			}
 			push(
 				makeBlock(
 					"task",
-					{ checked: task[1] !== " ", due, assignee: "" },
+					{ checked: task[1] !== " ", due, dueTime, assignee: "" },
 					parseInline(title),
 				),
 				depth,

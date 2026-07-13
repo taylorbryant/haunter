@@ -15,7 +15,7 @@ import { DueDatePicker } from "@/components/due-date-picker";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import { parseTaskDateShortcut } from "@/features/tasks/lib/parse-task-input";
 import { AUTO_TASK_ASSIGNEE } from "@/features/tasks/lib/task-block-props";
-import { formatDueDateLabel } from "@/lib/due-date";
+import { formatDueDateTimeLabel, isDueOverdue } from "@/lib/due-date";
 
 export const TaskBlockCurrentUserContext = createContext<string | null>(null);
 
@@ -24,6 +24,7 @@ const taskBlockConfig = {
 	propSchema: {
 		checked: { default: false },
 		due: { default: "" },
+		dueTime: { default: "" },
 		// Assigned member's user id. AUTO_TASK_ASSIGNEE means "default to
 		// whoever creates/saves this new block"; "" is explicitly unassigned.
 		assignee: { default: AUTO_TASK_ASSIGNEE },
@@ -36,7 +37,7 @@ function TaskBlockView({
 	editor,
 	contentRef,
 }: ReactCustomBlockRenderProps<typeof taskBlockConfig>) {
-	const { checked, due, assignee } = block.props;
+	const { checked, due, dueTime, assignee } = block.props;
 	const currentUserId = useContext(TaskBlockCurrentUserContext);
 	const shownAssignee =
 		assignee === AUTO_TASK_ASSIGNEE ? (currentUserId ?? "") : assignee;
@@ -48,6 +49,7 @@ function TaskBlockView({
 	function update(props: {
 		checked?: boolean;
 		due?: string;
+		dueTime?: string;
 		assignee?: string;
 	}) {
 		if (!editor.isEditable) return;
@@ -67,7 +69,7 @@ function TaskBlockView({
 
 		editor.updateBlock(latest, {
 			content: parsed.title,
-			props: { due: parsed.dueDate },
+			props: { due: parsed.dueDate, dueTime: parsed.dueTime ?? "" },
 		});
 	}
 
@@ -97,7 +99,7 @@ function TaskBlockView({
 	}
 
 	const overdue =
-		due !== "" && !checked && due < new Date().toISOString().slice(0, 10);
+		!checked && isDueOverdue(due || null, dueTime === "" ? null : dueTime);
 
 	return (
 		// flex-wrap + the content's flex-basis floor: on narrow screens
@@ -142,19 +144,22 @@ function TaskBlockView({
 				/>
 				{readOnly && due === "" ? null : readOnly ? (
 					<span
-						className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${
+						className={`flex items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs ${
 							overdue
 								? "bg-destructive/10 text-destructive"
 								: "bg-muted text-muted-foreground"
 						}`}
 					>
-						{formatDueDateLabel(due)}
+						{formatDueDateTimeLabel(due, dueTime || null)}
 					</span>
 				) : (
 					<DueDatePicker
 						value={due === "" ? null : due}
-						onChange={(next) => update({ due: next ?? "" })}
-						className={`flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${
+						time={dueTime === "" ? null : dueTime}
+						onChange={(next) =>
+							update({ due: next.date ?? "", dueTime: next.time ?? "" })
+						}
+						className={`flex cursor-pointer items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs ${
 							due === ""
 								? "text-muted-foreground/70 hover:bg-muted focus-visible:bg-muted aria-expanded:bg-muted"
 								: overdue

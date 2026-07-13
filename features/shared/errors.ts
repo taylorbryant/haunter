@@ -41,6 +41,11 @@ export const errors = defineErrors({
 		status: 422,
 		message: "This task lives in a page; edit it in the editor",
 	},
+	InvalidTaskDue: {
+		code: "INVALID_TASK_DUE",
+		status: 422,
+		message: "A due time requires a due date",
+	},
 	NotificationNotFound: {
 		code: "NOTIFICATION_NOT_FOUND",
 		status: 404,

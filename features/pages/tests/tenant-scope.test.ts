@@ -53,6 +53,7 @@ describe("tenant-scoped repositories", () => {
 				title: "Scoped task",
 				completed: false,
 				dueDate: null,
+				dueTime: null,
 				assigneeId: null,
 				completedAt: null,
 			});
@@ -106,6 +107,7 @@ describe("tenant-scoped repositories", () => {
 					title: "Foreign page task",
 					completed: false,
 					dueDate: null,
+					dueTime: null,
 					assigneeId: null,
 					completedAt: null,
 				}),

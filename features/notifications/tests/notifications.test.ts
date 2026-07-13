@@ -4,8 +4,11 @@ import type {
 	OverdueTaskCandidate,
 	PendingPushNotification,
 } from "@/features/notifications/ports";
-import type { Notification } from "@/features/notifications/schemas";
-import { isValidTimezone } from "@/features/notifications/schemas";
+import {
+	isValidTimezone,
+	type Notification,
+	NotificationSchema,
+} from "@/features/notifications/schemas";
 import { processOverdueNotifications } from "@/features/tasks/schedules/check-overdue";
 import { localDateAndHour } from "@/lib/timezone";
 
@@ -19,6 +22,7 @@ function candidate(
 		taskId: crypto.randomUUID(),
 		title: "Finish the notification system",
 		dueDate: "2026-07-09",
+		dueTime: null,
 		pageId: null,
 		sourceBlockId: null,
 		userId: USER_ID,
@@ -42,7 +46,10 @@ function createScheduleFixture(
 			return candidates;
 		},
 		async createOverdue(item: OverdueTaskCandidate, createdAt: string) {
-			const key = `${item.taskId}:${item.dueDate}:${item.userId}`;
+			const version = item.dueTime
+				? `${item.dueDate}:${item.dueTime}:${item.userId}`
+				: `${item.dueDate}:${item.userId}`;
+			const key = `${item.taskId}:${version}`;
 			if (createdKeys.has(key)) return null;
 			createdKeys.add(key);
 			const notification: Notification = {
@@ -51,11 +58,12 @@ function createScheduleFixture(
 				workspaceId: item.workspaceId,
 				kind: "task.overdue",
 				entityId: item.taskId,
-				entityVersion: `${item.dueDate}:${item.userId}`,
+				entityVersion: version,
 				payload: {
 					taskId: item.taskId,
 					title: item.title,
 					dueDate: item.dueDate,
+					dueTime: item.dueTime,
 					pageId: item.pageId,
 					sourceBlockId: item.sourceBlockId,
 				},
@@ -92,6 +100,28 @@ function createScheduleFixture(
 }
 
 describe("overdue notification schedule", () => {
+	it("keeps date-only notifications created before timed tasks were added", () => {
+		const parsed = NotificationSchema.parse({
+			id: crypto.randomUUID(),
+			userId: USER_ID,
+			workspaceId: WORKSPACE_ID,
+			kind: "task.overdue",
+			entityId: crypto.randomUUID(),
+			entityVersion: "2026-07-09:user_test",
+			payload: {
+				taskId: crypto.randomUUID(),
+				title: "An existing notification",
+				dueDate: "2026-07-09",
+				pageId: null,
+				sourceBlockId: null,
+			},
+			readAt: null,
+			createdAt: "2026-07-10T14:00:00.000Z",
+		});
+
+		expect(parsed.payload.dueTime).toBeNull();
+	});
+
 	it("uses the assignee timezone for the local date and hour", () => {
 		expect(
 			localDateAndHour(new Date("2026-07-10T14:00:00.000Z"), "America/Chicago"),
@@ -137,6 +167,24 @@ describe("overdue notification schedule", () => {
 			new Date("2026-07-10T18:00:00.000Z"),
 		);
 		expect(todayResult.created).toBe(0);
+	});
+
+	it("treats a timed task as overdue when its local due time passes", async () => {
+		const fixture = createScheduleFixture([
+			candidate({ dueDate: "2026-07-10", dueTime: "10:00" }),
+		]);
+
+		const before = await processOverdueNotifications(
+			fixture.ctx,
+			new Date("2026-07-10T14:55:00.000Z"),
+		);
+		const atDueTime = await processOverdueNotifications(
+			fixture.ctx,
+			new Date("2026-07-10T15:00:00.000Z"),
+		);
+
+		expect(before.created).toBe(0);
+		expect(atDueTime.created).toBe(1);
 	});
 
 	it("attempts every delivery group before reporting failures", async () => {

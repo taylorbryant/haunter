@@ -6,6 +6,7 @@ export type ExtractedTaskBlock = {
 	title: string;
 	checked: boolean;
 	due: string | null;
+	dueTime: string | null;
 	/** User id from the block's assignee prop; null when unassigned. */
 	assignee: string | null;
 	/** New editor task blocks can request assignment to the current saver. */
@@ -46,6 +47,7 @@ export function extractTaskBlocks(blocks: BlockJson[]): ExtractedTaskBlock[] {
 			if (block.type === "task" && !seen.has(block.id)) {
 				seen.add(block.id);
 				const due = block.props.due;
+				const dueTime = block.props.dueTime;
 				const assignee = block.props.assignee;
 				const useDefaultAssignee = isAutoTaskAssignee(assignee);
 				found.push({
@@ -53,6 +55,8 @@ export function extractTaskBlocks(blocks: BlockJson[]): ExtractedTaskBlock[] {
 					title: inlineText(block.content),
 					checked: block.props.checked === true,
 					due: typeof due === "string" && due.length > 0 ? due : null,
+					dueTime:
+						typeof dueTime === "string" && dueTime.length > 0 ? dueTime : null,
 					assignee:
 						typeof assignee === "string" &&
 						assignee.length > 0 &&

@@ -11,6 +11,31 @@ export function toIsoDate(date: Date): string {
 	return `${date.getFullYear()}-${month}-${day}`;
 }
 
+export function toIsoTime(date: Date): string {
+	const hour = String(date.getHours()).padStart(2, "0");
+	const minute = String(date.getMinutes()).padStart(2, "0");
+	return `${hour}:${minute}`;
+}
+
+export function formatDueTimeLabel(value: string): string {
+	const [hour, minute] = value.split(":").map(Number);
+	if (
+		!Number.isInteger(hour) ||
+		!Number.isInteger(minute) ||
+		hour < 0 ||
+		hour > 23 ||
+		minute < 0 ||
+		minute > 59
+	) {
+		return value;
+	}
+
+	return new Date(2000, 0, 1, hour, minute).toLocaleTimeString(undefined, {
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
 /** "Today", "Tomorrow", a weekday within a week, else "Jul 16". */
 export function formatDueDateLabel(value: string, now = new Date()): string {
 	const date = parseIsoDate(value);
@@ -30,4 +55,25 @@ export function formatDueDateLabel(value: string, now = new Date()): string {
 		day: "numeric",
 		...(date.getFullYear() !== today.getFullYear() ? { year: "numeric" } : {}),
 	});
+}
+
+export function formatDueDateTimeLabel(
+	dueDate: string,
+	dueTime: string | null,
+	now = new Date(),
+): string {
+	const date = formatDueDateLabel(dueDate, now);
+	return dueTime ? `${date}, ${formatDueTimeLabel(dueTime)}` : date;
+}
+
+export function isDueOverdue(
+	dueDate: string | null,
+	dueTime: string | null,
+	today = toIsoDate(new Date()),
+	currentTime = toIsoTime(new Date()),
+): boolean {
+	if (dueDate === null) return false;
+	if (dueDate < today) return true;
+	if (dueDate > today || dueTime === null) return false;
+	return dueTime <= currentTime;
 }

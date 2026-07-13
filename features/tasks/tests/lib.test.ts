@@ -47,6 +47,7 @@ describe("extractTaskBlocks", () => {
 				title: "Nested task",
 				checked: true,
 				due: "2026-07-03",
+				dueTime: null,
 				assignee: null,
 				useDefaultAssignee: false,
 			},
@@ -55,6 +56,7 @@ describe("extractTaskBlocks", () => {
 				title: "Top level",
 				checked: false,
 				due: null,
+				dueTime: null,
 				assignee: null,
 				useDefaultAssignee: false,
 			},
@@ -113,7 +115,41 @@ describe("parseTaskDateShortcut", () => {
 		expect(result).toEqual({
 			title: "Eat a sandwich",
 			dueDate: toIsoDate(addDays(1)),
+			dueTime: null,
 		});
+	});
+
+	it("parses an ambiguous daytime time as PM", () => {
+		const result = parseTaskDateShortcut(
+			[
+				{
+					type: "text",
+					text: "Pick up meds tomorrow at 2",
+					styles: {},
+				},
+			],
+			"",
+		);
+
+		expect(result).toEqual({
+			title: "Pick up meds",
+			dueDate: toIsoDate(addDays(1)),
+			dueTime: "14:00",
+		});
+	});
+
+	it("preserves explicit AM and 24-hour task times", () => {
+		const explicitAm = parseTaskDateShortcut(
+			[{ type: "text", text: "Take meds tomorrow at 2am", styles: {} }],
+			"",
+		);
+		const twentyFourHour = parseTaskDateShortcut(
+			[{ type: "text", text: "Call tomorrow at 14:30", styles: {} }],
+			"",
+		);
+
+		expect(explicitAm?.dueTime).toBe("02:00");
+		expect(twentyFourHour?.dueTime).toBe("14:30");
 	});
 
 	it("does not override an existing due date", () => {
@@ -190,6 +226,7 @@ describe("reconcileTaskBlockProps", () => {
 		expect(blocks[0]?.children[0]?.props).toEqual({
 			checked: true,
 			due: "2026-07-04",
+			dueTime: "",
 			assignee: "user_teammate",
 			color: "red",
 		});

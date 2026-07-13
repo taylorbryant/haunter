@@ -64,6 +64,7 @@ export const updateTask = tasks
 	.body(UpdateTaskBodySchema)
 	.errors({
 		Forbidden: errors.Forbidden,
+		InvalidTaskDue: errors.InvalidTaskDue,
 		TaskNotFound: errors.TaskNotFound,
 		TaskNotEditable: errors.TaskNotEditable,
 	})

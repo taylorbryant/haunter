@@ -139,7 +139,10 @@ describe("task reconciliation on page content save", () => {
 			{
 				id: page.id,
 				content: [
-					taskBlock("b1", "Ship the tasks feature", { due: "2026-07-03" }),
+					taskBlock("b1", "Ship the tasks feature", {
+						due: "2026-07-03",
+						dueTime: "14:00",
+					}),
 					taskBlock("b2", "Already done", { checked: true }),
 				],
 			},
@@ -152,6 +155,7 @@ describe("task reconciliation on page content save", () => {
 		const shipped = rows.find((row) => row.sourceBlockId === "b1");
 		expect(shipped?.title).toBe("Ship the tasks feature");
 		expect(shipped?.dueDate).toBe("2026-07-03");
+		expect(shipped?.dueTime).toBe("14:00");
 		expect(shipped?.completed).toBe(false);
 		expect(shipped?.pageTitle).toBe("Weekly notes");
 
@@ -254,6 +258,22 @@ describe("task reconciliation on page content save", () => {
 				{
 					id: page.id,
 					content: [
+						taskBlock("bad-time", "Bad time", {
+							due: "2026-07-03",
+							dueTime: "2pm",
+						}),
+					],
+				},
+				{ ctx },
+			),
+		).rejects.toThrow("Task due times must be HH:mm");
+
+		await expect(
+			tester.run(
+				savePageContentUseCase,
+				{
+					id: page.id,
+					content: [
 						taskBlock("bad-assignee", "Bad assignee", {
 							assignee: "user_stranger",
 						}),
@@ -292,6 +312,7 @@ describe("tasks use cases", () => {
 		expect(saved?.content[0]?.props).toEqual({
 			checked: true,
 			due: "2026-07-04",
+			dueTime: "",
 		});
 	});
 
@@ -329,6 +350,7 @@ describe("tasks use cases", () => {
 		expect(saved?.content[0]?.props).toEqual({
 			checked: true,
 			due: "2026-07-04",
+			dueTime: "",
 		});
 	});
 
@@ -386,10 +408,12 @@ describe("tasks use cases", () => {
 				workspaceId: workspace.id,
 				title: "Buy groceries",
 				dueDate: "2026-07-05",
+				dueTime: "14:00",
 			},
 			{ ctx },
 		);
 		expect(task.pageId).toBeNull();
+		expect(task.dueTime).toBe("14:00");
 
 		const renamed = await tester.run(
 			updateTaskUseCase,
@@ -425,6 +449,33 @@ describe("tasks use cases", () => {
 			{ ctx },
 		);
 		expect(all.items).toHaveLength(0);
+	});
+
+	it("requires a due date for a time and clears the time with the date", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+		const task = await tester.run(
+			createTaskUseCase,
+			{ workspaceId: workspace.id, title: "Pick up meds" },
+			{ ctx },
+		);
+
+		await expect(
+			tester.run(updateTaskUseCase, { id: task.id, dueTime: "14:00" }, { ctx }),
+		).rejects.toThrow("A due time requires a due date");
+
+		const scheduled = await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, dueDate: "2026-07-14", dueTime: "14:00" },
+			{ ctx },
+		);
+		const cleared = await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, dueDate: null },
+			{ ctx },
+		);
+
+		expect(scheduled.dueTime).toBe("14:00");
+		expect(cleared).toMatchObject({ dueDate: null, dueTime: null });
 	});
 
 	it("treats a task in another workspace as not found", async () => {

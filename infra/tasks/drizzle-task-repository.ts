@@ -24,6 +24,7 @@ function toTask(row: TaskRow): Task {
 		title: row.title,
 		completed: row.completed,
 		dueDate: row.dueDate,
+		dueTime: row.dueTime,
 		assigneeId: row.assigneeId,
 		completedAt: row.completedAt,
 		createdAt: row.createdAt,
@@ -85,6 +86,9 @@ export function createDrizzleTaskRepository(
 					// Due tasks first (soonest first), then undated by creation.
 					sql`${schema.tasks.dueDate} IS NULL`,
 					asc(schema.tasks.dueDate),
+					// Precise commitments precede all-day tasks on the same date.
+					sql`${schema.tasks.dueTime} IS NULL`,
+					asc(schema.tasks.dueTime),
 					asc(schema.tasks.createdAt),
 				)
 				.$dynamic();
@@ -140,6 +144,7 @@ export function createDrizzleTaskRepository(
 				title: input.title,
 				completed: input.completed,
 				dueDate: input.dueDate,
+				dueTime: input.dueTime,
 				assigneeId: input.assigneeId,
 				completedAt: input.completedAt,
 				createdAt: now,

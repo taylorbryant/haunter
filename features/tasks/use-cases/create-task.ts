@@ -37,6 +37,7 @@ export const createTaskUseCase = useCase
 				title: input.title,
 				completed: false,
 				dueDate: input.dueDate ?? null,
+				dueTime: input.dueTime ?? null,
 				assigneeId,
 				completedAt: null,
 			});

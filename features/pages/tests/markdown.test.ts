@@ -26,7 +26,11 @@ describe("blocksToMarkdown", () => {
 		const markdown = blocksToMarkdown([
 			block("heading", { level: 2 }, "Plans"),
 			block("paragraph", {}, "Hello world"),
-			block("task", { checked: false, due: "2026-07-10" }, "Ship it"),
+			block(
+				"task",
+				{ checked: false, due: "2026-07-10", dueTime: "14:00" },
+				"Ship it",
+			),
 			block("task", { checked: true }, "Done thing"),
 			block("bulletListItem", {}, "One"),
 			block("numberedListItem", {}, "First"),
@@ -38,7 +42,7 @@ describe("blocksToMarkdown", () => {
 
 		expect(markdown).toContain("## Plans");
 		expect(markdown).toContain("Hello world");
-		expect(markdown).toContain("- [ ] Ship it (due: 2026-07-10)");
+		expect(markdown).toContain("- [ ] Ship it (due: 2026-07-10 14:00)");
 		expect(markdown).toContain("- [x] Done thing");
 		expect(markdown).toContain("- One");
 		expect(markdown).toContain("1. First");
@@ -89,7 +93,7 @@ describe("markdownToBlocks", () => {
 				"",
 				"Hello **world**",
 				"",
-				"- [ ] Ship it (due: 2026-07-10)",
+				"- [ ] Ship it (due: 2026-07-10 14:00)",
 				"- [x] Done thing",
 				"- One",
 				"1. First",
@@ -121,6 +125,7 @@ describe("markdownToBlocks", () => {
 		expect(blocks[2].props).toMatchObject({
 			checked: false,
 			due: "2026-07-10",
+			dueTime: "14:00",
 		});
 		expect(blocks[3].props.checked).toBe(true);
 		expect(blocks[8].props.language).toBe("typescript");

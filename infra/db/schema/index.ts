@@ -311,6 +311,7 @@ export const tasks = sqliteTable(
 			.notNull()
 			.default(false),
 		dueDate: text("due_date"),
+		dueTime: text("due_time"),
 		completedAt: text("completed_at"),
 		createdAt: text("created_at").notNull(),
 		updatedAt: text("updated_at").notNull(),
@@ -327,6 +328,7 @@ export const tasks = sqliteTable(
 			table.workspaceId,
 			table.completed,
 			table.dueDate,
+			table.dueTime,
 			table.createdAt,
 		),
 		assigneeIdx: index("tasks_assignee_idx").on(
@@ -339,11 +341,13 @@ export const tasks = sqliteTable(
 			table.assigneeId,
 			table.completed,
 			table.dueDate,
+			table.dueTime,
 			table.createdAt,
 		),
 		overdueNotificationIdx: index("tasks_overdue_notification_idx").on(
 			table.completed,
 			table.dueDate,
+			table.dueTime,
 			table.assigneeId,
 		),
 		pageIdx: index("tasks_page_idx").on(table.pageId),

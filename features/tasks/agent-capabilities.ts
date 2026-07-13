@@ -1,9 +1,11 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
-import { localDateAndHour } from "@/lib/timezone";
+import { isDueOverdue } from "@/lib/due-date";
+import { localDateAndTime } from "@/lib/timezone";
 
 const DueDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const DueTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const WorkspaceInput = z.object({ workspaceId: z.string().min(1) });
 const TaskInput = WorkspaceInput.extend({ taskId: z.string().uuid() });
 
@@ -58,6 +60,7 @@ export function createTaskAgentCapabilities(
 					title: z.string(),
 					completed: z.boolean(),
 					dueDate: DueDate.nullable(),
+					dueTime: DueTime.nullable(),
 					assigneeId: z.string().nullable(),
 					assigneeName: z.string().nullable(),
 					pageId: z.string().uuid().nullable(),
@@ -71,16 +74,18 @@ export function createTaskAgentCapabilities(
 		async handle({ ctx, principal, input }) {
 			let dueOnOrAfter = input.dueOnOrAfter;
 			let dueOnOrBefore = input.dueOnOrBefore;
+			let localNow: { date: string; time: string } | null = null;
 			if (input.due) {
 				const timezone = dependencies.getTimezone
 					? await dependencies.getTimezone(principal.userId)
 					: (await ctx.ports.notificationInbox.getPreferences(principal.userId))
 							.timezone;
-				const today = localDateAndHour(
+				localNow = localDateAndTime(
 					dependencies.now?.() ?? new Date(),
 					timezone,
-				).date;
-				if (input.due === "overdue") dueOnOrBefore = addDays(today, -1);
+				);
+				const today = localNow.date;
+				if (input.due === "overdue") dueOnOrBefore = today;
 				if (input.due === "today") {
 					dueOnOrAfter = today;
 					dueOnOrBefore = today;
@@ -99,12 +104,24 @@ export function createTaskAgentCapabilities(
 					...(dueOnOrBefore ? { dueOnOrBefore } : {}),
 				},
 			});
+			const items =
+				input.due === "overdue" && localNow
+					? result.items.filter((task) =>
+							isDueOverdue(
+								task.dueDate,
+								task.dueTime,
+								localNow.date,
+								localNow.time,
+							),
+						)
+					: result.items;
 			return {
-				tasks: result.items.map((task) => ({
+				tasks: items.map((task) => ({
 					taskId: task.id,
 					title: task.title,
 					completed: task.completed,
 					dueDate: task.dueDate,
+					dueTime: task.dueTime,
 					assigneeId: task.assigneeId,
 					assigneeName: task.assigneeName,
 					pageId: task.pageId,
@@ -119,17 +136,22 @@ export function createTaskAgentCapabilities(
 
 	const createTaskCapability = defineAgentCapability("create_task", {
 		description:
-			"Create a standalone task in a workspace. The task is assigned to the acting user by default; dueDate uses YYYY-MM-DD.",
+			"Create a standalone task in a workspace. The task is assigned to the acting user by default; dueDate uses YYYY-MM-DD and optional dueTime uses HH:mm.",
 		input: WorkspaceInput.extend({
 			title: z.string().trim().min(1).max(300),
 			dueDate: DueDate.optional(),
+			dueTime: DueTime.optional(),
 			assigneeId: z.string().nullable().optional(),
-		}),
+		}).refine(
+			(input) => input.dueTime === undefined || input.dueDate !== undefined,
+			{ message: "dueDate is required when dueTime is set." },
+		),
 		output: z.object({
 			taskId: z.string().uuid(),
 			title: z.string(),
 			completed: z.boolean(),
 			dueDate: DueDate.nullable(),
+			dueTime: DueTime.nullable(),
 			assigneeId: z.string().nullable(),
 			createdAt: z.string(),
 			updatedAt: z.string(),
@@ -142,6 +164,7 @@ export function createTaskAgentCapabilities(
 					workspaceId: input.workspaceId,
 					title: input.title,
 					...(input.dueDate ? { dueDate: input.dueDate } : {}),
+					...(input.dueTime ? { dueTime: input.dueTime } : {}),
 					...(input.assigneeId !== undefined
 						? { assigneeId: input.assigneeId }
 						: {}),
@@ -152,6 +175,7 @@ export function createTaskAgentCapabilities(
 				title: task.title,
 				completed: task.completed,
 				dueDate: task.dueDate,
+				dueTime: task.dueTime,
 				assigneeId: task.assigneeId,
 				createdAt: task.createdAt,
 				updatedAt: task.updatedAt,
@@ -161,23 +185,28 @@ export function createTaskAgentCapabilities(
 
 	const updateTaskCapability = defineAgentCapability("update_task", {
 		description:
-			"Update a task's title, due date, or assignee. Set dueDate or assigneeId to null to clear it. Page-backed task titles must still be edited in their page.",
+			"Update a task's title, due date/time, or assignee. Set dueDate to null to clear both date and time; set dueTime to null to keep the date without a time. Page-backed task titles must still be edited in their page.",
 		input: TaskInput.extend({
 			title: z.string().trim().min(1).max(300).optional(),
 			dueDate: DueDate.nullable().optional(),
+			dueTime: DueTime.nullable().optional(),
 			assigneeId: z.string().nullable().optional(),
 		}).refine(
 			(input) =>
 				input.title !== undefined ||
 				input.dueDate !== undefined ||
+				input.dueTime !== undefined ||
 				input.assigneeId !== undefined,
-			{ message: "Provide a title, dueDate, or assigneeId to update." },
+			{
+				message: "Provide a title, dueDate, dueTime, or assigneeId to update.",
+			},
 		),
 		output: z.object({
 			taskId: z.string().uuid(),
 			title: z.string(),
 			completed: z.boolean(),
 			dueDate: DueDate.nullable(),
+			dueTime: DueTime.nullable(),
 			assigneeId: z.string().nullable(),
 			updatedAt: z.string(),
 		}),
@@ -189,6 +218,7 @@ export function createTaskAgentCapabilities(
 					id: input.taskId,
 					...(input.title !== undefined ? { title: input.title } : {}),
 					...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
+					...(input.dueTime !== undefined ? { dueTime: input.dueTime } : {}),
 					...(input.assigneeId !== undefined
 						? { assigneeId: input.assigneeId }
 						: {}),
@@ -199,6 +229,7 @@ export function createTaskAgentCapabilities(
 				title: task.title,
 				completed: task.completed,
 				dueDate: task.dueDate,
+				dueTime: task.dueTime,
 				assigneeId: task.assigneeId,
 				updatedAt: task.updatedAt,
 			};

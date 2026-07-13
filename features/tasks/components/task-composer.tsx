@@ -2,42 +2,15 @@
 
 import { CalendarIcon, PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { DueDatePicker, type DueDateValue } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import {
 	humanizeDueDate,
 	parseTaskInput,
-	toIsoDate,
 } from "@/features/tasks/lib/parse-task-input";
 import { cn } from "@/lib/utils";
-
-function addDays(days: number): Date {
-	const date = new Date();
-	date.setDate(date.getDate() + days);
-	return date;
-}
-
-const PRESETS: { label: string; date: () => Date }[] = [
-	{ label: "Today", date: () => addDays(0) },
-	{ label: "Tomorrow", date: () => addDays(1) },
-	{
-		label: "This weekend",
-		// Next Saturday (or today if it is Saturday).
-		date: () => addDays((6 - new Date().getDay() + 7) % 7),
-	},
-	{
-		label: "Next week",
-		// Next Monday.
-		date: () => addDays((1 - new Date().getDay() + 7) % 7 || 7),
-	},
-];
 
 /**
  * Todoist-style inline composer: natural-language dates are highlighted in
@@ -54,6 +27,7 @@ export function TaskComposer({
 	onSubmit: (input: {
 		title: string;
 		dueDate: string | null;
+		dueTime: string | null;
 		assigneeId?: string | null;
 	}) => Promise<boolean>;
 	onCancel?: () => void;
@@ -64,12 +38,11 @@ export function TaskComposer({
 	const [text, setText] = useState("");
 	// Undefined means untouched, so a parsed phrase can override the contextual
 	// default. Null means the user explicitly cleared the date.
-	const [manualDate, setManualDate] = useState<string | null | undefined>();
+	const [manualDue, setManualDue] = useState<DueDateValue | undefined>();
 	// Set when the user dismisses a detected phrase so it stays dismissed.
 	const [ignoredMatchText, setIgnoredMatchText] = useState<string | null>(null);
 	const [assigneeId, setAssigneeId] = useState<string | null>(currentUserId);
 	const [assigneeTouched, setAssigneeTouched] = useState(false);
-	const [pickerOpen, setPickerOpen] = useState(false);
 	const [pending, setPending] = useState(false);
 
 	useEffect(() => {
@@ -83,11 +56,17 @@ export function TaskComposer({
 			: null;
 	// A manually picked date wins over the parsed one.
 	const dueDate =
-		manualDate !== undefined
-			? manualDate
+		manualDue !== undefined
+			? manualDue.date
 			: activeMatch
 				? parsed.dueDate
 				: defaultDueDate;
+	const dueTime =
+		manualDue !== undefined
+			? manualDue.time
+			: activeMatch
+				? parsed.dueTime
+				: null;
 	const title = activeMatch ? parsed.title : text.trim();
 
 	async function submit() {
@@ -98,6 +77,7 @@ export function TaskComposer({
 		const ok = await onSubmit({
 			title,
 			dueDate,
+			dueTime,
 			...(submitAssigneeId !== undefined
 				? { assigneeId: submitAssigneeId }
 				: {}),
@@ -105,7 +85,7 @@ export function TaskComposer({
 		setPending(false);
 		if (ok) {
 			setText("");
-			setManualDate(undefined);
+			setManualDue(undefined);
 			setIgnoredMatchText(null);
 			setAssigneeId(currentUserId);
 			setAssigneeTouched(false);
@@ -114,15 +94,9 @@ export function TaskComposer({
 	}
 
 	function clearDate() {
-		setManualDate(null);
+		setManualDue({ date: null, time: null });
 		if (activeMatch) setIgnoredMatchText(activeMatch.text);
 		else setIgnoredMatchText(null);
-	}
-
-	function pickDate(date: Date | undefined) {
-		setManualDate(date ? toIsoDate(date) : null);
-		setPickerOpen(false);
-		inputRef.current?.focus();
 	}
 
 	if (mode === "compact") {
@@ -159,7 +133,9 @@ export function TaskComposer({
 				{dueDate ? (
 					<span className="hidden shrink-0 items-center gap-1 text-muted-foreground text-xs sm:flex">
 						<CalendarIcon className="size-3.5" aria-hidden="true" />
-						{dueDate === defaultDueDate ? "Today" : humanizeDueDate(dueDate)}
+						{dueDate === defaultDueDate && dueTime === null
+							? "Today"
+							: humanizeDueDate(dueDate, dueTime)}
 					</span>
 				) : null}
 				<Button
@@ -203,7 +179,7 @@ export function TaskComposer({
 						// biome-ignore lint/a11y/noAutofocus: full composer opens after an explicit user action
 						autoFocus={mode === "full"}
 						value={text}
-						placeholder="Task name, e.g. “buy groceries tomorrow”"
+						placeholder="Task name, e.g. “pick up meds tomorrow at 2”"
 						aria-label="Task name"
 						className={cn(
 							"keyboard-focus-ring relative w-full rounded-sm bg-transparent font-medium text-base leading-6 outline-none [--keyboard-focus-ring-size:2px] placeholder:text-muted-foreground sm:text-sm",
@@ -226,70 +202,22 @@ export function TaskComposer({
 						}}
 						className="opacity-100 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
 					/>
-					<Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-						<PopoverTrigger
-							render={
-								<button
-									type="button"
-									className={cn(
-										"flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-										dueDate
-											? "text-foreground"
-											: "text-muted-foreground hover:bg-muted",
-									)}
-								>
-									<CalendarIcon className="size-3.5" aria-hidden="true" />
-									{dueDate ? humanizeDueDate(dueDate) : "Date"}
-								</button>
+					<DueDatePicker
+						value={dueDate}
+						time={dueTime}
+						onChange={(next) => {
+							setManualDue(next);
+							if (next.date === null && activeMatch) {
+								setIgnoredMatchText(activeMatch.text);
 							}
-						/>
-						<PopoverContent className="w-auto p-0" align="start">
-							<div className="flex flex-col gap-0.5 p-2">
-								{PRESETS.map((preset) => (
-									<Button
-										key={preset.label}
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="justify-start font-normal"
-										onClick={() => pickDate(preset.date())}
-									>
-										{preset.label}
-										<span className="ml-auto text-muted-foreground text-xs">
-											{humanizeDueDate(toIsoDate(preset.date())) ===
-											preset.label
-												? preset.date().toLocaleDateString(undefined, {
-														weekday: "short",
-													})
-												: humanizeDueDate(toIsoDate(preset.date()))}
-										</span>
-									</Button>
-								))}
-							</div>
-							<Separator />
-							<Calendar
-								mode="single"
-								selected={
-									dueDate
-										? new Date(
-												Number(dueDate.slice(0, 4)),
-												Number(dueDate.slice(5, 7)) - 1,
-												Number(dueDate.slice(8, 10)),
-											)
-										: undefined
-								}
-								defaultMonth={
-									dueDate
-										? new Date(
-												Number(dueDate.slice(0, 4)),
-												Number(dueDate.slice(5, 7)) - 1,
-											)
-										: undefined
-								}
-								onSelect={pickDate}
-							/>
-						</PopoverContent>
-					</Popover>
+						}}
+						className={cn(
+							"flex items-center gap-1.5 rounded-md border py-1 pr-2 pl-1 text-xs",
+							dueDate
+								? "text-foreground"
+								: "text-muted-foreground hover:bg-muted",
+						)}
+					/>
 					{dueDate ? (
 						<button
 							type="button"

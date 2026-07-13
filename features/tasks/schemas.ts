@@ -4,6 +4,10 @@ export const DueDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
 	message: "Due date must be YYYY-MM-DD",
 });
 
+export const DueTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, {
+	message: "Due time must be HH:mm",
+});
+
 export const TaskSchema = z.object({
 	id: z.string().uuid(),
 	/** The member who created the task — not necessarily who it's for. */
@@ -14,6 +18,7 @@ export const TaskSchema = z.object({
 	title: z.string(),
 	completed: z.boolean(),
 	dueDate: DueDateSchema.nullable(),
+	dueTime: DueTimeSchema.nullable(),
 	/** The member responsible for the task; null when unassigned. */
 	assigneeId: z.string().nullable(),
 	completedAt: z.string().datetime().nullable(),
@@ -62,18 +67,28 @@ export const TaskIdInputSchema = z.object({
 	id: z.string().uuid(),
 });
 
-export const CreateTaskInputSchema = z.object({
-	workspaceId: z.string().min(1),
-	title: z.string().min(1).max(300),
-	dueDate: DueDateSchema.optional(),
-	// Omitted = assign to the creator (quick-add is "a task for me").
-	// Explicit null = create unassigned.
-	assigneeId: z.string().nullable().optional(),
-});
+export const CreateTaskInputSchema = z
+	.object({
+		workspaceId: z.string().min(1),
+		title: z.string().min(1).max(300),
+		dueDate: DueDateSchema.optional(),
+		dueTime: DueTimeSchema.optional(),
+		// Omitted = assign to the creator (quick-add is "a task for me").
+		// Explicit null = create unassigned.
+		assigneeId: z.string().nullable().optional(),
+	})
+	.refine(
+		(input) => input.dueTime === undefined || input.dueDate !== undefined,
+		{
+			message: "A due date is required when a due time is set",
+			path: ["dueDate"],
+		},
+	);
 
 export const UpdateTaskBodySchema = z.object({
 	completed: z.boolean().optional(),
 	dueDate: DueDateSchema.nullable().optional(),
+	dueTime: DueTimeSchema.nullable().optional(),
 	title: z.string().min(1).max(300).optional(),
 	assigneeId: z.string().nullable().optional(),
 });

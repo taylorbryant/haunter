@@ -3,6 +3,7 @@ import type { BlockJson } from "@/features/pages/schemas";
 export type TaskBlockPatch = {
 	checked?: boolean;
 	due?: string | null;
+	dueTime?: string | null;
 	assignee?: string | null;
 };
 
@@ -32,6 +33,9 @@ export function patchTaskBlock(
 						...block.props,
 						...(patch.checked !== undefined ? { checked: patch.checked } : {}),
 						...(patch.due !== undefined ? { due: patch.due ?? "" } : {}),
+						...(patch.dueTime !== undefined
+							? { dueTime: patch.dueTime ?? "" }
+							: {}),
 						...(patch.assignee !== undefined
 							? { assignee: patch.assignee ?? "" }
 							: {}),

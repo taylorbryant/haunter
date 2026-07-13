@@ -25,7 +25,11 @@ import type {
 	TaskScope,
 	TaskWithPage,
 } from "@/features/tasks/schemas";
-import { formatDueDateLabel } from "@/lib/due-date";
+import {
+	formatDueDateTimeLabel,
+	isDueOverdue,
+	toIsoTime,
+} from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
 const TASK_PAGE_SIZE = 50;
@@ -46,11 +50,19 @@ function readTaskScope(value: string | null): TaskScope {
 	return value === "mine" ? "mine" : "everyone";
 }
 
-function isOverdue(task: TaskWithPage, today?: string): boolean {
+function isOverdue(
+	task: TaskWithPage,
+	today?: string,
+	currentTime?: string,
+): boolean {
 	return (
 		!task.completed &&
-		task.dueDate !== null &&
-		task.dueDate < (today ?? new Date().toISOString().slice(0, 10))
+		isDueOverdue(
+			task.dueDate,
+			task.dueTime,
+			today,
+			currentTime ?? toIsoTime(new Date()),
+		)
 	);
 }
 
@@ -58,10 +70,12 @@ export function TaskList({
 	workspaceId,
 	variant = "default",
 	todayDate,
+	currentTime,
 }: {
 	workspaceId: string;
 	variant?: "default" | "today";
 	todayDate?: string;
+	currentTime?: string;
 }) {
 	const queryClient = useQueryClient();
 	const pathname = usePathname();
@@ -100,12 +114,14 @@ export function TaskList({
 	const tasks = tasksQuery.data?.items ?? [];
 	const hasMore = tasksQuery.data?.hasMore ?? false;
 	const overdueTasks = isTodayView
-		? tasks.filter(
-				(task) => task.dueDate !== null && task.dueDate < resolvedTodayDate,
-			)
+		? tasks.filter((task) => isOverdue(task, resolvedTodayDate, currentTime))
 		: [];
 	const todayTasks = isTodayView
-		? tasks.filter((task) => task.dueDate === resolvedTodayDate)
+		? tasks.filter(
+				(task) =>
+					task.dueDate === resolvedTodayDate &&
+					!isOverdue(task, resolvedTodayDate, currentTime),
+			)
 		: [];
 
 	// Opened from the ⌘K "Create task" command: reveal the composer, then strip
@@ -144,6 +160,7 @@ export function TaskList({
 	function createTask(input: {
 		title: string;
 		dueDate: string | null;
+		dueTime: string | null;
 		assigneeId?: string | null;
 	}): Promise<boolean> {
 		return new Promise((resolve) => {
@@ -153,6 +170,7 @@ export function TaskList({
 						workspaceId,
 						title: input.title,
 						...(input.dueDate ? { dueDate: input.dueDate } : {}),
+						...(input.dueTime ? { dueTime: input.dueTime } : {}),
 						...(input.assigneeId !== undefined
 							? { assigneeId: input.assigneeId }
 							: {}),
@@ -307,22 +325,27 @@ export function TaskList({
 								{canEdit ? (
 									<DueDatePicker
 										value={task.dueDate}
+										time={task.dueTime}
 										onChange={(next) =>
 											updateMutation.mutate(
 												{
 													path: { id: task.id },
-													body: { dueDate: next },
+													body: {
+														dueDate: next.date,
+														dueTime: next.time,
+													},
 												},
 												{ onSuccess: () => refresh(task) },
 											)
 										}
 										className={cn(
-											"flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
+											"flex shrink-0 cursor-pointer items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs",
 											task.dueDate === null
 												? "text-muted-foreground/70 hover:bg-muted focus-visible:bg-muted aria-expanded:bg-muted"
 												: isOverdue(
 															task,
 															isTodayView ? resolvedTodayDate : undefined,
+															isTodayView ? currentTime : undefined,
 														)
 													? "bg-destructive/10 text-destructive"
 													: "bg-muted text-muted-foreground",
@@ -331,17 +354,18 @@ export function TaskList({
 								) : task.dueDate !== null ? (
 									<span
 										className={cn(
-											"flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs",
+											"flex shrink-0 items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs",
 											isOverdue(
 												task,
 												isTodayView ? resolvedTodayDate : undefined,
+												isTodayView ? currentTime : undefined,
 											)
 												? "bg-destructive/10 text-destructive"
 												: "bg-muted text-muted-foreground",
 										)}
 									>
-										<CalendarIcon className="size-3" />
-										{formatDueDateLabel(task.dueDate)}
+										<CalendarIcon className="size-4 shrink-0" />
+										{formatDueDateTimeLabel(task.dueDate, task.dueTime)}
 									</span>
 								) : null}
 								{task.sourceBlockId === null && canEdit ? (

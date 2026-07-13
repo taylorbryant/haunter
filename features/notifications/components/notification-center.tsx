@@ -36,7 +36,7 @@ import {
 	markNotificationReadMutationOptions,
 } from "@/features/notifications/client/queries";
 import type { Notification } from "@/features/notifications/schemas";
-import { formatDueDateLabel } from "@/lib/due-date";
+import { formatDueDateTimeLabel } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
 type BadgeNavigator = Navigator & {
@@ -131,7 +131,11 @@ function NotificationPanel({
 										{item.payload.title}
 									</span>
 									<span className="mt-0.5 block text-muted-foreground text-xs">
-										Overdue · {formatDueDateLabel(item.payload.dueDate)}
+										Overdue ·{" "}
+										{formatDueDateTimeLabel(
+											item.payload.dueDate,
+											item.payload.dueTime,
+										)}
 									</span>
 								</span>
 								{item.readAt === null ? (
@@ -201,9 +205,7 @@ export function NotificationCenter() {
 	}
 
 	const triggerLabel =
-		unreadCount > 0
-			? `${unreadCount} unread notifications`
-			: "Notifications";
+		unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications";
 	const triggerContent = (
 		<>
 			<BellIcon />

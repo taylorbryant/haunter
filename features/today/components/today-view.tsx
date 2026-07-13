@@ -10,7 +10,7 @@ import { listPagesQueryOptions } from "@/features/pages/client/queries";
 import { formatEditedAt } from "@/features/pages/lib/format-edited-at";
 import { TaskList } from "@/features/tasks/components/task-list";
 import { formatTodayDate, selectRecentPages } from "@/features/today/lib/today";
-import { localDateAndHour } from "@/lib/timezone";
+import { localDateAndTime } from "@/lib/timezone";
 
 export function TodayView({
 	workspaceId,
@@ -25,7 +25,8 @@ export function TodayView({
 	const settingsQuery = useQuery(notificationSettingsQueryOptions());
 	const pagesQuery = useQuery(listPagesQueryOptions(workspaceId));
 	const timezone = settingsQuery.data?.timezone ?? initialTimezone;
-	const todayDate = localDateAndHour(new Date(now), timezone).date;
+	const localNow = localDateAndTime(new Date(now), timezone);
+	const todayDate = localNow.date;
 	const recentPages = selectRecentPages(pagesQuery.data?.items ?? []);
 
 	useEffect(() => {
@@ -46,6 +47,7 @@ export function TodayView({
 				workspaceId={workspaceId}
 				variant="today"
 				todayDate={todayDate}
+				currentTime={localNow.time}
 			/>
 
 			{pagesQuery.isError ? (
