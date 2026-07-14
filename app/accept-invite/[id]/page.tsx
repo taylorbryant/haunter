@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { GhostLogo } from "@/components/ghost-logo";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,10 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import {
+	acceptWorkspaceInvitation,
+	INVITATION_UNAVAILABLE_MESSAGE,
+} from "@/features/workspaces/client/accept-workspace-invitation";
 
 type Invitation = {
 	organizationId: string;
@@ -32,57 +36,134 @@ export default function AcceptInvitePage({
 	const { id } = use(params);
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
+	const userId = session?.user.id ?? null;
 	const organizationsQuery = authClient.useListOrganizations();
+	const actionInFlight = useRef(false);
+	const loadedInvitationKey = useRef<string | null>(null);
 	const [invite, setInvite] = useState<Invitation | null>(null);
 	const [status, setStatus] = useState<Status>("loading");
 	const [error, setError] = useState("");
 
 	useEffect(() => {
+		// Accepting an invitation refreshes the session. Once an action starts,
+		// never reload the single-use invitation in response to that refresh.
+		if (actionInFlight.current) return;
 		if (isPending) return;
-		if (!session) {
+		if (!userId) {
+			setInvite(null);
 			setStatus("need-auth");
 			return;
 		}
+		const invitationKey = `${id}:${userId}`;
+		if (loadedInvitationKey.current === invitationKey) return;
+		setError("");
+		setStatus("loading");
+		let cancelled = false;
 		authClient.organization
 			.getInvitation({ query: { id } })
 			.then(({ data, error: inviteError }) => {
+				if (cancelled) return;
+				loadedInvitationKey.current = invitationKey;
 				if (inviteError || !data) {
 					setError(
-						inviteError?.message ?? "This invitation is no longer valid.",
+						inviteError?.code === "INVITATION_NOT_FOUND"
+							? INVITATION_UNAVAILABLE_MESSAGE
+							: (inviteError?.message ?? "This invitation is no longer valid."),
 					);
 					setStatus("error");
 					return;
 				}
 				setInvite(data as Invitation);
 				setStatus("ready");
+			})
+			.catch((loadError: unknown) => {
+				if (cancelled) return;
+				loadedInvitationKey.current = invitationKey;
+				setError(
+					loadError instanceof Error
+						? loadError.message
+						: "Could not load this invitation.",
+				);
+				setStatus("error");
 			});
-	}, [id, session, isPending]);
+		return () => {
+			cancelled = true;
+		};
+	}, [id, userId, isPending]);
 
-	async function accept() {
-		setStatus("working");
-		const { data, error: acceptError } =
-			await authClient.organization.acceptInvitation({ invitationId: id });
-		if (acceptError) {
-			setError(acceptError.message ?? "Could not accept this invitation.");
-			setStatus("error");
-			return;
-		}
-		const orgId =
-			invite?.organizationId ?? data?.invitation?.organizationId ?? null;
-		if (orgId) {
-			await authClient.organization.setActive({ organizationId: orgId });
+	async function enterWorkspace(orgId: string) {
+		const { error: activeError } = await authClient.organization.setActive({
+			organizationId: orgId,
+		});
+		if (activeError) {
+			throw new Error(
+				activeError.message ?? "Could not open the new workspace.",
+			);
 		}
 		// Refresh the shared org-list cache before redirecting so the switcher
 		// includes the workspace we just joined (mirror of the leave() fix).
 		await organizationsQuery.refetch?.();
-		router.push(orgId ? `/w/${orgId}` : "/");
+		setStatus("done");
+		// The invitation is single-use; replacing keeps Back from reopening it.
+		router.replace(`/w/${orgId}`);
 		router.refresh();
 	}
 
-	async function decline() {
+	function showActionError(message: string) {
+		actionInFlight.current = false;
+		setError(message);
+		setStatus("error");
+	}
+
+	async function accept() {
+		// State updates do not disable the button until the next render. This ref
+		// prevents a fast double click from submitting the single-use invite twice.
+		if (actionInFlight.current) return;
+		actionInFlight.current = true;
+		setError("");
 		setStatus("working");
-		await authClient.organization.rejectInvitation({ invitationId: id });
-		router.push("/");
+		const result = await acceptWorkspaceInvitation(
+			{
+				invitationId: id,
+				knownOrganizationId: invite?.organizationId ?? null,
+			},
+			{
+				acceptInvitation: (invitationId) =>
+					authClient.organization.acceptInvitation({ invitationId }),
+				listOrganizations: () => authClient.organization.list(),
+			},
+		);
+		if (!result.ok) {
+			showActionError(result.error);
+			return;
+		}
+		try {
+			await enterWorkspace(result.organizationId);
+		} catch (activationError) {
+			showActionError(
+				activationError instanceof Error
+					? activationError.message
+					: "Could not open the new workspace.",
+			);
+		}
+	}
+
+	async function decline() {
+		if (actionInFlight.current) return;
+		actionInFlight.current = true;
+		setError("");
+		setStatus("working");
+		const { error: rejectError } =
+			await authClient.organization.rejectInvitation({ invitationId: id });
+		if (rejectError) {
+			showActionError(
+				rejectError.code === "INVITATION_NOT_FOUND"
+					? INVITATION_UNAVAILABLE_MESSAGE
+					: (rejectError.message ?? "Could not decline this invitation."),
+			);
+			return;
+		}
+		router.replace("/");
 	}
 
 	return (
