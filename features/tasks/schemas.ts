@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+export const TASK_TITLE_MAX_LENGTH = 1_000;
+export const TASK_TITLE_TOO_LONG_MESSAGE =
+	"Task titles can be up to 1,000 characters.";
+
+const TaskTitleInputSchema = z
+	.string()
+	.min(1)
+	.max(TASK_TITLE_MAX_LENGTH, { message: TASK_TITLE_TOO_LONG_MESSAGE });
+
 export const DueDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
 	message: "Due date must be YYYY-MM-DD",
 });
@@ -70,7 +79,7 @@ export const TaskIdInputSchema = z.object({
 export const CreateTaskInputSchema = z
 	.object({
 		workspaceId: z.string().min(1),
-		title: z.string().min(1).max(300),
+		title: TaskTitleInputSchema,
 		dueDate: DueDateSchema.optional(),
 		dueTime: DueTimeSchema.optional(),
 		// Omitted = assign to the creator (quick-add is "a task for me").
@@ -89,7 +98,7 @@ export const UpdateTaskBodySchema = z.object({
 	completed: z.boolean().optional(),
 	dueDate: DueDateSchema.nullable().optional(),
 	dueTime: DueTimeSchema.nullable().optional(),
-	title: z.string().min(1).max(300).optional(),
+	title: TaskTitleInputSchema.optional(),
 	assigneeId: z.string().nullable().optional(),
 });
 

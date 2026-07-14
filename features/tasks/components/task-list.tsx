@@ -1,5 +1,6 @@
 "use client";
 
+import { contractErrorMessage } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
@@ -19,7 +20,10 @@ import {
 	listTasksQueryOptions,
 	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
-import { TaskComposer } from "@/features/tasks/components/task-composer";
+import {
+	TaskComposer,
+	type TaskSubmissionResult,
+} from "@/features/tasks/components/task-composer";
 import type {
 	TaskFilter,
 	TaskScope,
@@ -162,8 +166,8 @@ export function TaskList({
 		dueDate: string | null;
 		dueTime: string | null;
 		assigneeId?: string | null;
-	}): Promise<boolean> {
-		return new Promise((resolve) => {
+	}): Promise<TaskSubmissionResult> {
+		return new Promise<TaskSubmissionResult>((resolve) => {
 			createMutation.mutate(
 				{
 					body: {
@@ -179,9 +183,16 @@ export function TaskList({
 				{
 					onSuccess: async () => {
 						await refresh();
-						resolve(true);
+						resolve({ ok: true });
 					},
-					onError: () => resolve(false),
+					onError: (error) =>
+						resolve({
+							ok: false,
+							error: contractErrorMessage(
+								error,
+								"Task could not be added. Try again.",
+							),
+						}),
 				},
 			);
 		});

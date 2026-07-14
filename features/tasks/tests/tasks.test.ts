@@ -21,6 +21,7 @@ import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
+import { TASK_TITLE_MAX_LENGTH, TASK_TITLE_TOO_LONG_MESSAGE } from "../schemas";
 import {
 	createTaskUseCase,
 	deleteTaskUseCase,
@@ -449,6 +450,31 @@ describe("tasks use cases", () => {
 			{ ctx },
 		);
 		expect(all.items).toHaveLength(0);
+	});
+
+	it("accepts detailed task titles and rejects only genuinely excessive ones", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+		const title =
+			"Tell Taylor that when I accepted my invite to the Playground workspace, the app said `Invitation not found` in error text, but then redirected me to the new workspace anyway so there is some sort of race condition or state identification bug in the workspace invitations flow on acceptance. Possibly could be I waited too many hours to accept the invite?";
+
+		expect(title.length).toBeGreaterThan(300);
+		const created = await tester.run(
+			createTaskUseCase,
+			{ workspaceId: workspace.id, title },
+			{ ctx },
+		);
+		expect(created.title).toBe(title);
+
+		await expect(
+			tester.run(
+				createTaskUseCase,
+				{
+					workspaceId: workspace.id,
+					title: "x".repeat(TASK_TITLE_MAX_LENGTH + 1),
+				},
+				{ ctx },
+			),
+		).rejects.toThrow(TASK_TITLE_TOO_LONG_MESSAGE);
 	});
 
 	it("requires a due date for a time and clears the time with the date", async () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarIcon, PlusIcon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { DueDatePicker, type DueDateValue } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -10,7 +10,13 @@ import {
 	humanizeDueDate,
 	parseTaskInput,
 } from "@/features/tasks/lib/parse-task-input";
+import {
+	TASK_TITLE_MAX_LENGTH,
+	TASK_TITLE_TOO_LONG_MESSAGE,
+} from "@/features/tasks/schemas";
 import { cn } from "@/lib/utils";
+
+export type TaskSubmissionResult = { ok: true } | { ok: false; error: string };
 
 /**
  * Todoist-style inline composer: natural-language dates are highlighted in
@@ -29,11 +35,12 @@ export function TaskComposer({
 		dueDate: string | null;
 		dueTime: string | null;
 		assigneeId?: string | null;
-	}) => Promise<boolean>;
+	}) => Promise<TaskSubmissionResult>;
 	onCancel?: () => void;
 	defaultDueDate?: string | null;
 	mode?: "full" | "compact";
 }) {
+	const errorId = useId();
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [text, setText] = useState("");
 	// Undefined means untouched, so a parsed phrase can override the contextual
@@ -44,6 +51,7 @@ export function TaskComposer({
 	const [assigneeId, setAssigneeId] = useState<string | null>(currentUserId);
 	const [assigneeTouched, setAssigneeTouched] = useState(false);
 	const [pending, setPending] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (!assigneeTouched) setAssigneeId(currentUserId);
@@ -71,10 +79,16 @@ export function TaskComposer({
 
 	async function submit() {
 		if (!title || pending) return;
+		if (title.length > TASK_TITLE_MAX_LENGTH) {
+			setError(TASK_TITLE_TOO_LONG_MESSAGE);
+			inputRef.current?.focus();
+			return;
+		}
+		setError(null);
 		setPending(true);
 		const submitAssigneeId =
 			assigneeTouched || assigneeId !== null ? assigneeId : undefined;
-		const ok = await onSubmit({
+		const result = await onSubmit({
 			title,
 			dueDate,
 			dueTime,
@@ -83,14 +97,21 @@ export function TaskComposer({
 				: {}),
 		});
 		setPending(false);
-		if (ok) {
+		if (result.ok) {
 			setText("");
 			setManualDue(undefined);
 			setIgnoredMatchText(null);
 			setAssigneeId(currentUserId);
 			setAssigneeTouched(false);
 			inputRef.current?.focus();
+		} else {
+			setError(result.error);
 		}
+	}
+
+	function changeText(next: string) {
+		setText(next);
+		if (error) setError(null);
 	}
 
 	function clearDate() {
@@ -101,53 +122,66 @@ export function TaskComposer({
 
 	if (mode === "compact") {
 		return (
-			<div className="flex min-w-0 items-center gap-2 border-b py-2">
-				<div className="relative min-w-0 flex-1">
-					{activeMatch ? (
-						<div
-							aria-hidden
-							className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre font-medium text-base text-foreground leading-6 sm:text-sm"
-						>
-							{text.slice(0, activeMatch.index)}
-							<span className="-mx-0.5 rounded-sm bg-primary/10 px-0.5 py-0.5">
-								{activeMatch.text}
-							</span>
-							{text.slice(activeMatch.index + activeMatch.text.length)}
-						</div>
+			<div className="border-b py-2">
+				<div className="flex min-w-0 items-center gap-2">
+					<div className="relative min-w-0 flex-1">
+						{activeMatch ? (
+							<div
+								aria-hidden
+								className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre font-medium text-base text-foreground leading-6 sm:text-sm"
+							>
+								{text.slice(0, activeMatch.index)}
+								<span className="-mx-0.5 rounded-sm bg-primary/10 px-0.5 py-0.5">
+									{activeMatch.text}
+								</span>
+								{text.slice(activeMatch.index + activeMatch.text.length)}
+							</div>
+						) : null}
+						<input
+							ref={inputRef}
+							value={text}
+							placeholder="Add a task for today…"
+							aria-label="Add a task"
+							aria-invalid={error ? true : undefined}
+							aria-describedby={error ? errorId : undefined}
+							className={cn(
+								"keyboard-focus-ring relative w-full rounded-sm bg-transparent font-medium text-base leading-6 outline-none [--keyboard-focus-ring-size:2px] placeholder:text-muted-foreground sm:text-sm",
+								activeMatch && "text-transparent caret-foreground",
+							)}
+							onChange={(event) => changeText(event.target.value)}
+							onKeyDown={(event) => {
+								if (event.key === "Enter") submit();
+							}}
+						/>
+					</div>
+					{dueDate ? (
+						<span className="hidden shrink-0 items-center gap-1 text-muted-foreground text-xs sm:flex">
+							<CalendarIcon className="size-3.5" aria-hidden="true" />
+							{dueDate === defaultDueDate && dueTime === null
+								? "Today"
+								: humanizeDueDate(dueDate, dueTime)}
+						</span>
 					) : null}
-					<input
-						ref={inputRef}
-						value={text}
-						placeholder="Add a task for today…"
-						aria-label="Add a task"
-						className={cn(
-							"keyboard-focus-ring relative w-full rounded-sm bg-transparent font-medium text-base leading-6 outline-none [--keyboard-focus-ring-size:2px] placeholder:text-muted-foreground sm:text-sm",
-							activeMatch && "text-transparent caret-foreground",
-						)}
-						onChange={(event) => setText(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key === "Enter") submit();
-						}}
-					/>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-sm"
+						aria-label={pending ? "Adding task" : "Add task"}
+						disabled={!title || pending}
+						onClick={submit}
+					>
+						<PlusIcon />
+					</Button>
 				</div>
-				{dueDate ? (
-					<span className="hidden shrink-0 items-center gap-1 text-muted-foreground text-xs sm:flex">
-						<CalendarIcon className="size-3.5" aria-hidden="true" />
-						{dueDate === defaultDueDate && dueTime === null
-							? "Today"
-							: humanizeDueDate(dueDate, dueTime)}
-					</span>
+				{error ? (
+					<p
+						id={errorId}
+						role="alert"
+						className="pt-1 text-destructive text-sm"
+					>
+						{error}
+					</p>
 				) : null}
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					aria-label={pending ? "Adding task" : "Add task"}
-					disabled={!title || pending}
-					onClick={submit}
-				>
-					<PlusIcon />
-				</Button>
 			</div>
 		);
 	}
@@ -181,17 +215,24 @@ export function TaskComposer({
 						value={text}
 						placeholder="Task name, e.g. “pick up meds tomorrow at 2”"
 						aria-label="Task name"
+						aria-invalid={error ? true : undefined}
+						aria-describedby={error ? errorId : undefined}
 						className={cn(
 							"keyboard-focus-ring relative w-full rounded-sm bg-transparent font-medium text-base leading-6 outline-none [--keyboard-focus-ring-size:2px] placeholder:text-muted-foreground sm:text-sm",
 							activeMatch && "text-transparent caret-foreground",
 						)}
-						onChange={(event) => setText(event.target.value)}
+						onChange={(event) => changeText(event.target.value)}
 						onKeyDown={(event) => {
 							if (event.key === "Enter") submit();
 							if (event.key === "Escape") onCancel?.();
 						}}
 					/>
 				</div>
+				{error ? (
+					<p id={errorId} role="alert" className="text-destructive text-sm">
+						{error}
+					</p>
+				) : null}
 				<div className="flex items-center gap-1.5">
 					<AssigneePicker
 						value={assigneeId}
