@@ -25,6 +25,16 @@ function normalizeHex(color: string | undefined) {
 describe("code highlighting themes", () => {
 	test("resolves syntax highlighting from the app theme", () => {
 		expect(getCodeTheme("light").id).toBe("github-light");
+		expect(getCodeTheme("alucard")).toMatchObject({
+			id: "alucard",
+			background: "#fffbeb",
+			foreground: "#1f1f1f",
+		});
+		expect(getCodeTheme("rose-pine-dawn")).toMatchObject({
+			id: "rose-pine-dawn",
+			background: "#faf4ed",
+			foreground: "#575279",
+		});
 		expect(getCodeTheme("catppuccin")).toMatchObject({
 			id: "catppuccin-mocha",
 			background: "#1e1e2e",
@@ -57,6 +67,14 @@ describe("code highlighting themes", () => {
 			expect(normalizeHex(tokens.fg)).toBe(
 				normalizeHex(appTheme.syntaxTheme.foreground),
 			);
+			if (appTheme.id === "alucard") {
+				const colors = tokens.tokens
+					.flat()
+					.map((token) => normalizeHex(token.color));
+				expect(colors).toContain("#a3144d");
+				expect(colors).toContain("#644ac9");
+				expect(colors).not.toContain("#ff79c6");
+			}
 		}
 	});
 

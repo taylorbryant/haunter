@@ -57,6 +57,13 @@ const createHaunterHighlighter = createBundledHighlighter({
 	},
 	themes: {
 		"github-light": () => import("@shikijs/themes/github-light"),
+		alucard: () => import("./alucard-syntax-theme"),
+		"catppuccin-latte": () => import("@shikijs/themes/catppuccin-latte"),
+		"rose-pine-dawn": () => import("@shikijs/themes/rose-pine-dawn"),
+		"gruvbox-light-medium": () =>
+			import("@shikijs/themes/gruvbox-light-medium"),
+		"everforest-light": () => import("@shikijs/themes/everforest-light"),
+		"solarized-light": () => import("@shikijs/themes/solarized-light"),
 		"github-dark": () => import("@shikijs/themes/github-dark"),
 		dracula: () => import("@shikijs/themes/dracula"),
 		"catppuccin-mocha": () => import("@shikijs/themes/catppuccin-mocha"),

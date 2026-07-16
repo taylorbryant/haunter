@@ -1,8 +1,8 @@
 "use client";
 
 import {
-	BotIcon,
 	BellIcon,
+	BotIcon,
 	PaletteIcon,
 	Trash2Icon,
 	UserIcon,
@@ -153,7 +153,7 @@ export function SettingsDialog({
 							<SidebarGroup>
 								<SidebarGroupLabel>Account</SidebarGroupLabel>
 								<SidebarGroupContent>
-									<SidebarMenu>
+									<SidebarMenu className="gap-0.5">
 										{SECTIONS.map((item) => (
 											<SidebarMenuItem key={item.id}>
 												<SidebarMenuButton

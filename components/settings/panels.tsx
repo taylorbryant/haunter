@@ -6,7 +6,7 @@ import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { authClient } from "@/client/auth-client";
 import { useCurrentUser } from "@/components/app-session-provider";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemeSettings } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -200,17 +200,9 @@ export function AppearancePanel() {
 		<Panel>
 			<PanelHeader
 				title="Appearance"
-				description="Choose how Haunter looks on this device."
+				description="Choose a mode and the palette Haunter uses for light and dark appearances."
 			/>
-			<div className="flex items-center justify-between gap-4">
-				<div className="flex flex-col gap-0.5">
-					<p className="font-medium text-sm">Theme</p>
-					<p className="text-muted-foreground text-sm">
-						Choose a built-in palette or follow your system preference.
-					</p>
-				</div>
-				<ThemeToggle />
-			</div>
+			<ThemeSettings />
 		</Panel>
 	);
 }

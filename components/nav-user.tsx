@@ -1,10 +1,18 @@
 "use client";
 
-import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon } from "lucide-react";
+import {
+	ChevronsUpDownIcon,
+	LogOutIcon,
+	MonitorIcon,
+	MoonIcon,
+	SettingsIcon,
+	SunIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { useCommand } from "@/components/command-palette/registry";
 import { SettingsDialog } from "@/components/settings-dialog";
+import { useThemePreferences } from "@/components/theme-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +30,8 @@ import {
 	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -31,6 +41,52 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { isThemeMode, type ThemeMode } from "@/lib/themes";
+import { cn } from "@/lib/utils";
+
+const THEME_MODES = [
+	{ id: "system", label: "System", icon: MonitorIcon },
+	{ id: "light", label: "Light", icon: SunIcon },
+	{ id: "dark", label: "Dark", icon: MoonIcon },
+] as const satisfies ReadonlyArray<{
+	id: ThemeMode;
+	label: string;
+	icon: typeof MonitorIcon;
+}>;
+
+function ThemeModePicker() {
+	const { mode, setMode } = useThemePreferences();
+
+	return (
+		<div className="flex items-center justify-between gap-3 px-2 py-1.5">
+			<span className="text-muted-foreground text-sm">Theme</span>
+			<DropdownMenuRadioGroup
+				value={mode}
+				onValueChange={(value) => {
+					if (isThemeMode(value)) setMode(value);
+				}}
+				aria-label="Theme mode"
+				className="flex items-center gap-0.5 rounded-md border border-border bg-muted/40 p-0.5"
+			>
+				{THEME_MODES.map((option) => (
+					<DropdownMenuRadioItem
+						key={option.id}
+						value={option.id}
+						closeOnClick={false}
+						title={option.label}
+						aria-label={option.label}
+						className={cn(
+							"size-7 justify-center p-0 text-muted-foreground transition-colors [&>[data-slot=dropdown-menu-radio-item-indicator]]:hidden",
+							mode === option.id && "bg-background text-foreground shadow-xs",
+						)}
+					>
+						<option.icon className="size-4" />
+					</DropdownMenuRadioItem>
+				))}
+			</DropdownMenuRadioGroup>
+		</div>
+	);
+}
 
 function initials(name: string): string {
 	return (
@@ -157,6 +213,8 @@ export function NavUser({
 									</div>
 								</DropdownMenuLabel>
 							</DropdownMenuGroup>
+							<DropdownMenuSeparator />
+							<ThemeModePicker />
 							<DropdownMenuSeparator />
 							<DropdownMenuItem onClick={() => setSettingsOpen(true)}>
 								<SettingsIcon />

@@ -2,9 +2,13 @@ import { describe, expect, test } from "bun:test";
 import {
 	APP_THEME_IDS,
 	APP_THEMES,
+	DARK_APP_THEMES,
+	DEFAULT_THEME_PREFERENCES,
 	getResolvedThemeColor,
 	getResolvedThemeColorScheme,
-	THEME_OPTIONS,
+	LIGHT_APP_THEMES,
+	parseThemePreferences,
+	resolveThemePreference,
 } from "./themes";
 
 const REQUIRED_PALETTE_TOKENS = [
@@ -40,13 +44,20 @@ const REQUIRED_PALETTE_TOKENS = [
 	"sidebar-border",
 	"sidebar-ring",
 	"code-block-background",
+	"code-block-header-background",
 	"code-block-foreground",
 ] as const;
 
 describe("app themes", () => {
-	test("registers every built-in palette as a selectable app theme", () => {
+	test("registers every built-in palette in its appearance group", () => {
 		expect(APP_THEME_IDS).toEqual([
 			"light",
+			"alucard",
+			"catppuccin-latte",
+			"rose-pine-dawn",
+			"gruvbox-light",
+			"everforest-light",
+			"solarized-light",
 			"dark",
 			"dracula",
 			"catppuccin",
@@ -57,10 +68,66 @@ describe("app themes", () => {
 			"everforest",
 			"solarized",
 		]);
-		expect(THEME_OPTIONS.map((theme) => theme.id)).toEqual([
-			"system",
-			...APP_THEME_IDS,
+		expect(LIGHT_APP_THEMES.map((theme) => theme.id)).toEqual([
+			"light",
+			"alucard",
+			"catppuccin-latte",
+			"rose-pine-dawn",
+			"gruvbox-light",
+			"everforest-light",
+			"solarized-light",
 		]);
+		expect(DARK_APP_THEMES.map((theme) => theme.id)).toEqual([
+			"dark",
+			"dracula",
+			"catppuccin",
+			"gruvbox",
+			"tokyo-night",
+			"nord",
+			"rose-pine",
+			"everforest",
+			"solarized",
+		]);
+	});
+
+	test("migrates the previous single theme choice into mode preferences", () => {
+		expect(parseThemePreferences({ legacyTheme: "dracula" })).toEqual({
+			mode: "dark",
+			lightTheme: "light",
+			darkTheme: "dracula",
+		});
+		expect(parseThemePreferences({ legacyTheme: "system" })).toEqual(
+			DEFAULT_THEME_PREFERENCES,
+		);
+		expect(
+			parseThemePreferences({
+				mode: "system",
+				lightTheme: "light",
+				darkTheme: "catppuccin",
+				legacyTheme: "solarized",
+			}),
+		).toEqual({
+			mode: "system",
+			lightTheme: "light",
+			darkTheme: "catppuccin",
+		});
+	});
+
+	test("resolves system, light, and dark modes with independent palettes", () => {
+		const preferences = {
+			mode: "system",
+			lightTheme: "light",
+			darkTheme: "dracula",
+		} as const;
+
+		expect(resolveThemePreference(preferences, "light")).toBe("light");
+		expect(resolveThemePreference(preferences, "dark")).toBe("dracula");
+		expect(
+			resolveThemePreference({ ...preferences, mode: "light" }, "dark"),
+		).toBe("light");
+		expect(
+			resolveThemePreference({ ...preferences, mode: "dark" }, "light"),
+		).toBe("dracula");
 	});
 
 	test("pairs every app palette with its matching syntax theme", () => {
@@ -70,6 +137,12 @@ describe("app themes", () => {
 			),
 		).toEqual({
 			light: "github-light",
+			alucard: "alucard",
+			"catppuccin-latte": "catppuccin-latte",
+			"rose-pine-dawn": "rose-pine-dawn",
+			"gruvbox-light": "gruvbox-light-medium",
+			"everforest-light": "everforest-light",
+			"solarized-light": "solarized-light",
 			dark: "github-dark",
 			dracula: "dracula",
 			catppuccin: "catppuccin-mocha",
@@ -120,18 +193,17 @@ describe("app themes", () => {
 				`--code-block-background: ${theme.syntaxTheme.background};`,
 			);
 			expect(block).toContain(
+				`--code-block-header-background: ${theme.syntaxTheme.headerBackground};`,
+			);
+			expect(block).toContain(
 				`--code-block-foreground: ${theme.syntaxTheme.foreground};`,
 			);
 		}
 	});
 
-	test("treats named palettes as dark for embedded surfaces", () => {
-		const namedPalettes = APP_THEMES.filter(
-			(theme) => !["light", "dark"].includes(theme.id),
-		);
-
-		for (const theme of namedPalettes) {
-			expect(getResolvedThemeColorScheme(theme.id)).toBe("dark");
+	test("reports the scheme and browser color for every palette", () => {
+		for (const theme of APP_THEMES) {
+			expect(getResolvedThemeColorScheme(theme.id)).toBe(theme.colorScheme);
 			expect(getResolvedThemeColor(theme.id)).toBe(theme.themeColor);
 		}
 	});
