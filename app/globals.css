@@ -491,6 +491,8 @@
 	align-items: stretch;
 	overflow: hidden;
 	padding: 0;
+	border: 1px solid
+		color-mix(in oklab, var(--prosemirror-highlight, #f8f8f2) 14%, transparent);
 	background-color: var(--prosemirror-highlight-bg, #282a36);
 	color: var(--prosemirror-highlight, #f8f8f2);
 }
