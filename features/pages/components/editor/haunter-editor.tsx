@@ -67,6 +67,7 @@ import {
 	type OpenCodeBlockDialogDetail,
 } from "./code-block-dialog-event";
 import { CodeEditDialog } from "./code-edit-dialog";
+import { useSyncEditorCodeTheme } from "./code-theme";
 import { editorSchema } from "./schema";
 import { TaskBlockCurrentUserContext } from "./task-block";
 
@@ -353,6 +354,7 @@ export default function HaunterEditor({
 					(normalizedInitialContent as never)
 				: undefined,
 	});
+	useSyncEditorCodeTheme(editor, resolvedTheme);
 
 	// Seed a brand-new shared doc from the database copy exactly once.
 	const seededRef = useRef(false);

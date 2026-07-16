@@ -61,6 +61,25 @@ describe("app themes", () => {
 		]);
 	});
 
+	test("pairs every app palette with its matching syntax theme", () => {
+		expect(
+			Object.fromEntries(
+				APP_THEMES.map((theme) => [theme.id, theme.syntaxTheme.id]),
+			),
+		).toEqual({
+			light: "github-light",
+			dark: "github-dark",
+			dracula: "dracula",
+			catppuccin: "catppuccin-mocha",
+			gruvbox: "gruvbox-dark-medium",
+			"tokyo-night": "tokyo-night",
+			nord: "nord",
+			"rose-pine": "rose-pine",
+			everforest: "everforest-dark",
+			solarized: "solarized-dark",
+		});
+	});
+
 	test("scopes palette variables to the document root", async () => {
 		const css = await Bun.file(
 			new URL("../app/globals.css", import.meta.url),

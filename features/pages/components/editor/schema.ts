@@ -13,11 +13,11 @@ import {
 } from "@/features/pages/lib/code-block-language";
 import { calloutBlockSpec } from "./callout-block";
 import { canvasBlockSpec } from "./canvas-block";
+import { OPEN_CODE_BLOCK_DIALOG_EVENT } from "./code-block-dialog-event";
 import {
 	getCodeBlockIndentPositions,
 	getCodeBlockUnindentRanges,
 } from "./code-block-indent";
-import { OPEN_CODE_BLOCK_DIALOG_EVENT } from "./code-block-dialog-event";
 import { getHaunterHighlighter } from "./code-theme";
 import { dividerBlockSpec } from "./divider-block";
 import { mentionSpec } from "./mention";
@@ -102,7 +102,7 @@ const baseCodeBlockSpec = createCodeBlockSpec({
 	...codeBlockOptions,
 	defaultLanguage: "sql",
 	supportedLanguages,
-	// Shared app highlighter, created with the user's chosen theme.
+	// Shared app highlighter, paired with the resolved appearance theme.
 	createHighlighter: () => getHaunterHighlighter(),
 });
 
@@ -135,10 +135,7 @@ const codeBlockUnindentExtension = createExtension({
 		"Shift-Tab": ({ editor }) =>
 			editor.transact((transaction) => {
 				const { $from, $to } = transaction.selection;
-				if (
-					$from.parent.type.name !== "codeBlock" ||
-					!$from.sameParent($to)
-				) {
+				if ($from.parent.type.name !== "codeBlock" || !$from.sameParent($to)) {
 					return false;
 				}
 
@@ -149,10 +146,7 @@ const codeBlockUnindentExtension = createExtension({
 					$to.parentOffset,
 				);
 				for (const range of ranges.reverse()) {
-					transaction.delete(
-						blockStart + range.from,
-						blockStart + range.to,
-					);
+					transaction.delete(blockStart + range.from, blockStart + range.to);
 				}
 
 				// Consume Shift+Tab even when this line has no indentation so focus

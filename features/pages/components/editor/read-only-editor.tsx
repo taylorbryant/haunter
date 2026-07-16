@@ -9,6 +9,7 @@ import { useTheme } from "next-themes";
 import type { BlockJson } from "@/features/pages/schemas";
 import { SharedPageTokenProvider } from "@/features/shares/components/shared-page-context";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
+import { useSyncEditorCodeTheme } from "./code-theme";
 import { editorSchema } from "./schema";
 
 /**
@@ -30,6 +31,7 @@ export default function ReadOnlyEditor({
 		// BlockNote rejects an empty initialContent array.
 		initialContent: content.length ? (content as never) : undefined,
 	});
+	useSyncEditorCodeTheme(editor, resolvedTheme);
 
 	const view = (
 		<div className="haunter-editor">

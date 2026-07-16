@@ -1,7 +1,6 @@
 "use client";
 
 import { rootFormError } from "@beignet/react-hook-form";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -10,20 +9,9 @@ import { useCurrentUser } from "@/components/app-session-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import {
-	CODE_THEMES,
-	setCodeThemeId,
-	useCodeThemeId,
-} from "@/features/pages/components/editor/code-theme";
 import { gravatarUrl } from "@/lib/gravatar";
 import { cn } from "@/lib/utils";
 
@@ -208,10 +196,6 @@ export function ProfilePanel() {
 }
 
 export function AppearancePanel() {
-	const codeThemeId = useCodeThemeId();
-	const codeTheme =
-		CODE_THEMES.find((theme) => theme.id === codeThemeId) ?? CODE_THEMES[0];
-
 	return (
 		<Panel>
 			<PanelHeader
@@ -226,43 +210,6 @@ export function AppearancePanel() {
 					</p>
 				</div>
 				<ThemeToggle />
-			</div>
-			<div className="flex items-center justify-between gap-4">
-				<div className="flex flex-col gap-0.5">
-					<p className="font-medium text-sm">Code highlighting</p>
-					<p className="text-muted-foreground text-sm">
-						Syntax theme for code blocks. Applies to pages you open next.
-					</p>
-				</div>
-				<DropdownMenu>
-					<DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
-						<span
-							aria-hidden
-							className="size-3 rounded-full border"
-							style={{ backgroundColor: codeTheme.bg }}
-						/>
-						{codeTheme.label}
-						<ChevronDownIcon className="opacity-50" />
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						{CODE_THEMES.map((theme) => (
-							<DropdownMenuItem
-								key={theme.id}
-								onClick={() => setCodeThemeId(theme.id)}
-							>
-								<span
-									aria-hidden
-									className="size-3 rounded-full border"
-									style={{ backgroundColor: theme.bg }}
-								/>
-								{theme.label}
-								{theme.id === codeThemeId ? (
-									<CheckIcon className="ml-auto" />
-								) : null}
-							</DropdownMenuItem>
-						))}
-					</DropdownMenuContent>
-				</DropdownMenu>
 			</div>
 		</Panel>
 	);

@@ -1,61 +1,38 @@
 "use client";
 
+import type { BlockNoteEditor } from "@blocknote/core";
 import { createBundledHighlighter } from "@shikijs/core";
 import { createJavaScriptRegexEngine } from "@shikijs/engine-javascript";
 import type { HighlighterGeneric } from "@shikijs/types";
-import { useSyncExternalStore } from "react";
+import { useEffect } from "react";
+import {
+	APP_THEME_IDS,
+	getResolvedSyntaxTheme,
+	type SyntaxThemeId,
+} from "@/lib/themes";
 
-/** Curated shiki themes offered in Appearance settings. */
-export const CODE_THEMES = [
-	{ id: "dracula", label: "Dracula", bg: "#282a36", fg: "#f8f8f2" },
-	{ id: "github-dark", label: "GitHub Dark", bg: "#24292e", fg: "#e1e4e8" },
-	{ id: "github-light", label: "GitHub Light", bg: "#ffffff", fg: "#24292e" },
-	{ id: "nord", label: "Nord", bg: "#2e3440", fg: "#d8dee9" },
-	{ id: "one-dark-pro", label: "One Dark Pro", bg: "#282c34", fg: "#abb2bf" },
-] as const;
+type CodeThemeEditor = Pick<BlockNoteEditor, "_tiptapEditor">;
 
-export type CodeThemeId = (typeof CODE_THEMES)[number]["id"];
+function getDocumentResolvedTheme(): string {
+	if (typeof document === "undefined") return "light";
 
-const STORAGE_KEY = "haunter.code-theme";
-const DEFAULT_THEME: CodeThemeId = "dracula";
-
-const listeners = new Set<() => void>();
-
-export function getCodeThemeId(): CodeThemeId {
-	if (typeof window === "undefined") return DEFAULT_THEME;
-	const stored = localStorage.getItem(STORAGE_KEY);
-	return CODE_THEMES.some((theme) => theme.id === stored)
-		? (stored as CodeThemeId)
-		: DEFAULT_THEME;
-}
-
-export function getCodeTheme() {
-	const id = getCodeThemeId();
-	return CODE_THEMES.find((theme) => theme.id === id) ?? CODE_THEMES[0];
-}
-
-export function setCodeThemeId(id: CodeThemeId) {
-	localStorage.setItem(STORAGE_KEY, id);
-	resetHighlighterCaches();
-	for (const listener of listeners) {
-		listener();
-	}
-}
-
-export function useCodeThemeId(): CodeThemeId {
-	return useSyncExternalStore(
-		(listener) => {
-			listeners.add(listener);
-			return () => listeners.delete(listener);
-		},
-		getCodeThemeId,
-		() => DEFAULT_THEME,
+	const appTheme = APP_THEME_IDS.find((theme) =>
+		document.documentElement.classList.contains(theme),
 	);
+	if (appTheme) return appTheme;
+
+	return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+		? "dark"
+		: "light";
+}
+
+export function getCodeTheme(resolvedTheme?: string) {
+	return getResolvedSyntaxTheme(resolvedTheme ?? getDocumentResolvedTheme());
 }
 
 /**
  * One shiki bundle for the whole app: the precompiled grammars for our
- * language allowlist plus the curated themes (each loaded on demand).
+ * language allowlist plus each appearance theme's matching syntax palette.
  */
 const createHaunterHighlighter = createBundledHighlighter({
 	langs: {
@@ -79,33 +56,132 @@ const createHaunterHighlighter = createBundledHighlighter({
 		md: () => import("@shikijs/langs-precompiled/markdown"),
 	},
 	themes: {
-		dracula: () => import("@shikijs/themes/dracula"),
-		"github-dark": () => import("@shikijs/themes/github-dark"),
 		"github-light": () => import("@shikijs/themes/github-light"),
+		"github-dark": () => import("@shikijs/themes/github-dark"),
+		dracula: () => import("@shikijs/themes/dracula"),
+		"catppuccin-mocha": () => import("@shikijs/themes/catppuccin-mocha"),
+		"gruvbox-dark-medium": () => import("@shikijs/themes/gruvbox-dark-medium"),
+		"tokyo-night": () => import("@shikijs/themes/tokyo-night"),
 		nord: () => import("@shikijs/themes/nord"),
-		"one-dark-pro": () => import("@shikijs/themes/one-dark-pro"),
+		"rose-pine": () => import("@shikijs/themes/rose-pine"),
+		"everforest-dark": () => import("@shikijs/themes/everforest-dark"),
+		"solarized-dark": () => import("@shikijs/themes/solarized-dark"),
 	},
 	engine: () => createJavaScriptRegexEngine(),
 });
 
+let activeCodeThemeId: SyntaxThemeId = "github-light";
+let activeThemeRequest = 0;
+let rawHighlighter: HighlighterGeneric<string, string> | undefined;
 let highlighterPromise: Promise<HighlighterGeneric<string, string>> | undefined;
 
-/** The app-wide highlighter, created with the currently selected theme. */
-export function getHaunterHighlighter() {
+function getOrCreateHighlighter(initialTheme: SyntaxThemeId) {
 	highlighterPromise ??= createHaunterHighlighter({
-		themes: [getCodeThemeId()],
+		themes: [initialTheme],
 		langs: [],
+	}).then((createdHighlighter) => {
+		rawHighlighter = createdHighlighter as HighlighterGeneric<string, string>;
+
+		return new Proxy(rawHighlighter, {
+			get(target, property) {
+				if (property === "getLoadedThemes") {
+					return () => [activeCodeThemeId];
+				}
+
+				const value = Reflect.get(target, property, target);
+				return typeof value === "function" ? value.bind(target) : value;
+			},
+		});
 	}) as Promise<HighlighterGeneric<string, string>>;
+
 	return highlighterPromise;
 }
 
 /**
- * Drop our cache AND BlockNote's shiki singletons so editors mounted after
- * a theme change build a fresh highlighter with the new theme.
+ * Return the shared highlighter after loading the syntax palette paired with
+ * the resolved app theme. The proxy makes BlockNote's parser ask for the
+ * currently active theme instead of the first theme Shiki ever loaded.
  */
-function resetHighlighterCaches() {
-	highlighterPromise = undefined;
-	const globals = globalThis as Record<symbol, unknown>;
-	delete globals[Symbol.for("blocknote.shikiParser")];
-	delete globals[Symbol.for("blocknote.shikiHighlighterPromise")];
+export async function getHaunterHighlighter(resolvedTheme?: string) {
+	const theme = getCodeTheme(resolvedTheme);
+	const request = ++activeThemeRequest;
+	const highlighter = await getOrCreateHighlighter(theme.id);
+
+	if (!rawHighlighter?.getLoadedThemes().includes(theme.id)) {
+		await rawHighlighter?.loadTheme(theme.id);
+	}
+	if (request === activeThemeRequest) {
+		activeCodeThemeId = theme.id;
+	}
+
+	return highlighter;
+}
+
+type HighlightPluginState = {
+	cache?: { remove: (position: number) => void };
+	promises?: unknown[];
+};
+
+function isHighlightPluginState(value: unknown): value is HighlightPluginState {
+	if (!value || typeof value !== "object") return false;
+	const candidate = value as HighlightPluginState;
+	return (
+		typeof candidate.cache?.remove === "function" &&
+		Array.isArray(candidate.promises) &&
+		"decorations" in candidate
+	);
+}
+
+/** Invalidate only code decorations, leaving editor content and history alone. */
+export function refreshEditorCodeHighlighting(editor: CodeThemeEditor) {
+	const tiptapEditor = editor._tiptapEditor;
+	if (tiptapEditor.isDestroyed) return;
+
+	const state = tiptapEditor.state;
+	const pluginState = state.plugins
+		.map((plugin) => plugin.getState(state))
+		.find(isHighlightPluginState);
+	if (!pluginState?.cache) return;
+
+	let hasCodeBlocks = false;
+	state.doc.descendants((node, position) => {
+		if (node.type.name !== "codeBlock") return;
+		hasCodeBlocks = true;
+		pluginState.cache?.remove(position);
+		return false;
+	});
+	if (!hasCodeBlocks) return;
+
+	tiptapEditor.view.dispatch(
+		state.tr.setMeta("prosemirror-highlight-refresh", true),
+	);
+}
+
+/** Keep existing code blocks paired with the active appearance theme. */
+export function useSyncEditorCodeTheme(
+	editor: CodeThemeEditor,
+	resolvedTheme: string | undefined,
+) {
+	useEffect(() => {
+		let active = true;
+		let hasCodeBlocks = false;
+		editor._tiptapEditor.state.doc.descendants((node) => {
+			if (node.type.name !== "codeBlock") return;
+			hasCodeBlocks = true;
+			return false;
+		});
+		if (!hasCodeBlocks) return;
+
+		void getHaunterHighlighter(resolvedTheme)
+			.then(() => {
+				if (active) refreshEditorCodeHighlighting(editor);
+			})
+			.catch((error: unknown) => {
+				console.error("Could not update code highlighting theme", error);
+			});
+
+		return () => {
+			active = false;
+		};
+	}, [editor, resolvedTheme]);
 }

@@ -2,6 +2,7 @@
 
 import type { BlockNoteEditor } from "@blocknote/core";
 import { XIcon } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import {
 	Dialog,
@@ -35,6 +36,7 @@ export function CodeEditDialog({
 	editable?: boolean;
 	onClose: () => void;
 }) {
+	const { resolvedTheme } = useTheme();
 	const block = editor.getBlock(blockId);
 	const [text, setText] = useState(() => (block ? blockInlineText(block) : ""));
 	const [language] = useState(() =>
@@ -44,7 +46,7 @@ export function CodeEditDialog({
 	);
 	const [highlightedHtml, setHighlightedHtml] = useState("");
 	const overlayRef = useRef<HTMLDivElement>(null);
-	const theme = getCodeTheme();
+	const theme = getCodeTheme(resolvedTheme);
 
 	// Re-highlight through the same shiki instance the editor uses. The
 	// trailing newline keeps the overlay's last line aligned with the textarea.
@@ -52,7 +54,7 @@ export function CodeEditDialog({
 		let live = true;
 		(async () => {
 			try {
-				const highlighter = await getHaunterHighlighter();
+				const highlighter = await getHaunterHighlighter(resolvedTheme);
 				let lang = language;
 				if (
 					lang !== "text" &&
@@ -74,7 +76,7 @@ export function CodeEditDialog({
 		return () => {
 			live = false;
 		};
-	}, [text, language, theme.id]);
+	}, [text, language, theme.id, resolvedTheme]);
 
 	function commitAndClose() {
 		if (!editable) {
@@ -98,7 +100,7 @@ export function CodeEditDialog({
 				</DialogTitle>
 				<div
 					className="code-edit-focus-ring relative h-full w-full overflow-hidden rounded-lg border"
-					style={{ backgroundColor: theme.bg }}
+					style={{ backgroundColor: theme.background }}
 				>
 					<div
 						ref={overlayRef}
@@ -116,7 +118,7 @@ export function CodeEditDialog({
 						autoCorrect="off"
 						readOnly={!editable}
 						className="relative size-full resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-sm text-transparent leading-relaxed outline-none"
-						style={{ caretColor: theme.fg }}
+						style={{ caretColor: theme.foreground }}
 						onChange={(event) => setText(event.target.value)}
 						onScroll={(event) => {
 							const overlay = overlayRef.current;
