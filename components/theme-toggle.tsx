@@ -33,7 +33,7 @@ export function ThemeToggle() {
 				{currentTheme.label}
 				<ChevronDownIcon className="opacity-50" />
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
+			<DropdownMenuContent align="end" className="min-w-44">
 				{THEME_OPTIONS.map((option) => (
 					<DropdownMenuItem key={option.id} onClick={() => setTheme(option.id)}>
 						<ThemeIcon theme={option.id} />
