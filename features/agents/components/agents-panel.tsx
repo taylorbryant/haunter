@@ -6,6 +6,7 @@ import {
 	CircleCheckIcon,
 	CircleXIcon,
 	ExternalLinkIcon,
+	PlusIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -19,6 +20,7 @@ import {
 	listAgentActivityQueryOptions,
 	listAgentsQueryOptions,
 } from "@/features/agents/client/queries";
+import { AgentConnectDialog } from "@/features/agents/components/agent-connect-dialog";
 import type { AgentActivity, AgentSummary } from "@/features/agents/schemas";
 
 function statusVariant(status: string) {
@@ -234,6 +236,7 @@ function AgentRow({
 export function AgentsPanel() {
 	const queryClient = useQueryClient();
 	const query = useQuery(listAgentsQueryOptions());
+	const [connectOpen, setConnectOpen] = useState(false);
 	const [revoking, setRevoking] = useState<AgentSummary | null>(null);
 	const revoke = useMutation({
 		mutationFn: revokeAgent,
@@ -253,33 +256,53 @@ export function AgentsPanel() {
 				title="Agents"
 				description="AI agents you've approved to read and write your pages. Each agent acts as you, limited to the capabilities you granted."
 			/>
-			{query.isPending ? (
-				<div className="flex flex-col gap-2">
-					<Skeleton className="h-20 w-full" />
-					<Skeleton className="h-20 w-full" />
-				</div>
-			) : query.isError ? (
-				<p className="text-muted-foreground text-sm">
-					Your agents could not be loaded. Try again in a moment.
-				</p>
-			) : query.data.items.length === 0 ? (
-				<div className="flex flex-col gap-2 rounded-md border border-dashed p-4">
-					<p className="font-medium text-sm">No agents connected</p>
-					<p className="text-muted-foreground text-sm">
-						Point an Agent Auth-compatible client at this app's discovery
-						document (
-						<code className="font-mono">/.well-known/agent-configuration</code>
-						). When it registers, it will give you an approval link to review
-						what it's asking for.
+			<section className="flex flex-col items-start gap-4 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-center">
+				<div className="flex min-w-0 flex-1 flex-col gap-1">
+					<h3 className="font-medium text-sm">Connect an agent</h3>
+					<p className="text-muted-foreground text-xs">
+						Get setup instructions for Codex, Claude, Cursor, VS Code, and other
+						MCP clients.
 					</p>
 				</div>
-			) : (
-				<div className="flex flex-col gap-2">
-					{query.data.items.map((agent) => (
-						<AgentRow key={agent.id} agent={agent} onRevoke={setRevoking} />
-					))}
+				<Button
+					type="button"
+					className="w-full sm:w-auto"
+					onClick={() => setConnectOpen(true)}
+				>
+					<PlusIcon data-icon="inline-start" />
+					Connect
+				</Button>
+			</section>
+			<section className="flex flex-col gap-2">
+				<div className="flex flex-col gap-1">
+					<h3 className="font-medium text-sm">Connected agents</h3>
+					<p className="text-muted-foreground text-xs">
+						Review access or revoke an agent at any time.
+					</p>
 				</div>
-			)}
+				{query.isPending ? (
+					<div className="flex flex-col gap-2">
+						<Skeleton className="h-20 w-full" />
+						<Skeleton className="h-20 w-full" />
+					</div>
+				) : query.isError ? (
+					<p className="text-muted-foreground text-sm">
+						Your agents could not be loaded. Try again in a moment.
+					</p>
+				) : query.data.items.length === 0 ? (
+					<div className="rounded-md border border-dashed p-4">
+						<p className="text-muted-foreground text-sm">
+							No agents connected yet.
+						</p>
+					</div>
+				) : (
+					<div className="flex flex-col gap-2">
+						{query.data.items.map((agent) => (
+							<AgentRow key={agent.id} agent={agent} onRevoke={setRevoking} />
+						))}
+					</div>
+				)}
+			</section>
 			<AgentActivityList />
 			{revoke.isError ? (
 				<p role="alert" className="text-destructive text-sm">
@@ -300,6 +323,7 @@ export function AgentsPanel() {
 				pending={revoke.isPending}
 				onConfirm={confirmRevokeAgent}
 			/>
+			<AgentConnectDialog open={connectOpen} onOpenChange={setConnectOpen} />
 		</Panel>
 	);
 }
