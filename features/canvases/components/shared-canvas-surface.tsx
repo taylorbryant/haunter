@@ -5,10 +5,11 @@ import "tldraw/tldraw.css";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { type Editor, Tldraw } from "tldraw";
-import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import { rq } from "@/client";
 import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
+import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import { getSharedCanvas } from "@/features/shares/contracts";
+import { useCanvasTheme } from "./use-canvas-theme";
 
 /**
  * Read-only canvas for the public share view: fetches the snapshot through
@@ -22,6 +23,7 @@ export default function SharedCanvasSurface({
 	canvasId: string;
 }) {
 	const { resolvedTheme } = useTheme();
+	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
 	const canvasQuery = useQuery(
 		rq(getSharedCanvas).queryOptions({ path: { token, id: canvasId } }),
 	);
@@ -46,9 +48,7 @@ export default function SharedCanvasSurface({
 	const snapshot = loadableSnapshot(stored);
 
 	function handleMount(editor: Editor) {
-		editor.user.updateUserPreferences({
-			colorScheme: resolvedTheme === "dark" ? "dark" : "light",
-		});
+		syncCanvasTheme(editor);
 		editor.updateInstanceState({ isReadonly: true });
 	}
 

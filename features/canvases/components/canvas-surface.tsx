@@ -16,13 +16,13 @@ import {
 	Tldraw,
 } from "tldraw";
 import { useCurrentUser } from "@/components/app-session-provider";
-import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
 	getCanvasQueryOptions,
 	saveCanvasSnapshotMutationOptions,
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
+import { useCanvasTheme } from "@/features/canvases/components/use-canvas-theme";
 import {
 	type CanvasCollabUser,
 	useCollabCanvasStore,
@@ -31,6 +31,7 @@ import {
 	isLoadableSnapshot,
 	loadableSnapshot,
 } from "@/features/canvases/lib/snapshot";
+import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
 	type CollabRoom,
 	useCollabSession,
@@ -53,6 +54,7 @@ export default function CanvasSurface({ canvasId }: { canvasId: string }) {
 
 function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	const { resolvedTheme } = useTheme();
+	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
 	const queryClient = useQueryClient();
 	const canvasQuery = useQuery(getCanvasQueryOptions(canvasId));
 	const saveMutation = useMutation(saveCanvasSnapshotMutationOptions());
@@ -126,9 +128,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	const localStore = localStoreRef.current.store;
 
 	function handleMount(editor: Editor) {
-		editor.user.updateUserPreferences({
-			colorScheme: resolvedTheme === "dark" ? "dark" : "light",
-		});
+		syncCanvasTheme(editor);
 		if (!canEdit) {
 			editor.updateInstanceState({ isReadonly: true });
 		}
@@ -241,6 +241,7 @@ function CollabCanvasSurface({
 	canEdit: boolean;
 }) {
 	const { resolvedTheme } = useTheme();
+	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
 	const queryClient = useQueryClient();
 	const saveMutation = useMutation(saveCanvasSnapshotMutationOptions());
 	// Cursor identity shown to the other people on this canvas.
@@ -267,9 +268,7 @@ function CollabCanvasSurface({
 	}, []);
 
 	function handleMount(editor: Editor) {
-		editor.user.updateUserPreferences({
-			colorScheme: resolvedTheme === "dark" ? "dark" : "light",
-		});
+		syncCanvasTheme(editor);
 		if (!canEdit) {
 			editor.updateInstanceState({ isReadonly: true });
 		}

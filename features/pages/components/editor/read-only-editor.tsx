@@ -8,6 +8,7 @@ import { BlockNoteView } from "@blocknote/shadcn";
 import { useTheme } from "next-themes";
 import type { BlockJson } from "@/features/pages/schemas";
 import { SharedPageTokenProvider } from "@/features/shares/components/shared-page-context";
+import { getResolvedThemeColorScheme } from "@/lib/themes";
 import { editorSchema } from "./schema";
 
 /**
@@ -35,7 +36,7 @@ export default function ReadOnlyEditor({
 			<BlockNoteView
 				editor={editor}
 				editable={false}
-				theme={resolvedTheme === "dark" ? "dark" : "light"}
+				theme={getResolvedThemeColorScheme(resolvedTheme)}
 				slashMenu={false}
 				sideMenu={false}
 			/>

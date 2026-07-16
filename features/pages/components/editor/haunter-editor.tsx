@@ -34,8 +34,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Awareness } from "y-protocols/awareness";
 import { apiClient } from "@/client";
 import { createCanvas } from "@/features/canvases/contracts";
-import type { CollabRoom } from "@/features/collab/client/session";
 import { setCollabPresence } from "@/features/collab/client/presence-state";
+import type { CollabRoom } from "@/features/collab/client/session";
+import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import {
 	invalidateBacklinks,
 	invalidatePage,
@@ -45,7 +46,6 @@ import {
 	setPageContentInCache,
 	setPageSavedAtInCache,
 } from "@/features/pages/client/queries";
-import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import {
 	drainPageSaveQueue,
 	registerPageSaveFlusher,
@@ -60,12 +60,13 @@ import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { reconcileTaskBlockProps } from "@/features/tasks/lib/reconcile-task-block-props";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getResolvedThemeColorScheme } from "@/lib/themes";
 import { cn } from "@/lib/utils";
-import { CodeEditDialog } from "./code-edit-dialog";
 import {
 	OPEN_CODE_BLOCK_DIALOG_EVENT,
 	type OpenCodeBlockDialogDetail,
 } from "./code-block-dialog-event";
+import { CodeEditDialog } from "./code-edit-dialog";
 import { editorSchema } from "./schema";
 import { TaskBlockCurrentUserContext } from "./task-block";
 
@@ -553,7 +554,7 @@ export default function HaunterEditor({
 					editor={editor}
 					editable={editable}
 					onChange={handleChange}
-					theme={resolvedTheme === "dark" ? "dark" : "light"}
+					theme={getResolvedThemeColorScheme(resolvedTheme)}
 					slashMenu={false}
 					sideMenu={false}
 				>

@@ -1,14 +1,6 @@
 "use client";
 
-import {
-	ChevronsUpDownIcon,
-	LogOutIcon,
-	MonitorIcon,
-	MoonIcon,
-	SettingsIcon,
-	SunIcon,
-} from "lucide-react";
-import { useTheme } from "next-themes";
+import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { useCommand } from "@/components/command-palette/registry";
@@ -39,13 +31,6 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
-
-const THEME_OPTIONS = [
-	{ value: "system", icon: MonitorIcon, label: "System" },
-	{ value: "light", icon: SunIcon, label: "Light" },
-	{ value: "dark", icon: MoonIcon, label: "Dark" },
-] as const;
 
 function initials(name: string): string {
 	return (
@@ -64,7 +49,6 @@ export function NavUser({
 	user: { name: string; email: string; image: string | null };
 }) {
 	const { isMobile } = useSidebar();
-	const { theme, setTheme } = useTheme();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 
 	useCommand({
@@ -108,30 +92,6 @@ export function NavUser({
 		</SidebarMenuButton>
 	);
 
-	// Inline theme switcher: plain buttons (not menu/close items) so tapping one
-	// changes the theme without closing the menu or drawer.
-	const themeControl = (
-		<div className="flex items-center gap-0.5 rounded-md border p-0.5">
-			{THEME_OPTIONS.map(({ value, icon: Icon, label }) => (
-				<button
-					key={value}
-					type="button"
-					aria-label={label}
-					aria-pressed={theme === value}
-					onClick={() => setTheme(value)}
-					className={cn(
-						"flex size-7 items-center justify-center rounded-sm transition-colors",
-						theme === value
-							? "bg-muted text-foreground"
-							: "text-muted-foreground hover:text-foreground",
-					)}
-				>
-					<Icon className="size-4" />
-				</button>
-			))}
-		</div>
-	);
-
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
@@ -153,10 +113,6 @@ export function NavUser({
 								</DrawerDescription>
 							</DrawerHeader>
 							<div className="flex flex-col gap-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-								<div className="flex items-center justify-between gap-2 px-2 py-1">
-									<span className="text-muted-foreground text-sm">Theme</span>
-									{themeControl}
-								</div>
 								<DrawerClose
 									render={
 										<Button
@@ -201,11 +157,6 @@ export function NavUser({
 									</div>
 								</DropdownMenuLabel>
 							</DropdownMenuGroup>
-							<DropdownMenuSeparator />
-							<div className="flex items-center justify-between gap-2 px-2 py-1.5">
-								<span className="text-muted-foreground text-xs">Theme</span>
-								{themeControl}
-							</div>
 							<DropdownMenuSeparator />
 							<DropdownMenuItem onClick={() => setSettingsOpen(true)}>
 								<SettingsIcon />

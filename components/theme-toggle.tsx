@@ -1,7 +1,8 @@
 "use client";
 
-import { MoonIcon, SunIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useTheme } from "next-themes";
+import { ThemeIcon } from "@/components/theme-icon";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -9,9 +10,12 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { THEME_OPTIONS } from "@/lib/themes";
 
 export function ThemeToggle() {
-	const { setTheme } = useTheme();
+	const { theme, setTheme } = useTheme();
+	const currentTheme =
+		THEME_OPTIONS.find((option) => option.id === theme) ?? THEME_OPTIONS[0];
 
 	return (
 		<DropdownMenu>
@@ -19,25 +23,24 @@ export function ThemeToggle() {
 				render={
 					<Button
 						type="button"
-						variant="ghost"
-						size="icon"
+						variant="outline"
+						size="sm"
 						aria-label="Change theme"
 					/>
 				}
 			>
-				<SunIcon className="dark:hidden" />
-				<MoonIcon className="hidden dark:block" />
+				<ThemeIcon theme={currentTheme.id} />
+				{currentTheme.label}
+				<ChevronDownIcon className="opacity-50" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				<DropdownMenuItem onClick={() => setTheme("light")}>
-					Light
-				</DropdownMenuItem>
-				<DropdownMenuItem onClick={() => setTheme("dark")}>
-					Dark
-				</DropdownMenuItem>
-				<DropdownMenuItem onClick={() => setTheme("system")}>
-					System
-				</DropdownMenuItem>
+				{THEME_OPTIONS.map((option) => (
+					<DropdownMenuItem key={option.id} onClick={() => setTheme(option.id)}>
+						<ThemeIcon theme={option.id} />
+						{option.label}
+						{theme === option.id ? <CheckIcon className="ml-auto" /> : null}
+					</DropdownMenuItem>
+				))}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

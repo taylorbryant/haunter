@@ -222,7 +222,7 @@ export function AppearancePanel() {
 				<div className="flex flex-col gap-0.5">
 					<p className="font-medium text-sm">Theme</p>
 					<p className="text-muted-foreground text-sm">
-						Light, dark, or follow your system preference.
+						Choose a built-in palette or follow your system preference.
 					</p>
 				</div>
 				<ThemeToggle />

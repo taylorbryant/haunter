@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, .dracula *));
 
 :root {
 	--card: oklch(1 0 0);
@@ -82,7 +82,7 @@
 	--radius-4xl: calc(var(--radius) * 2.6);
 }
 
-.dark {
+:root.dark {
 	--background: oklch(0.145 0 0);
 	--foreground: oklch(0.985 0 0);
 	--card: oklch(0.205 0 0);
@@ -114,6 +114,43 @@
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Dracula's canonical UI surfaces and accent palette. Keep this as a named
+   theme (instead of folding it into .dark) so more palettes can follow. */
+:root.dracula {
+	color-scheme: dark;
+	--background: #282a36;
+	--foreground: #f8f8f2;
+	--card: #343746;
+	--card-foreground: #f8f8f2;
+	--popover: #343746;
+	--popover-foreground: #f8f8f2;
+	--primary: #bd93f9;
+	--primary-foreground: #191a21;
+	--secondary: #44475a;
+	--secondary-foreground: #f8f8f2;
+	--muted: #343746;
+	--muted-foreground: #b7bad3;
+	--accent: #44475a;
+	--accent-foreground: #f8f8f2;
+	--destructive: #ff5555;
+	--border: #44475a;
+	--input: #44475a;
+	--ring: #bd93f9;
+	--chart-1: #ff79c6;
+	--chart-2: #bd93f9;
+	--chart-3: #8be9fd;
+	--chart-4: #50fa7b;
+	--chart-5: #ffb86c;
+	--sidebar: #21222c;
+	--sidebar-foreground: #f8f8f2;
+	--sidebar-primary: #bd93f9;
+	--sidebar-primary-foreground: #191a21;
+	--sidebar-accent: #44475a;
+	--sidebar-accent-foreground: #f8f8f2;
+	--sidebar-border: #44475a;
+	--sidebar-ring: #ff79c6;
 }
 
 @layer base {
