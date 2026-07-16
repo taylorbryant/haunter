@@ -213,7 +213,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			header.style.setProperty("justify-content", "space-between");
 			header.style.setProperty(
 				"color",
-				"var(--prosemirror-highlight, #f8f8f2)",
+				"var(--prosemirror-highlight, var(--code-block-foreground, #f8f8f2))",
 			);
 			header.style.setProperty("gap", "8px");
 			if (languageSelect) {
@@ -241,7 +241,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			expandButton.style.setProperty("background", "transparent");
 			expandButton.style.setProperty(
 				"color",
-				"var(--prosemirror-highlight, #f8f8f2)",
+				"var(--prosemirror-highlight, var(--code-block-foreground, #f8f8f2))",
 			);
 			expandButton.style.setProperty("opacity", "1");
 			expandButton.style.setProperty("visibility", "visible");

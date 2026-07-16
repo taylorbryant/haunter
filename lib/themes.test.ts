@@ -39,6 +39,8 @@ const REQUIRED_PALETTE_TOKENS = [
 	"sidebar-accent-foreground",
 	"sidebar-border",
 	"sidebar-ring",
+	"code-block-background",
+	"code-block-foreground",
 ] as const;
 
 describe("app themes", () => {
@@ -114,6 +116,12 @@ describe("app themes", () => {
 			for (const token of REQUIRED_PALETTE_TOKENS) {
 				expect(block).toContain(`--${token}:`);
 			}
+			expect(block).toContain(
+				`--code-block-background: ${theme.syntaxTheme.background};`,
+			);
+			expect(block).toContain(
+				`--code-block-foreground: ${theme.syntaxTheme.foreground};`,
+			);
 		}
 	});
 
