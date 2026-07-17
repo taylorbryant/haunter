@@ -24,10 +24,12 @@ import {
 	TaskComposer,
 	type TaskSubmissionResult,
 } from "@/features/tasks/components/task-composer";
-import type {
-	TaskFilter,
-	TaskScope,
-	TaskWithPage,
+import {
+	TASK_TITLE_MAX_LENGTH,
+	TASK_TITLE_TOO_LONG_MESSAGE,
+	type TaskFilter,
+	type TaskScope,
+	type TaskWithPage,
 } from "@/features/tasks/schemas";
 import {
 	formatDueDateTimeLabel,
@@ -100,6 +102,11 @@ export function TaskList({
 	const [composing, setComposing] = useState(isTodayView);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editTitle, setEditTitle] = useState("");
+	const [editError, setEditError] = useState<{
+		taskId: string;
+		message: string;
+	} | null>(null);
+	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [taskToDelete, setTaskToDelete] = useState<TaskWithPage | null>(null);
 
 	const tasksQuery = useQuery(
@@ -111,9 +118,19 @@ export function TaskList({
 			isTodayView ? { dueOnOrBefore: resolvedTodayDate } : {},
 		),
 	);
-	const createMutation = useMutation(createTaskMutationOptions());
+	const createMutation = useMutation({
+		...createTaskMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 	const updateMutation = useMutation(updateTaskMutationOptions());
-	const deleteMutation = useMutation(deleteTaskMutationOptions());
+	const renameMutation = useMutation({
+		...updateTaskMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
+	const deleteMutation = useMutation({
+		...deleteTaskMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 
 	const tasks = tasksQuery.data?.items ?? [];
 	const hasMore = tasksQuery.data?.hasMore ?? false;
@@ -152,12 +169,40 @@ export function TaskList({
 	// Standalone tasks are renamed here; page-sourced titles live in the page
 	// document and are edited in the editor.
 	function commitTitle(task: TaskWithPage) {
+		if (renameMutation.isPending) return;
 		const trimmed = editTitle.trim();
-		setEditingId(null);
-		if (!trimmed || trimmed === task.title) return;
-		updateMutation.mutate(
+		if (!trimmed || trimmed === task.title) {
+			setEditingId(null);
+			setEditError(null);
+			return;
+		}
+		if (trimmed.length > TASK_TITLE_MAX_LENGTH) {
+			setEditError({
+				taskId: task.id,
+				message: TASK_TITLE_TOO_LONG_MESSAGE,
+			});
+			return;
+		}
+		setEditError(null);
+		renameMutation.mutate(
 			{ path: { id: task.id }, body: { title: trimmed } },
-			{ onSuccess: () => refresh(task) },
+			{
+				onSuccess: async () => {
+					await refresh(task);
+					setEditingId((current) => (current === task.id ? null : current));
+					setEditError((current) =>
+						current?.taskId === task.id ? null : current,
+					);
+				},
+				onError: (error) =>
+					setEditError({
+						taskId: task.id,
+						message: contractErrorMessage(
+							error,
+							"Task could not be renamed. Try again.",
+						),
+					}),
+			},
 		);
 	}
 
@@ -200,6 +245,7 @@ export function TaskList({
 
 	function confirmDeleteTask() {
 		if (!taskToDelete || deleteMutation.isPending) return;
+		setDeleteError(null);
 		deleteMutation.mutate(
 			{ path: { id: taskToDelete.id } },
 			{
@@ -207,6 +253,13 @@ export function TaskList({
 					setTaskToDelete(null);
 					await refresh(taskToDelete);
 				},
+				onError: (error) =>
+					setDeleteError(
+						contractErrorMessage(
+							error,
+							"Task could not be deleted. Try again.",
+						),
+					),
 			},
 		);
 	}
@@ -267,19 +320,33 @@ export function TaskList({
 						<div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
 							<div className="min-w-0 flex-1">
 								{editingId === task.id ? (
-									<input
-										// biome-ignore lint/a11y/noAutofocus: opened by an explicit tap on the title
-										autoFocus
-										value={editTitle}
-										aria-label="Task name"
-										className="keyboard-focus-ring w-full rounded-sm bg-transparent text-base leading-tight outline-none [--keyboard-focus-ring-size:2px] sm:text-sm"
-										onChange={(event) => setEditTitle(event.target.value)}
-										onKeyDown={(event) => {
-											if (event.key === "Enter") commitTitle(task);
-											if (event.key === "Escape") setEditingId(null);
-										}}
-										onBlur={() => commitTitle(task)}
-									/>
+									<>
+										<input
+											// biome-ignore lint/a11y/noAutofocus: opened by an explicit tap on the title
+											autoFocus
+											value={editTitle}
+											aria-label="Task name"
+											maxLength={TASK_TITLE_MAX_LENGTH}
+											className="keyboard-focus-ring w-full rounded-sm bg-transparent text-base leading-tight outline-none [--keyboard-focus-ring-size:2px] sm:text-sm"
+											onChange={(event) => {
+												setEditTitle(event.target.value);
+												setEditError(null);
+											}}
+											onKeyDown={(event) => {
+												if (event.key === "Enter") commitTitle(task);
+												if (event.key === "Escape") {
+													setEditingId(null);
+													setEditError(null);
+												}
+											}}
+											onBlur={() => commitTitle(task)}
+										/>
+										{editError?.taskId === task.id ? (
+											<p role="alert" className="mt-1 text-destructive text-xs">
+												{editError.message}
+											</p>
+										) : null}
+									</>
 								) : task.sourceBlockId === null && canEdit ? (
 									<button
 										type="button"
@@ -289,6 +356,7 @@ export function TaskList({
 										)}
 										onClick={() => {
 											setEditTitle(task.title);
+											setEditError(null);
 											setEditingId(task.id);
 										}}
 									>
@@ -461,7 +529,7 @@ export function TaskList({
 			)}
 			{tasksQuery.isPending ? (
 				<p className="text-muted-foreground text-sm">Loading…</p>
-			) : tasksQuery.isError ? (
+			) : tasksQuery.isError && !tasksQuery.data ? (
 				<div className="flex items-center gap-2 text-sm">
 					<p className="text-muted-foreground">
 						{isTodayView
@@ -540,7 +608,10 @@ export function TaskList({
 			<DestructiveConfirmationDialog
 				open={taskToDelete !== null}
 				onOpenChange={(open) => {
-					if (!open) setTaskToDelete(null);
+					if (!open) {
+						setTaskToDelete(null);
+						setDeleteError(null);
+					}
 				}}
 				title="Delete task?"
 				description={
@@ -552,6 +623,7 @@ export function TaskList({
 				actionLabel="Delete task"
 				pendingLabel="Deleting…"
 				pending={deleteMutation.isPending}
+				error={deleteError}
 				onConfirm={confirmDeleteTask}
 			/>
 		</div>

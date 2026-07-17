@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { type Editor, Tldraw } from "tldraw";
 import { rq } from "@/client";
+import { Button } from "@/components/ui/button";
 import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import { getSharedCanvas } from "@/features/shares/contracts";
@@ -36,10 +37,18 @@ export default function SharedCanvasSurface({
 		);
 	}
 
-	if (canvasQuery.isError || !canvasQuery.data) {
+	if (!canvasQuery.data) {
 		return (
-			<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-				This canvas could not be loaded.
+			<div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground text-sm">
+				<p>This canvas could not be loaded.</p>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					onClick={() => void canvasQuery.refetch()}
+				>
+					Try again
+				</Button>
 			</div>
 		);
 	}

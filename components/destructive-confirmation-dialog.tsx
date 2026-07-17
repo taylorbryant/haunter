@@ -15,6 +15,7 @@ export function DestructiveConfirmationDialog({
 	actionLabel,
 	pendingLabel,
 	pending = false,
+	error,
 	onConfirm,
 }: {
 	open: boolean;
@@ -24,6 +25,7 @@ export function DestructiveConfirmationDialog({
 	actionLabel: string;
 	pendingLabel: string;
 	pending?: boolean;
+	error?: string | null;
 	onConfirm: () => void;
 }) {
 	return (
@@ -34,6 +36,11 @@ export function DestructiveConfirmationDialog({
 			description={description}
 			className="sm:max-w-sm"
 		>
+			{error ? (
+				<p role="alert" className="text-destructive text-sm">
+					{error}
+				</p>
+			) : null}
 			<ResponsiveDialogFooter className="flex-col-reverse sm:flex-row">
 				<Button
 					type="button"

@@ -28,7 +28,10 @@ function formatJoined(iso: string): string {
 export function WaitlistAdmin() {
 	const queryClient = useQueryClient();
 	const waitlistQuery = useQuery(listWaitlistQueryOptions());
-	const approveMutation = useMutation(approveWaitlistUserMutationOptions());
+	const approveMutation = useMutation({
+		...approveWaitlistUserMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 	// The row currently being approved, so only its button shows a pending state.
 	const [approvingId, setApprovingId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -59,11 +62,22 @@ export function WaitlistAdmin() {
 		return <p className="text-muted-foreground text-sm">Loading waitlist…</p>;
 	}
 
-	if (waitlistQuery.isError) {
+	if (waitlistQuery.isError && !waitlistQuery.data) {
 		return (
-			<p role="alert" className="text-destructive text-sm">
-				Could not load the waitlist.
-			</p>
+			<div
+				role="alert"
+				className="flex items-center gap-2 text-destructive text-sm"
+			>
+				<span className="flex-1">Could not load the waitlist.</span>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					onClick={() => void waitlistQuery.refetch()}
+				>
+					Try again
+				</Button>
+			</div>
 		);
 	}
 

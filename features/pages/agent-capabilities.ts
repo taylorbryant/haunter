@@ -1,5 +1,9 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
+import {
+	PAGE_TITLE_MAX_LENGTH,
+	PAGE_TITLE_TOO_LONG_MESSAGE,
+} from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
 
@@ -89,7 +93,11 @@ export const createPageCapability = defineAgentCapability("create_page", {
 	description:
 		"Create a page in a workspace, optionally nested under another page and initialized from markdown. Call list_workspaces first to get a workspaceId.",
 	input: WorkspaceInput.extend({
-		title: z.string().trim().min(1).max(300),
+		title: z
+			.string()
+			.trim()
+			.min(1)
+			.max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE),
 		parentPageId: z.string().uuid().optional(),
 		markdown: z.string().min(1).max(100_000).optional(),
 	}),
@@ -187,7 +195,12 @@ export const updatePageCapability = defineAgentCapability("update_page", {
 	description:
 		"Update a page's title, icon, or parent. Set icon to null to remove it or parentPageId to null to move the page to the workspace root.",
 	input: PageInput.extend({
-		title: z.string().trim().min(1).max(300).optional(),
+		title: z
+			.string()
+			.trim()
+			.min(1)
+			.max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE)
+			.optional(),
 		icon: z.string().max(16).nullable().optional(),
 		parentPageId: z.string().uuid().nullable().optional(),
 	}).refine(

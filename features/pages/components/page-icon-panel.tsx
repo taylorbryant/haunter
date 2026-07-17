@@ -8,6 +8,8 @@ import {
 	EmojiPickerSearch,
 } from "@/components/ui/emoji-picker";
 import {
+	invalidatePage,
+	invalidatePages,
 	setPageIconInCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
@@ -15,7 +17,15 @@ import {
 /** Persist a page's icon and refresh every surface that renders it. */
 function useSetPageIcon(pageId: string) {
 	const queryClient = useQueryClient();
-	const updateMutation = useMutation(updatePageMutationOptions());
+	const updateMutation = useMutation({
+		...updatePageMutationOptions(),
+		onError: () => {
+			void Promise.all([
+				invalidatePage(queryClient, pageId),
+				invalidatePages(queryClient),
+			]);
+		},
+	});
 
 	return (icon: string | null) => {
 		// Write the caches synchronously: the picker closes (unmounting this

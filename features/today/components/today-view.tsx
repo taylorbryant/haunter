@@ -50,7 +50,7 @@ export function TodayView({
 				currentTime={localNow.time}
 			/>
 
-			{pagesQuery.isError ? (
+			{pagesQuery.isError && !pagesQuery.data ? (
 				<section
 					className="border-t pt-6"
 					aria-labelledby="recent-pages-heading"

@@ -33,6 +33,8 @@ import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Awareness } from "y-protocols/awareness";
 import { apiClient } from "@/client";
+import { reportUserError, userErrorMessage } from "@/client/error-feedback";
+import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
 import { setCollabPresence } from "@/features/collab/client/presence-state";
 import type { CollabRoom } from "@/features/collab/client/session";
@@ -159,14 +161,18 @@ function getSlashMenuItems(
 		group: "Basic blocks",
 		icon: <PenToolIcon className="size-4.5" />,
 		onItemClick: async () => {
-			// Create the row first so the block never points at a missing canvas.
-			const canvas = await apiClient.endpoint(createCanvas).call({
-				body: { workspaceId: page.workspaceId, pageId: page.pageId },
-			});
-			insertOrUpdateBlockForSlashMenu(editor, {
-				type: "canvas",
-				props: { canvasId: canvas.id },
-			});
+			try {
+				// Create the row first so the block never points at a missing canvas.
+				const canvas = await apiClient.endpoint(createCanvas).call({
+					body: { workspaceId: page.workspaceId, pageId: page.pageId },
+				});
+				insertOrUpdateBlockForSlashMenu(editor, {
+					type: "canvas",
+					props: { canvasId: canvas.id },
+				});
+			} catch (error) {
+				reportUserError(error, "The canvas could not be created.");
+			}
 		},
 	};
 
@@ -188,20 +194,24 @@ function getSlashMenuItems(
 		group: "Basic blocks",
 		icon: <FilePlusIcon className="size-4.5" />,
 		onItemClick: async () => {
-			// Create the row first so the block never points at a missing page.
-			const created = await apiClient.endpoint(createPage).call({
-				body: {
-					workspaceId: page.workspaceId,
-					parentPageId: page.pageId,
-					title: "",
-					appendToParentContent: false,
-				},
-			});
-			insertOrUpdateBlockForSlashMenu(editor, {
-				type: "pageLink",
-				props: { pageId: created.id, workspaceId: page.workspaceId },
-			});
-			page.onSubpageCreated(created);
+			try {
+				// Create the row first so the block never points at a missing page.
+				const created = await apiClient.endpoint(createPage).call({
+					body: {
+						workspaceId: page.workspaceId,
+						parentPageId: page.pageId,
+						title: "",
+						appendToParentContent: false,
+					},
+				});
+				insertOrUpdateBlockForSlashMenu(editor, {
+					type: "pageLink",
+					props: { pageId: created.id, workspaceId: page.workspaceId },
+				});
+				page.onSubpageCreated(created);
+			} catch (error) {
+				reportUserError(error, "The subpage could not be created.");
+			}
 		},
 	};
 
@@ -306,6 +316,7 @@ export default function HaunterEditor({
 	const queryClient = useQueryClient();
 	const isMobile = useIsMobile();
 	const [saveState, setSaveState] = useState<SaveState>("saved");
+	const [saveError, setSaveError] = useState<string | null>(null);
 	const normalizedInitialContent = useMemo(
 		() => normalizeCodeBlockLanguages(initialContent),
 		[initialContent],
@@ -345,7 +356,14 @@ export default function HaunterEditor({
 
 	const editor = useCreateBlockNote({
 		schema: editorSchema,
-		uploadFile: (file: File) => uploadPageImage(pageId, file),
+		uploadFile: async (file: File) => {
+			try {
+				return await uploadPageImage(pageId, file);
+			} catch (error) {
+				reportUserError(error, "The image could not be uploaded.");
+				throw error;
+			}
+		},
 		collaboration: collab
 			? {
 					fragment: collab.doc.getXmlFragment("blocknote"),
@@ -509,7 +527,10 @@ export default function HaunterEditor({
 		};
 	}, [editor, editable, notificationBlockId]);
 
-	const saveMutation = useMutation(savePageContentMutationOptions());
+	const saveMutation = useMutation({
+		...savePageContentMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const dirtyRef = useRef(false);
 	const inFlightSaveRef = useRef<Promise<boolean> | null>(null);
@@ -535,6 +556,7 @@ export default function HaunterEditor({
 		// Mirror into the cache immediately: a remount between this save and
 		// the next refetch must not initialize the editor from a stale doc.
 		setPageContentInCache(queryClient, pageId, content);
+		let saveAgainAfterSuccess = false;
 		const run = saveMutation
 			.mutateAsync({
 				path: { id: pageId },
@@ -547,7 +569,9 @@ export default function HaunterEditor({
 			})
 			.then(
 				(result) => {
+					setSaveError(null);
 					baseUpdatedAtRef.current = result.contentUpdatedAt;
+					saveAgainAfterSuccess = dirtyRef.current;
 					if (!dirtyRef.current) reportState("saved");
 					setPageSavedAtInCache(
 						queryClient,
@@ -568,17 +592,24 @@ export default function HaunterEditor({
 						// Someone else saved a newer version. Don't retry over it —
 						// hand off so the owner reloads the doc into a fresh editor.
 						dirtyRef.current = false;
+						setSaveError(null);
 						reportState("saved");
 						onConflict?.();
 						return false;
 					}
 					dirtyRef.current = true;
+					setSaveError(
+						userErrorMessage(error, "Your page changes could not be saved."),
+					);
 					reportState("error");
 					return false;
 				},
 			)
 			.finally(() => {
 				inFlightSaveRef.current = null;
+				// A debounce can fire while the preceding request is still running.
+				// Hand the newer document to a fresh request once that save succeeds.
+				if (saveAgainAfterSuccess) void saveRef.current();
 			});
 		inFlightSaveRef.current = run;
 		return run;
@@ -590,6 +621,7 @@ export default function HaunterEditor({
 		if (!editable) return;
 		normalizeEditorCodeBlockLanguages(editor);
 		dirtyRef.current = true;
+		setSaveError(null);
 		reportState("pending");
 		if (timeoutRef.current) clearTimeout(timeoutRef.current);
 		timeoutRef.current = setTimeout(() => saveRef.current(), AUTOSAVE_DELAY_MS);
@@ -641,6 +673,23 @@ export default function HaunterEditor({
 		// content runs edge-to-edge; the block controls that live there are
 		// hidden below. Driven from JS (not CSS) to share one breakpoint.
 		<div className={cn("haunter-editor", isMobile && "editor-flush")}>
+			{saveError ? (
+				<div
+					role="alert"
+					className="mb-2 flex items-center gap-2 rounded-md border border-destructive/30 px-3 py-2 text-destructive text-sm"
+				>
+					<span className="flex-1">{saveError}</span>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={saveMutation.isPending}
+						onClick={() => void saveRef.current()}
+					>
+						Retry
+					</Button>
+				</div>
+			) : null}
 			{collab ? <PresencePublisher room={collab} /> : null}
 			<TaskBlockCurrentUserContext.Provider value={currentUserId}>
 				<BlockNoteView

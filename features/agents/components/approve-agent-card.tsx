@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BotIcon, CheckIcon, XIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { reportUserError } from "@/client/error-feedback";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -30,22 +31,30 @@ async function decideCapabilityRequest(body: {
 	user_code?: string;
 	capabilities?: string[];
 }): Promise<{ ok: boolean; message?: string }> {
-	const res = await fetch("/api/auth/agent/approve-capability", {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify(body),
-	});
-	const payload = (await res.json().catch(() => null)) as {
-		error?: string;
-		message?: string;
-	} | null;
-	// The plugin can send soft failures (e.g. fresh_session_required) with a
-	// 200 status, so an `error` field in the body means failure regardless.
-	if (res.ok && !payload?.error) return { ok: true };
-	return {
-		ok: false,
-		message: payload?.message ?? "The approval could not be completed.",
-	};
+	try {
+		const res = await fetch("/api/auth/agent/approve-capability", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		const payload = (await res.json().catch(() => null)) as {
+			error?: string;
+			message?: string;
+		} | null;
+		// The plugin can send soft failures (e.g. fresh_session_required) with a
+		// 200 status, so an `error` field in the body means failure regardless.
+		if (res.ok && !payload?.error) return { ok: true };
+		return {
+			ok: false,
+			message: payload?.message ?? "The approval could not be completed.",
+		};
+	} catch {
+		return {
+			ok: false,
+			message:
+				"The approval could not be completed. Check your connection and try again.",
+		};
+	}
 }
 
 /**
@@ -89,7 +98,12 @@ export function ApproveAgentCard({
 			setError(result.message ?? "");
 			return;
 		}
-		await invalidateAgents(queryClient);
+		void invalidateAgents(queryClient).catch((refreshError) => {
+			reportUserError(
+				refreshError,
+				"The decision was saved, but the agent list could not be refreshed.",
+			);
+		});
 		setPhase(action === "approve" ? "approved" : "denied");
 	}
 
@@ -108,19 +122,22 @@ export function ApproveAgentCard({
 		);
 	}
 
-	if (query.isError) {
+	if (query.isError && !query.data) {
 		return (
 			<Card className="w-full max-w-md">
 				<CardHeader>
-					<CardTitle>Nothing to approve</CardTitle>
+					<CardTitle>Approval unavailable</CardTitle>
 					<CardDescription>
 						This agent request has expired, was already decided, or the link is
 						invalid.
 					</CardDescription>
 				</CardHeader>
 				<CardFooter>
+					<Button variant="outline" onClick={() => void query.refetch()}>
+						Try again
+					</Button>
 					<Button
-						variant="outline"
+						variant="ghost"
 						render={<Link href="/" />}
 						nativeButton={false}
 					>

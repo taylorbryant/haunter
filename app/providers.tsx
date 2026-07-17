@@ -3,6 +3,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { makeQueryClient } from "@/client";
+import { UserErrorToaster } from "@/components/user-error-toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 function useKeyboardFocusModality() {
@@ -37,7 +38,10 @@ export function Providers({ children }: { children: ReactNode }) {
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<TooltipProvider>{children}</TooltipProvider>
+			<TooltipProvider>
+				{children}
+				<UserErrorToaster />
+			</TooltipProvider>
 		</QueryClientProvider>
 	);
 }

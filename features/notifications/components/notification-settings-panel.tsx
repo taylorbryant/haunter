@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { userErrorMessage } from "@/client/error-feedback";
 import { Panel, PanelHeader } from "@/components/settings/panels";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,15 +28,26 @@ type PushState = "checking" | "enabled" | "disabled" | "unavailable";
 export function NotificationSettingsPanel() {
 	const queryClient = useQueryClient();
 	const settings = useQuery(notificationSettingsQueryOptions());
-	const updateSettings = useMutation(
-		updateNotificationSettingsMutationOptions(),
-	);
-	const subscribe = useMutation(subscribePushMutationOptions());
-	const unsubscribe = useMutation(unsubscribePushMutationOptions());
-	const testPush = useMutation(testPushMutationOptions());
+	const updateSettings = useMutation({
+		...updateNotificationSettingsMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
+	const subscribe = useMutation({
+		...subscribePushMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
+	const unsubscribe = useMutation({
+		...unsubscribePushMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
+	const testPush = useMutation({
+		...testPushMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 	const [pushState, setPushState] = useState<PushState>("checking");
 	const [browserTimezone, setBrowserTimezone] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
 	const pending = subscribe.isPending || unsubscribe.isPending;
 
 	useEffect(() => {
@@ -48,9 +60,21 @@ export function NotificationSettingsPanel() {
 			setPushState("unavailable");
 			return;
 		}
-		void currentPushSubscription().then((subscription) => {
-			if (active) setPushState(subscription ? "enabled" : "disabled");
-		});
+		void currentPushSubscription().then(
+			(subscription) => {
+				if (active) setPushState(subscription ? "enabled" : "disabled");
+			},
+			(subscriptionError) => {
+				if (!active) return;
+				setPushState("unavailable");
+				setError(
+					userErrorMessage(
+						subscriptionError,
+						"Push notification status could not be checked.",
+					),
+				);
+			},
+		);
 		return () => {
 			active = false;
 		};
@@ -58,15 +82,26 @@ export function NotificationSettingsPanel() {
 
 	function updateOverdueTasks(checked: boolean) {
 		setMessage(null);
+		setError(null);
 		updateSettings.mutate(
 			{ body: { overdueTasksEnabled: checked } },
-			{ onSuccess: () => invalidateNotificationSettings(queryClient) },
+			{
+				onSuccess: () => void invalidateNotificationSettings(queryClient),
+				onError: (updateError) =>
+					setError(
+						userErrorMessage(
+							updateError,
+							"Notification settings could not be updated.",
+						),
+					),
+			},
 		);
 	}
 
 	async function useCurrentTimezone() {
 		if (!browserTimezone) return;
 		setMessage(null);
+		setError(null);
 		try {
 			await updateSettings.mutateAsync({
 				body: { timezone: browserTimezone },
@@ -74,20 +109,20 @@ export function NotificationSettingsPanel() {
 			await invalidateNotificationSettings(queryClient);
 			setMessage(`Delivery timezone updated to ${browserTimezone}.`);
 		} catch (error) {
-			setMessage(
-				error instanceof Error
-					? error.message
-					: "Timezone could not be updated.",
-			);
+			setError(userErrorMessage(error, "Timezone could not be updated."));
 		}
 	}
 
 	async function updatePush(checked: boolean) {
 		setMessage(null);
+		setError(null);
 		try {
 			if (checked) {
 				const publicKey = settings.data?.vapidPublicKey;
-				if (!publicKey) throw new Error("Push is not configured for Haunter.");
+				if (!publicKey) {
+					setError("Push is not configured for Haunter.");
+					return;
+				}
 				const browserSubscription = await enablePush(publicKey);
 				await subscribe.mutateAsync({
 					body: serializePushSubscription(browserSubscription),
@@ -107,14 +142,13 @@ export function NotificationSettingsPanel() {
 			setPushState("disabled");
 			setMessage("Push notifications disabled on this device.");
 		} catch (error) {
-			setMessage(
-				error instanceof Error ? error.message : "Push could not be updated.",
-			);
+			setError(userErrorMessage(error, "Push could not be updated."));
 		}
 	}
 
 	async function sendTest() {
 		setMessage(null);
+		setError(null);
 		try {
 			const browserSubscription = await currentPushSubscription();
 			if (!browserSubscription) {
@@ -125,17 +159,13 @@ export function NotificationSettingsPanel() {
 			const result = await testPush.mutateAsync({
 				body: { endpoint: browserSubscription.endpoint },
 			});
-			setMessage(
-				result.sent
-					? "Test notification sent."
-					: "Test notification could not be sent.",
-			);
+			if (result.sent) {
+				setMessage("Test notification sent.");
+			} else {
+				setError("Test notification could not be sent.");
+			}
 		} catch (error) {
-			setMessage(
-				error instanceof Error
-					? error.message
-					: "Test notification could not be sent.",
-			);
+			setError(userErrorMessage(error, "Test notification could not be sent."));
 		}
 	}
 
@@ -146,6 +176,30 @@ export function NotificationSettingsPanel() {
 				<Skeleton className="h-16 w-full" />
 				<Skeleton className="h-16 w-full" />
 				<Skeleton className="h-16 w-full" />
+			</Panel>
+		);
+	}
+
+	if (!settings.data) {
+		return (
+			<Panel>
+				<PanelHeader title="Notifications" />
+				<div
+					role="alert"
+					className="flex items-center gap-3 text-destructive text-sm"
+				>
+					<span className="flex-1">
+						Notification settings could not be loaded.
+					</span>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => void settings.refetch()}
+					>
+						Try again
+					</Button>
+				</div>
 			</Panel>
 		);
 	}
@@ -240,6 +294,11 @@ export function NotificationSettingsPanel() {
 			{message ? (
 				<p className="text-muted-foreground text-sm" role="status">
 					{message}
+				</p>
+			) : null}
+			{error ? (
+				<p className="text-destructive text-sm" role="alert">
+					{error}
 				</p>
 			) : null}
 		</Panel>
