@@ -6,6 +6,17 @@ import type {
 	PageVersionMeta,
 } from "@/features/pages/schemas";
 
+export type PublishSubpageLinkInput = {
+	parentPageId: string;
+	parentContentUpdatedAt: string;
+	child: Pick<PageMeta, "id" | "workspaceId">;
+};
+
+/** Post-commit propagation from application writes into an open collab room. */
+export interface PageCollaborationPort {
+	publishSubpageLink(input: PublishSubpageLinkInput): Promise<void>;
+}
+
 export type NewPage = {
 	userId: string;
 	parentPageId: string | null;
@@ -68,7 +79,10 @@ export interface PageRepository {
 		needle: string,
 		limit: number,
 	): Promise<PageSearchCandidate[]>;
-	create(scope: TenantScope, input: NewPage): Promise<PageMeta>;
+	create(
+		scope: TenantScope,
+		input: NewPage,
+	): Promise<PageMeta & { contentUpdatedAt: string }>;
 	update(
 		scope: TenantScope,
 		id: string,
@@ -79,9 +93,9 @@ export interface PageRepository {
 		id: string,
 		contentJson: string,
 		searchText: string,
-	): Promise<{ updatedAt: string }>;
+	): Promise<{ updatedAt: string; contentUpdatedAt: string }>;
 	/**
-	 * Compare-and-set variant: persist only if the row's updatedAt still
+	 * Compare-and-set variant: persist only if the row's contentUpdatedAt still
 	 * equals `baseUpdatedAt`. Returns null when the row moved on (stale write).
 	 */
 	saveContentIf(
@@ -90,7 +104,7 @@ export interface PageRepository {
 		contentJson: string,
 		searchText: string,
 		baseUpdatedAt: string,
-	): Promise<{ updatedAt: string } | null>;
+	): Promise<{ updatedAt: string; contentUpdatedAt: string } | null>;
 	/** Set or clear deletedAt for the given pages. */
 	setDeletedByIds(
 		scope: TenantScope,

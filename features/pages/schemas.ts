@@ -39,6 +39,8 @@ export const PageMetaSchema = z.object({
 
 export const PageSchema = PageMetaSchema.extend({
 	content: PageContentSchema,
+	/** Optimistic-concurrency token for the document body only. */
+	contentUpdatedAt: z.string().datetime(),
 });
 
 export const ListPagesInputSchema = z.object({
@@ -57,6 +59,15 @@ export const CreatePageInputSchema = z.object({
 	workspaceId: z.string().min(1),
 	parentPageId: z.string().uuid().optional(),
 	title: z.string().max(300),
+	/** Defaults to true; the editor opts out when it inserts at the cursor. */
+	appendToParentContent: z.boolean().optional(),
+});
+
+export const CreatePageOutputSchema = PageMetaSchema.extend({
+	/** Initial document-only optimistic-concurrency token. */
+	contentUpdatedAt: z.string().datetime(),
+	/** Version containing the automatic parent page-link append, when present. */
+	parentContentUpdatedAt: z.string().datetime().nullable(),
 });
 
 export const UpdatePageBodySchema = z.object({
@@ -71,7 +82,7 @@ export const UpdatePageInputSchema =
 
 export const SavePageContentBodySchema = z.object({
 	content: PageContentSchema,
-	// Optimistic-concurrency precondition: the updatedAt the client last saw.
+	// Optimistic-concurrency precondition: the contentUpdatedAt the client last saw.
 	// When present and stale, the save is rejected with 409 instead of
 	// clobbering another member's (or another tab's) edits.
 	baseUpdatedAt: z.string().datetime().optional(),
@@ -82,7 +93,10 @@ export const SavePageContentInputSchema = PageIdInputSchema.merge(
 );
 
 export const SavePageContentOutputSchema = z.object({
+	/** General last-edited timestamp for display and sorting. */
 	updatedAt: z.string().datetime(),
+	/** Document-only optimistic-concurrency token. */
+	contentUpdatedAt: z.string().datetime(),
 	tasksChanged: z.boolean(),
 	linksChanged: z.boolean(),
 });
@@ -148,6 +162,7 @@ export type PageMeta = z.infer<typeof PageMetaSchema>;
 export type SearchResult = z.infer<typeof SearchResultSchema>;
 export type Page = z.infer<typeof PageSchema>;
 export type CreatePageInput = z.infer<typeof CreatePageInputSchema>;
+export type CreatePageOutput = z.infer<typeof CreatePageOutputSchema>;
 export type UpdatePageInput = z.infer<typeof UpdatePageInputSchema>;
 export type SavePageContentInput = z.infer<typeof SavePageContentInputSchema>;
 export type PageVersionMeta = z.infer<typeof PageVersionMetaSchema>;

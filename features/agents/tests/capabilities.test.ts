@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { createBetterAuthAgentCapabilityTestContext } from "@beignet/agent-auth-better-auth/testing";
 import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestContextFactory,
@@ -7,12 +8,12 @@ import {
 	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
-import { createBetterAuthAgentCapabilityTestContext } from "@beignet/agent-auth-better-auth/testing";
 import type { AppContext } from "@/app-context";
 import type { AgentActivityWrite } from "@/features/agents/ports";
 import { createTestAgentAdminRepository } from "@/features/agents/tests/helpers";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import {
+	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
@@ -36,6 +37,7 @@ async function createFixture() {
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
+	const pageCollaboration = createTestPageCollaborationPort();
 	const activities: AgentActivityWrite[] = [];
 	const agents = createTestAgentAdminRepository([], activities);
 	const members = {
@@ -72,6 +74,7 @@ async function createFixture() {
 			canvases,
 			members,
 			pageLinks,
+			pageCollaboration,
 			pages,
 			pageVersions,
 			tasks,

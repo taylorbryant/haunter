@@ -24,6 +24,7 @@ import { type AppServiceContextInput, appContext } from "@/server/context";
 import { createPage, listPages, searchPages } from "../contracts";
 import { pageRoutes } from "../routes";
 import {
+	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
@@ -42,6 +43,7 @@ async function createHookedTestApp(options: { auth: AppPorts["auth"] }) {
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
+	const pageCollaboration = createTestPageCollaborationPort();
 	const members = {
 		async findRole() {
 			return "owner";
@@ -59,6 +61,7 @@ async function createHookedTestApp(options: { auth: AppPorts["auth"] }) {
 			gate: appPorts.gate,
 			members,
 			pageLinks,
+			pageCollaboration,
 			pages,
 			pageVersions,
 			tasks,

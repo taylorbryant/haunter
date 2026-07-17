@@ -20,7 +20,6 @@ import {
 	ResponsiveDialogFooter,
 } from "@/components/responsive-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
 	Dialog,
 	DialogContent,
@@ -42,6 +41,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
 	SidebarGroup,
 	SidebarGroupAction,
@@ -58,19 +58,22 @@ import {
 } from "@/components/ui/sidebar";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
+	focusTitleOnArrival,
+	primeTitleKeyboard,
+	releaseTitleKeyboardPrime,
+} from "@/features/pages/client/new-page-focus";
+import { appendSubpageLinkToOpenPage } from "@/features/pages/client/open-page-content";
+import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
 	getPageQueryOptions,
+	invalidatePage,
 	invalidatePages,
 	invalidateTrash,
 	listPagesQueryOptions,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
-import {
-	focusTitleOnArrival,
-	primeTitleKeyboard,
-	releaseTitleKeyboardPrime,
-} from "@/features/pages/client/new-page-focus";
+import { flushPendingPageSave } from "@/features/pages/client/save-state";
 import type { PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
@@ -202,8 +205,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	);
 	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 
-	function createPage(parentPageId: string | null) {
+	async function createPage(parentPageId: string | null) {
 		primeTitleKeyboard();
+		if (parentPageId && !(await flushPendingPageSave(parentPageId))) {
+			releaseTitleKeyboardPrime();
+			return;
+		}
 		createMutation.mutate(
 			{
 				body: {
@@ -215,7 +222,32 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			{
 				onSuccess: async (page) => {
 					if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
-					await invalidatePages(queryClient);
+					const parentContentUpdatedAt = page.parentContentUpdatedAt;
+					const appendedToOpenPage =
+						parentPageId && parentContentUpdatedAt
+							? appendSubpageLinkToOpenPage(
+									parentPageId,
+									page,
+									parentContentUpdatedAt,
+								)
+							: false;
+					if (parentPageId && parentContentUpdatedAt && !appendedToOpenPage) {
+						void import("./editor/sync-subpage-link")
+							.then(({ syncSubpageLinkToCollabRoom }) =>
+								syncSubpageLinkToCollabRoom(
+									parentPageId,
+									page,
+									parentContentUpdatedAt,
+								),
+							)
+							.catch(() => undefined);
+					}
+					await Promise.all([
+						invalidatePages(queryClient),
+						parentPageId
+							? invalidatePage(queryClient, parentPageId)
+							: Promise.resolve(),
+					]);
 					focusTitleOnArrival(page.id);
 					// On mobile, close the sheet so the new page is visible.
 					if (isMobile) {

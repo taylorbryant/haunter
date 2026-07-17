@@ -30,6 +30,7 @@ import {
 } from "../contracts";
 import { pageRoutes } from "../routes";
 import {
+	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
@@ -57,6 +58,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
+	const pageCollaboration = createTestPageCollaborationPort();
 	// Every signed-in test user is an owner of their active workspace.
 	const members = {
 		async findRole() {
@@ -75,6 +77,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 			gate: appPorts.gate,
 			members,
 			pageLinks,
+			pageCollaboration,
 			pages,
 			pageVersions,
 			tasks,

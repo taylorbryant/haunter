@@ -269,6 +269,7 @@ export const pages = sqliteTable(
 		position: real("position").notNull(),
 		content: text("content").notNull().default("[]"),
 		searchText: text("search_text").notNull().default(""),
+		contentUpdatedAt: text("content_updated_at").notNull(),
 		deletedAt: text("deleted_at"),
 		createdAt: text("created_at").notNull(),
 		updatedAt: text("updated_at").notNull(),

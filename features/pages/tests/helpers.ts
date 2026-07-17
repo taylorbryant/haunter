@@ -1,13 +1,25 @@
+import { tenantScopeId } from "@beignet/core/ports";
+import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type {
 	NewPage,
 	NewPageVersion,
+	PageCollaborationPort,
 	PageLinkRepository,
 	PageRepository,
 	PageVersionRepository,
 	UpdatePageData,
 } from "@/features/pages/ports";
-import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { Page, PageMeta, PageVersion } from "@/features/pages/schemas";
+
+export function createTestPageCollaborationPort(
+	published: Parameters<PageCollaborationPort["publishSubpageLink"]>[0][] = [],
+): PageCollaborationPort {
+	return {
+		async publishSubpageLink(input) {
+			published.push(input);
+		},
+	};
+}
 
 export function createTestPageLinkRepository(deps: {
 	pages: PageRepository;
@@ -60,7 +72,11 @@ export function createTestPageRepository(): PageRepository {
 	const pages = new Map<string, Page>();
 
 	function toMeta(page: Page): PageMeta {
-		const { content: _content, ...meta } = page;
+		const {
+			content: _content,
+			contentUpdatedAt: _contentUpdatedAt,
+			...meta
+		} = page;
 		return meta;
 	}
 
@@ -160,12 +176,13 @@ export function createTestPageRepository(): PageRepository {
 				icon: null,
 				position: input.position,
 				content: [],
+				contentUpdatedAt: now,
 				deletedAt: null,
 				createdAt: now,
 				updatedAt: now,
 			};
 			pages.set(page.id, page);
-			return toMeta(page);
+			return { ...toMeta(page), contentUpdatedAt: page.contentUpdatedAt };
 		},
 		async update(scope, id: string, input: UpdatePageData) {
 			const page = pages.get(id);
@@ -188,11 +205,22 @@ export function createTestPageRepository(): PageRepository {
 				throw new Error(`Page not found: ${id}`);
 			}
 
-			const updatedAt = new Date(
-				Math.max(Date.now(), Date.parse(page.updatedAt) + 1),
+			const contentUpdatedAt = new Date(
+				Math.max(
+					Date.now(),
+					Date.parse(page.updatedAt) + 1,
+					Date.parse(page.contentUpdatedAt) + 1,
+				),
 			).toISOString();
-			pages.set(id, { ...page, content: JSON.parse(contentJson), updatedAt });
-			return { updatedAt };
+			const updatedAt =
+				page.updatedAt >= contentUpdatedAt ? page.updatedAt : contentUpdatedAt;
+			pages.set(id, {
+				...page,
+				content: JSON.parse(contentJson),
+				contentUpdatedAt,
+				updatedAt,
+			});
+			return { updatedAt, contentUpdatedAt };
 		},
 		async saveContentIf(
 			scope,
@@ -205,16 +233,27 @@ export function createTestPageRepository(): PageRepository {
 			if (!page || page.workspaceId !== tenantScopeId(scope)) {
 				throw new Error(`Page not found: ${id}`);
 			}
-			if (page.updatedAt !== baseUpdatedAt) {
+			if (page.contentUpdatedAt !== baseUpdatedAt) {
 				return null;
 			}
 
 			// Strictly after the base version, mirroring the drizzle repo.
-			const updatedAt = new Date(
-				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
+			const contentUpdatedAt = new Date(
+				Math.max(
+					Date.now(),
+					Date.parse(page.updatedAt) + 1,
+					Date.parse(baseUpdatedAt) + 1,
+				),
 			).toISOString();
-			pages.set(id, { ...page, content: JSON.parse(contentJson), updatedAt });
-			return { updatedAt };
+			const updatedAt =
+				page.updatedAt >= contentUpdatedAt ? page.updatedAt : contentUpdatedAt;
+			pages.set(id, {
+				...page,
+				content: JSON.parse(contentJson),
+				contentUpdatedAt,
+				updatedAt,
+			});
+			return { updatedAt, contentUpdatedAt };
 		},
 		async setDeletedByIds(scope, ids: string[], deletedAt: string | null) {
 			for (const id of ids) {
@@ -302,4 +341,3 @@ export function createTestPageVersionRepository(): PageVersionRepository {
 		},
 	};
 }
-import { tenantScopeId } from "@beignet/core/ports";

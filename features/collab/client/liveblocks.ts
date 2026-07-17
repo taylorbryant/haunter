@@ -46,6 +46,7 @@ const roomCache = new Map<string, CachedRoom>();
 // sessions instant. Lingering docs are small; memory is not a concern at
 // this scale.
 const ROOM_LINGER_MS = 5 * 60_000;
+const ROOM_SYNC_TIMEOUT_MS = 8000;
 
 function acquireRoom(mode: CollabMode, roomId: string): CachedRoom {
 	const cached = roomCache.get(roomId);
@@ -60,7 +61,13 @@ function acquireRoom(mode: CollabMode, roomId: string): CachedRoom {
 	const { room, leave } = getLiveblocksClient(mode).enterRoom(roomId);
 	const doc = new Y.Doc();
 	const provider = new LiveblocksYjsProvider(room, doc);
-	const entry: CachedRoom = { doc, provider, leave, refs: 1, linger: null };
+	const entry: CachedRoom = {
+		doc,
+		provider,
+		leave,
+		refs: 1,
+		linger: null,
+	};
 	roomCache.set(roomId, entry);
 	return entry;
 }
@@ -79,6 +86,44 @@ function releaseRoom(roomId: string) {
 		entry.leave();
 		entry.doc.destroy();
 	}, ROOM_LINGER_MS);
+}
+
+function waitForRoomSync(provider: LiveblocksYjsProvider): Promise<boolean> {
+	if (provider.synced) return Promise.resolve(true);
+
+	return new Promise((resolve) => {
+		const finish = (synced: boolean) => {
+			clearTimeout(timeout);
+			provider.off("synced", update);
+			provider.off("sync", update);
+			resolve(synced);
+		};
+		const update = () => {
+			if (provider.synced) finish(true);
+		};
+		const timeout = setTimeout(() => finish(false), ROOM_SYNC_TIMEOUT_MS);
+		provider.on("synced", update);
+		provider.on("sync", update);
+	});
+}
+
+/**
+ * Run one bounded mutation against a synced room without making it a React
+ * session. The normal room cache keeps the provider alive long enough to send
+ * any Yjs update after the callback releases its reference.
+ */
+export async function withSyncedRoom<T>(
+	mode: CollabMode,
+	roomId: string,
+	run: (room: CollabRoom) => T | Promise<T>,
+): Promise<T | null> {
+	const { doc, provider } = acquireRoom(mode, roomId);
+	try {
+		if (!(await waitForRoomSync(provider))) return null;
+		return await run({ doc, provider, synced: true });
+	} finally {
+		releaseRoom(roomId);
+	}
 }
 
 /**

@@ -114,18 +114,20 @@ export function setPageIconInCache(
 }
 
 /**
- * Reflect a save's new `updatedAt` into the getPage cache immediately so the
- * header's "last edited" label flips to "Just now" without waiting for a
- * refetch.
+ * Reflect both timestamps from a content save into the getPage cache. The
+ * display timestamp and the document CAS token intentionally advance together
+ * here, while metadata-only writes preserve the document token.
  */
 export function setPageSavedAtInCache(
 	queryClient: QueryClient,
 	id: string,
 	updatedAt: string,
+	contentUpdatedAt: string,
 ) {
 	queryClient.setQueryData<Page>(
 		rq(getPage).key({ path: { id } }),
-		(current) => (current ? { ...current, updatedAt } : current),
+		(current) =>
+			current ? { ...current, updatedAt, contentUpdatedAt } : current,
 	);
 }
 

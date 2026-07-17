@@ -2,6 +2,7 @@ import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import {
 	CreatePageInputSchema,
+	CreatePageOutputSchema,
 	ListBacklinksOutputSchema,
 	ListPagesOutputSchema,
 	ListPageVersionsOutputSchema,
@@ -52,9 +53,10 @@ export const createPage = pages
 		Forbidden: errors.Forbidden,
 		WorkspaceNotFound: errors.WorkspaceNotFound,
 		PageNotFound: errors.PageNotFound,
+		StaleWrite: errors.StaleWrite,
 	})
 	.responses({
-		201: PageMetaSchema,
+		201: CreatePageOutputSchema,
 	});
 
 export const getPage = pages

@@ -37,6 +37,7 @@ import { createCanvas } from "@/features/canvases/contracts";
 import { setCollabPresence } from "@/features/collab/client/presence-state";
 import type { CollabRoom } from "@/features/collab/client/session";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
+import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-content";
 import {
 	invalidateBacklinks,
 	invalidatePage,
@@ -56,6 +57,19 @@ import {
 	normalizeCodeBlockLanguage,
 	normalizeCodeBlockLanguages,
 } from "@/features/pages/lib/code-block-language";
+import {
+	COLLAB_CONTENT_VERSION_KEY,
+	COLLAB_SEEDED_KEY,
+	COLLAB_SUBPAGE_LINKS_KEY,
+	isSameOrNewerContentVersion,
+	isSubpageLinkedCollabEvent,
+	type SubpageLinkedCollabEvent,
+} from "@/features/pages/lib/collab-document";
+import {
+	containsBlockId,
+	reconcilePageLinkBlocks,
+} from "@/features/pages/lib/reconcile-page-link-blocks";
+import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { reconcileTaskBlockProps } from "@/features/tasks/lib/reconcile-task-block-props";
@@ -180,6 +194,7 @@ function getSlashMenuItems(
 					workspaceId: page.workspaceId,
 					parentPageId: page.pageId,
 					title: "",
+					appendToParentContent: false,
 				},
 			});
 			insertOrUpdateBlockForSlashMenu(editor, {
@@ -214,10 +229,8 @@ type HaunterEditorProps = {
 	pageId: string;
 	workspaceId: string;
 	initialContent: BlockJson[];
-	/** The document version this editor was initialized from. */
-	updatedAt?: string;
-	/** Same-client metadata writes, like title saves, also advance page updatedAt. */
-	localMetadataUpdatedAt?: string | null;
+	/** Document-only optimistic-concurrency token. */
+	contentUpdatedAt?: string;
 	editable?: boolean;
 	/**
 	 * The page's synced Liveblocks room, or null for local-only editing.
@@ -232,20 +245,11 @@ type HaunterEditorProps = {
 	/** Current signed-in user, used for same-user authoring defaults. */
 	currentUserId?: string | null;
 	/** Flush pending same-client metadata writes before saving document content. */
-	flushMetadataSave?: () => Promise<string | null>;
+	flushMetadataSave?: () => Promise<unknown>;
 	onSaveStateChange?: (state: SaveState) => void;
 	/** The server rejected a save as stale; the owner should reload the doc. */
 	onConflict?: () => void;
 };
-
-function isSameOrNewerVersion(next: string, current: string | null): boolean {
-	if (!current) return true;
-	const nextMs = Date.parse(next);
-	const currentMs = Date.parse(current);
-	return Number.isNaN(nextMs) || Number.isNaN(currentMs)
-		? next >= current
-		: nextMs >= currentMs;
-}
 
 /**
  * Publishes the other people currently in this page to the presence store;
@@ -286,8 +290,7 @@ export default function HaunterEditor({
 	pageId,
 	workspaceId,
 	initialContent,
-	updatedAt,
-	localMetadataUpdatedAt = null,
+	contentUpdatedAt,
 	editable = true,
 	collabUser,
 	collab = null,
@@ -307,12 +310,12 @@ export default function HaunterEditor({
 		() => normalizeCodeBlockLanguages(initialContent),
 		[initialContent],
 	);
-	// Last server updatedAt this editor saw: the optimistic-concurrency base.
-	const baseUpdatedAtRef = useRef<string | null>(updatedAt ?? null);
+	// Last document version this editor saw: metadata writes do not affect it.
+	const baseUpdatedAtRef = useRef<string | null>(contentUpdatedAt ?? null);
 
 	const advanceBaseUpdatedAt = useCallback(
 		(next: string | null | undefined) => {
-			if (!next || !isSameOrNewerVersion(next, baseUpdatedAtRef.current))
+			if (!next || !isSameOrNewerContentVersion(next, baseUpdatedAtRef.current))
 				return;
 			baseUpdatedAtRef.current = next;
 		},
@@ -320,18 +323,24 @@ export default function HaunterEditor({
 	);
 
 	useEffect(() => {
-		advanceBaseUpdatedAt(localMetadataUpdatedAt);
-	}, [localMetadataUpdatedAt, advanceBaseUpdatedAt]);
+		if (!collab) return;
+		const meta = collab.doc.getMap<unknown>("haunter-meta");
+		const advanceFromRoom = () => {
+			const version = meta.get(COLLAB_CONTENT_VERSION_KEY);
+			if (typeof version === "string") advanceBaseUpdatedAt(version);
+		};
+		meta.observe(advanceFromRoom);
+		advanceFromRoom();
+		return () => meta.unobserve(advanceFromRoom);
+	}, [collab, advanceBaseUpdatedAt]);
 
-	// Whether the shared doc needs seeding from the database, decided once at
-	// mount — before BlockNote binds the fragment and materializes its empty
-	// paragraph into it. The doc-level "seeded" flag keeps a second client
-	// that joins in the same instant from double-inserting.
+	// Only the doc-level marker establishes that the shared document completed
+	// its database seed. Fragment length is not authoritative because BlockNote
+	// materializes an empty paragraph while binding a new document.
 	const [shouldSeed] = useState(() => {
 		if (!collab) return false;
-		const fragment = collab.doc.getXmlFragment("blocknote");
-		const meta = collab.doc.getMap<boolean>("haunter-meta");
-		return fragment.length === 0 && meta.get("seeded") !== true;
+		const meta = collab.doc.getMap<unknown>("haunter-meta");
+		return meta.get(COLLAB_SEEDED_KEY) !== true;
 	});
 
 	const editor = useCreateBlockNote({
@@ -356,28 +365,105 @@ export default function HaunterEditor({
 	});
 	useSyncEditorCodeTheme(editor, resolvedTheme);
 
+	const appendSubpageLink = useCallback(
+		(
+			child: SubpageLinkedCollabEvent["child"],
+			parentContentUpdatedAt: string,
+		) => {
+			const meta = collab?.doc.getMap<unknown>("haunter-meta");
+			if (meta && meta.get(COLLAB_SEEDED_KEY) !== true) return false;
+
+			const block = createSubpageLinkBlock(child);
+			const exists = containsBlockId(
+				editor.document as unknown as BlockJson[],
+				block.id,
+			);
+			const lastBlock = editor.document.at(-1);
+			if (!exists && !lastBlock) return false;
+
+			const insert = () => {
+				if (!exists && lastBlock) {
+					editor.insertBlocks([block as never], lastBlock, "after");
+				}
+			};
+			if (collab && meta) {
+				collab.doc.transact(() => {
+					insert();
+					const current = meta.get(COLLAB_CONTENT_VERSION_KEY);
+					if (
+						typeof current !== "string" ||
+						isSameOrNewerContentVersion(parentContentUpdatedAt, current)
+					) {
+						meta.set(COLLAB_CONTENT_VERSION_KEY, parentContentUpdatedAt);
+					}
+				});
+			} else {
+				insert();
+			}
+			advanceBaseUpdatedAt(parentContentUpdatedAt);
+			return true;
+		},
+		[collab, editor, advanceBaseUpdatedAt],
+	);
+
+	useEffect(() => {
+		if (!editable) return;
+		return registerSubpageLinkAppender(pageId, appendSubpageLink);
+	}, [editable, pageId, appendSubpageLink]);
+
+	useEffect(() => {
+		if (!collab || !editable) return;
+		const pending = collab.doc.getMap<unknown>(COLLAB_SUBPAGE_LINKS_KEY);
+		const applyPending = () => {
+			for (const event of pending.values()) {
+				if (!isSubpageLinkedCollabEvent(event)) continue;
+				appendSubpageLink(event.child, event.parentContentUpdatedAt);
+			}
+		};
+		pending.observe(applyPending);
+		applyPending();
+		return () => pending.unobserve(applyPending);
+	}, [collab, editable, appendSubpageLink]);
+
 	// Seed a brand-new shared doc from the database copy exactly once.
 	const seededRef = useRef(false);
 	useEffect(() => {
 		if (!collab || !shouldSeed || seededRef.current) return;
 		seededRef.current = true;
-		if (normalizedInitialContent.length === 0) return;
-		collab.doc.getMap<boolean>("haunter-meta").set("seeded", true);
-		editor.replaceBlocks(editor.document, normalizedInitialContent as never);
-	}, [collab, shouldSeed, editor, normalizedInitialContent]);
+		const meta = collab.doc.getMap<unknown>("haunter-meta");
+		if (meta.get(COLLAB_SEEDED_KEY) === true) return;
+		collab.doc.transact(() => {
+			if (normalizedInitialContent.length > 0) {
+				editor.replaceBlocks(
+					editor.document,
+					normalizedInitialContent as never,
+				);
+			}
+			if (contentUpdatedAt) {
+				meta.set(COLLAB_CONTENT_VERSION_KEY, contentUpdatedAt);
+			}
+			meta.set(COLLAB_SEEDED_KEY, true);
+		});
+	}, [collab, shouldSeed, contentUpdatedAt, editor, normalizedInitialContent]);
 
 	const reconciledVersionRef = useRef<string | null>(null);
 	useEffect(() => {
 		if (!collab) return;
-		if (reconciledVersionRef.current === updatedAt) return;
-		reconciledVersionRef.current = updatedAt ?? null;
+		if (reconciledVersionRef.current === contentUpdatedAt) return;
+		reconciledVersionRef.current = contentUpdatedAt ?? null;
 
-		const { blocks, changed } = reconcileTaskBlockProps(
+		const taskResult = reconcileTaskBlockProps(
 			editor.document as unknown as BlockJson[],
 			normalizedInitialContent,
 		);
-		if (changed) editor.replaceBlocks(editor.document, blocks as never);
-	}, [collab, editor, normalizedInitialContent, updatedAt]);
+		const pageLinkResult = reconcilePageLinkBlocks(
+			taskResult.blocks,
+			normalizedInitialContent,
+		);
+		if (taskResult.changed || pageLinkResult.changed) {
+			editor.replaceBlocks(editor.document, pageLinkResult.blocks as never);
+		}
+	}, [collab, contentUpdatedAt, editor, normalizedInitialContent]);
 
 	useEffect(() => {
 		if (!focusRequest || !editable) return;
@@ -444,7 +530,7 @@ export default function HaunterEditor({
 		if (!dirtyRef.current) return true;
 		dirtyRef.current = false;
 		reportState("saving");
-		advanceBaseUpdatedAt(await flushMetadataSave?.());
+		await flushMetadataSave?.();
 		const content = editor.document as unknown as BlockJson[];
 		// Mirror into the cache immediately: a remount between this save and
 		// the next refetch must not initialize the editor from a stale doc.
@@ -461,9 +547,14 @@ export default function HaunterEditor({
 			})
 			.then(
 				(result) => {
-					baseUpdatedAtRef.current = result.updatedAt;
+					baseUpdatedAtRef.current = result.contentUpdatedAt;
 					if (!dirtyRef.current) reportState("saved");
-					setPageSavedAtInCache(queryClient, pageId, result.updatedAt);
+					setPageSavedAtInCache(
+						queryClient,
+						pageId,
+						result.updatedAt,
+						result.contentUpdatedAt,
+					);
 					if (result.linksChanged) {
 						invalidateBacklinks(queryClient);
 					}

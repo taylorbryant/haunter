@@ -341,7 +341,7 @@ describe("tasks use cases", () => {
 				{
 					id: page.id,
 					content: staleEditorContent,
-					baseUpdatedAt: firstSave.updatedAt,
+					baseUpdatedAt: firstSave.contentUpdatedAt,
 				},
 				{ ctx },
 			),

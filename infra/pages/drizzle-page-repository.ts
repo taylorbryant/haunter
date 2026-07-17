@@ -12,13 +12,13 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type {
 	NewPage,
 	PageRepository,
 	UpdatePageData,
 } from "@/features/pages/ports";
 import type { BlockJson, Page, PageMeta } from "@/features/pages/schemas";
-import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import * as schema from "@/infra/db/schema";
 import { assertPageInScope } from "@/infra/db/tenant-scope";
 
@@ -37,7 +37,7 @@ const metaColumns = {
 	updatedAt: schema.pages.updatedAt,
 };
 
-type PageMetaRow = Omit<PageRow, "content" | "searchText">;
+type PageMetaRow = Omit<PageRow, "content" | "searchText" | "contentUpdatedAt">;
 
 function toPageMeta(row: PageMetaRow): PageMeta {
 	return {
@@ -58,6 +58,7 @@ function toPage(row: PageRow): Page {
 	return {
 		...toPageMeta(row),
 		content: JSON.parse(row.content) as BlockJson[],
+		contentUpdatedAt: row.contentUpdatedAt,
 	};
 }
 
@@ -237,6 +238,7 @@ export function createDrizzlePageRepository(
 				position: input.position,
 				content: "[]",
 				searchText: "",
+				contentUpdatedAt: now,
 				createdAt: now,
 				updatedAt: now,
 			};
@@ -246,7 +248,7 @@ export function createDrizzlePageRepository(
 				throw new Error("Failed to create page");
 			}
 
-			return toPageMeta(row);
+			return { ...toPageMeta(row), contentUpdatedAt: row.contentUpdatedAt };
 		},
 		async update(scope, id: string, input: UpdatePageData) {
 			if (input.parentPageId !== undefined && input.parentPageId !== null) {
@@ -276,7 +278,10 @@ export function createDrizzlePageRepository(
 			searchText: string,
 		) {
 			const [current] = await db
-				.select({ updatedAt: schema.pages.updatedAt })
+				.select({
+					updatedAt: schema.pages.updatedAt,
+					contentUpdatedAt: schema.pages.contentUpdatedAt,
+				})
 				.from(schema.pages)
 				.where(
 					and(
@@ -291,25 +296,37 @@ export function createDrizzlePageRepository(
 
 			// Strictly after the previous version: write-through saves without a
 			// CAS base must still invalidate any editor holding that base.
-			const updatedAt = new Date(
-				Math.max(Date.now(), Date.parse(current.updatedAt) + 1),
+			const contentUpdatedAt = new Date(
+				Math.max(
+					Date.now(),
+					Date.parse(current.updatedAt) + 1,
+					Date.parse(current.contentUpdatedAt) + 1,
+				),
 			).toISOString();
 			const [row] = await db
 				.update(schema.pages)
-				.set({ content: contentJson, searchText, updatedAt })
+				.set({
+					content: contentJson,
+					searchText,
+					contentUpdatedAt,
+					updatedAt: sql<string>`max(${schema.pages.updatedAt}, ${contentUpdatedAt})`,
+				})
 				.where(
 					and(
 						eq(schema.pages.id, id),
 						eq(schema.pages.workspaceId, tenantScopeId(scope)),
 					),
 				)
-				.returning({ id: schema.pages.id });
+				.returning({
+					updatedAt: schema.pages.updatedAt,
+					contentUpdatedAt: schema.pages.contentUpdatedAt,
+				});
 
 			if (!row) {
 				throw new Error(`Failed to save content for page ${id}`);
 			}
 
-			return { updatedAt };
+			return row;
 		},
 		async saveContentIf(
 			scope,
@@ -321,24 +338,32 @@ export function createDrizzlePageRepository(
 			// Strictly after the base version: two writes inside the same
 			// millisecond must still produce distinct versions, or the next
 			// stale write would slip past the compare-and-set.
-			const updatedAt = new Date(
+			const contentUpdatedAt = new Date(
 				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
 			).toISOString();
-			// The WHERE clause is the compare-and-set: no row updates when
-			// another writer already bumped updatedAt.
+			// The WHERE clause is the compare-and-set: metadata writes do not
+			// invalidate the document token, while another content writer does.
 			const [row] = await db
 				.update(schema.pages)
-				.set({ content: contentJson, searchText, updatedAt })
+				.set({
+					content: contentJson,
+					searchText,
+					contentUpdatedAt,
+					updatedAt: sql<string>`max(${schema.pages.updatedAt}, ${contentUpdatedAt})`,
+				})
 				.where(
 					and(
 						eq(schema.pages.id, id),
 						eq(schema.pages.workspaceId, tenantScopeId(scope)),
-						eq(schema.pages.updatedAt, baseUpdatedAt),
+						eq(schema.pages.contentUpdatedAt, baseUpdatedAt),
 					),
 				)
-				.returning({ id: schema.pages.id });
+				.returning({
+					updatedAt: schema.pages.updatedAt,
+					contentUpdatedAt: schema.pages.contentUpdatedAt,
+				});
 
-			return row ? { updatedAt } : null;
+			return row ?? null;
 		},
 		async setDeletedByIds(scope, ids: string[], deletedAt: string | null) {
 			if (ids.length === 0) return;

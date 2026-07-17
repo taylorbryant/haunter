@@ -21,6 +21,7 @@ import type {
 } from "@/features/notifications/ports";
 import type { pagePolicy } from "@/features/pages/policy";
 import type {
+	PageCollaborationPort,
 	PageLinkRepository,
 	PageRepository,
 	PageVersionRepository,
@@ -66,6 +67,7 @@ export type AppPorts = {
 	notificationInbox: NotificationRepository;
 	notifications: import("@beignet/core/notifications").NotificationPort;
 	mailer: MailerPort;
+	pageCollaboration: PageCollaborationPort;
 	pageLinks: PageLinkRepository;
 	pages: PageRepository;
 	pageVersions: PageVersionRepository;

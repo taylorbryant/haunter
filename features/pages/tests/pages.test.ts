@@ -2,12 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
 import {
-	createTestTenant,
-	createTestUserActor,
-} from "@beignet/core/testing";
-import {
 	createTestContextFactory,
 	createTestPorts,
+	createTestTenant,
+	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
@@ -34,6 +32,7 @@ import {
 	updatePageUseCase,
 } from "../use-cases";
 import {
+	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
@@ -45,6 +44,7 @@ function createTester(
 	workspaceId: string,
 	tasks = createTestTaskRepository(),
 	role = "owner",
+	pageCollaboration = createTestPageCollaborationPort(),
 ) {
 	const auth = {
 		user: {
@@ -65,6 +65,7 @@ function createTester(
 				gate: appPorts.gate,
 				canvases,
 				pageLinks,
+				pageCollaboration,
 				pages,
 				pageVersions,
 				tasks,
@@ -103,26 +104,61 @@ function createTester(
 async function createFixture(userId = "user_test") {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository({ pages });
+	const publishedSubpageLinks: Parameters<
+		ReturnType<typeof createTestPageCollaborationPort>["publishSubpageLink"]
+	>[0][] = [];
+	const pageCollaboration = createTestPageCollaborationPort(
+		publishedSubpageLinks,
+	);
 	// Better Auth org ids are nanoid-style, not UUIDs — use a matching shape so
 	// schema validation is exercised realistically.
 	const workspace = {
 		id: crypto.randomUUID().replaceAll("-", ""),
 		name: "Work",
 	};
-	const tester = createTester(userId, pages, workspace.id, tasks);
+	const tester = createTester(
+		userId,
+		pages,
+		workspace.id,
+		tasks,
+		"owner",
+		pageCollaboration,
+	);
 	const ctx = await tester.ctx();
 	const scope = createTenantScope(createTestTenant(workspace.id));
 
-	return { pages, tasks, workspace, scope, tester, ctx };
+	return {
+		pages,
+		tasks,
+		workspace,
+		scope,
+		tester,
+		ctx,
+		publishedSubpageLinks,
+	};
 }
 
 describe("pages use cases", () => {
 	it("creates nested pages and lists workspace pages as meta only", async () => {
-		const { workspace, tester, ctx } = await createFixture();
+		const { workspace, tester, ctx, publishedSubpageLinks } =
+			await createFixture();
 
 		const root = await tester.run(
 			createPageUseCase,
 			{ workspaceId: workspace.id, title: "Jun 28 – Jul 4" },
+			{ ctx },
+		);
+		expect(root.parentContentUpdatedAt).toBeNull();
+		const intro = {
+			id: "intro",
+			type: "paragraph",
+			props: {},
+			content: [{ type: "text", text: "Weekly notes", styles: {} }],
+			children: [],
+		};
+		await tester.run(
+			savePageContentUseCase,
+			{ id: root.id, content: [intro] },
 			{ ctx },
 		);
 		const child = await tester.run(
@@ -139,10 +175,167 @@ describe("pages use cases", () => {
 			{ workspaceId: workspace.id },
 			{ ctx },
 		);
+		const parent = await tester.run(getPageUseCase, { id: root.id }, { ctx });
+		const backlinks = await tester.run(
+			listBacklinksUseCase,
+			{ id: child.id },
+			{ ctx },
+		);
 
 		expect(child.parentPageId).toBe(root.id);
+		expect(child.parentContentUpdatedAt).toBe(parent.updatedAt);
+		if (!child.parentContentUpdatedAt) {
+			throw new Error("Expected the parent content version");
+		}
+		expect(parent.content).toHaveLength(2);
+		expect(parent.content[0]).toEqual(intro);
+		expect(parent.content[1]).toMatchObject({
+			id: child.id,
+			type: "pageLink",
+			props: { pageId: child.id, workspaceId: workspace.id },
+		});
+		expect(backlinks.items.map((page) => page.id)).toEqual([root.id]);
+		expect(publishedSubpageLinks).toEqual([
+			{
+				parentPageId: root.id,
+				parentContentUpdatedAt: child.parentContentUpdatedAt,
+				child: expect.objectContaining({
+					id: child.id,
+					workspaceId: workspace.id,
+				}),
+			},
+		]);
 		expect(listed.items).toHaveLength(2);
 		expect(listed.items.every((item) => !("content" in item))).toBe(true);
+	});
+
+	it("lets the editor place a new subpage block at the cursor", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+		const parent = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Parent" },
+			{ ctx },
+		);
+		const child = await tester.run(
+			createPageUseCase,
+			{
+				workspaceId: workspace.id,
+				parentPageId: parent.id,
+				title: "Child",
+				appendToParentContent: false,
+			},
+			{ ctx },
+		);
+		const fetched = await tester.run(
+			getPageUseCase,
+			{ id: parent.id },
+			{ ctx },
+		);
+		const backlinks = await tester.run(
+			listBacklinksUseCase,
+			{ id: child.id },
+			{ ctx },
+		);
+
+		expect(fetched.content).toEqual([]);
+		expect(backlinks.items).toEqual([]);
+		expect(child.parentContentUpdatedAt).toBeNull();
+	});
+
+	it("preserves a concurrent parent edit while appending a subpage", async () => {
+		const { pages, workspace, tester, ctx } = await createFixture();
+		const parent = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Parent" },
+			{ ctx },
+		);
+		const originalSaveContentIf = pages.saveContentIf.bind(pages);
+		let attempts = 0;
+		pages.saveContentIf = async (...args) => {
+			attempts += 1;
+			if (attempts === 1) {
+				const [scope, pageId] = args;
+				const current = await pages.findById(scope, pageId);
+				if (!current) throw new Error("Expected parent page");
+				const concurrentContent = [
+					...current.content,
+					{
+						id: "concurrent-edit",
+						type: "paragraph",
+						props: {},
+						content: [{ type: "text", text: "Concurrent edit", styles: {} }],
+						children: [],
+					},
+				];
+				await pages.saveContent(
+					scope,
+					pageId,
+					JSON.stringify(concurrentContent),
+					"Concurrent edit",
+				);
+				return null;
+			}
+			return originalSaveContentIf(...args);
+		};
+
+		const child = await tester.run(
+			createPageUseCase,
+			{
+				workspaceId: workspace.id,
+				parentPageId: parent.id,
+				title: "Child",
+			},
+			{ ctx },
+		);
+		const fetched = await tester.run(
+			getPageUseCase,
+			{ id: parent.id },
+			{ ctx },
+		);
+
+		expect(attempts).toBe(2);
+		expect(fetched.content.map((block) => block.type)).toEqual([
+			"paragraph",
+			"pageLink",
+		]);
+		expect(fetched.content[1]?.props.pageId).toBe(child.id);
+	});
+
+	it("keeps a committed nested page when collaboration propagation fails", async () => {
+		const pages = createTestPageRepository();
+		const workspaceId = crypto.randomUUID().replaceAll("-", "");
+		const tester = createTester(
+			"user_test",
+			pages,
+			workspaceId,
+			createTestTaskRepository({ pages }),
+			"owner",
+			{
+				async publishSubpageLink() {
+					throw new Error("Liveblocks unavailable");
+				},
+			},
+		);
+		const ctx = await tester.ctx();
+		const parent = await tester.run(
+			createPageUseCase,
+			{ workspaceId, title: "Parent" },
+			{ ctx },
+		);
+
+		const child = await tester.run(
+			createPageUseCase,
+			{ workspaceId, parentPageId: parent.id, title: "Child" },
+			{ ctx },
+		);
+		const fetched = await tester.run(
+			getPageUseCase,
+			{ id: parent.id },
+			{ ctx },
+		);
+
+		expect(child.parentPageId).toBe(parent.id);
+		expect(fetched.content.at(-1)?.props.pageId).toBe(child.id);
 	});
 
 	it("round-trips page content and bumps updatedAt", async () => {
@@ -195,7 +388,11 @@ describe("pages use cases", () => {
 		// Writer A saves on top of the created version.
 		const first = await tester.run(
 			savePageContentUseCase,
-			{ id: page.id, content: block("A"), baseUpdatedAt: page.updatedAt },
+			{
+				id: page.id,
+				content: block("A"),
+				baseUpdatedAt: page.contentUpdatedAt,
+			},
 			{ ctx },
 		);
 
@@ -203,7 +400,11 @@ describe("pages use cases", () => {
 		await expect(
 			tester.run(
 				savePageContentUseCase,
-				{ id: page.id, content: block("B"), baseUpdatedAt: page.updatedAt },
+				{
+					id: page.id,
+					content: block("B"),
+					baseUpdatedAt: page.contentUpdatedAt,
+				},
 				{ ctx },
 			),
 		).rejects.toThrow(/changed since/);
@@ -211,13 +412,64 @@ describe("pages use cases", () => {
 		// After rebasing on A's version, B's save lands.
 		const rebased = await tester.run(
 			savePageContentUseCase,
-			{ id: page.id, content: block("B2"), baseUpdatedAt: first.updatedAt },
+			{
+				id: page.id,
+				content: block("B2"),
+				baseUpdatedAt: first.contentUpdatedAt,
+			},
 			{ ctx },
 		);
 		expect(rebased.updatedAt >= first.updatedAt).toBe(true);
 
 		const fetched = await tester.run(getPageUseCase, { id: page.id }, { ctx });
 		expect(fetched.content).toEqual(block("B2"));
+	});
+
+	it("does not invalidate the content token when only metadata changes", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+		const created = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Before" },
+			{ ctx },
+		);
+		const initial = await tester.run(
+			getPageUseCase,
+			{ id: created.id },
+			{ ctx },
+		);
+		const content = [
+			{
+				id: "body-after-title-save",
+				type: "paragraph",
+				props: {},
+				content: [{ type: "text", text: "body after title save", styles: {} }],
+				children: [],
+			},
+		];
+
+		await tester.run(
+			updatePageUseCase,
+			{ id: created.id, title: "After" },
+			{ ctx },
+		);
+		const saved = await tester.run(
+			savePageContentUseCase,
+			{
+				id: created.id,
+				content,
+				baseUpdatedAt: initial.contentUpdatedAt,
+			},
+			{ ctx },
+		);
+		const fetched = await tester.run(
+			getPageUseCase,
+			{ id: created.id },
+			{ ctx },
+		);
+
+		expect(fetched.title).toBe("After");
+		expect(fetched.content).toEqual(content);
+		expect(fetched.contentUpdatedAt).toBe(saved.contentUpdatedAt);
 	});
 
 	it("rejects moving a page under one of its descendants", async () => {

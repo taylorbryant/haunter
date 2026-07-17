@@ -127,7 +127,7 @@ export const createPageCapability = defineAgentCapability("create_page", {
 				input: {
 					id: page.id,
 					content: initialContent,
-					baseUpdatedAt: page.updatedAt,
+					baseUpdatedAt: page.contentUpdatedAt,
 				},
 			});
 			updatedAt = saved.updatedAt;
@@ -171,7 +171,7 @@ export const appendToPageCapability = defineAgentCapability("append_to_page", {
 			input: {
 				id: input.pageId,
 				content: [...page.content, ...appended],
-				baseUpdatedAt: page.updatedAt,
+				baseUpdatedAt: page.contentUpdatedAt,
 			},
 		});
 		return {

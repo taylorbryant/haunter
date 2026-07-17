@@ -14,16 +14,16 @@ import { useCollabSession } from "@/features/collab/client/session";
 import { cursorColorFor, pageRoomId } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
+	consumeTitleFocus,
+	releaseTitleKeyboardPrime,
+} from "@/features/pages/client/new-page-focus";
+import {
 	getPageQueryOptions,
 	invalidatePage,
 	invalidatePages,
 	setPageTitleInCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
-import {
-	consumeTitleFocus,
-	releaseTitleKeyboardPrime,
-} from "@/features/pages/client/new-page-focus";
 import { setPageSaveState } from "@/features/pages/client/save-state";
 import { useSharedTitle } from "@/features/pages/client/use-shared-title";
 import { cn } from "@/lib/utils";
@@ -94,9 +94,6 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const titleDraftRef = useRef<string | null>(null);
 	const titleSavePromiseRef = useRef<Promise<string | null> | null>(null);
-	const [localMetadataUpdatedAt, setLocalMetadataUpdatedAt] = useState<
-		string | null
-	>(null);
 	// Bumped when a save is rejected as stale: refetches the doc and remounts
 	// the editor on the newer version instead of clobbering it.
 	const [reloadCount, setReloadCount] = useState(0);
@@ -108,7 +105,6 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on page change
 	useEffect(() => {
 		setTitle(null);
-		setLocalMetadataUpdatedAt(null);
 		setPageSaveState("saved");
 	}, [pageId]);
 
@@ -196,7 +192,6 @@ export function PageEditor({ pageId }: { pageId: string }) {
 						result.title,
 						result.updatedAt,
 					);
-					setLocalMetadataUpdatedAt(result.updatedAt);
 					invalidatePages(queryClient);
 					if (titleDraftRef.current === next) {
 						titleDraftRef.current = null;
@@ -294,8 +289,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					pageId={pageId}
 					workspaceId={page.workspaceId}
 					initialContent={page.content}
-					updatedAt={page.updatedAt}
-					localMetadataUpdatedAt={localMetadataUpdatedAt}
+					contentUpdatedAt={page.contentUpdatedAt}
 					editable={!readOnly}
 					collab={collabRoom}
 					collabUser={collabUser}
