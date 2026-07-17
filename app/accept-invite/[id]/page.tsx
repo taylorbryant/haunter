@@ -153,17 +153,19 @@ export default function AcceptInvitePage({
 		actionInFlight.current = true;
 		setError("");
 		setStatus("working");
-		const { error: rejectError } =
-			await authClient.organization.rejectInvitation({ invitationId: id });
-		if (rejectError) {
+		try {
+			const { error: rejectError } =
+				await authClient.organization.rejectInvitation({ invitationId: id });
+			if (rejectError) throw rejectError;
+			router.replace("/");
+		} catch (rejectError) {
+			const authError = rejectError as { code?: string; message?: string };
 			showActionError(
-				rejectError.code === "INVITATION_NOT_FOUND"
+				authError.code === "INVITATION_NOT_FOUND"
 					? INVITATION_UNAVAILABLE_MESSAGE
-					: (rejectError.message ?? "Could not decline this invitation."),
+					: (authError.message ?? "Could not decline this invitation."),
 			);
-			return;
 		}
-		router.replace("/");
 	}
 
 	return (

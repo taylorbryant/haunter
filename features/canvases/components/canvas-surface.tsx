@@ -16,6 +16,8 @@ import {
 	Tldraw,
 } from "tldraw";
 import { useCurrentUser } from "@/components/app-session-provider";
+import { userErrorMessage } from "@/client/error-feedback";
+import { Button } from "@/components/ui/button";
 import {
 	getCanvasQueryOptions,
 	saveCanvasSnapshotMutationOptions,
@@ -57,11 +59,17 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
 	const queryClient = useQueryClient();
 	const canvasQuery = useQuery(getCanvasQueryOptions(canvasId));
-	const saveMutation = useMutation(saveCanvasSnapshotMutationOptions());
+	const saveMutation = useMutation({
+		...saveCanvasSnapshotMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 	const collabSession = useCollabSession(canvasRoomId(canvasId));
 	const canEdit = useCanEditWorkspace();
 
-	const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
+	const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(
+		"saved",
+	);
+	const [saveError, setSaveError] = useState<string | null>(null);
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const flushRef = useRef<() => void>(() => {});
 	// Last server updatedAt this client saw: the optimistic-concurrency base.
@@ -90,10 +98,18 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		);
 	}
 
-	if (canvasQuery.isError || !canvasQuery.data) {
+	if (!canvasQuery.data) {
 		return (
-			<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-				This canvas could not be loaded.
+			<div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground text-sm">
+				<p>This canvas could not be loaded.</p>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					onClick={() => void canvasQuery.refetch()}
+				>
+					Try again
+				</Button>
 			</div>
 		);
 	}
@@ -134,6 +150,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		}
 
 		let dirty = false;
+		let saveInFlight = false;
 
 		// Another member (or tab) saved since we loaded: adopt the server's
 		// snapshot rather than clobbering it, and rebase future saves on it.
@@ -152,8 +169,10 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		}
 
 		function save() {
-			if (!dirty) return;
+			if (saveInFlight || !dirty) return;
 			dirty = false;
+			saveInFlight = true;
+			setSaveError(null);
 			setSaveState("saving");
 			const snapshot = getSnapshot(editor.store).document as unknown as Record<
 				string,
@@ -174,18 +193,41 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 				},
 				{
 					onSuccess: (result) => {
+						saveInFlight = false;
 						baseUpdatedAtRef.current = result.updatedAt;
+						setSaveError(null);
+						if (dirty) save();
+						else setSaveState("saved");
 					},
 					onError: (error) => {
+						saveInFlight = false;
 						if (error instanceof ContractError && error.status === 409) {
-							void reloadFromServer();
+							void reloadFromServer().then(
+								() => {
+									setSaveError(null);
+									setSaveState("saved");
+								},
+								(reloadError) => {
+									dirty = true;
+									setSaveError(
+										userErrorMessage(
+											reloadError,
+											"The latest canvas could not be loaded.",
+										),
+									);
+									setSaveState("error");
+								},
+							);
 						} else {
 							// Transient failure: keep the local changes and retry on the
 							// next edit/flush.
 							dirty = true;
+							setSaveError(
+								userErrorMessage(error, "Canvas changes could not be saved."),
+							);
+							setSaveState("error");
 						}
 					},
-					onSettled: () => setSaveState("saved"),
 				},
 			);
 		}
@@ -219,6 +261,23 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 					Saving…
 				</span>
 			) : null}
+			{saveState === "error" && saveError ? (
+				<div
+					role="alert"
+					className="absolute right-2 bottom-2 z-10 flex max-w-xs items-center gap-2 rounded border border-destructive/30 bg-background/95 px-2 py-1.5 text-destructive text-xs shadow"
+				>
+					<span className="flex-1">{saveError}</span>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={saveMutation.isPending}
+						onClick={() => flushRef.current()}
+					>
+						Retry
+					</Button>
+				</div>
+			) : null}
 		</div>
 	);
 }
@@ -243,7 +302,10 @@ function CollabCanvasSurface({
 	const { resolvedTheme } = useTheme();
 	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
 	const queryClient = useQueryClient();
-	const saveMutation = useMutation(saveCanvasSnapshotMutationOptions());
+	const saveMutation = useMutation({
+		...saveCanvasSnapshotMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 	// Cursor identity shown to the other people on this canvas.
 	const currentUser = useCurrentUser();
 	const collabUser: CanvasCollabUser | undefined = currentUser
@@ -255,7 +317,10 @@ function CollabCanvasSurface({
 		: undefined;
 	const storeWithStatus = useCollabCanvasStore(room, snapshot, collabUser);
 
-	const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
+	const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(
+		"saved",
+	);
+	const [saveError, setSaveError] = useState<string | null>(null);
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const flushRef = useRef<() => void>(() => {});
 
@@ -274,10 +339,13 @@ function CollabCanvasSurface({
 		}
 
 		let dirty = false;
+		let saveInFlight = false;
 
 		function save() {
-			if (!dirty || !canEdit) return;
+			if (saveInFlight || !dirty || !canEdit) return;
 			dirty = false;
+			saveInFlight = true;
+			setSaveError(null);
 			setSaveState("saving");
 			const document = getSnapshot(editor.store).document as unknown as Record<
 				string,
@@ -287,12 +355,22 @@ function CollabCanvasSurface({
 			saveMutation.mutate(
 				{ path: { id: canvasId }, body: { snapshot: document } },
 				{
-					onError: () => {
+					onSuccess: () => {
+						saveInFlight = false;
+						setSaveError(null);
+						if (dirty) save();
+						else setSaveState("saved");
+					},
+					onError: (error) => {
+						saveInFlight = false;
 						// Transient failure: keep local changes and retry on the next
 						// edit/flush; the shared doc is the live source of truth anyway.
 						dirty = true;
+						setSaveError(
+							userErrorMessage(error, "Canvas changes could not be saved."),
+						);
+						setSaveState("error");
 					},
-					onSettled: () => setSaveState("saved"),
 				},
 			);
 		}
@@ -326,6 +404,23 @@ function CollabCanvasSurface({
 				<span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-background/80 px-1.5 py-0.5 text-muted-foreground text-xs">
 					Saving…
 				</span>
+			) : null}
+			{saveState === "error" && saveError ? (
+				<div
+					role="alert"
+					className="absolute right-2 bottom-2 z-10 flex max-w-xs items-center gap-2 rounded border border-destructive/30 bg-background/95 px-2 py-1.5 text-destructive text-xs shadow"
+				>
+					<span className="flex-1">{saveError}</span>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={saveMutation.isPending}
+						onClick={() => flushRef.current()}
+					>
+						Retry
+					</Button>
+				</div>
 			) : null}
 		</div>
 	);

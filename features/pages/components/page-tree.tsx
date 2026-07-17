@@ -14,6 +14,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { userErrorMessage } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import {
 	ResponsiveDialog,
@@ -74,7 +75,11 @@ import {
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
-import type { PageMeta } from "@/features/pages/schemas";
+import {
+	PAGE_TITLE_MAX_LENGTH,
+	PAGE_TITLE_TOO_LONG_MESSAGE,
+	type PageMeta,
+} from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { cn } from "@/lib/utils";
@@ -183,13 +188,29 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		...listPagesQueryOptions(workspaceId),
 		enabled: synced,
 	});
-	const createMutation = useMutation(createPageMutationOptions());
+	const createMutation = useMutation({
+		...createPageMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 	const updateMutation = useMutation(updatePageMutationOptions());
-	const deleteMutation = useMutation(deletePageMutationOptions());
+	const renameMutation = useMutation({
+		...updatePageMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
+	const deleteMutation = useMutation({
+		...deletePageMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 
 	const { expanded, toggle } = useExpandedState(workspaceId);
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [renameValue, setRenameValue] = useState("");
+	const [actionError, setActionError] = useState<string | null>(null);
+	const [renameError, setRenameError] = useState<{
+		pageId: string;
+		message: string;
+	} | null>(null);
+	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [iconPageId, setIconPageId] = useState<string | null>(null);
 	const [pageToTrash, setPageToTrash] = useState<TreeNode | null>(null);
 	const [dragId, setDragId] = useState<string | null>(null);
@@ -206,8 +227,18 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 
 	async function createPage(parentPageId: string | null) {
+		setActionError(null);
 		primeTitleKeyboard();
-		if (parentPageId && !(await flushPendingPageSave(parentPageId))) {
+		try {
+			if (parentPageId && !(await flushPendingPageSave(parentPageId))) {
+				setActionError("Save the current page before creating a subpage.");
+				releaseTitleKeyboardPrime();
+				return;
+			}
+		} catch (error) {
+			setActionError(
+				userErrorMessage(error, "The current page could not be saved."),
+			);
 			releaseTitleKeyboardPrime();
 			return;
 		}
@@ -257,6 +288,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					router.push(`/w/${workspaceId}/p/${page.id}`);
 				},
 				onError: () => {
+					setActionError("The page could not be created. Please try again.");
 					setSuppressMobileFinalFocus(false);
 					releaseTitleKeyboardPrime();
 				},
@@ -265,23 +297,58 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	}
 
 	function commitRename(pageId: string) {
+		if (renameMutation.isPending) return;
 		const title = renameValue.trim();
-		setRenamingId(null);
-		if (!title) return;
-		updateMutation.mutate(
+		if (!title) {
+			setRenamingId((current) => (current === pageId ? null : current));
+			setRenameError(null);
+			return;
+		}
+		if (title.length > PAGE_TITLE_MAX_LENGTH) {
+			setRenameError({ pageId, message: PAGE_TITLE_TOO_LONG_MESSAGE });
+			return;
+		}
+		setRenameError(null);
+		renameMutation.mutate(
 			{ path: { id: pageId }, body: { title } },
-			{ onSuccess: () => invalidatePages(queryClient) },
+			{
+				onSuccess: () => {
+					setRenamingId((current) => (current === pageId ? null : current));
+					setRenameError((current) =>
+						current?.pageId === pageId ? null : current,
+					);
+					void invalidatePages(queryClient);
+				},
+				onError: (error) =>
+					setRenameError({
+						pageId,
+						message: userErrorMessage(error, "The page could not be renamed."),
+					}),
+			},
 		);
+	}
+
+	function startRename(node: TreeNode) {
+		setRenameError(null);
+		setRenamingId(node.id);
+		setRenameValue(node.title);
+	}
+
+	function startTrash(node: TreeNode) {
+		setDeleteError(null);
+		setPageToTrash(node);
 	}
 
 	// Soft delete: the subtree moves to the workspace trash (restorable).
 	function deletePage(node: TreeNode) {
+		setDeleteError(null);
 		const subtree = subtreeIdsById.get(node.id) ?? new Set([node.id]);
 		deleteMutation.mutate(
 			{ path: { id: node.id } },
 			{
 				onSuccess: async () => {
 					setPageToTrash(null);
+					setDeleteError(null);
 					await Promise.all([
 						invalidatePages(queryClient),
 						invalidateTrash(queryClient),
@@ -293,6 +360,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						router.push(`/w/${workspaceId}`);
 					}
 				},
+				onError: (error) =>
+					setDeleteError(
+						userErrorMessage(error, "The page could not be moved to trash."),
+					),
 			},
 		);
 	}
@@ -451,7 +522,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							autoFocus
 							className="h-8"
 							value={renameValue}
-							onChange={(event) => setRenameValue(event.target.value)}
+							maxLength={PAGE_TITLE_MAX_LENGTH}
+							aria-invalid={renameError?.pageId === node.id ? true : undefined}
+							onChange={(event) => {
+								setRenameValue(event.target.value);
+								setRenameError(null);
+							}}
 							onKeyDown={(event) => {
 								if (event.key === "Enter") commitRename(node.id);
 								if (event.key === "Escape") setRenamingId(null);
@@ -554,10 +630,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 											<Button
 												variant="ghost"
 												className="h-11 justify-start"
-												onClick={() => {
-													setRenamingId(node.id);
-													setRenameValue(node.title);
-												}}
+												onClick={() => startRename(node)}
 											/>
 										}
 									>
@@ -581,7 +654,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 											<Button
 												variant="ghost"
 												className="h-11 justify-start text-destructive hover:text-destructive"
-												onClick={() => setPageToTrash(node)}
+												onClick={() => startTrash(node)}
 											/>
 										}
 									>
@@ -610,12 +683,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 									side="right"
 									align="start"
 								>
-									<DropdownMenuItem
-										onClick={() => {
-											setRenamingId(node.id);
-											setRenameValue(node.title);
-										}}
-									>
+									<DropdownMenuItem onClick={() => startRename(node)}>
 										Rename
 									</DropdownMenuItem>
 									<DropdownMenuItem onClick={() => setIconPageId(node.id)}>
@@ -623,7 +691,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 									</DropdownMenuItem>
 									<DropdownMenuItem
 										className="text-destructive focus:text-destructive"
-										onClick={() => setPageToTrash(node)}
+										onClick={() => startTrash(node)}
 									>
 										Move to trash
 									</DropdownMenuItem>
@@ -675,6 +743,20 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							/>
 						))}
 					</div>
+				) : pagesQuery.isError && !pagesQuery.data ? (
+					<div className="space-y-2 px-2 py-1 text-xs">
+						<p role="alert" className="text-destructive">
+							Pages could not be loaded.
+						</p>
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							onClick={() => void pagesQuery.refetch()}
+						>
+							Try again
+						</Button>
+					</div>
 				) : tree.length === 0 ? (
 					<p className="px-2 text-sidebar-foreground/50 text-xs">
 						{canEdit ? "No pages yet. Create one." : "No pages yet."}
@@ -683,13 +765,26 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					<SidebarMenu>{tree.map((node) => renderNode(node))}</SidebarMenu>
 				)}
 			</SidebarGroupContent>
+			{actionError ? (
+				<p role="alert" className="px-2 text-destructive text-xs">
+					{actionError}
+				</p>
+			) : null}
+			{!isMobile && renameError?.pageId === renamingId ? (
+				<p role="alert" className="px-2 text-destructive text-xs">
+					{renameError.message}
+				</p>
+			) : null}
 			{/* On desktop renaming is inline in the row; on mobile the row is
 			    inside the sidebar sheet, so it gets a proper drawer instead. */}
 			{isMobile ? (
 				<ResponsiveDialog
 					open={renamingId !== null}
 					onOpenChange={(open) => {
-						if (!open) setRenamingId(null);
+						if (!open) {
+							setRenamingId(null);
+							setRenameError(null);
+						}
 					}}
 					title="Rename page"
 					description="Choose a new name for this page."
@@ -705,10 +800,25 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							autoFocus
 							value={renameValue}
 							aria-label="Page title"
-							onChange={(event) => setRenameValue(event.target.value)}
+							aria-invalid={
+								renameError?.pageId === renamingId ? true : undefined
+							}
+							maxLength={PAGE_TITLE_MAX_LENGTH}
+							onChange={(event) => {
+								setRenameValue(event.target.value);
+								setRenameError(null);
+							}}
 						/>
+						{renameError?.pageId === renamingId ? (
+							<p role="alert" className="text-destructive text-sm">
+								{renameError.message}
+							</p>
+						) : null}
 						<ResponsiveDialogFooter>
-							<Button type="submit" disabled={!renameValue.trim()}>
+							<Button
+								type="submit"
+								disabled={!renameValue.trim() || renameMutation.isPending}
+							>
 								Rename
 							</Button>
 						</ResponsiveDialogFooter>
@@ -718,7 +828,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			<DestructiveConfirmationDialog
 				open={pageToTrash !== null}
 				onOpenChange={(open) => {
-					if (!open) setPageToTrash(null);
+					if (!open) {
+						setPageToTrash(null);
+						setDeleteError(null);
+					}
 				}}
 				title="Move to trash?"
 				description={
@@ -733,6 +846,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 				actionLabel="Move to trash"
 				pendingLabel="Moving…"
 				pending={deleteMutation.isPending}
+				error={deleteError}
 				onConfirm={() => {
 					if (pageToTrash) deletePage(pageToTrash);
 				}}

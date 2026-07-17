@@ -110,6 +110,20 @@ export function PageHistoryDialog({
 
 	const preview = previewQuery.isPending ? (
 		<Skeleton className="h-40 w-full" />
+	) : previewQuery.isError && !previewQuery.data ? (
+		<div className="flex items-center gap-2 text-sm">
+			<p role="alert" className="text-destructive">
+				This version could not be loaded.
+			</p>
+			<Button
+				type="button"
+				variant="outline"
+				size="sm"
+				onClick={() => void previewQuery.refetch()}
+			>
+				Try again
+			</Button>
+		</div>
 	) : previewQuery.data ? (
 		<ReadOnlyEditor key={selected} content={previewQuery.data.content} />
 	) : (
@@ -136,6 +150,20 @@ export function PageHistoryDialog({
 										<Skeleton className="h-10 w-full" />
 										<Skeleton className="h-10 w-full" />
 										<Skeleton className="h-10 w-full" />
+									</div>
+								) : versionsQuery.isError && !versionsQuery.data ? (
+									<div className="flex items-center gap-2 p-2 text-sm">
+										<p role="alert" className="text-destructive">
+											Page history could not be loaded.
+										</p>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={() => void versionsQuery.refetch()}
+										>
+											Try again
+										</Button>
 									</div>
 								) : versions.length === 0 ? (
 									<p className="p-2 text-muted-foreground text-sm">
@@ -212,6 +240,20 @@ export function PageHistoryDialog({
 				</DialogHeader>
 				{versionsQuery.isPending ? (
 					<Skeleton className="h-40 w-full" />
+				) : versionsQuery.isError && !versionsQuery.data ? (
+					<div className="flex items-center gap-2 text-sm">
+						<p role="alert" className="text-destructive">
+							Page history could not be loaded.
+						</p>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => void versionsQuery.refetch()}
+						>
+							Try again
+						</Button>
+					</div>
 				) : versions.length === 0 ? (
 					<p className="text-muted-foreground text-sm">
 						No versions yet — they appear after you've edited for a while.

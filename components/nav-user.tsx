@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { authErrorMessage, reportUserError } from "@/client/error-feedback";
 import { useCommand } from "@/components/command-palette/registry";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { useThemePreferences } from "@/components/theme-provider";
@@ -117,12 +118,15 @@ export function NavUser({
 	});
 
 	async function signOut() {
-		await authClient.signOut();
-		// Hard navigation: forces the server to re-evaluate the now-cleared
-		// session and redirect to sign-in, and drops all client state. More
-		// reliable than a client-side push after logout (which on mobile could
-		// leave you on a stale, still-"logged in"-looking page).
-		window.location.href = "/";
+		try {
+			const result = await authClient.signOut();
+			if (result.error) throw result.error;
+			// Hard navigation: forces the server to re-evaluate the now-cleared
+			// session and redirect to sign-in, and drops all client state.
+			window.location.href = "/";
+		} catch (error) {
+			reportUserError(authErrorMessage(error, "You could not be signed out."));
+		}
 	}
 
 	const userIdentity = (

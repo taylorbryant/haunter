@@ -25,6 +25,15 @@ function PageLink({
 		);
 	}
 
+	if (pagesQuery.isError && !page) {
+		return (
+			<span className="inline-flex items-center gap-1.5 py-0.5 text-destructive">
+				<FileTextIcon className="size-4" />
+				Page temporarily unavailable
+			</span>
+		);
+	}
+
 	if (!page) {
 		return (
 			<span className="inline-flex items-center gap-1.5 py-0.5 text-muted-foreground line-through">

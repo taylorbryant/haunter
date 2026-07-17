@@ -3,12 +3,31 @@
 import { useQuery } from "@tanstack/react-query";
 import { FileTextIcon } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { listBacklinksQueryOptions } from "@/features/pages/client/queries";
 
 /** Notion-style "Linked mentions": live pages whose documents link here. */
 export function Backlinks({ pageId }: { pageId: string }) {
 	const backlinksQuery = useQuery(listBacklinksQueryOptions(pageId));
 	const items = backlinksQuery.data?.items ?? [];
+
+	if (backlinksQuery.isError && !backlinksQuery.data) {
+		return (
+			<div className="mt-10 flex items-center gap-2 border-t pt-4 text-xs">
+				<p role="alert" className="text-destructive">
+					Linked mentions could not be loaded.
+				</p>
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					onClick={() => void backlinksQuery.refetch()}
+				>
+					Try again
+				</Button>
+			</div>
+		);
+	}
 
 	if (items.length === 0) {
 		return null;

@@ -10,6 +10,8 @@ import {
 	useState,
 } from "react";
 import { useCurrentUser } from "@/components/app-session-provider";
+import { Button } from "@/components/ui/button";
+import { userErrorMessage } from "@/client/error-feedback";
 import { useCollabSession } from "@/features/collab/client/session";
 import { cursorColorFor, pageRoomId } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
@@ -26,6 +28,10 @@ import {
 } from "@/features/pages/client/queries";
 import { setPageSaveState } from "@/features/pages/client/save-state";
 import { useSharedTitle } from "@/features/pages/client/use-shared-title";
+import {
+	PAGE_TITLE_MAX_LENGTH,
+	PAGE_TITLE_TOO_LONG_MESSAGE,
+} from "@/features/pages/schemas";
 import { cn } from "@/lib/utils";
 import { Backlinks } from "./backlinks";
 import { EditorBodySkeleton, PageEditorSkeleton } from "./page-editor-skeleton";
@@ -68,7 +74,10 @@ function resizeTitleTextarea(textarea: HTMLTextAreaElement | null) {
 export function PageEditor({ pageId }: { pageId: string }) {
 	const queryClient = useQueryClient();
 	const pageQuery = useQuery(getPageQueryOptions(pageId));
-	const updatePageMutation = useMutation(updatePageMutationOptions());
+	const updatePageMutation = useMutation({
+		...updatePageMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 	// Viewers get a read-only surface; the server denies their writes anyway,
 	// but the UI must not pretend edits will stick.
 	const readOnly = !useCanEditWorkspace();
@@ -90,10 +99,13 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	);
 
 	const [title, setTitle] = useState<string | null>(null);
+	const [titleError, setTitleError] = useState<string | null>(null);
 	const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
 	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const titleDraftRef = useRef<string | null>(null);
 	const titleSavePromiseRef = useRef<Promise<string | null> | null>(null);
+	const activePageIdRef = useRef(pageId);
+	activePageIdRef.current = pageId;
 	// Bumped when a save is rejected as stale: refetches the doc and remounts
 	// the editor on the newer version instead of clobbering it.
 	const [reloadCount, setReloadCount] = useState(0);
@@ -104,8 +116,15 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// Reset local title state when navigating between pages.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on page change
 	useEffect(() => {
+		if (titleTimeoutRef.current) clearTimeout(titleTimeoutRef.current);
+		titleTimeoutRef.current = null;
+		titleDraftRef.current = null;
 		setTitle(null);
+		setTitleError(null);
 		setPageSaveState("saved");
+		return () => {
+			if (titleTimeoutRef.current) clearTimeout(titleTimeoutRef.current);
+		};
 	}, [pageId]);
 
 	// Arriving at a page we just created: put the caret in its empty title.
@@ -154,10 +173,20 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		return <PageEditorSkeleton />;
 	}
 
-	if (pageQuery.isError || !pageQuery.data) {
+	if (!pageQuery.data) {
 		return (
-			<div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-10 text-muted-foreground">
+			<div className="mx-auto w-full max-w-4xl space-y-3 px-4 py-6 text-muted-foreground md:px-8 md:py-10">
 				<p className="px-0 md:px-[54px]">This page could not be loaded.</p>
+				<div className="px-0 md:px-[54px]">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => void pageQuery.refetch()}
+					>
+						Try again
+					</Button>
+				</div>
 			</div>
 		);
 	}
@@ -166,6 +195,11 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 	function handleTitleChange(next: string) {
 		const normalized = normalizeTitleInput(next);
+		setTitleError(
+			normalized.length > PAGE_TITLE_MAX_LENGTH
+				? PAGE_TITLE_TOO_LONG_MESSAGE
+				: null,
+		);
 		setTitle(normalized);
 		titleDraftRef.current = normalized;
 		// Collaborators see every keystroke; the database write is debounced.
@@ -178,28 +212,55 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	}
 
 	function saveTitle(next: string): Promise<string | null> {
+		if (next.length > PAGE_TITLE_MAX_LENGTH) {
+			setTitleError(PAGE_TITLE_TOO_LONG_MESSAGE);
+			return Promise.resolve(null);
+		}
+		// Preserve typing order when a slow request overlaps the next debounce.
+		// Without this queue, an older response can arrive last and overwrite the
+		// newer title in both the database and client cache.
+		const savedPageId = pageId;
+		const previousSave = titleSavePromiseRef.current;
+		const request = () =>
+			updatePageMutation.mutateAsync({
+				path: { id: savedPageId },
+				body: { title: next },
+			});
 		let promise: Promise<string | null>;
-		promise = updatePageMutation
-			.mutateAsync({ path: { id: pageId }, body: { title: next } })
+		promise = (previousSave ? previousSave.then(request) : request())
 			.then(
 				(result) => {
+					const isCurrentDraft =
+						activePageIdRef.current === savedPageId &&
+						titleDraftRef.current === next;
+					if (isCurrentDraft) setTitleError(null);
 					// Write the saved title into the cache BEFORE handing display
 					// back to it — otherwise the input snaps back to the stale
 					// cached title (e.g. "Untitled" on a fresh page).
 					setPageTitleInCache(
 						queryClient,
-						pageId,
+						savedPageId,
 						result.title,
 						result.updatedAt,
 					);
-					invalidatePages(queryClient);
-					if (titleDraftRef.current === next) {
+					void invalidatePages(queryClient);
+					if (isCurrentDraft) {
 						titleDraftRef.current = null;
 						setTitle((current) => (current === next ? null : current));
 					}
 					return result.updatedAt;
 				},
-				() => null,
+				(error) => {
+					if (
+						activePageIdRef.current === savedPageId &&
+						titleDraftRef.current === next
+					) {
+						setTitleError(
+							userErrorMessage(error, "The page title could not be saved."),
+						);
+					}
+					return null;
+				},
 			)
 			.finally(() => {
 				if (titleSavePromiseRef.current === promise) {
@@ -263,6 +324,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 						value={shownTitle}
 						placeholder="Untitled"
 						readOnly={readOnly}
+						maxLength={PAGE_TITLE_MAX_LENGTH}
 						rows={1}
 						wrap="soft"
 						onChange={(event) => {
@@ -271,7 +333,29 @@ export function PageEditor({ pageId }: { pageId: string }) {
 						}}
 						onKeyDown={handleTitleKeyDown}
 						aria-label="Page title"
+						aria-invalid={titleError ? true : undefined}
+						aria-describedby={titleError ? "page-title-error" : undefined}
 					/>
+					{titleError ? (
+						<div
+							id="page-title-error"
+							role="alert"
+							className="mt-2 flex items-center gap-2 text-destructive text-sm"
+						>
+							<span className="flex-1">{titleError}</span>
+							{shownTitle.length <= PAGE_TITLE_MAX_LENGTH ? (
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									disabled={updatePageMutation.isPending}
+									onClick={() => void saveTitle(shownTitle)}
+								>
+									Retry
+								</Button>
+							) : null}
+						</div>
+					) : null}
 				</div>
 			</div>
 			{conflictNotice ? (

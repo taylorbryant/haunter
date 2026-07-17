@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiClient } from "@/client";
 import { authClient } from "@/client/auth-client";
+import { authErrorMessage } from "@/client/error-feedback";
 import { GhostLogo } from "@/components/ghost-logo";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,7 +31,9 @@ import { gravatarUrl } from "@/lib/gravatar";
  */
 export function OtpAuthForm() {
 	const router = useRouter();
-	const [step, setStep] = useState<"email" | "code" | "name">("email");
+	const [step, setStep] = useState<"email" | "code" | "name" | "setup">(
+		"email",
+	);
 	const [email, setEmail] = useState("");
 	const [code, setCode] = useState("");
 	const [name, setName] = useState("");
@@ -45,16 +48,20 @@ export function OtpAuthForm() {
 		setPending(true);
 		setEmail(address);
 
-		const result = await authClient.emailOtp.sendVerificationOtp({
-			email: address,
-			type: "sign-in",
-		});
-		setPending(false);
-		if (result.error) {
-			setError(result.error.message || "Could not send a code. Try again.");
-			return;
+		try {
+			const result = await authClient.emailOtp.sendVerificationOtp({
+				email: address,
+				type: "sign-in",
+			});
+			if (result.error) throw result.error;
+			setStep("code");
+		} catch (sendError) {
+			setError(
+				authErrorMessage(sendError, "Could not send a code. Try again."),
+			);
+		} finally {
+			setPending(false);
 		}
-		setStep("code");
 	}
 
 	async function verify(event?: React.FormEvent) {
@@ -62,13 +69,18 @@ export function OtpAuthForm() {
 		if (code.length < 6 || pending) return;
 		setError(null);
 		setPending(true);
-		const result = await authClient.signIn.emailOtp({
-			email: email.trim(),
-			otp: code,
-		});
-		if (result.error) {
+		let result: Awaited<ReturnType<typeof authClient.signIn.emailOtp>>;
+		try {
+			result = await authClient.signIn.emailOtp({
+				email: email.trim(),
+				otp: code,
+			});
+			if (result.error) throw result.error;
+		} catch (verifyError) {
 			setPending(false);
-			setError(result.error.message || "That code is invalid or expired.");
+			setError(
+				authErrorMessage(verifyError, "That code is invalid or expired."),
+			);
 			return;
 		}
 
@@ -103,21 +115,24 @@ export function OtpAuthForm() {
 		// Default the avatar to the email's Gravatar in the same update; the
 		// URL 404s for addresses without one, and avatars fall back to
 		// initials. Both are editable later in Settings.
-		const image = await gravatarUrl(email).catch(() => null);
-		const trimmed = name.trim();
-		const result = await authClient.updateUser({
-			...(trimmed ? { name: trimmed } : {}),
-			...(image ? { image } : {}),
-		});
-		if (result.error) {
+		try {
+			const image = await gravatarUrl(email).catch(() => null);
+			const trimmed = name.trim();
+			const result = await authClient.updateUser({
+				...(trimmed ? { name: trimmed } : {}),
+				...(image ? { image } : {}),
+			});
+			if (result.error) throw result.error;
+			await continueToApp();
+		} catch (nameError) {
 			setPending(false);
-			setError(result.error.message || "Could not save your name.");
-			return;
+			setError(authErrorMessage(nameError, "Could not save your name."));
 		}
-		await continueToApp();
 	}
 
 	async function continueToApp() {
+		setStep("setup");
+		setError(null);
 		setPending(true);
 		// A ?next= destination (set by the auth proxy) wins over the onboarding
 		// landing page. Same-origin relative paths only — "//host" would be a
@@ -126,9 +141,11 @@ export function OtpAuthForm() {
 
 		// Signed in. Ensure the user has a workspace (a Better Auth organization),
 		// make it active, then seed it (idempotent for returning users) and land
-		// on the welcome page; fall back to home if anything fails.
+		// on the welcome page.
 		try {
-			const { data: orgs } = await authClient.organization.list();
+			const listed = await authClient.organization.list();
+			if (listed.error) throw listed.error;
+			const orgs = listed.data;
 			let workspaceId = orgs?.[0]?.id ?? null;
 			if (!workspaceId) {
 				const created = await authClient.organization.create({
@@ -136,10 +153,14 @@ export function OtpAuthForm() {
 					slug: `personal-${crypto.randomUUID().slice(0, 8)}`,
 					logo: "🏡",
 				});
+				if (created.error) throw created.error;
 				workspaceId = created.data?.id ?? null;
 			}
 			if (!workspaceId) throw new Error("Could not create a workspace.");
-			await authClient.organization.setActive({ organizationId: workspaceId });
+			const activated = await authClient.organization.setActive({
+				organizationId: workspaceId,
+			});
+			if (activated.error) throw activated.error;
 			const seeded = await apiClient.endpoint(onboard).call({ body: {} });
 			router.push(
 				nextPath ??
@@ -147,8 +168,15 @@ export function OtpAuthForm() {
 						? `/w/${seeded.workspaceId}/p/${seeded.pageId}`
 						: `/w/${seeded.workspaceId}/tasks`),
 			);
-		} catch {
-			router.push(nextPath ?? "/");
+		} catch (continueError) {
+			setPending(false);
+			setError(
+				authErrorMessage(
+					continueError,
+					"Could not finish setting up your account.",
+				),
+			);
+			return;
 		}
 		router.refresh();
 	}
@@ -162,14 +190,18 @@ export function OtpAuthForm() {
 						? "Sign in"
 						: step === "code"
 							? "Enter your code"
-							: "What should we call you?"}
+							: step === "name"
+								? "What should we call you?"
+								: "Finish setting up"}
 				</CardTitle>
 				<CardDescription aria-live="polite">
 					{step === "email"
 						? "We'll email you a 6-digit code — no password needed."
 						: step === "code"
 							? `We sent a code to ${email}.`
-							: "Your name is shown to people you share workspaces with."}
+							: step === "name"
+								? "Your name is shown to people you share workspaces with."
+								: "Your account is signed in. Haunter is preparing your workspace."}
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
@@ -226,6 +258,17 @@ export function OtpAuthForm() {
 							Skip for now
 						</button>
 					</form>
+				) : step === "setup" ? (
+					<div className="flex flex-col gap-4">
+						{error ? (
+							<p role="alert" className="text-destructive text-sm">
+								{error}
+							</p>
+						) : null}
+						<Button type="button" disabled={pending} onClick={continueToApp}>
+							{pending ? "Setting up…" : "Try again"}
+						</Button>
+					</div>
 				) : (
 					<form className="flex flex-col gap-4" onSubmit={verify}>
 						<div className="flex flex-col gap-2">

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { authErrorMessage, reportUserError } from "@/client/error-feedback";
 import { useAppSession } from "@/components/app-session-provider";
 
 export function useWorkspaceRouteSync(
@@ -33,10 +34,20 @@ export function useWorkspaceRouteSync(
 		}
 
 		setPendingWorkspaceId(workspaceId);
-		void authClient.organization
-			.setActive({ organizationId: workspaceId })
-			.then(() => router.refresh())
-			.catch(() => setPendingWorkspaceId(null));
+		void (async () => {
+			try {
+				const result = await authClient.organization.setActive({
+					organizationId: workspaceId,
+				});
+				if (result.error) throw result.error;
+				router.refresh();
+			} catch (error) {
+				setPendingWorkspaceId(null);
+				reportUserError(
+					authErrorMessage(error, "The workspace could not be activated."),
+				);
+			}
+		})();
 	}, [options.syncActive, activeId, pendingWorkspaceId, workspaceId, router]);
 
 	return { synced };

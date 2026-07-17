@@ -4,6 +4,7 @@ import { ChevronDownIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { authErrorMessage } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { ResponsiveDialog } from "@/components/responsive-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -73,42 +74,73 @@ export function MembersDialog({
 		if (!address || busy) return;
 		setBusy(true);
 		setError(null);
-		const { error: inviteError } = await authClient.organization.inviteMember({
-			email: address,
-			role: inviteRole as "member",
-		});
-		setBusy(false);
-		if (inviteError) {
-			setError(inviteError.message ?? "Could not send the invitation.");
-			return;
+		try {
+			const result = await authClient.organization.inviteMember({
+				email: address,
+				role: inviteRole as "member",
+			});
+			if (result.error) throw result.error;
+			setEmail("");
+			await refresh();
+		} catch (inviteError) {
+			setError(authErrorMessage(inviteError, "Could not send the invitation."));
+		} finally {
+			setBusy(false);
 		}
-		setEmail("");
-		await refresh();
 	}
 
 	async function changeRole(memberId: string, role: string) {
 		setBusy(true);
-		await authClient.organization.updateMemberRole({
-			memberId,
-			role: role as "member",
-		});
-		setBusy(false);
-		await refresh();
+		setError(null);
+		try {
+			const result = await authClient.organization.updateMemberRole({
+				memberId,
+				role: role as "member",
+			});
+			if (result.error) throw result.error;
+			await refresh();
+		} catch (roleError) {
+			setError(
+				authErrorMessage(roleError, "Could not update the member role."),
+			);
+		} finally {
+			setBusy(false);
+		}
 	}
 
 	async function removeMember(memberIdOrEmail: string) {
 		setBusy(true);
-		await authClient.organization.removeMember({ memberIdOrEmail });
-		setBusy(false);
-		setMemberToRemove(null);
-		await refresh();
+		setError(null);
+		try {
+			const result = await authClient.organization.removeMember({
+				memberIdOrEmail,
+			});
+			if (result.error) throw result.error;
+			await refresh();
+			setMemberToRemove(null);
+		} catch (removeError) {
+			setError(authErrorMessage(removeError, "Could not remove the member."));
+		} finally {
+			setBusy(false);
+		}
 	}
 
 	async function cancelInvitation(invitationId: string) {
 		setBusy(true);
-		await authClient.organization.cancelInvitation({ invitationId });
-		setBusy(false);
-		await refresh();
+		setError(null);
+		try {
+			const result = await authClient.organization.cancelInvitation({
+				invitationId,
+			});
+			if (result.error) throw result.error;
+			await refresh();
+		} catch (cancelError) {
+			setError(
+				authErrorMessage(cancelError, "Could not cancel the invitation."),
+			);
+		} finally {
+			setBusy(false);
+		}
 	}
 
 	function confirmRemoveMember() {
@@ -119,16 +151,25 @@ export function MembersDialog({
 	async function leave() {
 		if (!org || busy) return;
 		setBusy(true);
-		await authClient.organization.leave({ organizationId: org.id });
-		// Refresh the shared org-list cache before redirecting: the switcher
-		// must drop this workspace, and the home page picks the first list
-		// entry — a stale list would bounce us back into the one we just left.
-		await organizationsQuery.refetch?.();
-		setBusy(false);
-		setLeaveOpen(false);
-		onOpenChange(false);
-		router.push("/");
-		router.refresh();
+		setError(null);
+		try {
+			const result = await authClient.organization.leave({
+				organizationId: org.id,
+			});
+			if (result.error) throw result.error;
+			// Refresh the shared org-list cache before redirecting: the switcher
+			// must drop this workspace, and the home page picks the first list
+			// entry — a stale list would bounce us back into the one we just left.
+			await organizationsQuery.refetch?.();
+			setLeaveOpen(false);
+			onOpenChange(false);
+			router.push("/");
+			router.refresh();
+		} catch (leaveError) {
+			setError(authErrorMessage(leaveError, "Could not leave the workspace."));
+		} finally {
+			setBusy(false);
+		}
 	}
 
 	return (
@@ -143,6 +184,24 @@ export function MembersDialog({
 			}
 			className="sm:max-w-lg"
 		>
+			{orgQuery.error ? (
+				<div
+					role="alert"
+					className="flex items-center gap-2 text-destructive text-sm"
+				>
+					<span className="flex-1">
+						The workspace members could not be loaded.
+					</span>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => void orgQuery.refetch?.()}
+					>
+						Try again
+					</Button>
+				</div>
+			) : null}
 			{canManage ? (
 				<form
 					// Stacks on mobile so the email field keeps a usable width.
@@ -170,7 +229,7 @@ export function MembersDialog({
 					</div>
 				</form>
 			) : null}
-			{error ? (
+			{error && !memberToRemove && !leaveOpen ? (
 				<p role="alert" className="text-destructive text-sm">
 					{error}
 				</p>
@@ -213,7 +272,10 @@ export function MembersDialog({
 									size="icon"
 									className="size-8 text-muted-foreground"
 									aria-label={`Remove ${label}`}
-									onClick={() => setMemberToRemove({ id: member.id, label })}
+									onClick={() => {
+										setError(null);
+										setMemberToRemove({ id: member.id, label });
+									}}
 								>
 									<XIcon />
 								</Button>
@@ -257,7 +319,10 @@ export function MembersDialog({
 						variant="ghost"
 						className="text-destructive hover:text-destructive"
 						disabled={busy}
-						onClick={() => setLeaveOpen(true)}
+						onClick={() => {
+							setError(null);
+							setLeaveOpen(true);
+						}}
 					>
 						Leave workspace
 					</Button>
@@ -266,7 +331,10 @@ export function MembersDialog({
 			<DestructiveConfirmationDialog
 				open={memberToRemove !== null}
 				onOpenChange={(nextOpen) => {
-					if (!nextOpen) setMemberToRemove(null);
+					if (!nextOpen) {
+						setMemberToRemove(null);
+						setError(null);
+					}
 				}}
 				title="Remove member?"
 				description={
@@ -278,11 +346,15 @@ export function MembersDialog({
 				actionLabel="Remove member"
 				pendingLabel="Removing…"
 				pending={busy}
+				error={error}
 				onConfirm={confirmRemoveMember}
 			/>
 			<DestructiveConfirmationDialog
 				open={leaveOpen}
-				onOpenChange={setLeaveOpen}
+				onOpenChange={(nextOpen) => {
+					setLeaveOpen(nextOpen);
+					if (!nextOpen) setError(null);
+				}}
 				title="Leave workspace?"
 				description={
 					<span className="break-words">
@@ -293,6 +365,7 @@ export function MembersDialog({
 				actionLabel="Leave workspace"
 				pendingLabel="Leaving…"
 				pending={busy}
+				error={error}
 				onConfirm={leave}
 			/>
 		</ResponsiveDialog>

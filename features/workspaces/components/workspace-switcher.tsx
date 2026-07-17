@@ -12,6 +12,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
+import { authErrorMessage, reportUserError } from "@/client/error-feedback";
 import { useAppSession } from "@/components/app-session-provider";
 import {
 	CommandRegistration,
@@ -102,6 +103,7 @@ export function WorkspaceSwitcher({
 	const appSession = useAppSession();
 	const workspacesQuery = useWorkspaces();
 	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [name, setName] = useState("");
@@ -123,9 +125,20 @@ export function WorkspaceSwitcher({
 
 	function openEdit() {
 		if (!active) return;
+		setError(null);
 		setEditName(active.name);
 		setEditIcon(active.logo ?? null);
 		setEditOpen(true);
+	}
+
+	function openCreate() {
+		setError(null);
+		setDialogOpen(true);
+	}
+
+	function openDelete() {
+		setError(null);
+		setDeleteOpen(true);
 	}
 
 	// Palette commands, colocated with the dialogs they open and gated by the
@@ -136,7 +149,7 @@ export function WorkspaceSwitcher({
 		group: "Workspace",
 		keywords: "create organization",
 		icon: PlusIcon,
-		run: () => setDialogOpen(true),
+		run: openCreate,
 	});
 	useCommand(
 		active && {
@@ -167,67 +180,159 @@ export function WorkspaceSwitcher({
 				group: "Workspace",
 				keywords: "remove",
 				icon: Trash2Icon,
-				run: () => setDeleteOpen(true),
+				run: openDelete,
 			},
 	);
 
 	async function switchTo(id: string) {
 		if (id === activeWorkspaceId) return;
-		await authClient.organization.setActive({ organizationId: id });
-		router.push(`/w/${id}/today`);
+		try {
+			const result = await authClient.organization.setActive({
+				organizationId: id,
+			});
+			if (result.error) throw result.error;
+			router.push(`/w/${id}/today`);
+		} catch (switchError) {
+			reportUserError(
+				authErrorMessage(switchError, "The workspace could not be opened."),
+			);
+		}
 	}
 
 	async function create() {
 		const trimmed = name.trim();
 		if (!trimmed || busy) return;
 		setBusy(true);
-		const { data, error } = await authClient.organization.create({
-			name: trimmed,
-			slug: slugify(trimmed),
-		});
-		if (error || !data) {
+		setError(null);
+		let createdId: string | null = null;
+		try {
+			const result = await authClient.organization.create({
+				name: trimmed,
+				slug: slugify(trimmed),
+			});
+			if (result.error || !result.data) {
+				throw result.error ?? new Error("No workspace was returned.");
+			}
+			createdId = result.data.id;
+			const activeResult = await authClient.organization.setActive({
+				organizationId: createdId,
+			});
+			if (activeResult.error) throw activeResult.error;
+			void workspacesQuery.refetch?.().catch((refreshError) => {
+				reportUserError(
+					refreshError,
+					"The workspace was created, but the workspace list could not be refreshed.",
+				);
+			});
+			setName("");
+			setDialogOpen(false);
+			router.push(`/w/${createdId}/today`);
+		} catch (createError) {
+			if (createdId) {
+				try {
+					await workspacesQuery.refetch?.();
+				} catch (refreshError) {
+					reportUserError(
+						refreshError,
+						"The workspace was created, but the workspace list could not be refreshed.",
+					);
+				}
+				setName("");
+				setDialogOpen(false);
+				reportUserError(
+					authErrorMessage(
+						createError,
+						"The workspace was created, but it could not be opened.",
+					),
+				);
+			} else {
+				setError(
+					authErrorMessage(createError, "The workspace could not be created."),
+				);
+			}
+		} finally {
 			setBusy(false);
-			return;
 		}
-		await authClient.organization.setActive({ organizationId: data.id });
-		await workspacesQuery.refetch?.();
-		setBusy(false);
-		setName("");
-		setDialogOpen(false);
-		router.push(`/w/${data.id}/today`);
 	}
 
 	async function saveEdit() {
 		const trimmed = editName.trim();
 		if (!active || !trimmed || busy) return;
 		setBusy(true);
-		await authClient.organization.update({
-			organizationId: active.id,
-			data: { name: trimmed, logo: editIcon ?? undefined },
-		});
-		await workspacesQuery.refetch?.();
-		setBusy(false);
-		setEditOpen(false);
-		router.refresh();
+		setError(null);
+		try {
+			const result = await authClient.organization.update({
+				organizationId: active.id,
+				data: { name: trimmed, logo: editIcon ?? undefined },
+			});
+			if (result.error) throw result.error;
+			void workspacesQuery.refetch?.().catch((refreshError) => {
+				reportUserError(
+					refreshError,
+					"The workspace was updated, but the workspace list could not be refreshed.",
+				);
+			});
+			setEditOpen(false);
+			router.refresh();
+		} catch (updateError) {
+			setError(
+				authErrorMessage(updateError, "The workspace could not be updated."),
+			);
+		} finally {
+			setBusy(false);
+		}
 	}
 
 	async function confirmDelete() {
 		if (!active || busy) return;
 		const deletedId = active.id;
 		setBusy(true);
-		await authClient.organization.delete({ organizationId: deletedId });
-		await workspacesQuery.refetch?.();
-		setBusy(false);
+		setError(null);
+		try {
+			const deleteResult = await authClient.organization.delete({
+				organizationId: deletedId,
+			});
+			if (deleteResult.error) throw deleteResult.error;
+		} catch (deleteError) {
+			setError(
+				authErrorMessage(deleteError, "The workspace could not be deleted."),
+			);
+			setBusy(false);
+			return;
+		}
+
 		setDeleteOpen(false);
+		try {
+			await workspacesQuery.refetch?.();
+		} catch (refreshError) {
+			reportUserError(
+				refreshError,
+				"The workspace was deleted, but the workspace list could not be refreshed.",
+			);
+		}
 		// Leaving the deleted workspace: switch to another one, or land on the
 		// home route (its empty state) if that was the last workspace.
 		const next = workspaces.find((w) => w.id !== deletedId);
 		if (next) {
-			await authClient.organization.setActive({ organizationId: next.id });
-			router.push(`/w/${next.id}/today`);
+			try {
+				const activeResult = await authClient.organization.setActive({
+					organizationId: next.id,
+				});
+				if (activeResult.error) throw activeResult.error;
+				router.push(`/w/${next.id}/today`);
+			} catch (activationError) {
+				reportUserError(
+					authErrorMessage(
+						activationError,
+						"The workspace was deleted, but the next workspace could not be opened.",
+					),
+				);
+				router.push("/");
+			}
 		} else {
 			router.push("/");
 		}
+		setBusy(false);
 		router.refresh();
 	}
 
@@ -254,6 +359,18 @@ export function WorkspaceSwitcher({
 			<SidebarMenu>
 				<SidebarMenuItem>
 					<SidebarMenuSkeleton showIcon className="opacity-70" />
+				</SidebarMenuItem>
+			</SidebarMenu>
+		);
+	}
+
+	if (workspacesQuery.error && workspaces.length === 0) {
+		return (
+			<SidebarMenu>
+				<SidebarMenuItem>
+					<SidebarMenuButton onClick={() => void workspacesQuery.refetch?.()}>
+						<span className="text-destructive">Workspaces unavailable</span>
+					</SidebarMenuButton>
 				</SidebarMenuItem>
 			</SidebarMenu>
 		);
@@ -297,7 +414,7 @@ export function WorkspaceSwitcher({
 											<Button
 												variant="ghost"
 												className="h-11 justify-start text-muted-foreground"
-												onClick={() => setDialogOpen(true)}
+												onClick={openCreate}
 											/>
 										}
 									>
@@ -338,7 +455,7 @@ export function WorkspaceSwitcher({
 														<Button
 															variant="ghost"
 															className="h-11 justify-start text-destructive hover:text-destructive"
-															onClick={() => setDeleteOpen(true)}
+															onClick={openDelete}
 														/>
 													}
 												>
@@ -384,7 +501,7 @@ export function WorkspaceSwitcher({
 									))}
 								</DropdownMenuGroup>
 								<DropdownMenuSeparator />
-								<DropdownMenuItem onClick={() => setDialogOpen(true)}>
+								<DropdownMenuItem onClick={openCreate}>
 									<PlusIcon />
 									<span className="font-medium text-muted-foreground">
 										New workspace
@@ -406,7 +523,7 @@ export function WorkspaceSwitcher({
 										{canDeleteWorkspace ? (
 											<DropdownMenuItem
 												className="text-destructive focus:text-destructive"
-												onClick={() => setDeleteOpen(true)}
+												onClick={openDelete}
 											>
 												<Trash2Icon className="text-destructive" />
 												Delete workspace
@@ -420,7 +537,10 @@ export function WorkspaceSwitcher({
 
 					<ResponsiveDialog
 						open={dialogOpen}
-						onOpenChange={setDialogOpen}
+						onOpenChange={(nextOpen) => {
+							setDialogOpen(nextOpen);
+							if (nextOpen) setError(null);
+						}}
 						title="New workspace"
 						description="Workspaces keep separate areas of your life apart, like work and personal."
 						className="sm:max-w-sm"
@@ -442,6 +562,11 @@ export function WorkspaceSwitcher({
 									onChange={(event) => setName(event.target.value)}
 								/>
 							</div>
+							{error ? (
+								<p role="alert" className="text-destructive text-sm">
+									{error}
+								</p>
+							) : null}
 							<ResponsiveDialogFooter>
 								<Button type="submit" disabled={!name.trim() || busy}>
 									{busy ? "Creating…" : "Create workspace"}
@@ -452,7 +577,10 @@ export function WorkspaceSwitcher({
 
 					<ResponsiveDialog
 						open={editOpen}
-						onOpenChange={setEditOpen}
+						onOpenChange={(nextOpen) => {
+							setEditOpen(nextOpen);
+							if (nextOpen) setError(null);
+						}}
 						title="Edit workspace"
 						description="Update this workspace's emoji and name."
 						className="sm:max-w-sm"
@@ -483,6 +611,11 @@ export function WorkspaceSwitcher({
 										/>
 									</div>
 								</div>
+								{error ? (
+									<p role="alert" className="text-destructive text-sm">
+										{error}
+									</p>
+								) : null}
 								<ResponsiveDialogFooter>
 									<Button type="submit" disabled={!editName.trim() || busy}>
 										{busy ? "Saving..." : "Save"}
@@ -498,7 +631,10 @@ export function WorkspaceSwitcher({
 
 					<DestructiveConfirmationDialog
 						open={deleteOpen}
-						onOpenChange={setDeleteOpen}
+						onOpenChange={(nextOpen) => {
+							setDeleteOpen(nextOpen);
+							if (!nextOpen) setError(null);
+						}}
 						title={`Delete ${active ? `“${active.name}”` : "workspace"}?`}
 						description={
 							<span className="break-words">
@@ -509,6 +645,7 @@ export function WorkspaceSwitcher({
 						actionLabel="Delete workspace"
 						pendingLabel="Deleting…"
 						pending={busy}
+						error={error}
 						onConfirm={confirmDelete}
 					/>
 				</SidebarMenuItem>

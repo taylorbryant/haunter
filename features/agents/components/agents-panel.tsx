@@ -145,10 +145,18 @@ function AgentActivityList() {
 					<Skeleton className="h-12 w-full" />
 					<Skeleton className="h-12 w-full" />
 				</div>
-			) : query.isError ? (
-				<p className="py-2 text-muted-foreground text-sm">
-					Recent agent activity could not be loaded.
-				</p>
+			) : query.isError && !query.data ? (
+				<div className="flex items-center gap-2 py-2 text-muted-foreground text-sm">
+					<p>Recent agent activity could not be loaded.</p>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => void query.refetch()}
+					>
+						Try again
+					</Button>
+				</div>
 			) : query.data.items.length === 0 ? (
 				<p className="py-2 text-muted-foreground text-sm">
 					No agent activity yet.
@@ -240,14 +248,21 @@ export function AgentsPanel() {
 	const [revoking, setRevoking] = useState<AgentSummary | null>(null);
 	const revoke = useMutation({
 		mutationFn: revokeAgent,
-		onSettled: () => invalidateAgents(queryClient),
+		meta: { errorMode: "inline" },
+		onSuccess: () => {
+			setRevoking(null);
+			void invalidateAgents(queryClient);
+		},
 	});
 
 	function confirmRevokeAgent() {
 		if (!revoking || revoke.isPending) return;
-		revoke.mutate(revoking.id, {
-			onSettled: () => setRevoking(null),
-		});
+		revoke.mutate(revoking.id);
+	}
+
+	function openRevokeAgent(agent: AgentSummary) {
+		revoke.reset();
+		setRevoking(agent);
 	}
 
 	return (
@@ -285,10 +300,18 @@ export function AgentsPanel() {
 						<Skeleton className="h-20 w-full" />
 						<Skeleton className="h-20 w-full" />
 					</div>
-				) : query.isError ? (
-					<p className="text-muted-foreground text-sm">
-						Your agents could not be loaded. Try again in a moment.
-					</p>
+				) : query.isError && !query.data ? (
+					<div className="flex items-center gap-2 text-muted-foreground text-sm">
+						<span className="flex-1">Your agents could not be loaded.</span>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => void query.refetch()}
+						>
+							Try again
+						</Button>
+					</div>
 				) : query.data.items.length === 0 ? (
 					<div className="rounded-md border border-dashed p-4">
 						<p className="text-muted-foreground text-sm">
@@ -298,29 +321,36 @@ export function AgentsPanel() {
 				) : (
 					<div className="flex flex-col gap-2">
 						{query.data.items.map((agent) => (
-							<AgentRow key={agent.id} agent={agent} onRevoke={setRevoking} />
+							<AgentRow
+								key={agent.id}
+								agent={agent}
+								onRevoke={openRevokeAgent}
+							/>
 						))}
 					</div>
 				)}
 			</section>
 			<AgentActivityList />
-			{revoke.isError ? (
-				<p role="alert" className="text-destructive text-sm">
-					{revoke.error instanceof Error
-						? revoke.error.message
-						: "Could not revoke this agent."}
-				</p>
-			) : null}
 			<DestructiveConfirmationDialog
 				open={revoking !== null}
 				onOpenChange={(open) => {
-					if (!open) setRevoking(null);
+					if (!open) {
+						setRevoking(null);
+						revoke.reset();
+					}
 				}}
 				title={`Revoke “${revoking?.name ?? "agent"}”?`}
 				description="The agent loses all capabilities immediately and its tokens stop working. This cannot be undone; the agent would have to register and be approved again."
 				actionLabel="Revoke agent"
 				pendingLabel="Revoking…"
 				pending={revoke.isPending}
+				error={
+					revoke.isError
+						? revoke.error instanceof Error
+							? revoke.error.message
+							: "Could not revoke this agent."
+						: null
+				}
 				onConfirm={confirmRevokeAgent}
 			/>
 			<AgentConnectDialog open={connectOpen} onOpenChange={setConnectOpen} />

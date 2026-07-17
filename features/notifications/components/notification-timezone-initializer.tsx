@@ -14,6 +14,7 @@ export function NotificationTimezoneInitializer() {
 	const settings = useQuery(notificationSettingsQueryOptions());
 	const initializeTimezone = useMutation({
 		...initializeNotificationTimezoneMutationOptions(),
+		meta: { errorMode: "silent" },
 		retry: 2,
 	});
 	const attempted = useRef(false);

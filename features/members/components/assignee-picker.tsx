@@ -85,6 +85,11 @@ function AssigneePickerContent({
 
 	return (
 		<DropdownMenuContent align="end" className="w-48">
+			{orgQuery.error ? (
+				<DropdownMenuItem disabled className="text-destructive">
+					Members could not be loaded
+				</DropdownMenuItem>
+			) : null}
 			{members.map((member) => {
 				const name = member.user?.name || member.user?.email || "Member";
 				return (

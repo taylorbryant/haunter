@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileTextIcon, Trash2Icon, Undo2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { userErrorMessage } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
@@ -23,7 +24,11 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 	const canEdit = useCanEditWorkspace();
 	const trashQuery = useQuery(listTrashQueryOptions(workspaceId));
 	const restoreMutation = useMutation(restorePageMutationOptions());
-	const purgeMutation = useMutation(purgePageMutationOptions());
+	const purgeMutation = useMutation({
+		...purgePageMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
+	const [purgeError, setPurgeError] = useState<string | null>(null);
 	const [pageToPurge, setPageToPurge] = useState<{
 		id: string;
 		title: string | null;
@@ -41,6 +46,7 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 
 	function confirmPurgePage() {
 		if (!pageToPurge || purgeMutation.isPending) return;
+		setPurgeError(null);
 		purgeMutation.mutate(
 			{ path: { id: pageToPurge.id } },
 			{
@@ -48,12 +54,34 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 					setPageToPurge(null);
 					await refresh();
 				},
+				onError: (error) =>
+					setPurgeError(
+						userErrorMessage(error, "The page could not be deleted."),
+					),
 			},
 		);
 	}
 
 	if (trashQuery.isPending) {
 		return <p className="text-muted-foreground text-sm">Loading…</p>;
+	}
+
+	if (trashQuery.isError && !trashQuery.data) {
+		return (
+			<div className="flex items-center gap-2 text-sm">
+				<p role="alert" className="text-destructive">
+					The trash could not be loaded.
+				</p>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					onClick={() => void trashQuery.refetch()}
+				>
+					Try again
+				</Button>
+			</div>
+		);
 	}
 
 	if (items.length === 0) {
@@ -126,7 +154,10 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 			<DestructiveConfirmationDialog
 				open={pageToPurge !== null}
 				onOpenChange={(open) => {
-					if (!open) setPageToPurge(null);
+					if (!open) {
+						setPageToPurge(null);
+						setPurgeError(null);
+					}
 				}}
 				title="Delete forever?"
 				description={
@@ -138,6 +169,7 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 				actionLabel="Delete forever"
 				pendingLabel="Deleting…"
 				pending={purgeMutation.isPending}
+				error={purgeError}
 				onConfirm={confirmPurgePage}
 			/>
 		</>

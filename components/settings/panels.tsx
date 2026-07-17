@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { authClient } from "@/client/auth-client";
+import { authErrorMessage } from "@/client/error-feedback";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { ThemeSettings } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -69,27 +70,32 @@ export function ProfilePanel() {
 	const onSubmit = form.handleSubmit(async (values) => {
 		form.clearErrors("root");
 		setSaved(false);
-
-		const updated = await authClient.updateUser({ name: values.name });
-		if (updated.error) {
+		try {
+			const updated = await authClient.updateUser({ name: values.name });
+			if (updated.error) throw updated.error;
+		} catch (profileError) {
 			form.setError(
 				"root",
 				rootFormError(
-					updated.error,
-					updated.error.message || "Could not update your profile.",
+					profileError,
+					authErrorMessage(profileError, "Could not update your profile."),
 				),
 			);
 			return;
 		}
 
 		if (values.email !== user?.email) {
-			const changed = await authClient.changeEmail({ newEmail: values.email });
-			if (changed.error) {
+			try {
+				const changed = await authClient.changeEmail({
+					newEmail: values.email,
+				});
+				if (changed.error) throw changed.error;
+			} catch (emailError) {
 				form.setError(
 					"root",
 					rootFormError(
-						changed.error,
-						changed.error.message || "Could not change your email.",
+						emailError,
+						authErrorMessage(emailError, "Could not change your email."),
 					),
 				);
 				return;
@@ -100,15 +106,36 @@ export function ProfilePanel() {
 	});
 
 	async function setAvatar(image: string | null) {
+		form.clearErrors("root");
 		setSaved(false);
-		// Better Auth accepts null to clear the image.
-		await authClient.updateUser({ image: image as string | undefined });
-		setAvatarValue(image);
+		try {
+			// Better Auth accepts null to clear the image.
+			const result = await authClient.updateUser({
+				image: image as string | undefined,
+			});
+			if (result.error) throw result.error;
+			setAvatarValue(image);
+		} catch (avatarError) {
+			form.setError(
+				"root",
+				rootFormError(
+					avatarError,
+					authErrorMessage(avatarError, "Could not update your avatar."),
+				),
+			);
+		}
 	}
 
 	async function useGravatar() {
 		if (!user?.email) return;
-		await setAvatar(await gravatarUrl(user.email));
+		try {
+			await setAvatar(await gravatarUrl(user.email));
+		} catch (avatarError) {
+			form.setError(
+				"root",
+				rootFormError(avatarError, "Could not load your Gravatar."),
+			);
+		}
 	}
 
 	return (
@@ -222,14 +249,20 @@ export function DeleteAccountPanel() {
 		if (!matches || pending) return;
 		setError(null);
 		setPending(true);
-		const result = await authClient.deleteUser();
-		if (result.error) {
+		try {
+			const result = await authClient.deleteUser();
+			if (result.error) throw result.error;
+			router.push("/");
+			router.refresh();
+		} catch (deleteError) {
 			setPending(false);
-			setError(result.error.message || "Could not delete your account.");
-			return;
+			setError(
+				rootFormError(
+					deleteError,
+					authErrorMessage(deleteError, "Could not delete your account."),
+				).message,
+			);
 		}
-		router.push("/");
-		router.refresh();
 	}
 
 	return (

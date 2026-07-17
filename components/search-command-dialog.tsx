@@ -5,6 +5,7 @@ import { CornerDownLeftIcon, FileTextIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useFilteredCommandGroups } from "@/components/command-palette/registry";
+import { Button } from "@/components/ui/button";
 import {
 	Command,
 	CommandDialog,
@@ -109,6 +110,18 @@ export function SearchCommandDialog({
 								No matching commands.
 							</div>
 						)
+					) : search.isError ? (
+						<div className="flex flex-col items-center gap-2 py-6 text-center text-destructive text-sm">
+							<p role="alert">Search could not be completed.</p>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={() => void search.refetch()}
+							>
+								Try again
+							</Button>
+						</div>
 					) : pageItems.length > 0 ? (
 						<CommandGroup heading="Pages">
 							{pageItems.map((item) => (

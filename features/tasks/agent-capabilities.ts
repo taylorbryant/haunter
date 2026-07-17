@@ -1,6 +1,9 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
-import { TASK_TITLE_MAX_LENGTH } from "@/features/tasks/schemas";
+import {
+	TASK_TITLE_MAX_LENGTH,
+	TASK_TITLE_TOO_LONG_MESSAGE,
+} from "@/features/tasks/schemas";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
 import { isDueOverdue } from "@/lib/due-date";
 import { localDateAndTime } from "@/lib/timezone";
@@ -139,7 +142,9 @@ export function createTaskAgentCapabilities(
 		description:
 			"Create a standalone task in a workspace. The task is assigned to the acting user by default; dueDate uses YYYY-MM-DD and optional dueTime uses HH:mm.",
 		input: WorkspaceInput.extend({
-			title: z.string().trim().min(1).max(TASK_TITLE_MAX_LENGTH),
+			title: z.string().trim().min(1).max(TASK_TITLE_MAX_LENGTH, {
+				message: TASK_TITLE_TOO_LONG_MESSAGE,
+			}),
 			dueDate: DueDate.optional(),
 			dueTime: DueTime.optional(),
 			assigneeId: z.string().nullable().optional(),
@@ -188,7 +193,14 @@ export function createTaskAgentCapabilities(
 		description:
 			"Update a task's title, due date/time, or assignee. Set dueDate to null to clear both date and time; set dueTime to null to keep the date without a time. Page-backed task titles must still be edited in their page.",
 		input: TaskInput.extend({
-			title: z.string().trim().min(1).max(TASK_TITLE_MAX_LENGTH).optional(),
+			title: z
+				.string()
+				.trim()
+				.min(1)
+				.max(TASK_TITLE_MAX_LENGTH, {
+					message: TASK_TITLE_TOO_LONG_MESSAGE,
+				})
+				.optional(),
 			dueDate: DueDate.nullable().optional(),
 			dueTime: DueTime.nullable().optional(),
 			assigneeId: z.string().nullable().optional(),

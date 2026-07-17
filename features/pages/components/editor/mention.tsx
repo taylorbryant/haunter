@@ -19,7 +19,11 @@ function MentionChip({
 	if (!page) {
 		return (
 			<span className="text-muted-foreground line-through">
-				{pagesQuery.isPending ? "…" : "Page unavailable"}
+				{pagesQuery.isPending
+					? "…"
+					: pagesQuery.isError
+						? "Page temporarily unavailable"
+						: "Page unavailable"}
 			</span>
 		);
 	}

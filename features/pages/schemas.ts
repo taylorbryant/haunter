@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const PAGE_TITLE_MAX_LENGTH = 300;
+export const PAGE_TITLE_TOO_LONG_MESSAGE = `Page titles must be ${PAGE_TITLE_MAX_LENGTH} characters or fewer.`;
+
 /**
  * Permissive shape check for a BlockNote block. The editor owns the real
  * schema; the server validates structure only and stores content verbatim.
@@ -58,7 +61,7 @@ export const PageIdInputSchema = z.object({
 export const CreatePageInputSchema = z.object({
 	workspaceId: z.string().min(1),
 	parentPageId: z.string().uuid().optional(),
-	title: z.string().max(300),
+	title: z.string().max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE),
 	/** Defaults to true; the editor opts out when it inserts at the cursor. */
 	appendToParentContent: z.boolean().optional(),
 });
@@ -71,7 +74,10 @@ export const CreatePageOutputSchema = PageMetaSchema.extend({
 });
 
 export const UpdatePageBodySchema = z.object({
-	title: z.string().max(300).optional(),
+	title: z
+		.string()
+		.max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE)
+		.optional(),
 	icon: z.string().max(16).nullable().optional(),
 	parentPageId: z.string().uuid().nullable().optional(),
 	position: z.number().optional(),

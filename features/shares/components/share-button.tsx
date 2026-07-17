@@ -9,7 +9,8 @@ import {
 	XIcon,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { userErrorMessage } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,15 +51,49 @@ export function SharePanel({
 	const queryClient = useQueryClient();
 	const [copied, setCopied] = useState(false);
 	const [flushError, setFlushError] = useState<string | null>(null);
+	const [actionError, setActionError] = useState<string | null>(null);
 	const [flushing, setFlushing] = useState(false);
 	const [revokeOpen, setRevokeOpen] = useState(false);
+	const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(
+		() => () => {
+			if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
+		},
+		[],
+	);
 
 	const shareQuery = useQuery({
 		...getPageShareQueryOptions(pageId),
 		enabled: active,
 	});
-	const createMutation = useMutation(createPageShareMutationOptions());
-	const revokeMutation = useMutation(revokePageShareMutationOptions());
+	const createMutation = useMutation({
+		...createPageShareMutationOptions(),
+		meta: { errorMode: "inline" },
+		onSuccess: () => {
+			setActionError(null);
+			void invalidatePageShare(queryClient, pageId);
+		},
+		onError: (error) => {
+			setActionError(
+				userErrorMessage(error, "The page could not be published."),
+			);
+		},
+	});
+	const revokeMutation = useMutation({
+		...revokePageShareMutationOptions(),
+		meta: { errorMode: "inline" },
+		onSuccess: () => {
+			setActionError(null);
+			setRevokeOpen(false);
+			void invalidatePageShare(queryClient, pageId);
+		},
+		onError: (error) => {
+			setActionError(
+				userErrorMessage(error, "The public link could not be revoked."),
+			);
+		},
+	});
 
 	const share = shareQuery.data?.share ?? null;
 	const shareUrl = share
@@ -73,6 +108,11 @@ export function SharePanel({
 			if (await flushPendingPageSave(pageId)) return true;
 			setFlushError("Save this page before sharing.");
 			return false;
+		} catch (error) {
+			setFlushError(
+				userErrorMessage(error, "The page could not be saved before sharing."),
+			);
+			return false;
 		} finally {
 			setFlushing(false);
 		}
@@ -80,36 +120,65 @@ export function SharePanel({
 
 	async function publish() {
 		if (busy) return;
+		setActionError(null);
 		if (!(await flushBeforeShare())) return;
-		createMutation.mutate(
-			{ path: { pageId }, body: {} },
-			{ onSuccess: () => invalidatePageShare(queryClient, pageId) },
-		);
+		createMutation.mutate({ path: { pageId }, body: {} });
 	}
 
 	function revoke() {
 		if (busy) return;
-		revokeMutation.mutate(
-			{ path: { pageId } },
-			{
-				onSuccess: async () => {
-					setRevokeOpen(false);
-					await invalidatePageShare(queryClient, pageId);
-				},
-			},
-		);
+		setActionError(null);
+		revokeMutation.mutate({ path: { pageId } });
+	}
+
+	function openRevoke() {
+		setFlushError(null);
+		setActionError(null);
+		setRevokeOpen(true);
 	}
 
 	async function copy() {
 		if (!shareUrl) return;
 		if (!(await flushBeforeShare())) return;
-		await navigator.clipboard.writeText(shareUrl);
-		setCopied(true);
-		setTimeout(() => setCopied(false), 1500);
+		try {
+			await navigator.clipboard.writeText(shareUrl);
+			setActionError(null);
+			setCopied(true);
+			if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
+			copyResetTimer.current = setTimeout(() => {
+				setCopied(false);
+				copyResetTimer.current = null;
+			}, 1500);
+		} catch (error) {
+			setActionError(
+				userErrorMessage(
+					error,
+					"The link could not be copied to the clipboard.",
+				),
+			);
+		}
 	}
 
 	if (shareQuery.isPending) {
 		return <p className="text-muted-foreground text-sm">Loading…</p>;
+	}
+
+	if (shareQuery.isError && !shareQuery.data) {
+		return (
+			<div className="flex flex-col items-start gap-3">
+				<p role="alert" className="text-destructive text-sm">
+					Sharing settings could not be loaded.
+				</p>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					onClick={() => void shareQuery.refetch()}
+				>
+					Try again
+				</Button>
+			</div>
+		);
 	}
 
 	if (share) {
@@ -149,23 +218,27 @@ export function SharePanel({
 					size="sm"
 					className="w-fit text-destructive hover:text-destructive"
 					disabled={busy}
-					onClick={() => setRevokeOpen(true)}
+					onClick={openRevoke}
 				>
 					Revoke link
 				</Button>
-				{flushError ? (
+				{flushError || (!revokeOpen && actionError) ? (
 					<p role="alert" className="text-destructive text-xs">
-						{flushError}
+						{flushError ?? (!revokeOpen ? actionError : null)}
 					</p>
 				) : null}
 				<DestructiveConfirmationDialog
 					open={revokeOpen}
-					onOpenChange={setRevokeOpen}
+					onOpenChange={(open) => {
+						setRevokeOpen(open);
+						if (!open) setActionError(null);
+					}}
 					title="Revoke public link?"
 					description="Anyone with this link will lose access. You can publish a new link later."
 					actionLabel="Revoke link"
 					pendingLabel="Revoking…"
 					pending={busy}
+					error={actionError}
 					onConfirm={revoke}
 				/>
 			</div>
@@ -186,9 +259,9 @@ export function SharePanel({
 			<Button type="button" size="sm" disabled={busy} onClick={publish}>
 				{busy ? "Publishing…" : "Publish"}
 			</Button>
-			{flushError ? (
+			{flushError || actionError ? (
 				<p role="alert" className="text-destructive text-xs">
-					{flushError}
+					{flushError ?? actionError}
 				</p>
 			) : null}
 		</div>

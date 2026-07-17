@@ -82,6 +82,22 @@ export function AgentConnectDialog({
 			className="gap-5 sm:max-w-2xl"
 		>
 			<div className="flex max-h-[70vh] flex-col gap-5 overflow-y-auto pr-1">
+				{workspacesQuery.error ? (
+					<div
+						role="alert"
+						className="flex items-center gap-2 text-destructive text-sm"
+					>
+						<span className="flex-1">Workspaces could not be loaded.</span>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => void workspacesQuery.refetch?.()}
+						>
+							Try again
+						</Button>
+					</div>
+				) : null}
 				<fieldset className="min-w-0">
 					<legend className="mb-2 font-medium text-sm">AI client</legend>
 					<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

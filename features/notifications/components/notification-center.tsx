@@ -58,6 +58,8 @@ function NotificationPanel({
 	items,
 	unreadCount,
 	loading,
+	error,
+	onRetry,
 	onOpen,
 	onMarkAll,
 	markingAll,
@@ -65,6 +67,8 @@ function NotificationPanel({
 	items: Notification[];
 	unreadCount: number;
 	loading: boolean;
+	error: boolean;
+	onRetry: () => void;
 	onOpen: (item: Notification) => void;
 	onMarkAll: () => void;
 	markingAll: boolean;
@@ -102,6 +106,15 @@ function NotificationPanel({
 								</div>
 							</div>
 						))}
+					</div>
+				) : error ? (
+					<div className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 text-center">
+						<p role="alert" className="text-destructive text-sm">
+							Notifications could not be loaded.
+						</p>
+						<Button type="button" variant="outline" size="sm" onClick={onRetry}>
+							Try again
+						</Button>
 					</div>
 				) : items.length === 0 ? (
 					<div className="flex min-h-48 flex-col items-center justify-center gap-2 px-6 text-center">
@@ -162,15 +175,21 @@ export function NotificationCenter() {
 	const queryClient = useQueryClient();
 	const [open, setOpen] = useState(false);
 	const query = useQuery(listNotificationsQueryOptions());
-	const markRead = useMutation(markNotificationReadMutationOptions());
+	const markRead = useMutation({
+		...markNotificationReadMutationOptions(),
+		meta: { errorMode: "silent" },
+	});
 	const markAll = useMutation(markAllNotificationsReadMutationOptions());
 	const items = query.data?.items ?? [];
 	const unreadCount = query.data?.unreadCount ?? 0;
 
 	useEffect(() => {
 		const badgeNavigator = navigator as BadgeNavigator;
-		if (unreadCount > 0) void badgeNavigator.setAppBadge?.(unreadCount);
-		else void badgeNavigator.clearAppBadge?.();
+		const update =
+			unreadCount > 0
+				? badgeNavigator.setAppBadge?.(unreadCount)
+				: badgeNavigator.clearAppBadge?.();
+		void update?.catch(() => undefined);
 	}, [unreadCount]);
 
 	useEffect(() => {
@@ -225,6 +244,8 @@ export function NotificationCenter() {
 			items={items}
 			unreadCount={unreadCount}
 			loading={query.isPending}
+			error={query.isError && !query.data}
+			onRetry={() => void query.refetch()}
 			onOpen={openNotification}
 			onMarkAll={markAllRead}
 			markingAll={markAll.isPending}
