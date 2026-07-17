@@ -1,5 +1,12 @@
-export const AGENT_AUTH_CLI_VERSION = "0.6.2";
+export const AGENT_AUTH_CLI_VERSION = "0.5.1";
 export const HAUNTER_AGENT_AUTH_URL = "https://haunter.app";
+
+export const AGENT_PACKAGE_RUNNERS = [
+	{ id: "npx", label: "npm", command: "npx" },
+	{ id: "bunx", label: "Bun", command: "bunx" },
+] as const;
+
+export type AgentPackageRunnerId = (typeof AGENT_PACKAGE_RUNNERS)[number]["id"];
 
 export const AGENT_CLIENTS = [
 	{ id: "codex", label: "Codex", mark: "Cx", hostName: "Codex" },
@@ -38,9 +45,15 @@ function cliPackage() {
 	return `@auth/agent-cli@${AGENT_AUTH_CLI_VERSION}`;
 }
 
-function stdioArgs(hostName: string) {
+function getPackageRunner(id: AgentPackageRunnerId) {
+	const runner = AGENT_PACKAGE_RUNNERS.find((candidate) => candidate.id === id);
+	if (!runner) throw new Error(`Unknown package runner: ${id}`);
+	return runner;
+}
+
+function stdioArgs(hostName: string, runnerId: AgentPackageRunnerId) {
 	return [
-		"-y",
+		...(runnerId === "npx" ? ["-y"] : []),
 		cliPackage(),
 		"mcp",
 		"--url",
@@ -50,13 +63,14 @@ function stdioArgs(hostName: string) {
 	];
 }
 
-function mcpServersJson(hostName: string) {
+function mcpServersJson(hostName: string, runnerId: AgentPackageRunnerId) {
+	const runner = getPackageRunner(runnerId);
 	return JSON.stringify(
 		{
 			mcpServers: {
 				haunter: {
-					command: "npx",
-					args: stdioArgs(hostName),
+					command: runner.command,
+					args: stdioArgs(hostName, runnerId),
 				},
 			},
 		},
@@ -65,14 +79,15 @@ function mcpServersJson(hostName: string) {
 	);
 }
 
-function vscodeJson(hostName: string) {
+function vscodeJson(hostName: string, runnerId: AgentPackageRunnerId) {
+	const runner = getPackageRunner(runnerId);
 	return JSON.stringify(
 		{
 			servers: {
 				haunter: {
 					type: "stdio",
-					command: "npx",
-					args: stdioArgs(hostName),
+					command: runner.command,
+					args: stdioArgs(hostName, runnerId),
 				},
 			},
 		},
@@ -81,14 +96,19 @@ function vscodeJson(hostName: string) {
 	);
 }
 
-export function getAgentClientSetup(id: AgentClientId): AgentClientSetup {
+export function getAgentClientSetup(
+	id: AgentClientId,
+	runnerId: AgentPackageRunnerId = "npx",
+): AgentClientSetup {
 	const client = AGENT_CLIENTS.find((candidate) => candidate.id === id);
 	if (!client) throw new Error(`Unknown agent client: ${id}`);
+	const runner = getPackageRunner(runnerId);
 
 	if (id === "codex") {
 		return {
-			configuration: `[mcp_servers.haunter]\ncommand = "npx"\nargs = [${stdioArgs(
+			configuration: `[mcp_servers.haunter]\ncommand = ${JSON.stringify(runner.command)}\nargs = [${stdioArgs(
 				client.hostName,
+				runnerId,
 			)
 				.map((arg) => `\n  ${JSON.stringify(arg)}`)
 				.join(",")},\n]`,
@@ -101,7 +121,10 @@ export function getAgentClientSetup(id: AgentClientId): AgentClientSetup {
 
 	if (id === "claude-code") {
 		return {
-			configuration: `claude mcp add haunter -- npx ${stdioArgs(client.hostName)
+			configuration: `claude mcp add haunter -- ${runner.command} ${stdioArgs(
+				client.hostName,
+				runnerId,
+			)
 				.map((arg) => JSON.stringify(arg))
 				.join(" ")}`,
 			configurationLabel: "Terminal",
@@ -113,7 +136,7 @@ export function getAgentClientSetup(id: AgentClientId): AgentClientSetup {
 
 	if (id === "claude-desktop") {
 		return {
-			configuration: mcpServersJson(client.hostName),
+			configuration: mcpServersJson(client.hostName, runnerId),
 			configurationLabel: "Claude Desktop configuration",
 			installInstruction:
 				"Open Settings → Developer → Edit Config and add this server.",
@@ -124,7 +147,7 @@ export function getAgentClientSetup(id: AgentClientId): AgentClientSetup {
 
 	if (id === "cursor") {
 		return {
-			configuration: mcpServersJson(client.hostName),
+			configuration: mcpServersJson(client.hostName, runnerId),
 			configurationLabel: "Cursor MCP configuration",
 			installInstruction:
 				"Open Cursor Settings → Tools & Integrations → MCP Tools, then add this configuration.",
@@ -134,7 +157,7 @@ export function getAgentClientSetup(id: AgentClientId): AgentClientSetup {
 
 	if (id === "vscode") {
 		return {
-			configuration: vscodeJson(client.hostName),
+			configuration: vscodeJson(client.hostName, runnerId),
 			configurationLabel: ".vscode/mcp.json",
 			installInstruction:
 				"Add this to your workspace MCP configuration, or use MCP: Open User Configuration for a global connection.",
@@ -144,7 +167,7 @@ export function getAgentClientSetup(id: AgentClientId): AgentClientSetup {
 	}
 
 	return {
-		configuration: mcpServersJson(client.hostName),
+		configuration: mcpServersJson(client.hostName, runnerId),
 		configurationLabel: "MCP configuration",
 		installInstruction:
 			"Add this local stdio server using your client's MCP configuration.",

@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/select";
 import {
 	AGENT_CLIENTS,
+	AGENT_PACKAGE_RUNNERS,
 	type AgentClientId,
+	type AgentPackageRunnerId,
 	getAgentClientSetup,
 	getAgentConnectionPrompt,
 } from "@/features/agents/connect-config";
@@ -36,12 +38,13 @@ export function AgentConnectDialog({
 }) {
 	const workspacesQuery = useWorkspaces();
 	const [clientId, setClientId] = useState<AgentClientId>("codex");
+	const [runnerId, setRunnerId] = useState<AgentPackageRunnerId>("npx");
 	const [workspaceId, setWorkspaceId] = useState("");
 	const [copied, setCopied] = useState<CopyTarget | null>(null);
 	const [copyError, setCopyError] = useState("");
 	const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-	const setup = getAgentClientSetup(clientId);
+	const setup = getAgentClientSetup(clientId, runnerId);
 	const selectedWorkspace =
 		workspacesQuery.workspaces.find(
 			(workspace) => workspace.id === workspaceId,
@@ -141,6 +144,27 @@ export function AgentConnectDialog({
 						</p>
 					</div>
 					<div className="flex flex-col gap-2">
+						<fieldset className="flex flex-col gap-2">
+							<legend className="font-medium text-xs">Package runner</legend>
+							<div className="flex gap-2">
+								{AGENT_PACKAGE_RUNNERS.map((runner) => (
+									<Button
+										key={runner.id}
+										type="button"
+										variant={runner.id === runnerId ? "secondary" : "outline"}
+										size="sm"
+										aria-pressed={runner.id === runnerId}
+										onClick={() => setRunnerId(runner.id)}
+									>
+										{runner.label} ({runner.command})
+									</Button>
+								))}
+							</div>
+							<p className="text-muted-foreground text-xs">
+								Choose the runner installed on the machine running your AI
+								client.
+							</p>
+						</fieldset>
 						<h4 className="font-medium text-xs">{setup.configurationLabel}</h4>
 						<div className="relative">
 							<pre className="max-h-52 overflow-auto whitespace-pre rounded-lg border bg-muted/50 p-3 pr-12 font-mono text-xs leading-relaxed">
