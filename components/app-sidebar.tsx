@@ -54,7 +54,7 @@ export function AppSidebar({
 						<NotificationCenter />
 					</SidebarMenu>
 				</div>
-				<SidebarMenu>
+				<SidebarMenu className="gap-0.5">
 					<SearchCommand />
 					<SidebarMenuItem>
 						<SidebarMenuButton

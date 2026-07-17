@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	editCodeBlockIndentation,
 	getCodeBlockIndentPositions,
 	getCodeBlockUnindentRanges,
 } from "../components/editor/code-block-indent";
@@ -57,12 +58,46 @@ describe("code block indent", () => {
 	});
 
 	test("indents every line touched by a selection", () => {
-		expect(applyIndent("one\ntwo\nthree", 1, 11)).toBe(
-			"  one\n  two\n  three",
-		);
+		expect(applyIndent("one\ntwo\nthree", 1, 11)).toBe("  one\n  two\n  three");
 	});
 
 	test("does not include a line when the selection ends at its start", () => {
 		expect(applyIndent("one\ntwo", 0, 4)).toBe("  one\ntwo");
+	});
+});
+
+describe("fullscreen code block indentation", () => {
+	test("indents at the current line and keeps the cursor with its text", () => {
+		expect(editCodeBlockIndentation("one\ntwo", 6, 6, false)).toEqual({
+			text: "one\n  two",
+			selectionFrom: 8,
+			selectionTo: 8,
+		});
+	});
+
+	test("indents a multiline selection without selecting the inserted spaces", () => {
+		expect(editCodeBlockIndentation("one\ntwo\nthree", 0, 7, false)).toEqual({
+			text: "  one\n  two\nthree",
+			selectionFrom: 2,
+			selectionTo: 11,
+		});
+	});
+
+	test("unindents selected lines and preserves the logical selection", () => {
+		expect(
+			editCodeBlockIndentation("  one\n\ttwo\nthree", 2, 11, true),
+		).toEqual({
+			text: "one\ntwo\nthree",
+			selectionFrom: 0,
+			selectionTo: 8,
+		});
+	});
+
+	test("keeps focus in place when Shift-Tab has nothing to remove", () => {
+		expect(editCodeBlockIndentation("one", 2, 2, true)).toEqual({
+			text: "one",
+			selectionFrom: 2,
+			selectionTo: 2,
+		});
 	});
 });

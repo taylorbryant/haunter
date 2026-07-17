@@ -10,6 +10,11 @@ import {
 	DialogContent,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import {
+	CODE_BLOCK_LANGUAGES,
+	normalizeCodeBlockLanguage,
+} from "@/features/pages/lib/code-block-language";
+import { editCodeBlockIndentation } from "./code-block-indent";
 import { getCodeTheme, getHaunterHighlighter } from "./code-theme";
 import type { editorSchema } from "./schema";
 
@@ -39,11 +44,11 @@ export function CodeEditDialog({
 	const { resolvedTheme } = useTheme();
 	const block = editor.getBlock(blockId);
 	const [text, setText] = useState(() => (block ? blockInlineText(block) : ""));
-	const [language] = useState(() =>
-		block?.type === "codeBlock" && typeof block.props.language === "string"
-			? block.props.language
-			: "text",
-	);
+	const [language, setLanguage] = useState(() => {
+		const initialLanguage =
+			block?.type === "codeBlock" ? block.props.language : "text";
+		return normalizeCodeBlockLanguage(initialLanguage) || "text";
+	});
 	const [highlightedHtml, setHighlightedHtml] = useState("");
 	const overlayRef = useRef<HTMLDivElement>(null);
 	const theme = getCodeTheme(resolvedTheme);
@@ -98,60 +103,95 @@ export function CodeEditDialog({
 				<DialogTitle className="sr-only">
 					{editable ? "Edit code" : "Code"}
 				</DialogTitle>
-				<div
-					className="code-edit-focus-ring relative h-full w-full overflow-hidden rounded-lg border"
-					style={{ backgroundColor: theme.background }}
-				>
+				<div className="bn-shadcn size-full">
 					<div
-						ref={overlayRef}
-						aria-hidden
-						className="pointer-events-none absolute inset-0 overflow-hidden p-3 font-mono text-sm leading-relaxed [&_pre]:m-0 [&_pre]:whitespace-pre [&_pre]:bg-transparent!"
-						// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output over user-authored code, no external input
-						dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-					/>
-					<textarea
-						autoFocus
-						value={text}
-						aria-label="Code"
-						spellCheck={false}
-						autoCapitalize="none"
-						autoCorrect="off"
-						readOnly={!editable}
-						className="relative size-full resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-sm text-transparent leading-relaxed outline-none"
-						style={{ caretColor: theme.foreground }}
-						onChange={(event) => setText(event.target.value)}
-						onScroll={(event) => {
-							const overlay = overlayRef.current;
-							if (overlay) {
-								overlay.scrollTop = event.currentTarget.scrollTop;
-								overlay.scrollLeft = event.currentTarget.scrollLeft;
-							}
-						}}
-						onKeyDown={(event) => {
-							if (
-								editable &&
-								(event.metaKey || event.ctrlKey) &&
-								event.key === "Enter"
-							) {
-								event.preventDefault();
-								commitAndClose();
-							}
-						}}
-					/>
+						data-content-type="codeBlock"
+						className="bn-block-content code-edit-focus-ring relative flex h-full w-full flex-col overflow-hidden rounded-lg border"
+						style={{ backgroundColor: theme.background }}
+					>
+						<div className="haunter-code-block-header">
+							<select
+								aria-label="Code language"
+								value={language}
+								disabled={!editable}
+								onChange={(event) => setLanguage(event.target.value)}
+							>
+								{CODE_BLOCK_LANGUAGES.map((option) => (
+									<option key={option.id} value={option.id}>
+										{option.label}
+									</option>
+								))}
+							</select>
+							<DialogClose
+								render={
+									<button
+										type="button"
+										aria-label="Close code editor"
+										className="haunter-code-block-expand keyboard-focus-ring"
+									/>
+								}
+							>
+								<XIcon aria-hidden="true" className="size-4" />
+							</DialogClose>
+						</div>
+						<div className="relative order-2 min-h-0 flex-1">
+							<div
+								ref={overlayRef}
+								aria-hidden
+								className="pointer-events-none absolute inset-0 overflow-hidden p-3 font-mono text-sm leading-relaxed [&_pre]:m-0 [&_pre]:whitespace-pre [&_pre]:bg-transparent!"
+								// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output over user-authored code, no external input
+								dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+							/>
+							<textarea
+								autoFocus
+								value={text}
+								aria-label="Code"
+								spellCheck={false}
+								autoCapitalize="none"
+								autoCorrect="off"
+								readOnly={!editable}
+								className="relative size-full resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-sm text-transparent leading-relaxed outline-none"
+								style={{ caretColor: theme.foreground }}
+								onChange={(event) => setText(event.target.value)}
+								onScroll={(event) => {
+									const overlay = overlayRef.current;
+									if (overlay) {
+										overlay.scrollTop = event.currentTarget.scrollTop;
+										overlay.scrollLeft = event.currentTarget.scrollLeft;
+									}
+								}}
+								onKeyDown={(event) => {
+									if (editable && event.key === "Tab") {
+										event.preventDefault();
+										const textarea = event.currentTarget;
+										const edit = editCodeBlockIndentation(
+											text,
+											textarea.selectionStart,
+											textarea.selectionEnd,
+											event.shiftKey,
+										);
+										setText(edit.text);
+										requestAnimationFrame(() => {
+											textarea.setSelectionRange(
+												edit.selectionFrom,
+												edit.selectionTo,
+											);
+										});
+										return;
+									}
+									if (
+										editable &&
+										(event.metaKey || event.ctrlKey) &&
+										event.key === "Enter"
+									) {
+										event.preventDefault();
+										commitAndClose();
+									}
+								}}
+							/>
+						</div>
+					</div>
 				</div>
-				{/* Match the expanded canvas close affordance and keep it outside
-				    the code surface so the whole dialog remains the editor. */}
-				<DialogClose
-					render={
-						<button
-							type="button"
-							aria-label="Close code editor"
-							className="-top-3 -right-3 absolute z-10 flex size-9 items-center justify-center rounded-full bg-background/70 text-muted-foreground ring-1 ring-border/60 backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground"
-						/>
-					}
-				>
-					<XIcon className="size-5" />
-				</DialogClose>
 			</DialogContent>
 		</Dialog>
 	);

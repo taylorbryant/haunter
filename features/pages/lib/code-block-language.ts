@@ -1,16 +1,20 @@
 import type { BlockJson } from "@/features/pages/schemas";
 
 export const CODE_BLOCK_LANGUAGES = [
-	{ id: "text", aliases: ["txt", "plain", "plaintext"] },
-	{ id: "typescript", aliases: ["ts"] },
-	{ id: "javascript", aliases: ["js"] },
-	{ id: "tsx", aliases: ["typescriptreact"] },
-	{ id: "python", aliases: ["py"] },
-	{ id: "sql", aliases: [] },
-	{ id: "shellscript", aliases: ["bash", "sh", "shell", "zsh"] },
-	{ id: "json", aliases: [] },
-	{ id: "yaml", aliases: ["yml"] },
-	{ id: "markdown", aliases: ["md"] },
+	{ id: "text", label: "Plain Text", aliases: ["txt", "plain", "plaintext"] },
+	{ id: "typescript", label: "TypeScript", aliases: ["ts"] },
+	{ id: "javascript", label: "JavaScript", aliases: ["js"] },
+	{ id: "tsx", label: "TSX", aliases: ["typescriptreact"] },
+	{ id: "python", label: "Python", aliases: ["py"] },
+	{ id: "sql", label: "SQL", aliases: [] },
+	{
+		id: "shellscript",
+		label: "Shell",
+		aliases: ["bash", "sh", "shell", "zsh"],
+	},
+	{ id: "json", label: "JSON", aliases: [] },
+	{ id: "yaml", label: "YAML", aliases: ["yml"] },
+	{ id: "markdown", label: "Markdown", aliases: ["md"] },
 ] as const;
 
 export const PLAINTEXT_CODE_BLOCK_LANGUAGE = "text";

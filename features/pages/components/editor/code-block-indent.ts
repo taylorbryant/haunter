@@ -3,6 +3,12 @@ export type CodeBlockUnindentRange = {
 	to: number;
 };
 
+export type CodeBlockIndentEdit = {
+	text: string;
+	selectionFrom: number;
+	selectionTo: number;
+};
+
 const CODE_BLOCK_INDENT_SIZE = 2;
 
 function getSelectedLineStarts(
@@ -32,10 +38,7 @@ function getIndentWidth(text: string, lineStart: number): number {
 	if (text[lineStart] === "\t") return 1;
 
 	let width = 0;
-	while (
-		width < CODE_BLOCK_INDENT_SIZE &&
-		text[lineStart + width] === " "
-	) {
+	while (width < CODE_BLOCK_INDENT_SIZE && text[lineStart + width] === " ") {
 		width += 1;
 	}
 	return width;
@@ -69,4 +72,56 @@ export function getCodeBlockIndentPositions(
 	selectionTo: number,
 ): number[] {
 	return getSelectedLineStarts(text, selectionFrom, selectionTo);
+}
+
+function removedCharactersBefore(
+	position: number,
+	ranges: CodeBlockUnindentRange[],
+): number {
+	return ranges.reduce((total, range) => {
+		if (position <= range.from) return total;
+		return total + Math.min(position, range.to) - range.from;
+	}, 0);
+}
+
+/** Applies the same Tab indentation semantics to a plain-text editing surface. */
+export function editCodeBlockIndentation(
+	text: string,
+	selectionFrom: number,
+	selectionTo: number,
+	unindent: boolean,
+): CodeBlockIndentEdit {
+	if (unindent) {
+		const ranges = getCodeBlockUnindentRanges(text, selectionFrom, selectionTo);
+		let nextText = text;
+		for (const range of ranges.reverse()) {
+			nextText = nextText.slice(0, range.from) + nextText.slice(range.to);
+		}
+
+		return {
+			text: nextText,
+			selectionFrom:
+				selectionFrom - removedCharactersBefore(selectionFrom, ranges),
+			selectionTo: selectionTo - removedCharactersBefore(selectionTo, ranges),
+		};
+	}
+
+	const positions = getCodeBlockIndentPositions(
+		text,
+		selectionFrom,
+		selectionTo,
+	);
+	let nextText = text;
+	for (const position of positions.reverse()) {
+		nextText = `${nextText.slice(0, position)}${" ".repeat(CODE_BLOCK_INDENT_SIZE)}${nextText.slice(position)}`;
+	}
+	const insertedBefore = (position: number) =>
+		positions.filter((lineStart) => lineStart <= position).length *
+		CODE_BLOCK_INDENT_SIZE;
+
+	return {
+		text: nextText,
+		selectionFrom: selectionFrom + insertedBefore(selectionFrom),
+		selectionTo: selectionTo + insertedBefore(selectionTo),
+	};
 }

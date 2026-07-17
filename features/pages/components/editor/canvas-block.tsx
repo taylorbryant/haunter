@@ -3,13 +3,14 @@
 import { createReactBlockSpec } from "@blocknote/react";
 import { Maximize2Icon, XIcon } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
 	Dialog,
 	DialogClose,
 	DialogContent,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { flushPendingCanvasSave } from "@/features/canvases/client/save-state";
 
 // tldraw is a ~MB chunk: load it only when a canvas block actually renders.
 const CanvasSurface = dynamic(
@@ -26,6 +27,21 @@ const CanvasSurface = dynamic(
 
 function CanvasBlockView({ canvasId }: { canvasId: string }) {
 	const [expanded, setExpanded] = useState(false);
+	const [changingView, setChangingView] = useState(false);
+	const changingViewRef = useRef(false);
+
+	async function changeExpanded(nextExpanded: boolean) {
+		if (changingViewRef.current || nextExpanded === expanded) return;
+		changingViewRef.current = true;
+		setChangingView(true);
+		try {
+			const saved = await flushPendingCanvasSave(canvasId);
+			if (saved) setExpanded(nextExpanded);
+		} finally {
+			changingViewRef.current = false;
+			setChangingView(false);
+		}
+	}
 
 	return (
 		<div className="flex h-full w-full flex-col">
@@ -34,7 +50,8 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 					type="button"
 					aria-label="Expand canvas"
 					className="keyboard-focus-ring flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-					onClick={() => setExpanded(true)}
+					disabled={changingView}
+					onClick={() => void changeExpanded(true)}
 				>
 					<Maximize2Icon className="size-4" />
 				</button>
@@ -49,7 +66,10 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 				)}
 			</div>
 			{expanded ? (
-				<Dialog open onOpenChange={(open) => !open && setExpanded(false)}>
+				<Dialog
+					open
+					onOpenChange={(open) => !open && void changeExpanded(false)}
+				>
 					<DialogContent
 						showCloseButton={false}
 						className="h-[85vh] overflow-visible p-0 sm:max-w-[90vw]"
@@ -64,6 +84,7 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 						    the backdrop and clear of tldraw's own top-right UI — as a
 						    semi-transparent circle. */}
 						<DialogClose
+							disabled={changingView}
 							render={
 								<button
 									type="button"

@@ -5,34 +5,39 @@ import "tldraw/tldraw.css";
 import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
 	createTLStore,
 	defaultBindingUtils,
 	defaultShapeUtils,
 	type Editor,
 	getSnapshot,
-	loadSnapshot,
 	Tldraw,
 } from "tldraw";
-import { useCurrentUser } from "@/components/app-session-provider";
 import { userErrorMessage } from "@/client/error-feedback";
+import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
 import {
 	getCanvasQueryOptions,
+	refreshCanvasQuery,
 	saveCanvasSnapshotMutationOptions,
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
+import {
+	clearPendingCanvasSave,
+	drainCanvasSaveQueue,
+	getPendingCanvasSave,
+	type PendingCanvasSave,
+	registerCanvasSaveFlusher,
+	rememberPendingCanvasSave,
+} from "@/features/canvases/client/save-state";
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
 import { useCanvasTheme } from "@/features/canvases/components/use-canvas-theme";
 import {
 	type CanvasCollabUser,
 	useCollabCanvasStore,
 } from "@/features/canvases/components/use-collab-canvas-store";
-import {
-	isLoadableSnapshot,
-	loadableSnapshot,
-} from "@/features/canvases/lib/snapshot";
+import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
 	type CollabRoom,
@@ -43,6 +48,8 @@ import { useCanEditWorkspace } from "@/features/members/client/use-workspace-rol
 import { useSharedPageToken } from "@/features/shares/components/shared-page-context";
 
 const SNAPSHOT_SAVE_DELAY_MS = 1500;
+const CANVAS_CONFLICT_MESSAGE =
+	"Canvas changed elsewhere. Your drawing is still here. Retry to keep this version.";
 
 export default function CanvasSurface({ canvasId }: { canvasId: string }) {
 	// Inside a public share view, swap to the read-only token-scoped surface.
@@ -65,30 +72,32 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	});
 	const collabSession = useCollabSession(canvasRoomId(canvasId));
 	const canEdit = useCanEditWorkspace();
+	const pendingSaveAtRender = getPendingCanvasSave(canvasId);
 
 	const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(
-		"saved",
+		pendingSaveAtRender ? "error" : "saved",
 	);
-	const [saveError, setSaveError] = useState<string | null>(null);
-	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const flushRef = useRef<() => void>(() => {});
+	const [saveError, setSaveError] = useState<string | null>(
+		pendingSaveAtRender ? CANVAS_CONFLICT_MESSAGE : null,
+	);
+	const flushRef = useRef<() => Promise<boolean>>(async () => true);
+	const retryRef = useRef<() => Promise<boolean>>(async () => true);
 	// Last server updatedAt this client saw: the optimistic-concurrency base.
-	const baseUpdatedAtRef = useRef<string | null>(null);
+	const baseVersionRef = useRef<{
+		canvasId: string;
+		updatedAt: string;
+	} | null>(null);
 	const localStoreRef = useRef<{
 		canvasId: string;
 		store: ReturnType<typeof createTLStore>;
 	} | null>(null);
-	if (canvasQuery.data && baseUpdatedAtRef.current === null) {
-		baseUpdatedAtRef.current = canvasQuery.data.updatedAt;
-	}
-
-	// Flush a pending snapshot save when the block unmounts.
-	useEffect(() => {
-		return () => {
-			if (timeoutRef.current) clearTimeout(timeoutRef.current);
-			flushRef.current();
+	if (canvasQuery.data && baseVersionRef.current?.canvasId !== canvasId) {
+		baseVersionRef.current = {
+			canvasId,
+			updatedAt:
+				pendingSaveAtRender?.baseUpdatedAt ?? canvasQuery.data.updatedAt,
 		};
-	}, []);
+	}
 
 	if (canvasQuery.isPending || collabSession.status === "connecting") {
 		return (
@@ -125,7 +134,8 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		);
 	}
 
-	const stored = canvasQuery.data.snapshot;
+	const initialUpdatedAt = canvasQuery.data.updatedAt;
+	const stored = pendingSaveAtRender?.snapshot ?? canvasQuery.data.snapshot;
 	// Legacy/empty rows without a schema crash tldraw's migrator; treat them
 	// as a fresh canvas instead.
 	const snapshot = loadableSnapshot(stored);
@@ -149,103 +159,161 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 			editor.updateInstanceState({ isReadonly: true });
 		}
 
-		let dirty = false;
-		let saveInFlight = false;
+		let pendingSave: PendingCanvasSave | null = pendingSaveAtRender;
+		let revision = pendingSave ? 1 : 0;
+		let savedRevision = 0;
+		let saveInFlight: Promise<boolean> | null = null;
+		let conflictPending = pendingSave !== null;
+		let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 
-		// Another member (or tab) saved since we loaded: adopt the server's
-		// snapshot rather than clobbering it, and rebase future saves on it.
-		async function reloadFromServer() {
-			const fresh = await queryClient.fetchQuery({
-				...getCanvasQueryOptions(canvasId),
-				staleTime: 0,
-			});
-			baseUpdatedAtRef.current = fresh.updatedAt;
-			if (isLoadableSnapshot(fresh.snapshot)) {
-				loadSnapshot(editor.store, {
-					document: fresh.snapshot,
-				});
+		async function save(): Promise<boolean> {
+			if (!canEdit) return true;
+			if (conflictPending) return false;
+			if (saveInFlight) {
+				const saved = await saveInFlight;
+				return saved && savedRevision < revision ? save() : saved;
 			}
-			dirty = false;
-		}
+			if (savedRevision >= revision) return true;
 
-		function save() {
-			if (saveInFlight || !dirty) return;
-			dirty = false;
-			saveInFlight = true;
+			const savingRevision = revision;
 			setSaveError(null);
 			setSaveState("saving");
 			const snapshot = getSnapshot(editor.store).document as unknown as Record<
 				string,
 				unknown
 			>;
-			// Mirror into the cache immediately so a remount (e.g. switching to
-			// the expanded dialog) never restores a stale drawing.
-			setCanvasSnapshotInCache(queryClient, canvasId, snapshot);
-			saveMutation.mutate(
-				{
-					path: { id: canvasId },
-					body: {
+			const request = (async () => {
+				try {
+					// Cancel an older GET before staging the local value. Otherwise its
+					// response can land later and make a remount restore stale shapes.
+					await setCanvasSnapshotInCache(queryClient, canvasId, snapshot);
+					const result = await saveMutation.mutateAsync({
+						path: { id: canvasId },
+						body: {
+							snapshot,
+							...(baseVersionRef.current
+								? { baseUpdatedAt: baseVersionRef.current.updatedAt }
+								: {}),
+						},
+					});
+					baseVersionRef.current = {
+						canvasId,
+						updatedAt: result.updatedAt,
+					};
+					savedRevision = savingRevision;
+					// Cancel once more after the mutation to catch a refetch that began
+					// while the PUT was in flight.
+					await setCanvasSnapshotInCache(
+						queryClient,
+						canvasId,
 						snapshot,
-						...(baseUpdatedAtRef.current
-							? { baseUpdatedAt: baseUpdatedAtRef.current }
-							: {}),
-					},
-				},
-				{
-					onSuccess: (result) => {
-						saveInFlight = false;
-						baseUpdatedAtRef.current = result.updatedAt;
-						setSaveError(null);
-						if (dirty) save();
-						else setSaveState("saved");
-					},
-					onError: (error) => {
-						saveInFlight = false;
-						if (error instanceof ContractError && error.status === 409) {
-							void reloadFromServer().then(
-								() => {
-									setSaveError(null);
-									setSaveState("saved");
-								},
-								(reloadError) => {
-									dirty = true;
-									setSaveError(
-										userErrorMessage(
-											reloadError,
-											"The latest canvas could not be loaded.",
-										),
-									);
-									setSaveState("error");
-								},
-							);
-						} else {
-							// Transient failure: keep the local changes and retry on the
-							// next edit/flush.
-							dirty = true;
+						result.updatedAt,
+					);
+					if (pendingSave && savedRevision < revision) {
+						const latestSnapshot = getSnapshot(editor.store)
+							.document as unknown as Record<string, unknown>;
+						pendingSave = rememberPendingCanvasSave(canvasId, {
+							snapshot: latestSnapshot,
+							baseUpdatedAt: result.updatedAt,
+						});
+					}
+					setSaveError(null);
+					return true;
+				} catch (error) {
+					if (error instanceof ContractError && error.status === 409) {
+						conflictPending = true;
+						const localSnapshot = getSnapshot(editor.store)
+							.document as unknown as Record<string, unknown>;
+						pendingSave = rememberPendingCanvasSave(canvasId, {
+							snapshot: localSnapshot,
+							baseUpdatedAt:
+								baseVersionRef.current?.updatedAt ?? initialUpdatedAt,
+						});
+						try {
+							// Refresh the server-state cache, but keep the conflict-protected
+							// local snapshot in the mounted store and pending-save registry.
+							const fresh = await refreshCanvasQuery(queryClient, canvasId);
+							baseVersionRef.current = {
+								canvasId,
+								updatedAt: fresh.updatedAt,
+							};
+							pendingSave = rememberPendingCanvasSave(canvasId, {
+								snapshot: localSnapshot,
+								baseUpdatedAt: fresh.updatedAt,
+							});
+							setSaveError(CANVAS_CONFLICT_MESSAGE);
+						} catch (refreshError) {
 							setSaveError(
-								userErrorMessage(error, "Canvas changes could not be saved."),
+								userErrorMessage(
+									refreshError,
+									"Canvas changed elsewhere. Your drawing is still here, but the latest version could not be checked.",
+								),
 							);
-							setSaveState("error");
 						}
-					},
-				},
-			);
+					} else {
+						setSaveError(
+							userErrorMessage(error, "Canvas changes could not be saved."),
+						);
+					}
+					setSaveState("error");
+					return false;
+				}
+			})();
+
+			saveInFlight = request;
+			const saved = await request;
+			if (saveInFlight === request) saveInFlight = null;
+			if (!saved) return false;
+			if (savedRevision < revision) return save();
+			if (pendingSave) {
+				clearPendingCanvasSave(canvasId, pendingSave);
+				pendingSave = null;
+			}
+			setSaveState("saved");
+			return true;
 		}
 
-		flushRef.current = save;
+		const flush = () =>
+			drainCanvasSaveQueue({
+				clearPendingTimer: () => {
+					if (pendingTimeout) {
+						clearTimeout(pendingTimeout);
+						pendingTimeout = null;
+					}
+				},
+				hasPendingChanges: () =>
+					savedRevision < revision || saveInFlight !== null,
+				save,
+			});
+		flushRef.current = flush;
+		retryRef.current = () => {
+			conflictPending = false;
+			return flush();
+		};
+		const unregisterFlusher = registerCanvasSaveFlusher(canvasId, flush);
 
 		const unlisten = editor.store.listen(
 			() => {
-				dirty = true;
-				if (timeoutRef.current) clearTimeout(timeoutRef.current);
-				timeoutRef.current = setTimeout(save, SNAPSHOT_SAVE_DELAY_MS);
+				revision += 1;
+				if (pendingSave) {
+					const latestSnapshot = getSnapshot(editor.store)
+						.document as unknown as Record<string, unknown>;
+					pendingSave = rememberPendingCanvasSave(canvasId, {
+						snapshot: latestSnapshot,
+						baseUpdatedAt:
+							baseVersionRef.current?.updatedAt ?? pendingSave.baseUpdatedAt,
+					});
+				}
+				if (pendingTimeout) clearTimeout(pendingTimeout);
+				pendingTimeout = setTimeout(() => void flush(), SNAPSHOT_SAVE_DELAY_MS);
 			},
 			{ scope: "document", source: "user" },
 		);
 
 		return () => {
 			unlisten();
-			save();
+			unregisterFlusher();
+			void flush();
 		};
 	}
 
@@ -272,7 +340,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 						variant="outline"
 						size="sm"
 						disabled={saveMutation.isPending}
-						onClick={() => flushRef.current()}
+						onClick={() => void retryRef.current()}
 					>
 						Retry
 					</Button>
@@ -321,16 +389,7 @@ function CollabCanvasSurface({
 		"saved",
 	);
 	const [saveError, setSaveError] = useState<string | null>(null);
-	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const flushRef = useRef<() => void>(() => {});
-
-	// Flush a pending snapshot save when the block unmounts.
-	useEffect(() => {
-		return () => {
-			if (timeoutRef.current) clearTimeout(timeoutRef.current);
-			flushRef.current();
-		};
-	}, []);
+	const flushRef = useRef<() => Promise<boolean>>(async () => true);
 
 	function handleMount(editor: Editor) {
 		syncCanvasTheme(editor);
@@ -338,58 +397,94 @@ function CollabCanvasSurface({
 			editor.updateInstanceState({ isReadonly: true });
 		}
 
-		let dirty = false;
-		let saveInFlight = false;
+		let revision = 0;
+		let savedRevision = 0;
+		let saveInFlight: Promise<boolean> | null = null;
+		let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 
-		function save() {
-			if (saveInFlight || !dirty || !canEdit) return;
-			dirty = false;
-			saveInFlight = true;
+		async function save(): Promise<boolean> {
+			if (!canEdit) return true;
+			if (saveInFlight) {
+				const saved = await saveInFlight;
+				return saved && savedRevision < revision ? save() : saved;
+			}
+			if (savedRevision >= revision) return true;
+
+			const savingRevision = revision;
 			setSaveError(null);
 			setSaveState("saving");
 			const document = getSnapshot(editor.store).document as unknown as Record<
 				string,
 				unknown
 			>;
-			setCanvasSnapshotInCache(queryClient, canvasId, document);
-			saveMutation.mutate(
-				{ path: { id: canvasId }, body: { snapshot: document } },
-				{
-					onSuccess: () => {
-						saveInFlight = false;
-						setSaveError(null);
-						if (dirty) save();
-						else setSaveState("saved");
-					},
-					onError: (error) => {
-						saveInFlight = false;
-						// Transient failure: keep local changes and retry on the next
-						// edit/flush; the shared doc is the live source of truth anyway.
-						dirty = true;
-						setSaveError(
-							userErrorMessage(error, "Canvas changes could not be saved."),
-						);
-						setSaveState("error");
-					},
-				},
-			);
-		}
-		flushRef.current = save;
+			const request = (async () => {
+				try {
+					await setCanvasSnapshotInCache(queryClient, canvasId, document);
+					const result = await saveMutation.mutateAsync({
+						path: { id: canvasId },
+						body: { snapshot: document },
+					});
+					savedRevision = savingRevision;
+					await setCanvasSnapshotInCache(
+						queryClient,
+						canvasId,
+						document,
+						result.updatedAt,
+					);
+					setSaveError(null);
+					return true;
+				} catch (error) {
+					// Keep the shared document and local revision pending. A retry
+					// materializes the current converged room state again.
+					setSaveError(
+						userErrorMessage(error, "Canvas changes could not be saved."),
+					);
+					setSaveState("error");
+					return false;
+				}
+			})();
 
-		// Only this user's own edits schedule a save; remote peers persist
-		// their own edits (converged content makes the writes equivalent).
+			saveInFlight = request;
+			const saved = await request;
+			if (saveInFlight === request) saveInFlight = null;
+			if (!saved) return false;
+			if (savedRevision < revision) return save();
+			setSaveState("saved");
+			return true;
+		}
+
+		const flush = () =>
+			drainCanvasSaveQueue({
+				clearPendingTimer: () => {
+					if (pendingTimeout) {
+						clearTimeout(pendingTimeout);
+						pendingTimeout = null;
+					}
+				},
+				hasPendingChanges: () =>
+					savedRevision < revision || saveInFlight !== null,
+				save,
+			});
+		flushRef.current = flush;
+		const unregisterFlusher = registerCanvasSaveFlusher(canvasId, flush);
+
+		// Local and remote document changes both reset the debounce. Concurrent
+		// peers may initially persist partial snapshots, but once their Yjs
+		// updates arrive every editor materializes and saves the converged room.
 		const unlisten = editor.store.listen(
 			() => {
-				dirty = true;
-				if (timeoutRef.current) clearTimeout(timeoutRef.current);
-				timeoutRef.current = setTimeout(save, SNAPSHOT_SAVE_DELAY_MS);
+				if (!canEdit) return;
+				revision += 1;
+				if (pendingTimeout) clearTimeout(pendingTimeout);
+				pendingTimeout = setTimeout(() => void flush(), SNAPSHOT_SAVE_DELAY_MS);
 			},
-			{ scope: "document", source: "user" },
+			{ scope: "document" },
 		);
 
 		return () => {
 			unlisten();
-			save();
+			unregisterFlusher();
+			void flush();
 		};
 	}
 
@@ -416,7 +511,7 @@ function CollabCanvasSurface({
 						variant="outline"
 						size="sm"
 						disabled={saveMutation.isPending}
-						onClick={() => flushRef.current()}
+						onClick={() => void flushRef.current()}
 					>
 						Retry
 					</Button>
