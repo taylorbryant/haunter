@@ -119,6 +119,114 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 }
 
 describe("pageRoutes", () => {
+	it("rejects an excessively nested initial document over HTTP", async () => {
+		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
+		const { app } = await createPagesTestApp({
+			auth: createSignedInAuth("user_test", workspace.id),
+		});
+		let content: {
+			id: string;
+			type: string;
+			props: Record<string, unknown>;
+			children: unknown[];
+		} = { id: "leaf", type: "paragraph", props: {}, children: [] };
+		for (let depth = 0; depth < 64; depth += 1) {
+			content = {
+				id: `parent-${depth}`,
+				type: "paragraph",
+				props: {},
+				children: [content],
+			};
+		}
+
+		const response = await app.fetch("http://beignet.test/api/pages", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				workspaceId: workspace.id,
+				title: "Too deep",
+				initialContent: [content],
+			}),
+		});
+
+		await app.stop();
+
+		expect(response.status).toBe(422);
+	});
+
+	it("creates a page with initial content over HTTP", async () => {
+		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
+		const { app } = await createPagesTestApp({
+			auth: createSignedInAuth("user_test", workspace.id),
+		});
+		const requester = createTestRequester(app, {});
+		const initialContent = [
+			{
+				id: "imported-paragraph",
+				type: "paragraph",
+				props: {},
+				content: [{ type: "text", text: "Imported body", styles: {} }],
+				children: [],
+			},
+		];
+
+		const created = await requester.request(createPage, {
+			body: {
+				workspaceId: workspace.id,
+				title: "Imported page",
+				initialContent,
+			},
+			idempotencyKey: "page-import-1",
+		});
+		const fetched = await requester.request(getPage, {
+			path: { id: created.id },
+		});
+
+		await app.stop();
+
+		expect(fetched.content).toEqual(initialContent);
+		expect(created.contentUpdatedAt).toBe(fetched.contentUpdatedAt);
+	});
+
+	it("returns 422 for semantically invalid initial content", async () => {
+		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
+		const { app } = await createPagesTestApp({
+			auth: createSignedInAuth("user_test", workspace.id),
+		});
+		const requester = createTestRequester(app, {});
+
+		const result = await requester.safeRequest(createPage, {
+			body: {
+				workspaceId: workspace.id,
+				title: "Invalid import",
+				initialContent: [
+					{
+						id: "invalid-task",
+						type: "task",
+						props: {
+							checked: false,
+							due: "tomorrow",
+							dueTime: "",
+							assignee: "",
+						},
+						content: [
+							{ type: "text", text: "Invalid task", styles: {} },
+						],
+						children: [],
+					},
+				],
+			},
+			idempotencyKey: "page-import-invalid",
+		});
+
+		await app.stop();
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("Expected an error result.");
+		expect(result.status).toBe(422);
+		expect(result.error.code).toBe("INVALID_PAGE_CONTENT");
+	});
+
 	it("supports the full page lifecycle over HTTP", async () => {
 		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
 		const { app } = await createPagesTestApp({

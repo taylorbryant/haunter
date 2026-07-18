@@ -1,5 +1,5 @@
-import type { BlockJson } from "@/features/pages/schemas";
 import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
+import type { BlockJson } from "@/features/pages/schemas";
 
 /**
  * Lossy blocks ⇄ markdown conversion for agent access. Hand-rolled rather
@@ -269,13 +269,35 @@ const NUMBERED_LINE = /^\d+[.)] (.*)$/;
 const HEADING_LINE = /^(#{1,6}) (.*)$/;
 const FENCE_LINE = /^```(\S*)\s*$/;
 
+export class MarkdownBlockLimitError extends Error {
+	constructor(readonly maxBlocks: number) {
+		super(`Markdown may contain at most ${maxBlocks} blocks.`);
+		this.name = "MarkdownBlockLimitError";
+	}
+}
+
 /**
  * Parse a pragmatic markdown subset into Haunter blocks. Two-space
  * indentation nests list items and tasks as children; blockquotes become
  * callouts; unrecognized lines become paragraphs.
  */
-export function markdownToBlocks(markdown: string): BlockJson[] {
+export function markdownToBlocks(
+	markdown: string,
+	options: { maxBlocks?: number } = {},
+): BlockJson[] {
 	const roots: BlockJson[] = [];
+	let blockCount = 0;
+	const parsedBlock = (
+		type: string,
+		props: Record<string, unknown>,
+		content: unknown,
+	) => {
+		blockCount += 1;
+		if (options.maxBlocks !== undefined && blockCount > options.maxBlocks) {
+			throw new MarkdownBlockLimitError(options.maxBlocks);
+		}
+		return makeBlock(type, props, content);
+	};
 	// Indentation stack for nesting list items; stack[d] receives depth-d+1 children.
 	let listStack: BlockJson[] = [];
 	const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -308,7 +330,7 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 			i += 1; // closing fence
 			listStack = [];
 			roots.push(
-				makeBlock(
+				parsedBlock(
 					"codeBlock",
 					{
 						language: normalizeCodeBlockLanguage(fence[1]),
@@ -321,7 +343,7 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 
 		if (/^(-{3,}|\*{3,})$/.test(trimmed)) {
 			listStack = [];
-			roots.push(makeBlock("divider", {}, undefined));
+			roots.push(parsedBlock("divider", {}, undefined));
 			i += 1;
 			continue;
 		}
@@ -330,7 +352,7 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 		if (heading) {
 			listStack = [];
 			roots.push(
-				makeBlock(
+				parsedBlock(
 					"heading",
 					{ level: Math.min(heading[1].length, 4) },
 					parseInline(heading[2]),
@@ -348,7 +370,7 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 				i += 1;
 			}
 			listStack = [];
-			roots.push(makeBlock("callout", {}, parseInline(parts.join(" "))));
+			roots.push(parsedBlock("callout", {}, parseInline(parts.join(" "))));
 			continue;
 		}
 
@@ -367,7 +389,7 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 				title = title.slice(0, dueMatch.index);
 			}
 			push(
-				makeBlock(
+				parsedBlock(
 					"task",
 					{ checked: task[1] !== " ", due, dueTime, assignee: "" },
 					parseInline(title),
@@ -380,14 +402,17 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 
 		const bullet = BULLET_LINE.exec(trimmed);
 		if (bullet) {
-			push(makeBlock("bulletListItem", {}, parseInline(bullet[1])), depth);
+			push(parsedBlock("bulletListItem", {}, parseInline(bullet[1])), depth);
 			i += 1;
 			continue;
 		}
 
 		const numbered = NUMBERED_LINE.exec(trimmed);
 		if (numbered) {
-			push(makeBlock("numberedListItem", {}, parseInline(numbered[1])), depth);
+			push(
+				parsedBlock("numberedListItem", {}, parseInline(numbered[1])),
+				depth,
+			);
 			i += 1;
 			continue;
 		}
@@ -396,14 +421,14 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 		if (image) {
 			listStack = [];
 			roots.push(
-				makeBlock("image", { url: image[2], caption: image[1] }, undefined),
+				parsedBlock("image", { url: image[2], caption: image[1] }, undefined),
 			);
 			i += 1;
 			continue;
 		}
 
 		listStack = [];
-		roots.push(makeBlock("paragraph", {}, parseInline(trimmed)));
+		roots.push(parsedBlock("paragraph", {}, parseInline(trimmed)));
 		i += 1;
 	}
 

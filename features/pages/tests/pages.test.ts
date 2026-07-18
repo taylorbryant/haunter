@@ -242,6 +242,64 @@ describe("pages use cases", () => {
 		expect(child.parentContentUpdatedAt).toBeNull();
 	});
 
+	it("creates imported content atomically and reconciles its task rows", async () => {
+		const { workspace, tester, ctx, tasks, scope } = await createFixture();
+		const initialContent = [
+			{
+				id: "imported-heading",
+				type: "heading",
+				props: { level: 1 },
+				content: [{ type: "text", text: "Imported notes", styles: {} }],
+				children: [],
+			},
+			{
+				id: "imported-task",
+				type: "task",
+				props: {
+					checked: false,
+					due: "2026-07-20",
+					dueTime: "09:30",
+					assignee: "",
+				},
+				content: [{ type: "text", text: "Review import", styles: {} }],
+				children: [],
+			},
+		];
+
+		const created = await tester.run(
+			createPageUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "Imported notes",
+				initialContent,
+			},
+			{ ctx },
+		);
+		const fetched = await tester.run(
+			getPageUseCase,
+			{ id: created.id },
+			{ ctx },
+		);
+		const importedTasks = await tasks.listByPage(scope, created.id);
+		const search = await tester.run(
+			searchPagesUseCase,
+			{ q: "Review import" },
+			{ ctx },
+		);
+
+		expect(fetched.content).toEqual(initialContent);
+		expect(created.contentUpdatedAt).toBe(fetched.contentUpdatedAt);
+		expect(importedTasks).toHaveLength(1);
+		expect(importedTasks[0]).toMatchObject({
+			sourceBlockId: "imported-task",
+			title: "Review import",
+			dueDate: "2026-07-20",
+			dueTime: "09:30",
+			assigneeId: null,
+		});
+		expect(search.items.map((page) => page.id)).toContain(created.id);
+	});
+
 	it("preserves a concurrent parent edit while appending a subpage", async () => {
 		const { pages, workspace, tester, ctx } = await createFixture();
 		const parent = await tester.run(

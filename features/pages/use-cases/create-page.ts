@@ -1,5 +1,8 @@
 import "@beignet/core/server-only";
-import { reconcilePageLinks } from "@/features/pages/lib/apply-page-content";
+import {
+	reconcilePageDerivations,
+	reconcilePageLinks,
+} from "@/features/pages/lib/apply-page-content";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
 import type { BlockJson, Page } from "@/features/pages/schemas";
@@ -34,12 +37,29 @@ export const createPageUseCase = useCase
 			const position =
 				(await tx.pages.maxPositionForParent(scope, parentPageId)) + 1;
 
-			const created = await tx.pages.create(scope, {
+			let created = await tx.pages.create(scope, {
 				userId: user.id,
 				parentPageId,
 				title: input.title,
 				position,
 			});
+
+			if (input.initialContent && input.initialContent.length > 0) {
+				const saved = await tx.pages.saveContent(
+					scope,
+					created.id,
+					JSON.stringify(input.initialContent),
+					extractPageSearchText(input.initialContent),
+				);
+				await reconcilePageDerivations(
+					tx,
+					scope,
+					created,
+					input.initialContent,
+					{ defaultTaskAssigneeId: user.id },
+				);
+				created = { ...created, ...saved };
+			}
 
 			if (parent && input.appendToParentContent !== false) {
 				const pageLinkBlock = createSubpageLinkBlock(created);

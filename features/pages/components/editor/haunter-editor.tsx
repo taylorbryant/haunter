@@ -50,7 +50,9 @@ import {
 	setPageSavedAtInCache,
 } from "@/features/pages/client/queries";
 import {
+	createInFlightSaveQueueStore,
 	drainPageSaveQueue,
+	type InFlightSaveQueue,
 	registerPageSaveFlusher,
 } from "@/features/pages/client/save-state";
 import { uploadPageImage } from "@/features/pages/client/upload";
@@ -235,6 +237,14 @@ function getSlashMenuItems(
 
 export type SaveState = "saved" | "pending" | "saving" | "error";
 
+type DocumentSaveOutcome =
+	| { status: "saved"; contentUpdatedAt: string }
+	| { status: "conflict" }
+	| { status: "error"; error: unknown };
+
+const documentSaveQueues =
+	createInFlightSaveQueueStore<DocumentSaveOutcome>();
+
 type HaunterEditorProps = {
 	pageId: string;
 	workspaceId: string;
@@ -254,8 +264,6 @@ type HaunterEditorProps = {
 	focusRequest?: number;
 	/** Current signed-in user, used for same-user authoring defaults. */
 	currentUserId?: string | null;
-	/** Flush pending same-client metadata writes before saving document content. */
-	flushMetadataSave?: () => Promise<unknown>;
 	onSaveStateChange?: (state: SaveState) => void;
 	/** The server rejected a save as stale; the owner should reload the doc. */
 	onConflict?: () => void;
@@ -306,7 +314,6 @@ export default function HaunterEditor({
 	collab = null,
 	focusRequest = 0,
 	currentUserId = null,
-	flushMetadataSave,
 	onSaveStateChange,
 	onConflict,
 }: HaunterEditorProps) {
@@ -315,8 +322,12 @@ export default function HaunterEditor({
 	const searchParams = useSearchParams();
 	const queryClient = useQueryClient();
 	const isMobile = useIsMobile();
+	const documentSaveQueue: InFlightSaveQueue<DocumentSaveOutcome> =
+		documentSaveQueues.get(pageId);
 	const [saveState, setSaveState] = useState<SaveState>("saved");
 	const [saveError, setSaveError] = useState<string | null>(null);
+	const onConflictRef = useRef(onConflict);
+	onConflictRef.current = onConflict;
 	const normalizedInitialContent = useMemo(
 		() => normalizeCodeBlockLanguages(initialContent),
 		[initialContent],
@@ -533,7 +544,6 @@ export default function HaunterEditor({
 	});
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const dirtyRef = useRef(false);
-	const inFlightSaveRef = useRef<Promise<boolean> | null>(null);
 	const saveRef = useRef<() => Promise<boolean>>(async () => true);
 
 	const reportState = useCallback(
@@ -545,19 +555,41 @@ export default function HaunterEditor({
 	);
 
 	saveRef.current = async () => {
-		if (inFlightSaveRef.current) {
-			return inFlightSaveRef.current;
+		const precedingSave = documentSaveQueue.inFlight;
+		if (precedingSave) {
+			const outcome = await precedingSave;
+			if (outcome.status === "saved") {
+				advanceBaseUpdatedAt(outcome.contentUpdatedAt);
+				return dirtyRef.current ? saveRef.current() : true;
+			}
+			if (outcome.status === "conflict") {
+				dirtyRef.current = false;
+				setSaveError(null);
+				reportState("saved");
+				onConflict?.();
+				return false;
+			}
+			// A newer local document supersedes the failed snapshot and can retry
+			// from the same content version once the old request has settled.
+			if (dirtyRef.current) return saveRef.current();
+			setSaveError(
+				userErrorMessage(
+					outcome.error,
+					"Your page changes could not be saved.",
+				),
+			);
+			reportState("error");
+			return false;
 		}
 		if (!dirtyRef.current) return true;
 		dirtyRef.current = false;
 		reportState("saving");
-		await flushMetadataSave?.();
 		const content = editor.document as unknown as BlockJson[];
 		// Mirror into the cache immediately: a remount between this save and
 		// the next refetch must not initialize the editor from a stale doc.
 		setPageContentInCache(queryClient, pageId, content);
 		let saveAgainAfterSuccess = false;
-		const run = saveMutation
+		const request = saveMutation
 			.mutateAsync({
 				path: { id: pageId },
 				body: {
@@ -570,7 +602,7 @@ export default function HaunterEditor({
 			.then(
 				(result) => {
 					setSaveError(null);
-					baseUpdatedAtRef.current = result.contentUpdatedAt;
+					advanceBaseUpdatedAt(result.contentUpdatedAt);
 					saveAgainAfterSuccess = dirtyRef.current;
 					if (!dirtyRef.current) reportState("saved");
 					setPageSavedAtInCache(
@@ -585,7 +617,10 @@ export default function HaunterEditor({
 					if (result.tasksChanged) {
 						invalidateTasks(queryClient);
 					}
-					return true;
+					return {
+						status: "saved",
+						contentUpdatedAt: result.contentUpdatedAt,
+					} satisfies DocumentSaveOutcome;
 				},
 				(error) => {
 					if (error instanceof ContractError && error.status === 409) {
@@ -595,23 +630,26 @@ export default function HaunterEditor({
 						setSaveError(null);
 						reportState("saved");
 						onConflict?.();
-						return false;
+						return { status: "conflict" } satisfies DocumentSaveOutcome;
 					}
 					dirtyRef.current = true;
 					setSaveError(
 						userErrorMessage(error, "Your page changes could not be saved."),
 					);
 					reportState("error");
-					return false;
+					return { status: "error", error } satisfies DocumentSaveOutcome;
 				},
-			)
-			.finally(() => {
-				inFlightSaveRef.current = null;
+			);
+		const run = documentSaveQueues.track(documentSaveQueue, request).then(
+			(outcome) => {
 				// A debounce can fire while the preceding request is still running.
 				// Hand the newer document to a fresh request once that save succeeds.
-				if (saveAgainAfterSuccess) void saveRef.current();
-			});
-		inFlightSaveRef.current = run;
+				if (outcome.status === "saved" && saveAgainAfterSuccess) {
+					void saveRef.current();
+				}
+				return outcome.status === "saved";
+			},
+		);
 		return run;
 	};
 
@@ -627,13 +665,38 @@ export default function HaunterEditor({
 		timeoutRef.current = setTimeout(() => saveRef.current(), AUTOSAVE_DELAY_MS);
 	}, [editor, reportState, editable]);
 
-	// Flush any pending save when the page unmounts (navigation away).
+	// Retain the page-scoped coordinator through cleanup. If this editor is
+	// replaced while its save is running, the replacement adopts that exact
+	// result before it can persist a newer document.
 	useEffect(() => {
+		const releaseQueue = documentSaveQueues.retain(documentSaveQueue);
+		const lastResult = documentSaveQueue.lastResult;
+		if (lastResult?.status === "saved") {
+			advanceBaseUpdatedAt(lastResult.contentUpdatedAt);
+		}
+		const precedingSave = documentSaveQueue.inFlight;
+		if (precedingSave) {
+			let active = true;
+			void precedingSave.then((outcome) => {
+				if (outcome.status === "saved") {
+					advanceBaseUpdatedAt(outcome.contentUpdatedAt);
+				} else if (outcome.status === "conflict" && active) {
+					// The component that started the request may already be gone. The
+					// replacement must reload its own editor, not only invalidate cache.
+					void onConflictRef.current?.();
+				}
+			});
+			return () => {
+				active = false;
+				if (timeoutRef.current) clearTimeout(timeoutRef.current);
+				void saveRef.current().finally(releaseQueue);
+			};
+		}
 		return () => {
 			if (timeoutRef.current) clearTimeout(timeoutRef.current);
-			void saveRef.current();
+			void saveRef.current().finally(releaseQueue);
 		};
-	}, []);
+	}, [advanceBaseUpdatedAt, documentSaveQueue]);
 
 	useEffect(() => {
 		return registerPageSaveFlusher(pageId, async () => {
@@ -645,11 +708,11 @@ export default function HaunterEditor({
 					}
 				},
 				hasPendingChanges: () =>
-					dirtyRef.current || inFlightSaveRef.current !== null,
+					dirtyRef.current || documentSaveQueue.inFlight !== null,
 				save: () => saveRef.current(),
 			});
 		});
-	}, [pageId]);
+	}, [documentSaveQueue, pageId]);
 
 	const [codeDialogBlockId, setCodeDialogBlockId] = useState<string | null>(
 		null,
