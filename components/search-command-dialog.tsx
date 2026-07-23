@@ -3,7 +3,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { CornerDownLeftIcon, FileTextIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFilteredCommandGroups } from "@/components/command-palette/registry";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +37,7 @@ export function SearchCommandDialog({
 	onOpenChange: (open: boolean) => void;
 }) {
 	const router = useRouter();
+	const inputRef = useRef<HTMLInputElement>(null);
 	const [query, setQuery] = useState("");
 
 	const isCommandMode = query.startsWith(COMMAND_PREFIX);
@@ -73,9 +74,11 @@ export function SearchCommandDialog({
 					? "Run a command"
 					: "Search pages by title or content, or type > for commands"
 			}
+			initialFocus={inputRef}
 		>
 			<Command shouldFilter={false}>
 				<CommandInput
+					ref={inputRef}
 					placeholder={
 						isCommandMode
 							? "Type a command..."
