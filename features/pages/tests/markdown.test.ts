@@ -81,7 +81,63 @@ describe("blocksToMarkdown", () => {
 			]),
 		]);
 
-		expect(markdown).toBe("- Parent\n\n  - Child");
+		expect(markdown).toBe("- Parent\n    - Child");
+	});
+
+	it("renders compact, portable lists with four-space nesting", () => {
+		const markdown = blocksToMarkdown([
+			block("numberedListItem", {}, "Go through the numbers", [
+				block("bulletListItem", {}, "Taken FS"),
+				block("bulletListItem", {}, "Availability", [
+					block("bulletListItem", {}, "Operational problem"),
+					block("bulletListItem", {}, "Takeaways"),
+				]),
+			]),
+			block("paragraph", {}, "Notes after the list"),
+		]);
+
+		expect(markdown).toBe(
+			[
+				"1. Go through the numbers",
+				"    - Taken FS",
+				"    - Availability",
+				"        - Operational problem",
+				"        - Takeaways",
+				"",
+				"Notes after the list",
+			].join("\n"),
+		);
+	});
+
+	it("does not turn children of non-list blocks into indented code", () => {
+		const markdown = blocksToMarkdown([
+			block("heading", { level: 2 }, "Section", [
+				block("paragraph", {}, "Nested editor content"),
+			]),
+		]);
+
+		expect(markdown).toBe("## Section\n\nNested editor content");
+	});
+
+	it("keeps whitespace outside inline formatting delimiters", () => {
+		const markdown = blocksToMarkdown([
+			{
+				id: "1",
+				type: "paragraph",
+				props: {},
+				content: [
+					{
+						type: "text",
+						text: "Trap: move the important work first ",
+						styles: { bold: true },
+					},
+					{ type: "text", text: "today", styles: {} },
+				],
+				children: [],
+			},
+		]);
+
+		expect(markdown).toBe("**Trap: move the important work first** today");
 	});
 });
 
@@ -144,13 +200,18 @@ describe("markdownToBlocks", () => {
 		});
 	});
 
-	it("nests two-space-indented list items as children", () => {
-		const blocks = markdownToBlocks("- Parent\n  - Child\n- Sibling");
+	it.each([
+		["two", "- Parent\n  - Child\n    - Grandchild\n- Sibling"],
+		["four", "- Parent\n    - Child\n        - Grandchild\n- Sibling"],
+	])("nests %s-space-indented list items as children", (_label, markdown) => {
+		const blocks = markdownToBlocks(markdown);
 
 		expect(blocks).toHaveLength(2);
 		expect(blocks[0].children).toHaveLength(1);
 		const child = blocks[0].children[0];
 		expect(child.type).toBe("bulletListItem");
+		expect(child.children).toHaveLength(1);
+		expect(child.children[0].type).toBe("bulletListItem");
 	});
 
 	it("supports H4 and caps deeper markdown headings at H4", () => {
@@ -169,7 +230,9 @@ describe("markdownToBlocks", () => {
 	it("round-trips content through markdown", () => {
 		const original = [
 			block("heading", { level: 1 }, "Title"),
-			block("task", { checked: false, due: "2026-08-01" }, "Water plants"),
+			block("task", { checked: false, due: "2026-08-01" }, "Water plants", [
+				block("bulletListItem", {}, "Use rainwater"),
+			]),
 			block("paragraph", {}, "Some prose"),
 		];
 
@@ -181,6 +244,7 @@ describe("markdownToBlocks", () => {
 			"paragraph",
 		]);
 		expect(reparsed[1].props.due).toBe("2026-08-01");
+		expect(reparsed[1].children[0].type).toBe("bulletListItem");
 	});
 
 	it("parses inline styles back into styled text nodes", () => {

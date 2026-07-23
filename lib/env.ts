@@ -4,6 +4,18 @@ import { z } from "zod";
 const BooleanEnv = z
 	.enum(["true", "false"])
 	.transform((value) => value === "true");
+const AuthHostPattern = z
+	.string()
+	.trim()
+	.min(1)
+	.refine(
+		(value) => !value.includes("://") && !/[\s/,]/.test(value),
+		"Use a hostname or hostname pattern without a protocol or path.",
+	);
+const AuthHostPatterns = z
+	.string()
+	.transform((value) => value.split(",").map((host) => host.trim()))
+	.pipe(z.array(AuthHostPattern).min(1));
 const LOCAL_BETTER_AUTH_SECRET = "local-dev-better-auth-secret-change-me";
 const isProductionRuntime =
 	process.env.NODE_ENV === "production" &&
@@ -38,13 +50,16 @@ export const env = createEnv({
 		BETTER_AUTH_SECRET: isProductionRuntime
 			? BetterAuthSecret
 			: BetterAuthSecret.default(LOCAL_BETTER_AUTH_SECRET),
-		// Auth has its own canonical origin. Local development defaults to the
-		// Next.js dev server; production must configure it explicitly so protocol
-		// discovery can never advertise localhost.
-		BETTER_AUTH_URL: isProductionRuntime
-			? z.string().url()
-			: z.string().url().default("http://localhost:3000"),
+		// Optional when auth is served by this app: APP_URL is the canonical
+		// origin. Set this only when Better Auth needs a different public origin.
+		BETTER_AUTH_URL: z.string().url().optional(),
+		BETTER_AUTH_ALLOWED_HOSTS: AuthHostPatterns.optional(),
 		BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
+		// Vercel supplies hostnames without a protocol. Exact deployment and
+		// branch aliases let previews work without a broad *.vercel.app wildcard.
+		VERCEL_URL: AuthHostPattern.optional(),
+		VERCEL_BRANCH_URL: AuthHostPattern.optional(),
+		VERCEL_PROJECT_PRODUCTION_URL: AuthHostPattern.optional(),
 		BOOTSTRAP_ADMIN_EMAIL: z
 			.string()
 			.trim()

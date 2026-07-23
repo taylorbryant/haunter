@@ -1,5 +1,5 @@
-import type { BlockJson } from "@/features/pages/schemas";
 import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
+import type { BlockJson } from "@/features/pages/schemas";
 
 /**
  * Lossy blocks ⇄ markdown conversion for agent access. Hand-rolled rather
@@ -32,6 +32,17 @@ function escapeInline(text: string): string {
 	return text.replace(/([\\`*_[\]])/g, "\\$1");
 }
 
+function wrapInlineStyle(text: string, marker: string): string {
+	const leadingWhitespace = text.match(/^\s*/)?.[0] ?? "";
+	const trailingWhitespace = text.match(/\s*$/)?.[0] ?? "";
+	const content = text.slice(
+		leadingWhitespace.length,
+		text.length - trailingWhitespace.length,
+	);
+	if (content.length === 0) return text;
+	return `${leadingWhitespace}${marker}${content}${marker}${trailingWhitespace}`;
+}
+
 function inlineToMarkdown(content: unknown): string {
 	if (!Array.isArray(content)) return "";
 
@@ -53,10 +64,12 @@ function inlineToMarkdown(content: unknown): string {
 
 		let text = escapeInline(node.text);
 		const styles = node.styles ?? {};
-		if (styles.code) text = `\`${node.text}\``;
-		if (styles.bold) text = `**${text}**`;
-		if (styles.italic) text = `*${text}*`;
-		if (styles.strike || styles.strikethrough) text = `~~${text}~~`;
+		if (styles.code) text = wrapInlineStyle(node.text, "`");
+		if (styles.bold) text = wrapInlineStyle(text, "**");
+		if (styles.italic) text = wrapInlineStyle(text, "*");
+		if (styles.strike || styles.strikethrough) {
+			text = wrapInlineStyle(text, "~~");
+		}
 		out += text;
 	}
 	return out;
@@ -83,7 +96,7 @@ function blockToMarkdown(
 		case "heading": {
 			const level =
 				typeof block.props.level === "number" ? block.props.level : 1;
-			return `${"#".repeat(Math.min(Math.max(level, 1), 6))} ${inline}`;
+			return `${indent}${"#".repeat(Math.min(Math.max(level, 1), 6))} ${inline}`;
 		}
 		case "bulletListItem":
 			return `${indent}- ${inline}`;
@@ -104,53 +117,77 @@ function blockToMarkdown(
 		}
 		case "codeBlock": {
 			const language = normalizeCodeBlockLanguage(block.props.language);
-			return `\`\`\`${language}\n${plainText(block.content)}\n\`\`\``;
+			const code = plainText(block.content)
+				.split("\n")
+				.map((line) => `${indent}${line}`)
+				.join("\n");
+			return `${indent}\`\`\`${language}\n${code}\n${indent}\`\`\``;
 		}
 		case "callout": {
 			const emoji =
 				typeof block.props.emoji === "string" ? `${block.props.emoji} ` : "";
-			return `> ${emoji}${inline}`;
+			return `${indent}> ${emoji}${inline}`;
 		}
 		case "quote":
-			return `> ${inline}`;
+			return `${indent}> ${inline}`;
 		case "divider":
-			return "---";
+			return `${indent}---`;
 		case "pageLink": {
 			const pageId = block.props.pageId;
 			return typeof pageId === "string" && pageId.length > 0
-				? `[Linked page](${PAGE_URI_PREFIX}${pageId})`
+				? `${indent}[Linked page](${PAGE_URI_PREFIX}${pageId})`
 				: "";
 		}
 		case "image": {
 			const url = typeof block.props.url === "string" ? block.props.url : "";
 			const caption =
 				typeof block.props.caption === "string" ? block.props.caption : "";
-			return `![${caption}](${url})`;
+			return `${indent}![${caption}](${url})`;
 		}
 		case "canvas":
-			return "*(canvas)*";
+			return `${indent}*(canvas)*`;
 		case "table":
-			return "*(table omitted)*";
+			return `${indent}*(table omitted)*`;
 		default:
 			return `${indent}${inline}`;
 	}
 }
 
 export function blocksToMarkdown(blocks: BlockJson[]): string {
-	const lines: string[] = [];
+	const renderedBlocks: Array<{ markdown: string; isListItem: boolean }> = [];
+	const isListItem = (block: BlockJson) =>
+		block.type === "bulletListItem" ||
+		block.type === "numberedListItem" ||
+		block.type === "task";
 
-	function walk(nodes: BlockJson[], depth: number) {
+	function walk(nodes: BlockJson[], listDepth: number) {
 		let ordinal = 0;
 		for (const block of nodes) {
 			ordinal = block.type === "numberedListItem" ? ordinal + 1 : 0;
-			const line = blockToMarkdown(block, "  ".repeat(depth), ordinal || 1);
-			if (line.length > 0) lines.push(line);
-			if (block.children.length > 0) walk(block.children, depth + 1);
+			const markdown = blockToMarkdown(
+				block,
+				"    ".repeat(listDepth),
+				ordinal || 1,
+			);
+			if (markdown.length > 0) {
+				renderedBlocks.push({
+					markdown,
+					isListItem: isListItem(block),
+				});
+			}
+			if (block.children.length > 0) {
+				walk(block.children, listDepth + (isListItem(block) ? 1 : 0));
+			}
 		}
 	}
 
 	walk(blocks, 0);
-	return lines.join("\n\n");
+	return renderedBlocks.reduce((markdown, current, index) => {
+		if (index === 0) return current.markdown;
+		const previous = renderedBlocks[index - 1];
+		const separator = previous.isListItem && current.isListItem ? "\n" : "\n\n";
+		return `${markdown}${separator}${current.markdown}`;
+	}, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -269,24 +306,56 @@ const NUMBERED_LINE = /^\d+[.)] (.*)$/;
 const HEADING_LINE = /^(#{1,6}) (.*)$/;
 const FENCE_LINE = /^```(\S*)\s*$/;
 
+export class MarkdownBlockLimitError extends Error {
+	constructor(readonly maxBlocks: number) {
+		super(`Markdown may contain at most ${maxBlocks} blocks.`);
+		this.name = "MarkdownBlockLimitError";
+	}
+}
+
 /**
- * Parse a pragmatic markdown subset into Haunter blocks. Two-space
- * indentation nests list items and tasks as children; blockquotes become
- * callouts; unrecognized lines become paragraphs.
+ * Parse a pragmatic markdown subset into Haunter blocks. Increasing
+ * indentation nests list items and tasks as children, whether the source uses
+ * two or four spaces per level; blockquotes become callouts; unrecognized
+ * lines become paragraphs.
  */
-export function markdownToBlocks(markdown: string): BlockJson[] {
+export function markdownToBlocks(
+	markdown: string,
+	options: { maxBlocks?: number } = {},
+): BlockJson[] {
 	const roots: BlockJson[] = [];
-	// Indentation stack for nesting list items; stack[d] receives depth-d+1 children.
+	let blockCount = 0;
+	const parsedBlock = (
+		type: string,
+		props: Record<string, unknown>,
+		content: unknown,
+	) => {
+		blockCount += 1;
+		if (options.maxBlocks !== undefined && blockCount > options.maxBlocks) {
+			throw new MarkdownBlockLimitError(options.maxBlocks);
+		}
+		return makeBlock(type, props, content);
+	};
+	// List stacks retain the indentation column for each nesting level. This
+	// accepts older Haunter exports (two spaces per level) as well as portable
+	// CommonMark-style exports (four spaces per level).
 	let listStack: BlockJson[] = [];
+	let listIndents: number[] = [];
 	const lines = markdown.replace(/\r\n/g, "\n").split("\n");
 	let i = 0;
 
-	const push = (block: BlockJson, depth: number) => {
+	const push = (block: BlockJson, indent: number) => {
+		let depth = 0;
+		for (let index = 0; index < listIndents.length; index += 1) {
+			if (listIndents[index] < indent) depth = index + 1;
+		}
 		const parent = depth > 0 ? listStack[depth - 1] : undefined;
 		if (parent) parent.children.push(block);
 		else roots.push(block);
 		listStack = listStack.slice(0, depth);
+		listIndents = listIndents.slice(0, depth);
 		listStack[depth] = block;
+		listIndents[depth] = indent;
 	};
 
 	while (i < lines.length) {
@@ -307,8 +376,9 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 			}
 			i += 1; // closing fence
 			listStack = [];
+			listIndents = [];
 			roots.push(
-				makeBlock(
+				parsedBlock(
 					"codeBlock",
 					{
 						language: normalizeCodeBlockLanguage(fence[1]),
@@ -321,7 +391,8 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 
 		if (/^(-{3,}|\*{3,})$/.test(trimmed)) {
 			listStack = [];
-			roots.push(makeBlock("divider", {}, undefined));
+			listIndents = [];
+			roots.push(parsedBlock("divider", {}, undefined));
 			i += 1;
 			continue;
 		}
@@ -329,8 +400,9 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 		const heading = HEADING_LINE.exec(trimmed);
 		if (heading) {
 			listStack = [];
+			listIndents = [];
 			roots.push(
-				makeBlock(
+				parsedBlock(
 					"heading",
 					{ level: Math.min(heading[1].length, 4) },
 					parseInline(heading[2]),
@@ -348,12 +420,13 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 				i += 1;
 			}
 			listStack = [];
-			roots.push(makeBlock("callout", {}, parseInline(parts.join(" "))));
+			listIndents = [];
+			roots.push(parsedBlock("callout", {}, parseInline(parts.join(" "))));
 			continue;
 		}
 
 		const indentMatch = /^( *)/.exec(raw);
-		const depth = Math.floor((indentMatch?.[1].length ?? 0) / 2);
+		const indent = indentMatch?.[1].length ?? 0;
 
 		const task = TASK_LINE.exec(trimmed);
 		if (task) {
@@ -367,12 +440,12 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 				title = title.slice(0, dueMatch.index);
 			}
 			push(
-				makeBlock(
+				parsedBlock(
 					"task",
 					{ checked: task[1] !== " ", due, dueTime, assignee: "" },
 					parseInline(title),
 				),
-				depth,
+				indent,
 			);
 			i += 1;
 			continue;
@@ -380,14 +453,17 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 
 		const bullet = BULLET_LINE.exec(trimmed);
 		if (bullet) {
-			push(makeBlock("bulletListItem", {}, parseInline(bullet[1])), depth);
+			push(parsedBlock("bulletListItem", {}, parseInline(bullet[1])), indent);
 			i += 1;
 			continue;
 		}
 
 		const numbered = NUMBERED_LINE.exec(trimmed);
 		if (numbered) {
-			push(makeBlock("numberedListItem", {}, parseInline(numbered[1])), depth);
+			push(
+				parsedBlock("numberedListItem", {}, parseInline(numbered[1])),
+				indent,
+			);
 			i += 1;
 			continue;
 		}
@@ -395,15 +471,17 @@ export function markdownToBlocks(markdown: string): BlockJson[] {
 		const image = /^!\[([^\]]*)\]\(([^)\s]*)\)$/.exec(trimmed);
 		if (image) {
 			listStack = [];
+			listIndents = [];
 			roots.push(
-				makeBlock("image", { url: image[2], caption: image[1] }, undefined),
+				parsedBlock("image", { url: image[2], caption: image[1] }, undefined),
 			);
 			i += 1;
 			continue;
 		}
 
 		listStack = [];
-		roots.push(makeBlock("paragraph", {}, parseInline(trimmed)));
+		listIndents = [];
+		roots.push(parsedBlock("paragraph", {}, parseInline(trimmed)));
 		i += 1;
 	}
 

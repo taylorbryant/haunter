@@ -9,9 +9,9 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { userErrorMessage } from "@/client/error-feedback";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
-import { userErrorMessage } from "@/client/error-feedback";
 import { useCollabSession } from "@/features/collab/client/session";
 import { cursorColorFor, pageRoomId } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
@@ -26,7 +26,13 @@ import {
 	setPageTitleInCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
-import { setPageSaveState } from "@/features/pages/client/save-state";
+import {
+	createLatestSaveQueueStore,
+	drainLatestSaveQueue,
+	type LatestSaveQueue,
+	registerPageSaveFlusher,
+	setPageSaveState,
+} from "@/features/pages/client/save-state";
 import { useSharedTitle } from "@/features/pages/client/use-shared-title";
 import {
 	PAGE_TITLE_MAX_LENGTH,
@@ -60,6 +66,18 @@ const ReadOnlyEditor = dynamic(() => import("./editor/read-only-editor"), {
 });
 
 const TITLE_SAVE_DELAY_MS = 500;
+
+type TitleDraft = {
+	value: string;
+	save: () => Promise<string | null>;
+};
+type TitleSaveQueue = LatestSaveQueue<TitleDraft, string | null>;
+
+const titleSaveQueues = createLatestSaveQueueStore<TitleDraft, string | null>();
+
+function serverTitleSaveQueue(pageId: string): TitleSaveQueue {
+	return { key: pageId, pending: null, timeout: null, inFlight: null };
+}
 
 function normalizeTitleInput(value: string) {
 	return value.replace(/[\r\n]+/g, " ");
@@ -101,9 +119,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const [title, setTitle] = useState<string | null>(null);
 	const [titleError, setTitleError] = useState<string | null>(null);
 	const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
-	const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const titleDraftRef = useRef<string | null>(null);
-	const titleSavePromiseRef = useRef<Promise<string | null> | null>(null);
+	// Browser queues are shared across remounts. Server renders use an isolated
+	// empty queue so request-scoped page state is never retained in module state.
+	// Viewers also stay isolated because they never register a writer that could
+	// retain and later evict a browser queue.
+	const titleQueue =
+		typeof window === "undefined" || readOnly
+			? serverTitleSaveQueue(pageId)
+			: titleSaveQueues.get(pageId);
 	const activePageIdRef = useRef(pageId);
 	activePageIdRef.current = pageId;
 	// Bumped when a save is rejected as stale: refetches the doc and remounts
@@ -116,14 +139,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// Reset local title state when navigating between pages.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on page change
 	useEffect(() => {
-		if (titleTimeoutRef.current) clearTimeout(titleTimeoutRef.current);
-		titleTimeoutRef.current = null;
-		titleDraftRef.current = null;
 		setTitle(null);
 		setTitleError(null);
 		setPageSaveState("saved");
 		return () => {
-			if (titleTimeoutRef.current) clearTimeout(titleTimeoutRef.current);
+			if (titleQueue.timeout) clearTimeout(titleQueue.timeout);
+			titleQueue.timeout = null;
 		};
 	}, [pageId]);
 
@@ -137,6 +158,29 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		input.setSelectionRange(input.value.length, input.value.length);
 		releaseTitleKeyboardPrime();
 	}, [pageId, pageLoaded]);
+
+	// Metadata and document saves are independent registrations. Keeping the
+	// title flusher mounted at this level covers collaboration startup, the
+	// dynamically loaded editor fallback, and ordinary navigation cleanup.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: capture one page-scoped flusher until this page changes
+	useEffect(() => {
+		if (readOnly) return;
+		const releaseQueue = titleSaveQueues.retain(titleQueue);
+		const flush = flushTitleSave;
+		const pending = titleQueue.pending;
+		if (pending) {
+			// A queue can outlive the component that created its current draft.
+			// Route retries and errors through the newly mounted editor from now on.
+			pending.save = () => saveTitle(pending);
+			void flush();
+		}
+		const unregister = registerPageSaveFlusher(pageId, flush);
+		return () => {
+			unregister();
+			releaseQueue();
+			void flush().finally(() => titleSaveQueues.evictIfIdle(titleQueue));
+		};
+	}, [pageId, readOnly]);
 
 	// A collaborator renamed the page: refresh the sidebar/breadcrumb lists
 	// (their PATCH already persisted it). Debounced — remote keystrokes
@@ -152,7 +196,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 	// Local typing wins while in flight; otherwise the shared live title;
 	// otherwise the database copy.
-	const shownTitle = title ?? sharedTitle ?? pageQuery.data?.title ?? "";
+	const shownTitle =
+		title ??
+		titleQueue.pending?.value ??
+		sharedTitle ??
+		pageQuery.data?.title ??
+		"";
 	useLayoutEffect(() => {
 		resizeTitleTextarea(titleInputRef.current);
 	});
@@ -195,23 +244,29 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 	function handleTitleChange(next: string) {
 		const normalized = normalizeTitleInput(next);
+		let draft: TitleDraft;
+		draft = {
+			value: normalized,
+			save: () => saveTitle(draft),
+		};
 		setTitleError(
 			normalized.length > PAGE_TITLE_MAX_LENGTH
 				? PAGE_TITLE_TOO_LONG_MESSAGE
 				: null,
 		);
 		setTitle(normalized);
-		titleDraftRef.current = normalized;
+		titleQueue.pending = draft;
 		// Collaborators see every keystroke; the database write is debounced.
 		pushTitle(normalized);
-		if (titleTimeoutRef.current) clearTimeout(titleTimeoutRef.current);
-		titleTimeoutRef.current = setTimeout(() => {
-			titleTimeoutRef.current = null;
-			void saveTitle(normalized);
+		if (titleQueue.timeout) clearTimeout(titleQueue.timeout);
+		titleQueue.timeout = setTimeout(() => {
+			titleQueue.timeout = null;
+			void draft.save();
 		}, TITLE_SAVE_DELAY_MS);
 	}
 
-	function saveTitle(next: string): Promise<string | null> {
+	function saveTitle(draft: TitleDraft): Promise<string | null> {
+		const next = draft.value;
 		if (next.length > PAGE_TITLE_MAX_LENGTH) {
 			setTitleError(PAGE_TITLE_TOO_LONG_MESSAGE);
 			return Promise.resolve(null);
@@ -219,8 +274,8 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		// Preserve typing order when a slow request overlaps the next debounce.
 		// Without this queue, an older response can arrive last and overwrite the
 		// newer title in both the database and client cache.
-		const savedPageId = pageId;
-		const previousSave = titleSavePromiseRef.current;
+		const savedPageId = titleQueue.key;
+		const previousSave = titleQueue.inFlight;
 		const request = () =>
 			updatePageMutation.mutateAsync({
 				path: { id: savedPageId },
@@ -230,10 +285,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		promise = (previousSave ? previousSave.then(request) : request())
 			.then(
 				(result) => {
-					const isCurrentDraft =
-						activePageIdRef.current === savedPageId &&
-						titleDraftRef.current === next;
-					if (isCurrentDraft) setTitleError(null);
+					const isLatestDraft = titleQueue.pending === draft;
+					const isActiveDraft =
+						activePageIdRef.current === savedPageId && isLatestDraft;
+					if (isActiveDraft) setTitleError(null);
 					// Write the saved title into the cache BEFORE handing display
 					// back to it — otherwise the input snaps back to the stale
 					// cached title (e.g. "Untitled" on a fresh page).
@@ -244,8 +299,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
 						result.updatedAt,
 					);
 					void invalidatePages(queryClient);
-					if (isCurrentDraft) {
-						titleDraftRef.current = null;
+					if (isLatestDraft) {
+						titleQueue.pending = null;
+					}
+					if (isActiveDraft) {
 						setTitle((current) => (current === next ? null : current));
 					}
 					return result.updatedAt;
@@ -253,7 +310,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				(error) => {
 					if (
 						activePageIdRef.current === savedPageId &&
-						titleDraftRef.current === next
+						titleQueue.pending === draft
 					) {
 						setTitleError(
 							userErrorMessage(error, "The page title could not be saved."),
@@ -263,28 +320,28 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				},
 			)
 			.finally(() => {
-				if (titleSavePromiseRef.current === promise) {
-					titleSavePromiseRef.current = null;
+				if (titleQueue.inFlight === promise) {
+					titleQueue.inFlight = null;
 				}
+				titleSaveQueues.evictIfIdle(titleQueue);
 			});
-		titleSavePromiseRef.current = promise;
+		titleQueue.inFlight = promise;
 		return promise;
 	}
 
-	async function flushTitleSave(): Promise<string | null> {
-		let pendingTitle: string | null = null;
-		if (titleTimeoutRef.current) {
-			clearTimeout(titleTimeoutRef.current);
-			titleTimeoutRef.current = null;
-			pendingTitle = titleDraftRef.current;
-		}
-
-		if (titleSavePromiseRef.current) {
-			const updatedAt = await titleSavePromiseRef.current;
-			if (pendingTitle === null) return updatedAt;
-		}
-
-		return pendingTitle !== null ? saveTitle(pendingTitle) : null;
+	async function flushTitleSave(): Promise<boolean> {
+		return drainLatestSaveQueue({
+			clearPendingTimer: () => {
+				if (titleQueue.timeout) {
+					clearTimeout(titleQueue.timeout);
+					titleQueue.timeout = null;
+				}
+			},
+			getInFlightSave: () =>
+				titleQueue.inFlight?.then((savedAt) => savedAt !== null) ?? null,
+			getPendingValue: () => titleQueue.pending,
+			save: async (draft) => (await draft.save()) !== null,
+		});
 	}
 
 	function handleTitleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -349,7 +406,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
 									variant="outline"
 									size="sm"
 									disabled={updatePageMutation.isPending}
-									onClick={() => void saveTitle(shownTitle)}
+									onClick={() => {
+										const draft = titleQueue.pending;
+										if (draft) void draft.save();
+									}}
 								>
 									Retry
 								</Button>
@@ -379,7 +439,6 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					collabUser={collabUser}
 					focusRequest={editorFocusRequest}
 					currentUserId={currentUser?.id ?? null}
-					flushMetadataSave={flushTitleSave}
 					onSaveStateChange={setPageSaveState}
 					onConflict={handleConflict}
 				/>

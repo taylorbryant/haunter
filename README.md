@@ -191,5 +191,13 @@ delivery is skipped. Users enable push separately for each device in Settings.
 - Set `APP_URL`, `BETTER_AUTH_SECRET`, `LOG_LEVEL`, and service-specific integration variables in your hosting environment.
 - Configure the notification schedule and VAPID values above if overdue reminders should run in production.
 - On a fresh installation, set `BOOTSTRAP_ADMIN_EMAIL` before the owner first signs in; leave it unset on established installations.
-- Set `BETTER_AUTH_TRUSTED_ORIGINS` before serving auth across multiple origins.
+- Keep `APP_URL` set to the canonical deployed origin. `BETTER_AUTH_URL` is an
+  optional override when Better Auth has a different public origin.
+  When Vercel's system environment variables are exposed, deployment, branch,
+  and production hosts are admitted automatically. Set
+  `BETTER_AUTH_ALLOWED_HOSTS` to comma-separated hostname patterns for
+  additional aliases, other hosting providers, or Vercel projects that do not
+  expose system variables. Use
+  `BETTER_AUTH_TRUSTED_ORIGINS` only for separate client origins that call the
+  auth server.
 - Review the starter authorization policy before exposing user-owned data.

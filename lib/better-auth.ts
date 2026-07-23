@@ -9,6 +9,7 @@ import { ensureDatabaseReady } from "@/infra/db/database-ready";
 import * as schema from "@/infra/db/schema";
 import { createHaunterAgentAuthAdapter } from "@/lib/agent-auth-adapter";
 import { createAuthRateLimitStorage } from "@/lib/auth-rate-limit";
+import { buildAuthAllowedHosts } from "@/lib/better-auth-hosts";
 import { env } from "@/lib/env";
 import { sendLoginCode, sendWorkspaceInvite } from "@/lib/mail";
 import { accessControl, roles } from "@/lib/org-access";
@@ -28,6 +29,8 @@ const adminUsers = createDrizzleAdminUserRepository(db);
 
 const authRateLimitStorage = createAuthRateLimitStorage();
 
+const authBaseUrl = env.BETTER_AUTH_URL ?? env.APP_URL;
+
 const agentCapabilityAdapter = createHaunterAgentAuthAdapter(async () => {
 	const [{ createHaunterAgentCapabilityExecutor }, serverModule] =
 		await Promise.all([
@@ -42,14 +45,34 @@ const agentCapabilityAdapter = createHaunterAgentAuthAdapter(async () => {
 
 const trustedOrigins = [
 	env.APP_URL,
-	env.BETTER_AUTH_URL,
+	authBaseUrl,
 	...(env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",")
 		.map((origin) => origin.trim())
 		.filter(Boolean) ?? []),
 ];
+const allowedAuthHosts = buildAuthAllowedHosts({
+	appUrl: env.APP_URL,
+	betterAuthUrl: authBaseUrl,
+	additionalHosts: env.BETTER_AUTH_ALLOWED_HOSTS,
+	vercelUrl: env.VERCEL_URL,
+	vercelBranchUrl: env.VERCEL_BRANCH_URL,
+	vercelProjectProductionUrl: env.VERCEL_PROJECT_PRODUCTION_URL,
+});
+const hasDynamicAuthHosts = Boolean(
+	env.BETTER_AUTH_ALLOWED_HOSTS?.length ||
+		env.VERCEL_URL ||
+		env.VERCEL_BRANCH_URL ||
+		env.VERCEL_PROJECT_PRODUCTION_URL,
+);
 
 export const auth = betterAuth({
-	baseURL: env.BETTER_AUTH_URL,
+	// Resolve the request-specific URL for previews and multi-domain installs.
+	// Single-domain installs retain their existing static URL behavior, including
+	// support for a configured base path. Better Auth automatically adds dynamic
+	// allowed hosts to trustedOrigins.
+	baseURL: hasDynamicAuthHosts
+		? { allowedHosts: allowedAuthHosts, protocol: "auto" }
+		: authBaseUrl,
 	secret: env.BETTER_AUTH_SECRET,
 	trustedOrigins: [...new Set(trustedOrigins)],
 	database: drizzleAdapter(db, {

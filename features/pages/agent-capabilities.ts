@@ -1,8 +1,10 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
 import {
+	MAX_INITIAL_PAGE_CONTENT_BLOCKS,
 	PAGE_TITLE_MAX_LENGTH,
 	PAGE_TITLE_TOO_LONG_MESSAGE,
+	type BlockJson,
 } from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
@@ -16,6 +18,22 @@ const PageMetadataOutput = z.object({
 	parentPageId: z.string().uuid().nullable(),
 	updatedAt: z.string(),
 });
+
+async function parseAgentMarkdown(markdown: string): Promise<BlockJson[]> {
+	const { MarkdownBlockLimitError, markdownToBlocks } = await import(
+		"@/features/pages/lib/markdown"
+	);
+	try {
+		return markdownToBlocks(markdown, {
+			maxBlocks: MAX_INITIAL_PAGE_CONTENT_BLOCKS,
+		});
+	} catch (error) {
+		if (error instanceof MarkdownBlockLimitError) {
+			throw appError("InvalidPageContent", { message: error.message });
+		}
+		throw error;
+	}
+}
 
 export const listPagesCapability = defineAgentCapability("list_pages", {
 	description:
@@ -109,43 +127,27 @@ export const createPageCapability = defineAgentCapability("create_page", {
 	}),
 	async handle({ ctx, input }) {
 		const initialContent = input.markdown
-			? await import("@/features/pages/lib/markdown").then(
-					({ markdownToBlocks }) => markdownToBlocks(input.markdown ?? ""),
-				)
+			? await parseAgentMarkdown(input.markdown)
 			: null;
 		if (initialContent && initialContent.length === 0) {
 			throw appError("InvalidPageContent");
 		}
-		const { createPageUseCase, savePageContentUseCase } = await import(
-			"@/features/pages/use-cases"
-		);
+		const { createPageUseCase } = await import("@/features/pages/use-cases");
 		const page = await createPageUseCase.run({
 			ctx,
 			input: {
 				workspaceId: input.workspaceId,
 				title: input.title,
 				...(input.parentPageId ? { parentPageId: input.parentPageId } : {}),
+				...(initialContent ? { initialContent } : {}),
 			},
 		});
-
-		let updatedAt = page.updatedAt;
-		if (initialContent) {
-			const saved = await savePageContentUseCase.run({
-				ctx,
-				input: {
-					id: page.id,
-					content: initialContent,
-					baseUpdatedAt: page.contentUpdatedAt,
-				},
-			});
-			updatedAt = saved.updatedAt;
-		}
 
 		return {
 			pageId: page.id,
 			title: page.title,
 			parentPageId: page.parentPageId,
-			updatedAt,
+			updatedAt: page.updatedAt,
 		};
 	},
 });
@@ -161,16 +163,15 @@ export const appendToPageCapability = defineAgentCapability("append_to_page", {
 		updatedAt: z.string(),
 	}),
 	async handle({ ctx, input }) {
-		const [{ getPageUseCase, savePageContentUseCase }, { markdownToBlocks }] =
-			await Promise.all([
-				import("@/features/pages/use-cases"),
-				import("@/features/pages/lib/markdown"),
-			]);
+		const { getPageUseCase, savePageContentUseCase } = await import(
+			"@/features/pages/use-cases"
+		);
 		const page = await getPageUseCase.run({
 			ctx,
 			input: { id: input.pageId },
 		});
-		const appended = markdownToBlocks(input.markdown);
+		// Authorize the target before spending work materializing its append.
+		const appended = await parseAgentMarkdown(input.markdown);
 		if (appended.length === 0) {
 			throw appError("InvalidPageContent");
 		}

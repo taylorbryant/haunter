@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	ChevronRightIcon,
 	FileTextIcon,
+	FileUpIcon,
 	MoreHorizontalIcon,
 	PencilIcon,
 	PlusIcon,
@@ -15,6 +16,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { userErrorMessage } from "@/client/error-feedback";
+import { useCommand } from "@/components/command-palette/registry";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import {
 	ResponsiveDialog,
@@ -93,6 +95,14 @@ const PageIconPanel = dynamic(
 		ssr: false,
 		loading: () => <div className="h-[300px] w-[288px]" aria-hidden />,
 	},
+);
+
+const MarkdownImportDialog = dynamic(
+	() =>
+		import("./markdown-import-dialog").then((mod) => ({
+			default: mod.MarkdownImportDialog,
+		})),
+	{ ssr: false },
 );
 
 type TreeNode = PageMeta & { children: TreeNode[] };
@@ -212,12 +222,26 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	} | null>(null);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [iconPageId, setIconPageId] = useState<string | null>(null);
+	const [importOpen, setImportOpen] = useState(false);
 	const [pageToTrash, setPageToTrash] = useState<TreeNode | null>(null);
 	const [dragId, setDragId] = useState<string | null>(null);
 	const [dropTarget, setDropTarget] = useState<{
 		id: string;
 		zone: "before" | "after" | "inside";
 	} | null>(null);
+
+	useCommand(
+		canEdit && synced
+			? {
+					id: "page.import-markdown",
+					title: "Import Markdown",
+					group: "Pages",
+					keywords: "upload file note",
+					icon: FileUpIcon,
+					run: () => setImportOpen(true),
+				}
+			: null,
+	);
 
 	const pages = pagesQuery.data?.items ?? [];
 	const { tree, nodesById, subtreeIdsById } = useMemo(
@@ -722,13 +746,34 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		<SidebarGroup>
 			<SidebarGroupLabel>Pages</SidebarGroupLabel>
 			{canEdit && synced ? (
-				<SidebarGroupAction
-					title="New page"
-					aria-label="New page"
-					onClick={() => createPage(null)}
-				>
-					<PlusIcon />
-				</SidebarGroupAction>
+				<>
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							render={
+								<SidebarGroupAction
+									className="right-12"
+									title="More page actions"
+									aria-label="More page actions"
+								/>
+							}
+						>
+							<MoreHorizontalIcon />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent className="w-44" side="bottom" align="end">
+							<DropdownMenuItem onClick={() => setImportOpen(true)}>
+								<FileUpIcon />
+								Import Markdown
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+					<SidebarGroupAction
+						title="New page"
+						aria-label="New page"
+						onClick={() => createPage(null)}
+					>
+						<PlusIcon />
+					</SidebarGroupAction>
+				</>
 			) : null}
 			<SidebarGroupContent>
 				{!synced || pagesQuery.isPending ? (
@@ -758,9 +803,21 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						</Button>
 					</div>
 				) : tree.length === 0 ? (
-					<p className="px-2 text-sidebar-foreground/50 text-xs">
-						{canEdit ? "No pages yet. Create one." : "No pages yet."}
-					</p>
+					<div className="flex flex-col items-start gap-1 px-2">
+						<p className="text-sidebar-foreground/50 text-xs">No pages yet.</p>
+						{canEdit ? (
+							<Button
+								type="button"
+								variant="ghost"
+								size="xs"
+								className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+								onClick={() => setImportOpen(true)}
+							>
+								<FileUpIcon data-icon="inline-start" />
+								Import Markdown
+							</Button>
+						) : null}
+					</div>
 				) : (
 					<SidebarMenu>{tree.map((node) => renderNode(node))}</SidebarMenu>
 				)}
@@ -824,6 +881,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						</ResponsiveDialogFooter>
 					</form>
 				</ResponsiveDialog>
+			) : null}
+			{importOpen ? (
+				<MarkdownImportDialog
+					workspaceId={workspaceId}
+					onOpenChange={setImportOpen}
+				/>
 			) : null}
 			<DestructiveConfirmationDialog
 				open={pageToTrash !== null}

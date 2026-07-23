@@ -27,6 +27,142 @@ export const BlockJsonSchema: z.ZodType<BlockJson> = z.lazy(() =>
 
 export const PageContentSchema = z.array(BlockJsonSchema);
 
+export const MAX_INITIAL_PAGE_CONTENT_BYTES = 5_000_000;
+export const MAX_INITIAL_PAGE_CONTENT_BLOCKS = 10_000;
+export const MAX_INITIAL_PAGE_CONTENT_DEPTH = 64;
+const MAX_INITIAL_PAGE_JSON_DEPTH = 128;
+
+function jsonStringByteLength(value: string): number {
+	// Opening and closing quotes. Count escapes as JSON.stringify would so the
+	// limit describes the actual request/persisted representation, not merely
+	// the unescaped text.
+	let bytes = 2;
+	for (let index = 0; index < value.length; index += 1) {
+		const code = value.charCodeAt(index);
+		if (
+			code === 0x22 ||
+			code === 0x5c ||
+			code === 0x08 ||
+			code === 0x09 ||
+			code === 0x0a ||
+			code === 0x0c ||
+			code === 0x0d
+		) {
+			bytes += 2;
+		} else if (code <= 0x1f) bytes += 6;
+		else if (code <= 0x7f) bytes += 1;
+		else if (code <= 0x7ff) bytes += 2;
+		else if (
+			code >= 0xd800 &&
+			code <= 0xdbff &&
+			index + 1 < value.length &&
+			value.charCodeAt(index + 1) >= 0xdc00 &&
+			value.charCodeAt(index + 1) <= 0xdfff
+		) {
+			bytes += 4;
+			index += 1;
+		} else if (code >= 0xd800 && code <= 0xdfff) bytes += 6;
+		else bytes += 3;
+	}
+	return bytes;
+}
+
+function initialContentBoundsIssue(value: unknown): string | null {
+	let blockCount = 0;
+	const visitBlocks = (blocks: unknown[], depth: number): string | null => {
+		if (depth > MAX_INITIAL_PAGE_CONTENT_DEPTH) {
+			return `Initial page content may not exceed ${MAX_INITIAL_PAGE_CONTENT_DEPTH} nested block levels.`;
+		}
+		for (const block of blocks) {
+			blockCount += 1;
+			if (blockCount > MAX_INITIAL_PAGE_CONTENT_BLOCKS) {
+				return `Initial page content may contain at most ${MAX_INITIAL_PAGE_CONTENT_BLOCKS} blocks.`;
+			}
+			if (typeof block !== "object" || block === null) continue;
+			const children = (block as { children?: unknown }).children;
+			if (!Array.isArray(children) || children.length === 0) continue;
+			const issue = visitBlocks(children, depth + 1);
+			if (issue) return issue;
+		}
+		return null;
+	};
+
+	if (Array.isArray(value)) {
+		const issue = visitBlocks(value, 1);
+		if (issue) return issue;
+	}
+
+	const ancestors = new WeakSet<object>();
+	let bytes = 0;
+	const sizeIssue = () =>
+		bytes > MAX_INITIAL_PAGE_CONTENT_BYTES
+			? "Initial page content must be 5 MB or smaller."
+			: null;
+	const visitJson = (current: unknown, depth: number): string | null => {
+		if (depth > MAX_INITIAL_PAGE_JSON_DEPTH) {
+			return "Initial page content is nested too deeply.";
+		}
+
+		if (typeof current === "string") {
+			bytes += jsonStringByteLength(current);
+			return sizeIssue();
+		}
+		if (typeof current === "number") {
+			bytes += String(current).length;
+			return sizeIssue();
+		}
+		if (typeof current === "boolean") {
+			bytes += current ? 4 : 5;
+			return sizeIssue();
+		}
+		if (current === null || current === undefined) {
+			bytes += 4;
+			return sizeIssue();
+		}
+		if (typeof current !== "object") {
+			bytes += 4;
+			return sizeIssue();
+		}
+		if (ancestors.has(current)) {
+			return "Initial page content must be serializable.";
+		}
+
+		ancestors.add(current);
+		bytes += 2;
+		let first = true;
+		if (Array.isArray(current)) {
+			for (const item of current) {
+				if (!first) bytes += 1;
+				first = false;
+				const issue = sizeIssue() ?? visitJson(item, depth + 1);
+				if (issue) return issue;
+			}
+		} else {
+			const record = current as Record<string, unknown>;
+			for (const key in record) {
+				if (!Object.hasOwn(record, key)) continue;
+				if (!first) bytes += 1;
+				first = false;
+				bytes += jsonStringByteLength(key) + 1;
+				const issue = sizeIssue() ?? visitJson(record[key], depth + 1);
+				if (issue) return issue;
+			}
+		}
+		ancestors.delete(current);
+		return sizeIssue();
+	};
+
+	return visitJson(value, 0);
+}
+
+const InitialPageContentSchema = z
+	.unknown()
+	.superRefine((value, ctx) => {
+		const issue = initialContentBoundsIssue(value);
+		if (issue) ctx.addIssue({ code: "custom", message: issue });
+	})
+	.pipe(PageContentSchema);
+
 export const PageMetaSchema = z.object({
 	id: z.string().uuid(),
 	userId: z.string(),
@@ -62,6 +198,8 @@ export const CreatePageInputSchema = z.object({
 	workspaceId: z.string().min(1),
 	parentPageId: z.string().uuid().optional(),
 	title: z.string().max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE),
+	/** Optional initial document used by imports and agent-created pages. */
+	initialContent: InitialPageContentSchema.optional(),
 	/** Defaults to true; the editor opts out when it inserts at the cursor. */
 	appendToParentContent: z.boolean().optional(),
 });

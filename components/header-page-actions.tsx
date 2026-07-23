@@ -1,11 +1,16 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MoreHorizontalIcon, Share2Icon, Trash2Icon } from "lucide-react";
+import {
+	DownloadIcon,
+	MoreHorizontalIcon,
+	Share2Icon,
+	Trash2Icon,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
-import { userErrorMessage } from "@/client/error-feedback";
+import { useEffect, useRef, useState } from "react";
+import { reportUserError, userErrorMessage } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { ResponsiveDialog } from "@/components/responsive-dialog";
 import { Button } from "@/components/ui/button";
@@ -26,6 +31,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
+import { downloadPageMarkdown } from "@/features/pages/client/markdown-files";
 import {
 	deletePageMutationOptions,
 	getPageQueryOptions,
@@ -66,10 +72,24 @@ export function HeaderPageActions() {
 		...deletePageMutationOptions(),
 		meta: { errorMode: "inline" },
 	});
-	const [shareOpen, setShareOpen] = useState(false);
-	const [trashOpen, setTrashOpen] = useState(false);
+	const [sharePageId, setSharePageId] = useState<string | null>(null);
+	const [exporting, setExporting] = useState(false);
+	const [trashTarget, setTrashTarget] = useState<{
+		pageId: string;
+		workspaceId: string;
+		title: string;
+	} | null>(null);
 	const [preparingTrash, setPreparingTrash] = useState(false);
 	const [trashError, setTrashError] = useState<string | null>(null);
+	const currentPageIdRef = useRef(pageId);
+	currentPageIdRef.current = pageId;
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: close page-scoped dialogs whenever the route identity changes
+	useEffect(() => {
+		setSharePageId(null);
+		setTrashTarget(null);
+		setTrashError(null);
+	}, [pageId, workspaceId]);
 
 	if (!pageId || !workspaceId || !canEdit || !synced) return null;
 
@@ -77,23 +97,55 @@ export function HeaderPageActions() {
 	const activeWorkspaceId = workspaceId;
 	const trashPending = preparingTrash || deleteMutation.isPending;
 
+	async function exportMarkdown() {
+		if (exporting) return;
+		setExporting(true);
+		try {
+			if (!(await flushPendingPageSave(activePageId))) {
+				reportUserError("Save this page before exporting it.");
+				return;
+			}
+			// Query the page captured when Export was clicked. The header persists
+			// across route changes, so its live observer may now point at another page.
+			const freshPageQuery = getPageQueryOptions(activePageId);
+			// Do not reuse a background request that started before the flush; its
+			// response can be a valid but stale snapshot of the exported page.
+			await queryClient.cancelQueries(
+				{ queryKey: freshPageQuery.queryKey, exact: true },
+				{ revert: false, silent: true },
+			);
+			const refreshed = await queryClient.fetchQuery({
+				...freshPageQuery,
+				staleTime: 0,
+			});
+			downloadPageMarkdown(refreshed.title, refreshed.content);
+		} catch (error) {
+			reportUserError(error, "The page could not be exported.");
+		} finally {
+			setExporting(false);
+		}
+	}
+
 	async function moveToTrash() {
-		if (trashPending) return;
+		const target = trashTarget;
+		if (trashPending || !target) return;
 		setTrashError(null);
 		setPreparingTrash(true);
 		try {
-			if (!(await flushPendingPageSave(activePageId))) {
+			if (!(await flushPendingPageSave(target.pageId))) {
 				setTrashError("Save this page before moving it to trash.");
 				return;
 			}
-			await deleteMutation.mutateAsync({ path: { id: activePageId } });
-			setTrashOpen(false);
+			await deleteMutation.mutateAsync({ path: { id: target.pageId } });
+			setTrashTarget(null);
 			await Promise.all([
 				invalidatePages(queryClient),
 				invalidateTrash(queryClient),
 				invalidateTasks(queryClient),
 			]);
-			router.push(`/w/${activeWorkspaceId}`);
+			if (currentPageIdRef.current === target.pageId) {
+				router.push(`/w/${target.workspaceId}`);
+			}
 		} catch (error) {
 			setTrashError(
 				userErrorMessage(error, "The page could not be moved to trash."),
@@ -132,7 +184,7 @@ export function HeaderPageActions() {
 									<Button
 										variant="ghost"
 										className="h-11 justify-start"
-										onClick={() => setShareOpen(true)}
+										onClick={() => setSharePageId(activePageId)}
 									/>
 								}
 							>
@@ -143,10 +195,27 @@ export function HeaderPageActions() {
 								render={
 									<Button
 										variant="ghost"
+										className="h-11 justify-start"
+										disabled={exporting}
+										onClick={() => void exportMarkdown()}
+									/>
+								}
+							>
+								<DownloadIcon />
+								{exporting ? "Exporting…" : "Export Markdown"}
+							</DrawerClose>
+							<DrawerClose
+								render={
+									<Button
+										variant="ghost"
 										className="h-11 justify-start text-destructive hover:text-destructive"
 										onClick={() => {
 											setTrashError(null);
-											setTrashOpen(true);
+											setTrashTarget({
+												pageId: activePageId,
+												workspaceId: activeWorkspaceId,
+												title: pageQuery.data?.title || "Untitled",
+											});
 										}}
 									/>
 								}
@@ -173,15 +242,26 @@ export function HeaderPageActions() {
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end" className="w-48">
 						<DropdownMenuGroup>
-							<DropdownMenuItem onClick={() => setShareOpen(true)}>
+							<DropdownMenuItem onClick={() => setSharePageId(activePageId)}>
 								<Share2Icon />
 								Share
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								disabled={exporting}
+								onClick={() => void exportMarkdown()}
+							>
+								<DownloadIcon />
+								{exporting ? "Exporting…" : "Export Markdown"}
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								variant="destructive"
 								onClick={() => {
 									setTrashError(null);
-									setTrashOpen(true);
+									setTrashTarget({
+										pageId: activePageId,
+										workspaceId: activeWorkspaceId,
+										title: pageQuery.data?.title || "Untitled",
+									});
 								}}
 							>
 								<Trash2Icon />
@@ -192,27 +272,31 @@ export function HeaderPageActions() {
 				</DropdownMenu>
 			)}
 
-			{shareOpen ? (
+			{sharePageId ? (
 				<ResponsiveDialog
 					open
-					onOpenChange={setShareOpen}
+					onOpenChange={(open) => {
+						if (!open) setSharePageId(null);
+					}}
 					title="Share"
 					description="Publish a read-only link to this page."
 					className="sm:max-w-sm"
 				>
-					<SharePanel pageId={activePageId} active />
+					<SharePanel pageId={sharePageId} active />
 				</ResponsiveDialog>
 			) : null}
 
 			<DestructiveConfirmationDialog
-				open={trashOpen}
+				open={trashTarget !== null}
 				onOpenChange={(open) => {
 					if (trashPending) return;
-					setTrashOpen(open);
-					if (!open) setTrashError(null);
+					if (!open) {
+						setTrashTarget(null);
+						setTrashError(null);
+					}
 				}}
 				title="Move to trash?"
-				description={`Move ${pageQuery.data?.title || "Untitled"} and any subpages to trash? You can restore them later from Trash.`}
+				description={`Move ${trashTarget?.title ?? "Untitled"} and any subpages to trash? You can restore them later from Trash.`}
 				actionLabel="Move to trash"
 				pendingLabel="Moving…"
 				pending={trashPending}

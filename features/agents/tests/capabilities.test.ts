@@ -308,6 +308,42 @@ describe("Haunter agent capabilities", () => {
 		);
 	});
 
+	it("rejects oversized markdown before creating an agent page", async () => {
+		const { execute, pages, scope, workspaceId } = await createFixture();
+		const markdown = Array.from({ length: 10_001 }, () => "x").join(
+			"\n\n",
+		);
+
+		await expect(
+			execute("create_page", {
+				workspaceId,
+				title: "Too many blocks",
+				markdown,
+			}),
+		).rejects.toMatchObject({ code: "INVALID_PAGE_CONTENT", status: 422 });
+		expect(await pages.listMetaByWorkspace(scope)).toEqual([]);
+	});
+
+	it("rejects oversized markdown before appending to an agent page", async () => {
+		const { execute, pages, scope, workspaceId } = await createFixture();
+		const created = (await execute("create_page", {
+			workspaceId,
+			title: "Append target",
+		})) as { pageId: string };
+		const markdown = Array.from({ length: 10_001 }, () => "x").join(
+			"\n\n",
+		);
+
+		await expect(
+			execute("append_to_page", {
+				workspaceId,
+				pageId: created.pageId,
+				markdown,
+			}),
+		).rejects.toMatchObject({ code: "INVALID_PAGE_CONTENT", status: 422 });
+		expect((await pages.findById(scope, created.pageId))?.content).toEqual([]);
+	});
+
 	it("searches, reads, and appends page markdown", async () => {
 		const { execute, workspaceId } = await createFixture();
 		const created = (await execute("create_page", {

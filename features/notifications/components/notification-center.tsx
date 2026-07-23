@@ -230,7 +230,7 @@ export function NotificationCenter() {
 			<BellIcon />
 			{unreadCount > 0 ? (
 				<span
-					className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 font-semibold text-[10px] text-primary-foreground leading-4"
+					className="absolute top-0.5 right-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 font-semibold text-[10px] text-primary-foreground leading-4 md:-top-1 md:-right-1"
 					aria-hidden
 				>
 					{unreadCount > 9 ? "9+" : unreadCount}

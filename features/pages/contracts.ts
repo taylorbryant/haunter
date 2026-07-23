@@ -48,9 +48,13 @@ export const listPages = pages
 export const createPage = pages
 	.post("/api/pages")
 	.body(CreatePageInputSchema)
-	.meta({ idempotency: { header: "idempotency-key", scope: "actor" } })
+	.meta({
+		idempotency: { header: "idempotency-key", scope: "actor" },
+		rateLimit: { max: 60, windowSec: 60, scope: "user" },
+	})
 	.errors({
 		Forbidden: errors.Forbidden,
+		InvalidPageContent: errors.InvalidPageContent,
 		WorkspaceNotFound: errors.WorkspaceNotFound,
 		PageNotFound: errors.PageNotFound,
 		StaleWrite: errors.StaleWrite,
