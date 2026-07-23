@@ -3,12 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DownloadIcon,
+	FileCode2Icon,
 	MoreHorizontalIcon,
 	Share2Icon,
 	Trash2Icon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { reportUserError, userErrorMessage } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
@@ -31,14 +33,21 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
+import {
+	downloadPageHtml,
+	HtmlExportError,
+	pageHtmlSourceUrl,
+} from "@/features/pages/client/html-files";
 import { downloadPageMarkdown } from "@/features/pages/client/markdown-files";
 import {
 	deletePageMutationOptions,
 	getPageQueryOptions,
 	invalidatePages,
 	invalidateTrash,
+	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
+import type { PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -59,6 +68,7 @@ export function HeaderPageActions() {
 	const pathname = usePathname();
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	const { resolvedTheme } = useTheme();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 	const { synced } = useWorkspaceRouteSync(workspaceId);
@@ -73,7 +83,7 @@ export function HeaderPageActions() {
 		meta: { errorMode: "inline" },
 	});
 	const [sharePageId, setSharePageId] = useState<string | null>(null);
-	const [exporting, setExporting] = useState(false);
+	const [exporting, setExporting] = useState<"markdown" | "html" | null>(null);
 	const [trashTarget, setTrashTarget] = useState<{
 		pageId: string;
 		workspaceId: string;
@@ -97,9 +107,14 @@ export function HeaderPageActions() {
 	const activeWorkspaceId = workspaceId;
 	const trashPending = preparingTrash || deleteMutation.isPending;
 
-	async function exportMarkdown() {
+	async function exportPage(format: "markdown" | "html") {
 		if (exporting) return;
-		setExporting(true);
+		setExporting(format);
+		const sourceUrl = pageHtmlSourceUrl(
+			window.location.origin,
+			activeWorkspaceId,
+			activePageId,
+		);
 		try {
 			if (!(await flushPendingPageSave(activePageId))) {
 				reportUserError("Save this page before exporting it.");
@@ -110,19 +125,66 @@ export function HeaderPageActions() {
 			const freshPageQuery = getPageQueryOptions(activePageId);
 			// Do not reuse a background request that started before the flush; its
 			// response can be a valid but stale snapshot of the exported page.
-			await queryClient.cancelQueries(
-				{ queryKey: freshPageQuery.queryKey, exact: true },
-				{ revert: false, silent: true },
-			);
-			const refreshed = await queryClient.fetchQuery({
-				...freshPageQuery,
-				staleTime: 0,
-			});
-			downloadPageMarkdown(refreshed.title, refreshed.content);
+			const freshPageListQuery =
+				format === "html" ? listPagesQueryOptions(activeWorkspaceId) : null;
+			const cachedPageList = freshPageListQuery
+				? queryClient.getQueryData<{ items: PageMeta[] }>(
+						freshPageListQuery.queryKey,
+					)
+				: null;
+			await Promise.all([
+				queryClient.cancelQueries(
+					{ queryKey: freshPageQuery.queryKey, exact: true },
+					{ revert: false, silent: true },
+				),
+				freshPageListQuery
+					? queryClient.cancelQueries(
+							{ queryKey: freshPageListQuery.queryKey, exact: true },
+							{ revert: false, silent: true },
+						)
+					: Promise.resolve(),
+			]);
+			const [refreshed, pageList] = await Promise.all([
+				queryClient.fetchQuery({
+					...freshPageQuery,
+					staleTime: 0,
+					meta: {
+						...freshPageQuery.meta,
+						errorMode: "silent",
+					},
+				}),
+				freshPageListQuery
+					? queryClient
+							.fetchQuery({
+								...freshPageListQuery,
+								staleTime: 0,
+								meta: {
+									...freshPageListQuery.meta,
+									errorMode: "silent",
+								},
+							})
+							.catch(() => cachedPageList)
+					: Promise.resolve(null),
+			]);
+			if (format === "markdown") {
+				downloadPageMarkdown(refreshed.title, refreshed.content);
+			} else {
+				await downloadPageHtml({
+					title: refreshed.title,
+					icon: refreshed.icon,
+					content: refreshed.content,
+					resolvedTheme,
+					sourceUrl,
+					pageReferences: pageList?.items ?? [],
+				});
+			}
 		} catch (error) {
-			reportUserError(error, "The page could not be exported.");
+			reportUserError(
+				error instanceof HtmlExportError ? error.message : error,
+				"The page could not be exported.",
+			);
 		} finally {
-			setExporting(false);
+			setExporting(null);
 		}
 	}
 
@@ -196,13 +258,26 @@ export function HeaderPageActions() {
 									<Button
 										variant="ghost"
 										className="h-11 justify-start"
-										disabled={exporting}
-										onClick={() => void exportMarkdown()}
+										disabled={exporting !== null}
+										onClick={() => void exportPage("markdown")}
 									/>
 								}
 							>
 								<DownloadIcon />
-								{exporting ? "Exporting…" : "Export Markdown"}
+								{exporting === "markdown" ? "Exporting…" : "Export Markdown"}
+							</DrawerClose>
+							<DrawerClose
+								render={
+									<Button
+										variant="ghost"
+										className="h-11 justify-start"
+										disabled={exporting !== null}
+										onClick={() => void exportPage("html")}
+									/>
+								}
+							>
+								<FileCode2Icon />
+								{exporting === "html" ? "Exporting…" : "Export HTML"}
 							</DrawerClose>
 							<DrawerClose
 								render={
@@ -247,11 +322,18 @@ export function HeaderPageActions() {
 								Share
 							</DropdownMenuItem>
 							<DropdownMenuItem
-								disabled={exporting}
-								onClick={() => void exportMarkdown()}
+								disabled={exporting !== null}
+								onClick={() => void exportPage("markdown")}
 							>
 								<DownloadIcon />
-								{exporting ? "Exporting…" : "Export Markdown"}
+								{exporting === "markdown" ? "Exporting…" : "Export Markdown"}
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								disabled={exporting !== null}
+								onClick={() => void exportPage("html")}
+							>
+								<FileCode2Icon />
+								{exporting === "html" ? "Exporting…" : "Export HTML"}
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								variant="destructive"

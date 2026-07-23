@@ -16,6 +16,10 @@ export function makeQueryClient() {
 	return new QueryClient({
 		queryCache: new QueryCache({
 			onError: (error, query) => {
+				const meta = query.meta as ErrorFeedbackMeta | undefined;
+				if (meta?.errorMode === "inline" || meta?.errorMode === "silent") {
+					return;
+				}
 				// Initial failures render in the owning surface. If cached data exists,
 				// keep it visible and disclose that its background refresh failed.
 				if (query.state.data !== undefined) {

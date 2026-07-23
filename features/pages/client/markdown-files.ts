@@ -1,3 +1,4 @@
+import { pageExportFilename } from "@/features/pages/lib/export-filename";
 import {
 	blocksToMarkdown,
 	MarkdownBlockLimitError,
@@ -32,18 +33,7 @@ export function pageTitleFromMarkdownFilename(filename: string): string {
 }
 
 export function markdownFilenameForPage(title: string): string {
-	const safe = Array.from(title.trim(), (character) =>
-		character.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(character)
-			? "-"
-			: character,
-	)
-		.join("")
-		.trim()
-		.replace(/\s+/g, " ")
-		.replace(/[. ]+$/g, "")
-		.slice(0, 180)
-		.trim();
-	return `${safe || "Untitled"}.md`;
+	return pageExportFilename(title, "md");
 }
 
 export function parseMarkdownPage(markdown: string): BlockJson[] {
