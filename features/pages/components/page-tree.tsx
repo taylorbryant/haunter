@@ -805,18 +805,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 				) : tree.length === 0 ? (
 					<div className="flex flex-col items-start gap-1 px-2">
 						<p className="text-sidebar-foreground/50 text-xs">No pages yet.</p>
-						{canEdit ? (
-							<Button
-								type="button"
-								variant="ghost"
-								size="xs"
-								className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-								onClick={() => setImportOpen(true)}
-							>
-								<FileUpIcon data-icon="inline-start" />
-								Import Markdown
-							</Button>
-						) : null}
 					</div>
 				) : (
 					<SidebarMenu>{tree.map((node) => renderNode(node))}</SidebarMenu>
