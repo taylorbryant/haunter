@@ -26,7 +26,7 @@ const drizzleSqliteProvider = createDrizzleSqliteProvider({
 
 export const providers = [
 	createDevtoolsProvider(),
-	createBetterAuthProvider<AuthUser, AuthSessionMetadata>(auth),
+	createBetterAuthProvider<AuthUser, AuthSessionMetadata>({ auth }),
 	createPinoLoggerProvider(),
 	drizzleSqliteProvider,
 	starterDatabaseProvider,
