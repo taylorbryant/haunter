@@ -148,12 +148,20 @@ export function HeaderPageActions() {
 				queryClient.fetchQuery({
 					...freshPageQuery,
 					staleTime: 0,
+					meta: {
+						...freshPageQuery.meta,
+						errorMode: "silent",
+					},
 				}),
 				freshPageListQuery
 					? queryClient
 							.fetchQuery({
 								...freshPageListQuery,
 								staleTime: 0,
+								meta: {
+									...freshPageListQuery.meta,
+									errorMode: "silent",
+								},
 							})
 							.catch(() => cachedPageList)
 					: Promise.resolve(null),

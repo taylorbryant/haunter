@@ -84,6 +84,31 @@ describe("client error feedback", () => {
 		expect(received).toEqual(["Some information could not be refreshed."]);
 	});
 
+	test("does not report query failures handled by the caller", async () => {
+		const queryClient = makeQueryClient();
+		const received: string[] = [];
+		const unsubscribe = subscribeUserErrors((message) =>
+			received.push(message),
+		);
+		queryClient.setQueryData<{ value: string }>(["handled-query"], {
+			value: "still usable",
+		});
+
+		await queryClient
+			.fetchQuery({
+				queryKey: ["handled-query"],
+				staleTime: 0,
+				meta: { errorMode: "silent" },
+				queryFn: async () => {
+					throw new Error("handled by the caller");
+				},
+			})
+			.catch(() => undefined);
+		unsubscribe();
+
+		expect(received).toEqual([]);
+	});
+
 	test("preserves Better Auth's structured user-facing message", () => {
 		expect(
 			authErrorMessage(
