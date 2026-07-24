@@ -14,7 +14,14 @@ import {
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import {
+	Fragment,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { userErrorMessage } from "@/client/error-feedback";
 import { useCommand } from "@/components/command-palette/registry";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
@@ -229,6 +236,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		id: string;
 		zone: "before" | "after" | "inside";
 	} | null>(null);
+	const menuFocusTransferPageId = useRef<string | null>(null);
 
 	useCommand(
 		canEdit && synced
@@ -356,6 +364,14 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		setRenameError(null);
 		setRenamingId(node.id);
 		setRenameValue(node.title);
+	}
+
+	function startDesktopRename(node: TreeNode) {
+		// The menu normally restores focus to its trigger after an item is
+		// selected. Renaming replaces the row with an autofocus input, so that
+		// restoration would immediately blur the input and end the rename.
+		menuFocusTransferPageId.current = node.id;
+		startRename(node);
 	}
 
 	function startTrash(node: TreeNode) {
@@ -706,8 +722,15 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 									className="w-48 rounded-lg"
 									side="right"
 									align="start"
+									finalFocus={() => {
+										if (menuFocusTransferPageId.current !== node.id) {
+											return true;
+										}
+										menuFocusTransferPageId.current = null;
+										return false;
+									}}
 								>
-									<DropdownMenuItem onClick={() => startRename(node)}>
+									<DropdownMenuItem onClick={() => startDesktopRename(node)}>
 										Rename
 									</DropdownMenuItem>
 									<DropdownMenuItem onClick={() => setIconPageId(node.id)}>
