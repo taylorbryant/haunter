@@ -2,6 +2,7 @@ import type { TenantScope } from "@beignet/core/ports";
 import type {
 	Page,
 	PageMeta,
+	PageNavigationItem,
 	PageVersion,
 	PageVersionMeta,
 } from "@/features/pages/schemas";
@@ -113,6 +114,28 @@ export interface PageRepository {
 	): Promise<void>;
 	deleteByIds(scope: TenantScope, ids: string[]): Promise<void>;
 	deleteByWorkspace(scope: TenantScope): Promise<void>;
+}
+
+export interface PageNavigationRepository {
+	listForUser(
+		scope: TenantScope,
+		userId: string,
+		recentLimit: number,
+	): Promise<{
+		favorites: PageNavigationItem[];
+		recents: PageNavigationItem[];
+	}>;
+	setFavorite(
+		scope: TenantScope,
+		userId: string,
+		pageId: string,
+		favorite: boolean,
+	): Promise<string | null>;
+	recordView(
+		scope: TenantScope,
+		userId: string,
+		pageId: string,
+	): Promise<string>;
 }
 
 export type NewPageVersion = {

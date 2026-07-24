@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { createTenant, createTenantScope } from "@beignet/core/ports";
-import { createTestDatabase } from "@/infra/db/test-database";
+import { eq } from "drizzle-orm";
 import * as schema from "@/infra/db/schema";
+import { createTestDatabase } from "@/infra/db/test-database";
 
 describe("tenant-scoped repositories", () => {
 	it("cannot read or mutate known foreign resource ids", async () => {
@@ -27,6 +28,22 @@ describe("tenant-scoped repositories", () => {
 					id: "workspace_b",
 					name: "Workspace B",
 					slug: "workspace-b",
+					createdAt: now,
+				},
+			]);
+			await testDatabase.db.insert(schema.member).values([
+				{
+					id: "member_scope_a",
+					organizationId: "workspace_a",
+					userId: "user_scope_test",
+					role: "owner",
+					createdAt: now,
+				},
+				{
+					id: "member_scope_b",
+					organizationId: "workspace_b",
+					userId: "user_scope_test",
+					role: "owner",
 					createdAt: now,
 				},
 			]);
@@ -85,6 +102,37 @@ describe("tenant-scoped repositories", () => {
 			expect(
 				await repositories.pageVersions.findById(scopeB, version.id),
 			).toBeNull();
+			await repositories.pageNavigation.setFavorite(
+				scopeA,
+				"user_scope_test",
+				pageA.id,
+				true,
+			);
+			expect(
+				(
+					await repositories.pageNavigation.listForUser(
+						scopeA,
+						"user_scope_test",
+						10,
+					)
+				).favorites.map((page) => page.id),
+			).toEqual([pageA.id]);
+			expect(
+				(
+					await repositories.pageNavigation.listForUser(
+						scopeB,
+						"user_scope_test",
+						10,
+					)
+				).favorites,
+			).toEqual([]);
+			await expect(
+				repositories.pageNavigation.recordView(
+					scopeB,
+					"user_scope_test",
+					pageA.id,
+				),
+			).rejects.toThrow("outside the tenant scope");
 
 			await expect(
 				repositories.pages.create(scopeA, {
@@ -176,6 +224,22 @@ describe("tenant-scoped repositories", () => {
 			expect((await repositories.shares.findByToken(share.token))?.id).toBe(
 				share.id,
 			);
+
+			await repositories.pageNavigation.recordView(
+				scopeA,
+				"user_scope_test",
+				pageA.id,
+			);
+			await testDatabase.db
+				.delete(schema.member)
+				.where(eq(schema.member.id, "member_scope_a"));
+			expect(
+				await repositories.pageNavigation.listForUser(
+					scopeA,
+					"user_scope_test",
+					10,
+				),
+			).toEqual({ favorites: [], recents: [] });
 		} finally {
 			await testDatabase.close();
 		}

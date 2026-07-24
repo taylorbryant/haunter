@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
 	type AnySQLiteColumn,
+	foreignKey,
 	index,
 	integer,
 	primaryKey,
@@ -285,6 +286,41 @@ export const pages = sqliteTable(
 			table.updatedAt,
 		),
 		parentIdx: index("pages_parent_idx").on(table.parentPageId),
+	}),
+);
+
+export const pageUserState = sqliteTable(
+	"page_user_state",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		pageId: text("page_id")
+			.notNull()
+			.references(() => pages.id, { onDelete: "cascade" }),
+		favoritedAt: text("favorited_at"),
+		lastViewedAt: text("last_viewed_at"),
+	},
+	(table) => ({
+		pk: primaryKey({ columns: [table.userId, table.pageId] }),
+		membershipFk: foreignKey({
+			columns: [table.workspaceId, table.userId],
+			foreignColumns: [member.organizationId, member.userId],
+			name: "page_user_state_membership_fk",
+		}).onDelete("cascade"),
+		favoritesIdx: index("page_user_state_favorites_idx").on(
+			table.workspaceId,
+			table.userId,
+			table.favoritedAt,
+		),
+		recentsIdx: index("page_user_state_recents_idx").on(
+			table.workspaceId,
+			table.userId,
+			table.lastViewedAt,
+		),
 	}),
 );
 

@@ -5,6 +5,7 @@ import type {
 	NewPageVersion,
 	PageCollaborationPort,
 	PageLinkRepository,
+	PageNavigationRepository,
 	PageRepository,
 	PageVersionRepository,
 	UpdatePageData,
@@ -64,6 +65,77 @@ export function createTestPageLinkRepository(deps: {
 			return sources.sort((left, right) =>
 				right.updatedAt.localeCompare(left.updatedAt),
 			);
+		},
+	};
+}
+
+export function createTestPageNavigationRepository(deps: {
+	pages: PageRepository;
+}): PageNavigationRepository {
+	const states = new Map<
+		string,
+		{
+			workspaceId: string;
+			favoritedAt: string | null;
+			lastViewedAt: string | null;
+		}
+	>();
+	let sequence = 0;
+	const timestamp = () => {
+		sequence += 1;
+		return new Date(Date.now() + sequence).toISOString();
+	};
+	const key = (userId: string, pageId: string) => `${userId}:${pageId}`;
+
+	return {
+		async listForUser(scope, userId, recentLimit) {
+			const pages = await deps.pages.listMetaByWorkspace(scope);
+			const items = pages.flatMap((page) => {
+				const state = states.get(key(userId, page.id));
+				return state ? [{ ...page, ...state }] : [];
+			});
+			return {
+				favorites: items
+					.filter((item) => item.favoritedAt !== null)
+					.sort((left, right) =>
+						(right.favoritedAt ?? "").localeCompare(left.favoritedAt ?? ""),
+					),
+				recents: items
+					.filter((item) => item.lastViewedAt !== null)
+					.sort((left, right) =>
+						(right.lastViewedAt ?? "").localeCompare(left.lastViewedAt ?? ""),
+					)
+					.slice(0, recentLimit),
+			};
+		},
+		async setFavorite(scope, userId, pageId, favorite) {
+			const page = await deps.pages.findMetaById(scope, pageId);
+			if (!page) throw new Error(`Page not found: ${pageId}`);
+			const stateKey = key(userId, pageId);
+			const current = states.get(stateKey);
+			const favoritedAt = favorite ? timestamp() : null;
+			if (!favorite && !current?.lastViewedAt) states.delete(stateKey);
+			else {
+				states.set(stateKey, {
+					workspaceId: page.workspaceId,
+					favoritedAt,
+					lastViewedAt: current?.lastViewedAt ?? null,
+				});
+			}
+			return favoritedAt;
+		},
+		async recordView(scope, userId, pageId) {
+			const page = await deps.pages.findMetaById(scope, pageId);
+			if (!page) throw new Error(`Page not found: ${pageId}`);
+			const stateKey = key(userId, pageId);
+			const current = states.get(stateKey);
+			const lastViewedAt = timestamp();
+			states.set(stateKey, {
+				workspaceId: page.workspaceId,
+				favoritedAt: current?.favoritedAt ?? null,
+				lastViewedAt,
+			});
+			return lastViewedAt;
 		},
 	};
 }

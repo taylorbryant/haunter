@@ -9,6 +9,7 @@ import { DestructiveConfirmationDialog } from "@/components/destructive-confirma
 import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
+	invalidatePageNavigation,
 	invalidatePages,
 	invalidateTrash,
 	listTrashQueryOptions,
@@ -40,6 +41,7 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 		await Promise.all([
 			invalidateTrash(queryClient),
 			invalidatePages(queryClient),
+			invalidatePageNavigation(queryClient, workspaceId),
 			invalidateTasks(queryClient),
 		]);
 	}

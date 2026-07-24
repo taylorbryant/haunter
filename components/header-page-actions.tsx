@@ -6,6 +6,7 @@ import {
 	FileCode2Icon,
 	MoreHorizontalIcon,
 	Share2Icon,
+	StarIcon,
 	Trash2Icon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -41,12 +42,15 @@ import {
 import { downloadPageMarkdown } from "@/features/pages/client/markdown-files";
 import {
 	deletePageMutationOptions,
+	getPageNavigationQueryOptions,
 	getPageQueryOptions,
+	invalidatePageNavigation,
 	invalidatePages,
 	invalidateTrash,
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
+import { usePageFavorite } from "@/features/pages/client/use-page-favorite";
 import type { PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
@@ -78,6 +82,14 @@ export function HeaderPageActions() {
 		...getPageQueryOptions(pageId ?? ""),
 		enabled: Boolean(pageId && synced),
 	});
+	const navigationQuery = useQuery({
+		...getPageNavigationQueryOptions(workspaceId ?? ""),
+		enabled: Boolean(workspaceId && synced),
+	});
+	const favorite = usePageFavorite(workspaceId ?? "", pageQuery.data);
+	const isFavorite = navigationQuery.data?.favorites.some(
+		(item) => item.id === pageId,
+	);
 	const deleteMutation = useMutation({
 		...deletePageMutationOptions(),
 		meta: { errorMode: "inline" },
@@ -101,7 +113,7 @@ export function HeaderPageActions() {
 		setTrashError(null);
 	}, [pageId, workspaceId]);
 
-	if (!pageId || !workspaceId || !canEdit || !synced) return null;
+	if (!pageId || !workspaceId || !synced) return null;
 
 	const activePageId = pageId;
 	const activeWorkspaceId = workspaceId;
@@ -202,6 +214,7 @@ export function HeaderPageActions() {
 			setTrashTarget(null);
 			await Promise.all([
 				invalidatePages(queryClient),
+				invalidatePageNavigation(queryClient, target.workspaceId),
 				invalidateTrash(queryClient),
 				invalidateTasks(queryClient),
 			]);
@@ -219,7 +232,21 @@ export function HeaderPageActions() {
 
 	return (
 		<>
-			{isMobile ? (
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				className="text-muted-foreground"
+				aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+				title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+				disabled={
+					!pageQuery.data || !navigationQuery.data || favorite.isPending
+				}
+				onClick={() => favorite.toggle(!isFavorite)}
+			>
+				<StarIcon className={isFavorite ? "fill-current" : undefined} />
+			</Button>
+
+			{!canEdit ? null : isMobile ? (
 				<Drawer showSwipeHandle>
 					<DrawerTrigger
 						render={
@@ -354,7 +381,7 @@ export function HeaderPageActions() {
 				</DropdownMenu>
 			)}
 
-			{sharePageId ? (
+			{canEdit && sharePageId ? (
 				<ResponsiveDialog
 					open
 					onOpenChange={(open) => {
@@ -368,23 +395,25 @@ export function HeaderPageActions() {
 				</ResponsiveDialog>
 			) : null}
 
-			<DestructiveConfirmationDialog
-				open={trashTarget !== null}
-				onOpenChange={(open) => {
-					if (trashPending) return;
-					if (!open) {
-						setTrashTarget(null);
-						setTrashError(null);
-					}
-				}}
-				title="Move to trash?"
-				description={`Move ${trashTarget?.title ?? "Untitled"} and any subpages to trash? You can restore them later from Trash.`}
-				actionLabel="Move to trash"
-				pendingLabel="Moving…"
-				pending={trashPending}
-				error={trashError}
-				onConfirm={() => void moveToTrash()}
-			/>
+			{canEdit ? (
+				<DestructiveConfirmationDialog
+					open={trashTarget !== null}
+					onOpenChange={(open) => {
+						if (trashPending) return;
+						if (!open) {
+							setTrashTarget(null);
+							setTrashError(null);
+						}
+					}}
+					title="Move to trash?"
+					description={`Move ${trashTarget?.title ?? "Untitled"} and any subpages to trash? You can restore them later from Trash.`}
+					actionLabel="Move to trash"
+					pendingLabel="Moving…"
+					pending={trashPending}
+					error={trashError}
+					onConfirm={() => void moveToTrash()}
+				/>
+			) : null}
 		</>
 	);
 }

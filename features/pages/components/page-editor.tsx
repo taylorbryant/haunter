@@ -23,7 +23,9 @@ import {
 	getPageQueryOptions,
 	invalidatePage,
 	invalidatePages,
+	recordPageViewMutationOptions,
 	setPageTitleInCache,
+	syncRecordedPageViewInNavigationCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import {
@@ -96,6 +98,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		...updatePageMutationOptions(),
 		meta: { errorMode: "inline" },
 	});
+	const recordViewMutation = useMutation({
+		...recordPageViewMutationOptions(),
+		meta: { errorMode: "silent" },
+	});
 	// Viewers get a read-only surface; the server denies their writes anyway,
 	// but the UI must not pretend edits will stick.
 	const readOnly = !useCanEditWorkspace();
@@ -135,6 +141,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const [editorFocusRequest, setEditorFocusRequest] = useState(0);
 	const [conflictNotice, setConflictNotice] = useState(false);
 	const conflictTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const recordedViewPageIdRef = useRef<string | null>(null);
 
 	// Reset local title state when navigating between pages.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on page change
@@ -150,6 +157,29 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 	// Arriving at a page we just created: put the caret in its empty title.
 	const pageLoaded = pageQuery.data != null;
+	useEffect(() => {
+		const page = pageQuery.data;
+		if (!page || recordedViewPageIdRef.current === page.id) return;
+		recordedViewPageIdRef.current = page.id;
+		void recordViewMutation
+			.mutateAsync({ path: { id: page.id }, body: {} })
+			.then(({ lastViewedAt }) =>
+				syncRecordedPageViewInNavigationCache(
+					queryClient,
+					page.workspaceId,
+					page,
+					lastViewedAt,
+				),
+			)
+			.catch(() => {
+				// Allow a later remount to retry; navigation history must never
+				// interfere with loading or editing the page.
+				if (recordedViewPageIdRef.current === page.id) {
+					recordedViewPageIdRef.current = null;
+				}
+			});
+	}, [pageQuery.data, queryClient, recordViewMutation.mutateAsync]);
+
 	useEffect(() => {
 		if (!pageLoaded || !consumeTitleFocus(pageId)) return;
 		const input = titleInputRef.current;

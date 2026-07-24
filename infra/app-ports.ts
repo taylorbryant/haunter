@@ -41,6 +41,7 @@ export const appPorts = definePorts<AppPorts>()({
 		"notifications",
 		"pageCollaboration",
 		"pageLinks",
+		"pageNavigation",
 		"pages",
 		"pageVersions",
 		"rateLimit",

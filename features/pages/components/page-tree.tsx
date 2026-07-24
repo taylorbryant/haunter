@@ -9,6 +9,7 @@ import {
 	PencilIcon,
 	PlusIcon,
 	SmilePlusIcon,
+	StarIcon,
 	Trash2Icon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -76,11 +77,16 @@ import { appendSubpageLinkToOpenPage } from "@/features/pages/client/open-page-c
 import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
+	getPageNavigationQueryOptions,
 	getPageQueryOptions,
 	invalidatePage,
+	invalidatePageNavigation,
 	invalidatePages,
 	invalidateTrash,
 	listPagesQueryOptions,
+	setFavoriteInNavigationCache,
+	setPageFavoriteMutationOptions,
+	setPageTitleInCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
@@ -205,6 +211,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		...listPagesQueryOptions(workspaceId),
 		enabled: synced,
 	});
+	const navigationQuery = useQuery({
+		...getPageNavigationQueryOptions(workspaceId),
+		enabled: synced,
+	});
 	const createMutation = useMutation({
 		...createPageMutationOptions(),
 		meta: { errorMode: "inline" },
@@ -217,6 +227,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const deleteMutation = useMutation({
 		...deletePageMutationOptions(),
 		meta: { errorMode: "inline" },
+	});
+	const favoriteMutation = useMutation({
+		...setPageFavoriteMutationOptions(),
+		meta: { errorFallback: "The favorite could not be updated." },
 	});
 
 	const { expanded, toggle } = useExpandedState(workspaceId);
@@ -344,11 +358,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		renameMutation.mutate(
 			{ path: { id: pageId }, body: { title } },
 			{
-				onSuccess: () => {
+				onSuccess: (page) => {
 					setRenamingId((current) => (current === pageId ? null : current));
 					setRenameError((current) =>
 						current?.pageId === pageId ? null : current,
 					);
+					setPageTitleInCache(queryClient, page.id, page.title, page.updatedAt);
 					void invalidatePages(queryClient);
 				},
 				onError: (error) =>
@@ -379,6 +394,48 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		setPageToTrash(node);
 	}
 
+	function toggleFavorite(node: TreeNode) {
+		const navigation = navigationQuery.data;
+		if (!navigation || favoriteMutation.isPending) return;
+		const wasFavorite = navigation.favorites.some(
+			(page) => page.id === node.id,
+		);
+		const nextFavorite = !wasFavorite;
+		const previousNavigation = navigation;
+		setFavoriteInNavigationCache(
+			queryClient,
+			workspaceId,
+			node,
+			nextFavorite ? new Date().toISOString() : null,
+		);
+		favoriteMutation.mutate(
+			{ path: { id: node.id }, body: { favorite: nextFavorite } },
+			{
+				onSuccess: ({ favoritedAt }) =>
+					setFavoriteInNavigationCache(
+						queryClient,
+						workspaceId,
+						node,
+						favoritedAt,
+					),
+				onError: () => {
+					if (previousNavigation) {
+						queryClient.setQueryData(
+							getPageNavigationQueryOptions(workspaceId).queryKey,
+							previousNavigation,
+						);
+					}
+				},
+				onSettled: () => {
+					void queryClient.invalidateQueries({
+						queryKey: getPageNavigationQueryOptions(workspaceId).queryKey,
+						exact: true,
+					});
+				},
+			},
+		);
+	}
+
 	// Soft delete: the subtree moves to the workspace trash (restorable).
 	function deletePage(node: TreeNode) {
 		setDeleteError(null);
@@ -391,6 +448,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					setDeleteError(null);
 					await Promise.all([
 						invalidatePages(queryClient),
+						invalidatePageNavigation(queryClient, workspaceId),
 						invalidateTrash(queryClient),
 						// Tasks on trashed pages are filtered out server-side, so the
 						// subtree's tasks just left the My Tasks list.
@@ -498,6 +556,9 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		// Mobile renames happen in the drawer below, not inline in the row.
 		const isRenaming = node.id === renamingId && !isMobile;
 		const hasChildren = node.children.length > 0;
+		const isFavorite = navigationQuery.data?.favorites.some(
+			(page) => page.id === node.id,
+		);
 
 		return (
 			// The children live in a SIBLING <li>, not inside the row's
@@ -628,7 +689,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							<ChevronRightIcon />
 						</SidebarMenuAction>
 					) : null}
-					{!canEdit || isRenaming ? null : isMobile ? (
+					{isRenaming ? null : isMobile ? (
 						// Mobile: one action button that opens a bottom drawer — bigger
 						// tap targets, and no "+" crowding the row.
 						<Drawer showSwipeHandle>
@@ -658,49 +719,70 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 											<Button
 												variant="ghost"
 												className="h-11 justify-start"
-												onClick={() => createPage(node.id)}
+												disabled={
+													!navigationQuery.data || favoriteMutation.isPending
+												}
+												onClick={() => toggleFavorite(node)}
 											/>
 										}
 									>
-										<PlusIcon />
-										Add subpage
+										<StarIcon
+											className={isFavorite ? "fill-current" : undefined}
+										/>
+										{isFavorite ? "Remove from favorites" : "Add to favorites"}
 									</DrawerClose>
-									<DrawerClose
-										render={
-											<Button
-												variant="ghost"
-												className="h-11 justify-start"
-												onClick={() => startRename(node)}
-											/>
-										}
-									>
-										<PencilIcon />
-										Rename
-									</DrawerClose>
-									<DrawerClose
-										render={
-											<Button
-												variant="ghost"
-												className="h-11 justify-start"
-												onClick={() => setIconPageId(node.id)}
-											/>
-										}
-									>
-										<SmilePlusIcon />
-										Change icon
-									</DrawerClose>
-									<DrawerClose
-										render={
-											<Button
-												variant="ghost"
-												className="h-11 justify-start text-destructive hover:text-destructive"
-												onClick={() => startTrash(node)}
-											/>
-										}
-									>
-										<Trash2Icon />
-										Move to trash
-									</DrawerClose>
+									{canEdit ? (
+										<>
+											<DrawerClose
+												render={
+													<Button
+														variant="ghost"
+														className="h-11 justify-start"
+														onClick={() => createPage(node.id)}
+													/>
+												}
+											>
+												<PlusIcon />
+												Add subpage
+											</DrawerClose>
+											<DrawerClose
+												render={
+													<Button
+														variant="ghost"
+														className="h-11 justify-start"
+														onClick={() => startRename(node)}
+													/>
+												}
+											>
+												<PencilIcon />
+												Rename
+											</DrawerClose>
+											<DrawerClose
+												render={
+													<Button
+														variant="ghost"
+														className="h-11 justify-start"
+														onClick={() => setIconPageId(node.id)}
+													/>
+												}
+											>
+												<SmilePlusIcon />
+												Change icon
+											</DrawerClose>
+											<DrawerClose
+												render={
+													<Button
+														variant="ghost"
+														className="h-11 justify-start text-destructive hover:text-destructive"
+														onClick={() => startTrash(node)}
+													/>
+												}
+											>
+												<Trash2Icon />
+												Move to trash
+											</DrawerClose>
+										</>
+									) : null}
 								</div>
 							</DrawerContent>
 						</Drawer>
@@ -711,7 +793,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 									render={
 										<SidebarMenuAction
 											showOnHover
-											className="right-6 aria-expanded:bg-muted"
+											className={cn(
+												canEdit ? "right-6" : "right-1",
+												"aria-expanded:bg-muted",
+											)}
 											aria-label="Page actions"
 										/>
 									}
@@ -730,27 +815,46 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 										return false;
 									}}
 								>
-									<DropdownMenuItem onClick={() => startDesktopRename(node)}>
-										Rename
-									</DropdownMenuItem>
-									<DropdownMenuItem onClick={() => setIconPageId(node.id)}>
-										Change icon
-									</DropdownMenuItem>
 									<DropdownMenuItem
-										className="text-destructive focus:text-destructive"
-										onClick={() => startTrash(node)}
+										disabled={
+											!navigationQuery.data || favoriteMutation.isPending
+										}
+										onClick={() => toggleFavorite(node)}
 									>
-										Move to trash
+										<StarIcon
+											className={isFavorite ? "fill-current" : undefined}
+										/>
+										{isFavorite ? "Remove from favorites" : "Add to favorites"}
 									</DropdownMenuItem>
+									{canEdit ? (
+										<>
+											<DropdownMenuItem
+												onClick={() => startDesktopRename(node)}
+											>
+												Rename
+											</DropdownMenuItem>
+											<DropdownMenuItem onClick={() => setIconPageId(node.id)}>
+												Change icon
+											</DropdownMenuItem>
+											<DropdownMenuItem
+												className="text-destructive focus:text-destructive"
+												onClick={() => startTrash(node)}
+											>
+												Move to trash
+											</DropdownMenuItem>
+										</>
+									) : null}
 								</DropdownMenuContent>
 							</DropdownMenu>
-							<SidebarMenuAction
-								showOnHover
-								aria-label="Add subpage"
-								onClick={() => createPage(node.id)}
-							>
-								<PlusIcon />
-							</SidebarMenuAction>
+							{canEdit ? (
+								<SidebarMenuAction
+									showOnHover
+									aria-label="Add subpage"
+									onClick={() => createPage(node.id)}
+								>
+									<PlusIcon />
+								</SidebarMenuAction>
+							) : null}
 						</>
 					)}
 				</SidebarMenuItem>

@@ -24,6 +24,7 @@ import {
 	useSidebar,
 } from "@/components/ui/sidebar";
 import { NotificationCenter } from "@/features/notifications/components/notification-center";
+import { FavoritePages } from "@/features/pages/components/favorite-pages";
 import { PageTree } from "@/features/pages/components/page-tree";
 import { WorkspaceSwitcher } from "@/features/workspaces/components/workspace-switcher";
 
@@ -100,7 +101,10 @@ export function AppSidebar({
 			</SidebarHeader>
 			<SidebarContent>
 				{activeWorkspaceId ? (
-					<PageTree workspaceId={activeWorkspaceId} />
+					<>
+						<FavoritePages workspaceId={activeWorkspaceId} />
+						<PageTree workspaceId={activeWorkspaceId} />
+					</>
 				) : null}
 				{activeWorkspaceId || isAdmin ? (
 					<SidebarGroup className="mt-auto">

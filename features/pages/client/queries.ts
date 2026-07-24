@@ -4,19 +4,27 @@ import {
 	createPage,
 	deletePage,
 	getPage,
+	getPageNavigation,
 	getPageVersion,
 	listBacklinks,
 	listPages,
 	listPageVersions,
 	listTrash,
 	purgePage,
+	recordPageView,
 	restorePage,
 	restorePageVersion,
 	savePageContent,
 	searchPages,
+	setPageFavorite,
 	updatePage,
 } from "@/features/pages/contracts";
-import type { BlockJson, Page, PageMeta } from "@/features/pages/schemas";
+import type {
+	BlockJson,
+	Page,
+	PageMeta,
+	PageNavigationOutput,
+} from "@/features/pages/schemas";
 
 export function listPagesQueryOptions(workspaceId: string) {
 	return {
@@ -29,6 +37,113 @@ export function listPagesQueryOptions(workspaceId: string) {
 
 export function getPageQueryOptions(id: string) {
 	return rq(getPage).queryOptions({ path: { id } });
+}
+
+export function getPageNavigationQueryOptions(workspaceId: string) {
+	return {
+		...rq(getPageNavigation).queryOptions({ path: { workspaceId } }),
+		refetchInterval: 30_000,
+	};
+}
+
+export function setPageFavoriteMutationOptions() {
+	return rq(setPageFavorite).mutationOptions();
+}
+
+export function recordPageViewMutationOptions() {
+	return rq(recordPageView).mutationOptions();
+}
+
+export function invalidatePageNavigation(
+	queryClient: QueryClient,
+	workspaceId: string,
+) {
+	return rq(getPageNavigation).invalidate(queryClient, {
+		path: { workspaceId },
+	});
+}
+
+export function setFavoriteInNavigationCache(
+	queryClient: QueryClient,
+	workspaceId: string,
+	page: PageMeta,
+	favoritedAt: string | null,
+) {
+	queryClient.setQueryData<PageNavigationOutput>(
+		rq(getPageNavigation).key({ path: { workspaceId } }),
+		(current) => {
+			if (!current) return current;
+			const withoutPage = current.favorites.filter(
+				(item) => item.id !== page.id,
+			);
+			return {
+				...current,
+				favorites: favoritedAt
+					? [
+							{
+								...page,
+								favoritedAt,
+								lastViewedAt:
+									current.recents.find((item) => item.id === page.id)
+										?.lastViewedAt ?? null,
+							},
+							...withoutPage,
+						]
+					: withoutPage,
+			};
+		},
+	);
+}
+
+export function setViewedInNavigationCache(
+	queryClient: QueryClient,
+	workspaceId: string,
+	page: PageMeta,
+	lastViewedAt: string,
+) {
+	queryClient.setQueryData<PageNavigationOutput>(
+		rq(getPageNavigation).key({ path: { workspaceId } }),
+		(current) => {
+			if (!current) return current;
+			const favorite = current.favorites.find((item) => item.id === page.id);
+			const navigationPage = {
+				...page,
+				favoritedAt: favorite?.favoritedAt ?? null,
+				lastViewedAt,
+			};
+			return {
+				favorites: current.favorites.map((item) =>
+					item.id === page.id ? { ...item, lastViewedAt } : item,
+				),
+				recents: [
+					navigationPage,
+					...current.recents.filter((item) => item.id !== page.id),
+				].slice(0, 10),
+			};
+		},
+	);
+}
+
+/**
+ * Reconcile a completed view write with navigation data. A navigation request
+ * may have started before the write and must not be allowed to overwrite the
+ * newer ordering when it resolves. The final invalidation also covers the
+ * case where navigation data had not been loaded yet, so the optimistic cache
+ * update was intentionally a no-op.
+ */
+export async function syncRecordedPageViewInNavigationCache(
+	queryClient: QueryClient,
+	workspaceId: string,
+	page: PageMeta,
+	lastViewedAt: string,
+) {
+	const queryKey = rq(getPageNavigation).key({ path: { workspaceId } });
+	await queryClient.cancelQueries(
+		{ queryKey, exact: true },
+		{ revert: false, silent: true },
+	);
+	setViewedInNavigationCache(queryClient, workspaceId, page, lastViewedAt);
+	await invalidatePageNavigation(queryClient, workspaceId);
 }
 
 export function createPageMutationOptions() {
@@ -111,6 +226,20 @@ export function setPageIconInCache(
 					}
 				: current,
 	);
+	queryClient.setQueriesData<PageNavigationOutput>(
+		rq(getPageNavigation).filter(),
+		(current) =>
+			current
+				? {
+						favorites: current.favorites.map((page) =>
+							page.id === id ? { ...page, icon } : page,
+						),
+						recents: current.recents.map((page) =>
+							page.id === id ? { ...page, icon } : page,
+						),
+					}
+				: current,
+	);
 }
 
 /**
@@ -129,6 +258,20 @@ export function setPageSavedAtInCache(
 		(current) =>
 			current ? { ...current, updatedAt, contentUpdatedAt } : current,
 	);
+	queryClient.setQueriesData<PageNavigationOutput>(
+		rq(getPageNavigation).filter(),
+		(current) =>
+			current
+				? {
+						favorites: current.favorites.map((page) =>
+							page.id === id ? { ...page, updatedAt } : page,
+						),
+						recents: current.recents.map((page) =>
+							page.id === id ? { ...page, updatedAt } : page,
+						),
+					}
+				: current,
+	);
 }
 
 /**
@@ -146,6 +289,20 @@ export function setPageTitleInCache(
 	queryClient.setQueryData<Page>(
 		rq(getPage).key({ path: { id } }),
 		(current) => (current ? { ...current, title, updatedAt } : current),
+	);
+	queryClient.setQueriesData<PageNavigationOutput>(
+		rq(getPageNavigation).filter(),
+		(current) =>
+			current
+				? {
+						favorites: current.favorites.map((page) =>
+							page.id === id ? { ...page, title, updatedAt } : page,
+						),
+						recents: current.recents.map((page) =>
+							page.id === id ? { ...page, title, updatedAt } : page,
+						),
+					}
+				: current,
 	);
 }
 

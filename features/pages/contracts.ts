@@ -9,13 +9,17 @@ import {
 	ListTrashOutputSchema,
 	PageIdInputSchema,
 	PageMetaSchema,
+	PageNavigationOutputSchema,
 	PageSchema,
 	PageVersionIdInputSchema,
 	PageVersionSchema,
+	RecordPageViewOutputSchema,
 	SavePageContentBodySchema,
 	SavePageContentOutputSchema,
 	SearchPagesInputSchema,
 	SearchPagesOutputSchema,
+	SetPageFavoriteBodySchema,
+	SetPageFavoriteOutputSchema,
 	UpdatePageBodySchema,
 } from "@/features/pages/schemas";
 import { errors } from "@/features/shared/errors";
@@ -43,6 +47,43 @@ export const listPages = pages
 	})
 	.responses({
 		200: ListPagesOutputSchema,
+	});
+
+export const getPageNavigation = pages
+	.get("/api/workspaces/:workspaceId/page-navigation")
+	.pathParams(z.object({ workspaceId: z.string().min(1) }))
+	.errors({
+		Forbidden: errors.Forbidden,
+		WorkspaceNotFound: errors.WorkspaceNotFound,
+	})
+	.responses({
+		200: PageNavigationOutputSchema,
+	});
+
+export const setPageFavorite = pages
+	.put("/api/pages/:id/favorite")
+	.pathParams(PageIdInputSchema)
+	.body(SetPageFavoriteBodySchema)
+	.meta({ rateLimit: { max: 120, windowSec: 60, scope: "user" } })
+	.errors({
+		Forbidden: errors.Forbidden,
+		PageNotFound: errors.PageNotFound,
+	})
+	.responses({
+		200: SetPageFavoriteOutputSchema,
+	});
+
+export const recordPageView = pages
+	.post("/api/pages/:id/view")
+	.pathParams(PageIdInputSchema)
+	.body(z.object({}))
+	.meta({ rateLimit: { max: 240, windowSec: 60, scope: "user" } })
+	.errors({
+		Forbidden: errors.Forbidden,
+		PageNotFound: errors.PageNotFound,
+	})
+	.responses({
+		200: RecordPageViewOutputSchema,
 	});
 
 export const createPage = pages

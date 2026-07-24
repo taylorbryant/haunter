@@ -10,7 +10,10 @@ import {
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
-import type { PageRepository } from "@/features/pages/ports";
+import type {
+	PageNavigationRepository,
+	PageRepository,
+} from "@/features/pages/ports";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
@@ -18,6 +21,7 @@ import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import {
 	createPageUseCase,
 	deletePageUseCase,
+	getPageNavigationUseCase,
 	getPageUseCase,
 	getPageVersionUseCase,
 	listBacklinksUseCase,
@@ -25,15 +29,18 @@ import {
 	listPageVersionsUseCase,
 	listTrashUseCase,
 	purgePageUseCase,
+	recordPageViewUseCase,
 	restorePageUseCase,
 	restorePageVersionUseCase,
 	savePageContentUseCase,
 	searchPagesUseCase,
+	setPageFavoriteUseCase,
 	updatePageUseCase,
 } from "../use-cases";
 import {
 	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
+	createTestPageNavigationRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
 } from "./helpers";
@@ -45,6 +52,7 @@ function createTester(
 	tasks = createTestTaskRepository(),
 	role = "owner",
 	pageCollaboration = createTestPageCollaborationPort(),
+	pageNavigation = createTestPageNavigationRepository({ pages }),
 ) {
 	const auth = {
 		user: {
@@ -65,6 +73,7 @@ function createTester(
 				gate: appPorts.gate,
 				canvases,
 				pageLinks,
+				pageNavigation,
 				pageCollaboration,
 				pages,
 				pageVersions,
@@ -76,6 +85,7 @@ function createTester(
 					...ports,
 					canvases,
 					pageLinks,
+					pageNavigation,
 					pages,
 					pageVersions,
 					tasks,
@@ -110,6 +120,7 @@ async function createFixture(userId = "user_test") {
 	const pageCollaboration = createTestPageCollaborationPort(
 		publishedSubpageLinks,
 	);
+	const pageNavigation = createTestPageNavigationRepository({ pages });
 	// Better Auth org ids are nanoid-style, not UUIDs — use a matching shape so
 	// schema validation is exercised realistically.
 	const workspace = {
@@ -123,6 +134,7 @@ async function createFixture(userId = "user_test") {
 		tasks,
 		"owner",
 		pageCollaboration,
+		pageNavigation,
 	);
 	const ctx = await tester.ctx();
 	const scope = createTenantScope(createTestTenant(workspace.id));
@@ -135,6 +147,7 @@ async function createFixture(userId = "user_test") {
 		tester,
 		ctx,
 		publishedSubpageLinks,
+		pageNavigation,
 	};
 }
 
@@ -1322,5 +1335,121 @@ describe("page versioning", () => {
 				{ ctx: viewerCtx },
 			),
 		).rejects.toThrow("view-only");
+	});
+
+	it("keeps favorites personal, newest-first, and available to viewers", async () => {
+		const { pages, pageNavigation, workspace, tester, ctx } =
+			await createFixture();
+		const first = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "First" },
+			{ ctx },
+		);
+		const second = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Second" },
+			{ ctx },
+		);
+
+		await tester.run(
+			setPageFavoriteUseCase,
+			{ id: first.id, favorite: true },
+			{ ctx },
+		);
+		await tester.run(
+			setPageFavoriteUseCase,
+			{ id: second.id, favorite: true },
+			{ ctx },
+		);
+		expect(
+			(
+				await tester.run(
+					getPageNavigationUseCase,
+					{ workspaceId: workspace.id },
+					{ ctx },
+				)
+			).favorites.map((page) => page.title),
+		).toEqual(["Second", "First"]);
+
+		const viewer = createTester(
+			"user_viewer",
+			pages,
+			workspace.id,
+			createTestTaskRepository({ pages }),
+			"viewer",
+			createTestPageCollaborationPort(),
+			pageNavigation,
+		);
+		const viewerCtx = await viewer.ctx();
+		await viewer.run(
+			setPageFavoriteUseCase,
+			{ id: first.id, favorite: true },
+			{ ctx: viewerCtx },
+		);
+		expect(
+			(
+				await viewer.run(
+					getPageNavigationUseCase,
+					{ workspaceId: workspace.id },
+					{ ctx: viewerCtx },
+				)
+			).favorites.map((page) => page.id),
+		).toEqual([first.id]);
+
+		await tester.run(
+			setPageFavoriteUseCase,
+			{ id: first.id, favorite: false },
+			{ ctx },
+		);
+		expect(
+			(
+				await tester.run(
+					getPageNavigationUseCase,
+					{ workspaceId: workspace.id },
+					{ ctx },
+				)
+			).favorites.map((page) => page.id),
+		).toEqual([second.id]);
+	});
+
+	it("tracks ten recent views and omits trashed pages until restored", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+		const created = [];
+		for (let index = 0; index < 12; index += 1) {
+			const page = await tester.run(
+				createPageUseCase,
+				{ workspaceId: workspace.id, title: `Page ${index}` },
+				{ ctx },
+			);
+			created.push(page);
+			await tester.run(recordPageViewUseCase, { id: page.id }, { ctx });
+		}
+
+		let navigation = await tester.run(
+			getPageNavigationUseCase,
+			{ workspaceId: workspace.id },
+			{ ctx },
+		);
+		expect(navigation.recents).toHaveLength(10);
+		const latest = created.at(-1);
+		if (!latest) throw new Error("Expected a recent page");
+		expect(navigation.recents[0]?.id).toBe(latest.id);
+		await tester.run(deletePageUseCase, { id: latest.id }, { ctx });
+		navigation = await tester.run(
+			getPageNavigationUseCase,
+			{ workspaceId: workspace.id },
+			{ ctx },
+		);
+		expect(navigation.recents.some((page) => page.id === latest.id)).toBe(
+			false,
+		);
+
+		await tester.run(restorePageUseCase, { id: latest.id }, { ctx });
+		navigation = await tester.run(
+			getPageNavigationUseCase,
+			{ workspaceId: workspace.id },
+			{ ctx },
+		);
+		expect(navigation.recents[0]?.id).toBe(latest.id);
 	});
 });

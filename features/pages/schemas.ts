@@ -190,6 +190,30 @@ export const ListPagesOutputSchema = z.object({
 	items: z.array(PageMetaSchema),
 });
 
+export const PageNavigationItemSchema = PageMetaSchema.extend({
+	favoritedAt: z.string().datetime().nullable(),
+	lastViewedAt: z.string().datetime().nullable(),
+});
+
+export const PageNavigationOutputSchema = z.object({
+	favorites: z.array(PageNavigationItemSchema),
+	recents: z.array(PageNavigationItemSchema),
+});
+
+export const SetPageFavoriteBodySchema = z.object({
+	favorite: z.boolean(),
+});
+
+export const SetPageFavoriteOutputSchema = z.object({
+	pageId: z.string().uuid(),
+	favoritedAt: z.string().datetime().nullable(),
+});
+
+export const RecordPageViewOutputSchema = z.object({
+	pageId: z.string().uuid(),
+	lastViewedAt: z.string().datetime(),
+});
+
 export const PageIdInputSchema = z.object({
 	id: z.string().uuid(),
 });
@@ -303,6 +327,8 @@ export const SearchPagesOutputSchema = z.object({
 });
 
 export type PageMeta = z.infer<typeof PageMetaSchema>;
+export type PageNavigationItem = z.infer<typeof PageNavigationItemSchema>;
+export type PageNavigationOutput = z.infer<typeof PageNavigationOutputSchema>;
 export type SearchResult = z.infer<typeof SearchResultSchema>;
 export type Page = z.infer<typeof PageSchema>;
 export type CreatePageInput = z.infer<typeof CreatePageInputSchema>;

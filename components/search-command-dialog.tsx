@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { CornerDownLeftIcon, FileTextIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useFilteredCommandGroups } from "@/components/command-palette/registry";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,11 @@ import {
 	CommandItem,
 	CommandList,
 } from "@/components/ui/command";
-import { searchPagesQueryOptions } from "@/features/pages/client/queries";
+import {
+	getPageNavigationQueryOptions,
+	searchPagesQueryOptions,
+} from "@/features/pages/client/queries";
+import { formatViewedAt } from "@/features/pages/lib/format-viewed-at";
 
 function useDebouncedValue(value: string, delayMs: number) {
 	const [debounced, setDebounced] = useState(value);
@@ -37,6 +41,8 @@ export function SearchCommandDialog({
 	onOpenChange: (open: boolean) => void;
 }) {
 	const router = useRouter();
+	const pathname = usePathname();
+	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [query, setQuery] = useState("");
 
@@ -48,6 +54,10 @@ export function SearchCommandDialog({
 		...searchPagesQueryOptions(debounced),
 		enabled: open && !isCommandMode && debounced.length >= 2,
 		placeholderData: keepPreviousData,
+	});
+	const navigation = useQuery({
+		...getPageNavigationQueryOptions(workspaceId ?? ""),
+		enabled: open && Boolean(workspaceId) && debounced.length === 0,
 	});
 
 	const pageItems =
@@ -113,6 +123,48 @@ export function SearchCommandDialog({
 								No matching commands.
 							</div>
 						)
+					) : debounced.length === 0 && navigation.isError ? (
+						<div className="flex flex-col items-center gap-2 py-6 text-center text-destructive text-sm">
+							<p role="alert">Recent pages could not be loaded.</p>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={() => void navigation.refetch()}
+							>
+								Try again
+							</Button>
+						</div>
+					) : debounced.length === 0 &&
+						(navigation.data?.recents.length ?? 0) > 0 ? (
+						<CommandGroup heading="Recent">
+							{navigation.data?.recents.map((item) => (
+								<CommandItem
+									key={item.id}
+									value={item.id}
+									onSelect={() => {
+										close();
+										router.push(`/w/${item.workspaceId}/p/${item.id}`);
+									}}
+								>
+									{item.icon ? (
+										<span aria-hidden>{item.icon}</span>
+									) : (
+										<FileTextIcon className="text-muted-foreground" />
+									)}
+									<div className="flex min-w-0 flex-1 items-center gap-3">
+										<span className="min-w-0 flex-1 truncate">
+											{item.title || "Untitled"}
+										</span>
+										{item.lastViewedAt ? (
+											<span className="shrink-0 text-muted-foreground text-xs">
+												{formatViewedAt(item.lastViewedAt)}
+											</span>
+										) : null}
+									</div>
+								</CommandItem>
+							))}
+						</CommandGroup>
 					) : search.isError ? (
 						<div className="flex flex-col items-center gap-2 py-6 text-center text-destructive text-sm">
 							<p role="alert">Search could not be completed.</p>
@@ -155,7 +207,9 @@ export function SearchCommandDialog({
 					) : (
 						<div className="py-6 text-center text-muted-foreground text-sm">
 							{debounced.length === 0
-								? "Search pages, or type > for commands."
+								? navigation.isFetching
+									? "Loading recent pages..."
+									: "No recently viewed pages."
 								: debounced.length < 2
 									? "Type at least 2 characters."
 									: search.isFetching

@@ -1,14 +1,17 @@
 export { createPageUseCase } from "./create-page";
 export { deletePageUseCase } from "./delete-page";
 export { getPageUseCase } from "./get-page";
+export { getPageNavigationUseCase } from "./get-page-navigation";
 export { getPageVersionUseCase } from "./get-page-version";
 export { listBacklinksUseCase } from "./list-backlinks";
 export { listPageVersionsUseCase } from "./list-page-versions";
 export { listPagesUseCase } from "./list-pages";
 export { listTrashUseCase } from "./list-trash";
 export { purgePageUseCase } from "./purge-page";
+export { recordPageViewUseCase } from "./record-page-view";
 export { restorePageUseCase } from "./restore-page";
 export { restorePageVersionUseCase } from "./restore-page-version";
 export { savePageContentUseCase } from "./save-page-content";
 export { searchPagesUseCase } from "./search-pages";
+export { setPageFavoriteUseCase } from "./set-page-favorite";
 export { updatePageUseCase } from "./update-page";

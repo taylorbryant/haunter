@@ -23,6 +23,7 @@ import type { pagePolicy } from "@/features/pages/policy";
 import type {
 	PageCollaborationPort,
 	PageLinkRepository,
+	PageNavigationRepository,
 	PageRepository,
 	PageVersionRepository,
 } from "@/features/pages/ports";
@@ -46,6 +47,7 @@ export type AppTransactionPorts = {
 	members: MemberRepository;
 	notificationInbox: NotificationRepository;
 	pageLinks: PageLinkRepository;
+	pageNavigation: PageNavigationRepository;
 	pages: PageRepository;
 	pageVersions: PageVersionRepository;
 	shares: ShareRepository;
@@ -69,6 +71,7 @@ export type AppPorts = {
 	mailer: MailerPort;
 	pageCollaboration: PageCollaborationPort;
 	pageLinks: PageLinkRepository;
+	pageNavigation: PageNavigationRepository;
 	pages: PageRepository;
 	pageVersions: PageVersionRepository;
 	rateLimit: RateLimitPort;

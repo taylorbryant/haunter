@@ -24,14 +24,18 @@ import {
 	createPage,
 	deletePage,
 	getPage,
+	getPageNavigation,
 	listPages,
+	recordPageView,
 	savePageContent,
+	setPageFavorite,
 	updatePage,
 } from "../contracts";
 import { pageRoutes } from "../routes";
 import {
 	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
+	createTestPageNavigationRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
 } from "./helpers";
@@ -57,6 +61,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const tasks = createTestTaskRepository();
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
+	const pageNavigation = createTestPageNavigationRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
 	const pageCollaboration = createTestPageCollaborationPort();
 	// Every signed-in test user is an owner of their active workspace.
@@ -77,6 +82,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 			gate: appPorts.gate,
 			members,
 			pageLinks,
+			pageNavigation,
 			pageCollaboration,
 			pages,
 			pageVersions,
@@ -94,6 +100,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 				pageVersions,
 				members,
 				pageLinks,
+				pageNavigation,
 				pages,
 				tasks,
 				canvases,
@@ -119,6 +126,35 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 }
 
 describe("pageRoutes", () => {
+	it("manages personal favorites and recent views over HTTP", async () => {
+		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
+		const { app } = await createPagesTestApp({
+			auth: createSignedInAuth("user_test", workspace.id),
+		});
+		const requester = createTestRequester(app, {});
+		const created = await requester.request(createPage, {
+			body: { workspaceId: workspace.id, title: "Pinned page" },
+			idempotencyKey: "page-navigation-create",
+		});
+
+		await requester.request(setPageFavorite, {
+			path: { id: created.id },
+			body: { favorite: true },
+		});
+		await requester.request(recordPageView, {
+			path: { id: created.id },
+			body: {},
+		});
+		const navigation = await requester.request(getPageNavigation, {
+			path: { workspaceId: workspace.id },
+		});
+
+		await app.stop();
+
+		expect(navigation.favorites.map((page) => page.id)).toEqual([created.id]);
+		expect(navigation.recents.map((page) => page.id)).toEqual([created.id]);
+	});
+
 	it("rejects an excessively nested initial document over HTTP", async () => {
 		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
 		const { app } = await createPagesTestApp({
@@ -209,9 +245,7 @@ describe("pageRoutes", () => {
 							dueTime: "",
 							assignee: "",
 						},
-						content: [
-							{ type: "text", text: "Invalid task", styles: {} },
-						],
+						content: [{ type: "text", text: "Invalid task", styles: {} }],
 						children: [],
 					},
 				],

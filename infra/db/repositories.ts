@@ -5,6 +5,7 @@ import { createDrizzleCanvasRepository } from "@/infra/canvases/drizzle-canvas-r
 import { createDrizzleMemberRepository } from "@/infra/members/drizzle-member-repository";
 import { createDrizzleNotificationRepository } from "@/infra/notifications/drizzle-notification-repository";
 import { createDrizzlePageLinkRepository } from "@/infra/pages/drizzle-page-link-repository";
+import { createDrizzlePageNavigationRepository } from "@/infra/pages/drizzle-page-navigation-repository";
 import { createDrizzlePageRepository } from "@/infra/pages/drizzle-page-repository";
 import { createDrizzlePageVersionRepository } from "@/infra/pages/drizzle-page-version-repository";
 import { createDrizzleShareRepository } from "@/infra/shares/drizzle-share-repository";
@@ -22,6 +23,7 @@ export function createRepositories(
 		members: createDrizzleMemberRepository(db),
 		notificationInbox: createDrizzleNotificationRepository(db),
 		pageLinks: createDrizzlePageLinkRepository(db),
+		pageNavigation: createDrizzlePageNavigationRepository(db),
 		pages: createDrizzlePageRepository(db),
 		pageVersions: createDrizzlePageVersionRepository(db),
 		shares: createDrizzleShareRepository(db),

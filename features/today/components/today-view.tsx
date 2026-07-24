@@ -6,10 +6,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { notificationSettingsQueryOptions } from "@/features/notifications/client/queries";
-import { listPagesQueryOptions } from "@/features/pages/client/queries";
-import { formatEditedAt } from "@/features/pages/lib/format-edited-at";
+import { getPageNavigationQueryOptions } from "@/features/pages/client/queries";
+import { formatViewedAt } from "@/features/pages/lib/format-viewed-at";
 import { TaskList } from "@/features/tasks/components/task-list";
-import { formatTodayDate, selectRecentPages } from "@/features/today/lib/today";
+import { formatTodayDate } from "@/features/today/lib/today";
 import { localDateAndTime } from "@/lib/timezone";
 
 export function TodayView({
@@ -23,11 +23,11 @@ export function TodayView({
 }) {
 	const [now, setNow] = useState(initialNow);
 	const settingsQuery = useQuery(notificationSettingsQueryOptions());
-	const pagesQuery = useQuery(listPagesQueryOptions(workspaceId));
+	const navigationQuery = useQuery(getPageNavigationQueryOptions(workspaceId));
 	const timezone = settingsQuery.data?.timezone ?? initialTimezone;
 	const localNow = localDateAndTime(new Date(now), timezone);
 	const todayDate = localNow.date;
-	const recentPages = selectRecentPages(pagesQuery.data?.items ?? []);
+	const recentPages = navigationQuery.data?.recents.slice(0, 5) ?? [];
 
 	useEffect(() => {
 		const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -50,13 +50,13 @@ export function TodayView({
 				currentTime={localNow.time}
 			/>
 
-			{pagesQuery.isError && !pagesQuery.data ? (
+			{navigationQuery.isError && !navigationQuery.data ? (
 				<section
 					className="border-t pt-6"
 					aria-labelledby="recent-pages-heading"
 				>
 					<h2 id="recent-pages-heading" className="font-medium text-sm">
-						Recently edited
+						Recently viewed
 					</h2>
 					<div className="mt-2 flex items-center gap-2 text-sm">
 						<p className="text-muted-foreground">
@@ -66,7 +66,7 @@ export function TodayView({
 							type="button"
 							variant="ghost"
 							size="sm"
-							onClick={() => pagesQuery.refetch()}
+							onClick={() => navigationQuery.refetch()}
 						>
 							Retry
 						</Button>
@@ -78,7 +78,7 @@ export function TodayView({
 					aria-labelledby="recent-pages-heading"
 				>
 					<h2 id="recent-pages-heading" className="font-medium text-sm">
-						Recently edited
+						Recently viewed
 					</h2>
 					<ul className="mt-2 flex flex-col divide-y">
 						{recentPages.map((page) => (
@@ -99,7 +99,9 @@ export function TodayView({
 										{page.title || "Untitled"}
 									</span>
 									<span className="shrink-0 text-muted-foreground text-xs">
-										{formatEditedAt(page.updatedAt, now)}
+										{page.lastViewedAt
+											? formatViewedAt(page.lastViewedAt, now)
+											: null}
 									</span>
 								</Link>
 							</li>
