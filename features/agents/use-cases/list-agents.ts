@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
 import { grantWorkspaceScopeLabel } from "@/features/agents/grant-scope";
+import { agentHostPermissionStateForCapabilities } from "@/features/agents/permission-profiles";
 import type { AgentAdminRow } from "@/features/agents/ports";
 import { ListAgentsOutputSchema } from "@/features/agents/schemas";
 import { requireUser } from "@/lib/auth";
@@ -15,6 +16,7 @@ export function toAgentSummary(
 		name: row.name,
 		mode: row.mode,
 		status: row.status,
+		hostId: row.hostId,
 		hostName: row.hostName,
 		grants: row.grants.map((grant) => ({
 			capability: grant.capability,
@@ -44,6 +46,30 @@ export const listAgentsUseCase = useCase
 		const workspaceNames = new Map(
 			workspaces.map((workspace) => [workspace.id, workspace.name]),
 		);
+		const hosts = new Map<
+			string,
+			{
+				id: string;
+				name: string | null;
+				permissionProfile: ReturnType<
+					typeof agentHostPermissionStateForCapabilities
+				>;
+			}
+		>();
+		for (const row of rows) {
+			if (row.hostStatus !== "active") continue;
+			if (hosts.has(row.hostId)) continue;
+			hosts.set(row.hostId, {
+				id: row.hostId,
+				name: row.hostName,
+				permissionProfile: agentHostPermissionStateForCapabilities(
+					row.hostDefaultCapabilities,
+				),
+			});
+		}
 
-		return { items: rows.map((row) => toAgentSummary(row, workspaceNames)) };
+		return {
+			items: rows.map((row) => toAgentSummary(row, workspaceNames)),
+			hosts: [...hosts.values()],
+		};
 	});

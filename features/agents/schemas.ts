@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+export const AgentPermissionProfileSchema = z.enum(["view", "edit", "full"]);
+
+export const AgentHostPermissionStateSchema = z.enum([
+	"ask",
+	"view",
+	"edit",
+	"full",
+	"custom",
+]);
+
 export const AgentGrantSchema = z.object({
 	capability: z.string(),
 	status: z.string(),
@@ -11,14 +21,22 @@ export const AgentSummarySchema = z.object({
 	name: z.string(),
 	mode: z.string(),
 	status: z.string(),
+	hostId: z.string(),
 	hostName: z.string().nullable(),
 	grants: z.array(AgentGrantSchema),
 	lastUsedAt: z.string().datetime().nullable(),
 	createdAt: z.string().datetime(),
 });
 
+export const AgentHostSummarySchema = z.object({
+	id: z.string(),
+	name: z.string().nullable(),
+	permissionProfile: AgentHostPermissionStateSchema,
+});
+
 export const ListAgentsOutputSchema = z.object({
 	items: z.array(AgentSummarySchema),
+	hosts: z.array(AgentHostSummarySchema),
 });
 
 export const ListAgentActivityInputSchema = z.object({
@@ -58,12 +76,16 @@ export const PendingAgentSchema = z.object({
 	id: z.string(),
 	approvalId: z.string(),
 	name: z.string(),
+	hostId: z.string(),
 	hostName: z.string().nullable(),
+	currentPermissionProfile: AgentHostPermissionStateSchema,
+	minimumPermissionProfile: AgentPermissionProfileSchema.nullable(),
 	requestedCapabilities: z.array(RequestedCapabilitySchema),
 	createdAt: z.string().datetime(),
 });
 
 export type AgentGrant = z.infer<typeof AgentGrantSchema>;
 export type AgentSummary = z.infer<typeof AgentSummarySchema>;
+export type AgentHostSummary = z.infer<typeof AgentHostSummarySchema>;
 export type AgentActivity = z.infer<typeof AgentActivitySchema>;
 export type PendingAgent = z.infer<typeof PendingAgentSchema>;

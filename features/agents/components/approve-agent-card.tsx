@@ -14,16 +14,35 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { rememberAgentHostPermissionProfile } from "@/features/agents/client/host-permissions";
 import {
 	getPendingAgentQueryOptions,
 	invalidateAgents,
 } from "@/features/agents/client/queries";
+import {
+	AGENT_PERMISSION_PROFILES,
+	type AgentPermissionProfile,
+	agentHostPermissionStateLabel,
+	agentPermissionProfilesAtOrAbove,
+} from "@/features/agents/permission-profiles";
+import { cn } from "@/lib/utils";
 
-type Phase = "review" | "working" | "approved" | "denied" | "failed";
+function formatList(items: readonly string[]): string {
+	if (items.length <= 1) return items[0] ?? "";
+	if (items.length === 2) return `${items[0]} and ${items[1]}`;
+	return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+}
+
+type Phase =
+	| "review"
+	| "working"
+	| "approved"
+	| "denied"
+	| "failed"
+	| "remember-failed";
 
 async function decideCapabilityRequest(body: {
 	approval_id: string;
@@ -38,7 +57,7 @@ async function decideCapabilityRequest(body: {
 			body: JSON.stringify(body),
 		});
 		const payload = (await res.json().catch(() => null)) as {
-			error?: string;
+			error?: string | { message?: string };
 			message?: string;
 		} | null;
 		// The plugin can send soft failures (e.g. fresh_session_required) with a
@@ -46,7 +65,10 @@ async function decideCapabilityRequest(body: {
 		if (res.ok && !payload?.error) return { ok: true };
 		return {
 			ok: false,
-			message: payload?.message ?? "The approval could not be completed.",
+			message:
+				(typeof payload?.error === "object"
+					? payload.error.message
+					: payload?.message) ?? "The approval could not be completed.",
 		};
 	} catch {
 		return {
@@ -73,30 +95,48 @@ export function ApproveAgentCard({
 	const queryClient = useQueryClient();
 	const query = useQuery(getPendingAgentQueryOptions(agentId));
 	const [code, setCode] = useState(initialCode);
-	const [excluded, setExcluded] = useState<Set<string>>(new Set());
+	const [selectedProfile, setSelectedProfile] =
+		useState<AgentPermissionProfile | null>(null);
 	const [phase, setPhase] = useState<Phase>("review");
 	const [error, setError] = useState("");
 
 	async function decide(action: "approve" | "deny") {
 		if (!query.data) return;
+		const profile =
+			selectedProfile ?? query.data.minimumPermissionProfile ?? null;
+		if (action === "approve" && !profile) return;
 		setPhase("working");
 		setError("");
 		const requested =
 			query.data?.requestedCapabilities.map((c) => c.name) ?? [];
-		const approvedCapabilities = requested.filter(
-			(name) => !excluded.has(name),
-		);
 		const result = await decideCapabilityRequest({
 			approval_id: query.data.approvalId,
 			action,
 			...(action === "approve"
-				? { user_code: code.trim(), capabilities: approvedCapabilities }
+				? { user_code: code.trim(), capabilities: requested }
 				: {}),
 		});
 		if (!result.ok) {
 			setPhase("failed");
 			setError(result.message ?? "");
 			return;
+		}
+		if (action === "approve" && profile) {
+			try {
+				await rememberAgentHostPermissionProfile({
+					hostId: query.data.hostId,
+					profile,
+				});
+			} catch (rememberError) {
+				setPhase("remember-failed");
+				setError(
+					rememberError instanceof Error
+						? rememberError.message
+						: "The agent was approved, but its access profile could not be applied.",
+				);
+				void invalidateAgents(queryClient);
+				return;
+			}
 		}
 		void invalidateAgents(queryClient).catch((refreshError) => {
 			reportUserError(
@@ -105,6 +145,30 @@ export function ApproveAgentCard({
 			);
 		});
 		setPhase(action === "approve" ? "approved" : "denied");
+	}
+
+	async function retryRememberingAccess() {
+		if (!query.data) return;
+		const profile =
+			selectedProfile ?? query.data.minimumPermissionProfile ?? null;
+		if (!profile) return;
+		setPhase("working");
+		setError("");
+		try {
+			await rememberAgentHostPermissionProfile({
+				hostId: query.data.hostId,
+				profile,
+			});
+			await invalidateAgents(queryClient);
+			setPhase("approved");
+		} catch (rememberError) {
+			setPhase("remember-failed");
+			setError(
+				rememberError instanceof Error
+					? rememberError.message
+					: "The access profile could not be applied.",
+			);
+		}
 	}
 
 	if (query.isPending) {
@@ -149,8 +213,26 @@ export function ApproveAgentCard({
 	}
 
 	const agent = query.data;
+	const effectiveProfile =
+		selectedProfile ?? agent.minimumPermissionProfile ?? null;
+	const availableProfiles = agent.minimumPermissionProfile
+		? agentPermissionProfilesAtOrAbove(agent.minimumPermissionProfile)
+		: [];
+	const requestedWorkspaces = [
+		...new Set(
+			agent.requestedCapabilities.flatMap(({ workspaceScope }) =>
+				workspaceScope ? [workspaceScope] : [],
+			),
+		),
+	];
+	const includesGeneralAccess = agent.requestedCapabilities.some(
+		({ workspaceScope }) => workspaceScope === null,
+	);
 
 	if (phase === "approved" || phase === "denied") {
+		const approvedProfile = effectiveProfile
+			? AGENT_PERMISSION_PROFILES[effectiveProfile]
+			: null;
 		return (
 			<Card className="w-full max-w-md">
 				<CardHeader>
@@ -159,11 +241,43 @@ export function ApproveAgentCard({
 					</CardTitle>
 					<CardDescription>
 						{phase === "approved"
-							? `"${agent.name}" can now act on your behalf with the capabilities you granted. You can revoke it anytime from Settings → Agents.`
+							? `"${agent.name}" is approved. ${approvedProfile?.label ?? "This access"} is now remembered for future agents from ${agent.hostName ?? "this client"}. You can disconnect the client from Settings → Agents.`
 							: `"${agent.name}" was denied and cannot access your workspaces.`}
 					</CardDescription>
 				</CardHeader>
 				<CardFooter>
+					<Button
+						variant="outline"
+						render={<Link href="/" />}
+						nativeButton={false}
+					>
+						Back to Haunter
+					</Button>
+				</CardFooter>
+			</Card>
+		);
+	}
+
+	if (phase === "remember-failed") {
+		return (
+			<Card className="w-full max-w-md">
+				<CardHeader>
+					<CardTitle>Agent approved</CardTitle>
+					<CardDescription>
+						The current agent can continue, but Haunter could not finish
+						applying the selected access profile to{" "}
+						{agent.hostName ?? "this client"}.
+					</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<p role="alert" className="text-destructive text-sm">
+						{error}
+					</p>
+				</CardContent>
+				<CardFooter className="gap-2">
+					<Button onClick={() => void retryRememberingAccess()}>
+						Try again
+					</Button>
 					<Button
 						variant="outline"
 						render={<Link href="/" />}
@@ -190,41 +304,100 @@ export function ApproveAgentCard({
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="flex flex-col gap-4">
+				<section
+					aria-labelledby="current-agent-request"
+					className="rounded-md border bg-muted/30 p-3"
+				>
+					<h2 id="current-agent-request" className="font-medium text-sm">
+						Current request
+					</h2>
+					{requestedWorkspaces.length > 0 ? (
+						<p className="mt-1 text-muted-foreground text-sm">
+							Workspaces:{" "}
+							<span className="font-medium text-foreground">
+								{formatList(requestedWorkspaces)}
+							</span>
+						</p>
+					) : (
+						<p className="mt-1 text-muted-foreground text-sm">
+							No workspace-specific access is requested.
+						</p>
+					)}
+					{includesGeneralAccess ? (
+						<p className="mt-1 text-muted-foreground text-xs">
+							This also includes general access needed to find your workspaces.
+						</p>
+					) : null}
+				</section>
 				<fieldset className="flex flex-col gap-2">
 					<legend className="mb-2 font-medium text-sm">
-						Requested capabilities
+						{agent.currentPermissionProfile === "ask"
+							? "Choose access"
+							: agent.currentPermissionProfile ===
+									agent.minimumPermissionProfile
+								? "Confirm access"
+								: "Upgrade access"}
 					</legend>
-					{agent.requestedCapabilities.map((capability) => (
-						<Label
-							key={capability.name}
-							className="flex items-start gap-3 rounded-md border p-3 font-normal"
-						>
-							<Checkbox
-								checked={!excluded.has(capability.name)}
-								onCheckedChange={(checked) => {
-									setExcluded((prev) => {
-										const next = new Set(prev);
-										if (checked === true) next.delete(capability.name);
-										else next.add(capability.name);
-										return next;
-									});
-								}}
-							/>
-							<span className="flex min-w-0 flex-col gap-1">
-								<span className="font-medium font-mono text-sm">
-									{capability.name}
-								</span>
-								{capability.workspaceScope ? (
-									<span className="text-foreground text-xs">
-										Workspace: {capability.workspaceScope}
-									</span>
-								) : null}
-								<span className="text-muted-foreground text-sm">
-									{capability.description}
-								</span>
+					{agent.currentPermissionProfile !== "ask" ? (
+						<p className="mb-2 text-muted-foreground text-sm">
+							Current access:{" "}
+							<span className="font-medium text-foreground">
+								{agentHostPermissionStateLabel(agent.currentPermissionProfile)}
 							</span>
-						</Label>
-					))}
+						</p>
+					) : null}
+					{availableProfiles.map((profile) => {
+						const definition = AGENT_PERMISSION_PROFILES[profile];
+						const selected = effectiveProfile === profile;
+						return (
+							<Label
+								key={profile}
+								className={cn(
+									"flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal transition-colors",
+									selected
+										? "border-primary bg-primary/5"
+										: "hover:bg-muted/50",
+								)}
+							>
+								<input
+									type="radio"
+									name="agent-permission-profile"
+									value={profile}
+									checked={selected}
+									onChange={() => setSelectedProfile(profile)}
+									className="mt-1 size-4 accent-primary"
+								/>
+								<span className="flex min-w-0 flex-col gap-1">
+									<span className="font-medium text-sm">
+										{definition.label}
+									</span>
+									<span className="text-muted-foreground text-sm">
+										{definition.description}
+									</span>
+									<ul className="mt-1 list-disc space-y-1 pl-4 text-muted-foreground text-xs">
+										{definition.details.map((detail) => (
+											<li key={detail}>{detail}</li>
+										))}
+									</ul>
+								</span>
+							</Label>
+						);
+					})}
+					{agent.minimumPermissionProfile === null ? (
+						<p
+							role="alert"
+							className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive text-sm"
+						>
+							This request includes access this version of Haunter cannot safely
+							classify. Deny it and update the client before trying again.
+						</p>
+					) : null}
+					<p className="mt-2 text-muted-foreground text-xs">
+						This approval grants only the access in the current request. Haunter
+						remembers which requests future agents from{" "}
+						{agent.hostName ?? "this client"} may receive without another
+						approval. Membership and roles are still checked for every action.
+					</p>
 				</fieldset>
 				<div className="flex flex-col gap-2">
 					<Label htmlFor="agent-user-code">Confirmation code</Label>
@@ -253,7 +426,7 @@ export function ApproveAgentCard({
 					disabled={
 						phase === "working" ||
 						code.trim().length === 0 ||
-						excluded.size === agent.requestedCapabilities.length
+						effectiveProfile === null
 					}
 				>
 					<CheckIcon data-icon="inline-start" />
