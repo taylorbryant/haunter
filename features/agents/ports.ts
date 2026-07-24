@@ -11,7 +11,10 @@ export type AgentAdminRow = {
 	mode: string;
 	status: string;
 	userId: string | null;
+	hostId: string;
 	hostName: string | null;
+	hostStatus: string | null;
+	hostDefaultCapabilities: string[];
 	grants: AgentCapabilityGrant[];
 	lastUsedAt: Date | null;
 	createdAt: Date;

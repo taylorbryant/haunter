@@ -1,9 +1,13 @@
 import "@beignet/core/server-only";
+import { grantWorkspaceScopeLabel } from "@/features/agents/grant-scope";
+import {
+	agentHostPermissionStateForCapabilities,
+	minimumAgentPermissionProfileForCapabilities,
+} from "@/features/agents/permission-profiles";
 import {
 	PendingAgentInputSchema,
 	PendingAgentSchema,
 } from "@/features/agents/schemas";
-import { grantWorkspaceScopeLabel } from "@/features/agents/grant-scope";
 import { appError } from "@/features/shared/errors";
 import { agentCapabilities } from "@/lib/agent-capability-registry";
 import { requireUser } from "@/lib/auth";
@@ -39,12 +43,21 @@ export const getPendingAgentUseCase = useCase
 		const workspaceNames = new Map(
 			workspaces.map((workspace) => [workspace.id, workspace.name]),
 		);
+		const requestedCapabilityNames = requested.map((grant) => grant.capability);
 
 		return {
 			id: row.id,
 			approvalId,
 			name: row.name,
+			hostId: row.hostId,
 			hostName: row.hostName,
+			currentPermissionProfile: agentHostPermissionStateForCapabilities(
+				row.hostDefaultCapabilities,
+			),
+			minimumPermissionProfile: minimumAgentPermissionProfileForCapabilities([
+				...row.hostDefaultCapabilities,
+				...requestedCapabilityNames,
+			]),
 			requestedCapabilities: requested.map((grant) => ({
 				name: grant.capability,
 				description:

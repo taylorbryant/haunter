@@ -14,10 +14,34 @@ type AgentRecord = {
 	mode: string;
 	status: string;
 	userId: string | null;
+	hostId: string;
 	hostName: string | null;
+	hostStatus: string | null;
+	hostDefaultCapabilities: string | null;
 	lastUsedAt: Date | null;
 	createdAt: Date;
 };
+
+function parseCapabilityIds(value: unknown): string[] {
+	if (Array.isArray(value)) {
+		return value.filter(
+			(capability): capability is string => typeof capability === "string",
+		);
+	}
+	if (typeof value !== "string" || value.length === 0) return [];
+
+	try {
+		let parsed: unknown = JSON.parse(value);
+		if (typeof parsed === "string") parsed = JSON.parse(parsed);
+		return Array.isArray(parsed)
+			? parsed.filter(
+					(capability): capability is string => typeof capability === "string",
+				)
+			: [];
+	} catch {
+		return [];
+	}
+}
 
 function parseGrantConstraints(value: unknown): Record<string, unknown> | null {
 	if (value === null || value === undefined) return null;
@@ -72,7 +96,12 @@ export function createDrizzleAgentAdminRepository(
 		record: AgentRecord,
 		grants: AgentAdminRow["grants"],
 	): AgentAdminRow {
-		return { ...record, grants };
+		const { hostDefaultCapabilities, ...agent } = record;
+		return {
+			...agent,
+			hostDefaultCapabilities: parseCapabilityIds(hostDefaultCapabilities),
+			grants,
+		};
 	}
 
 	const agentColumns = {
@@ -81,7 +110,10 @@ export function createDrizzleAgentAdminRepository(
 		mode: schema.agent.mode,
 		status: schema.agent.status,
 		userId: schema.agent.userId,
+		hostId: schema.agent.hostId,
 		hostName: schema.agentHost.name,
+		hostStatus: schema.agentHost.status,
+		hostDefaultCapabilities: schema.agentHost.defaultCapabilities,
 		lastUsedAt: schema.agent.lastUsedAt,
 		createdAt: schema.agent.createdAt,
 	};

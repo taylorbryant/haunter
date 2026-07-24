@@ -15,13 +15,22 @@ import { Panel, PanelHeader } from "@/components/settings/panels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { disconnectAgentHost } from "@/features/agents/client/host-permissions";
 import {
 	invalidateAgents,
 	listAgentActivityQueryOptions,
 	listAgentsQueryOptions,
 } from "@/features/agents/client/queries";
 import { AgentConnectDialog } from "@/features/agents/components/agent-connect-dialog";
-import type { AgentActivity, AgentSummary } from "@/features/agents/schemas";
+import {
+	agentCapabilityLabel,
+	agentHostPermissionStateLabel,
+} from "@/features/agents/permission-profiles";
+import type {
+	AgentActivity,
+	AgentHostSummary,
+	AgentSummary,
+} from "@/features/agents/schemas";
 
 function statusVariant(status: string) {
 	if (status === "active") return "default" as const;
@@ -217,9 +226,8 @@ function AgentRow({
 						<Badge
 							key={`${grant.capability}:${grant.workspaceScope ?? "global"}`}
 							variant="secondary"
-							className="font-mono"
 						>
-							{grant.capability}
+							{agentCapabilityLabel(grant.capability)}
 							{grant.workspaceScope ? ` · ${grant.workspaceScope}` : ""}
 						</Badge>
 					))}
@@ -236,21 +244,74 @@ function AgentRow({
 	);
 }
 
+function AgentHostRow({
+	host,
+	onDisconnect,
+}: {
+	host: AgentHostSummary;
+	onDisconnect: (host: AgentHostSummary) => void;
+}) {
+	const accessDescription =
+		host.permissionProfile === "ask"
+			? "Future agents from this client will ask you to approve access."
+			: "This access is remembered for future agents from this client.";
+
+	return (
+		<div className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-start">
+			<BotIcon className="mt-1 size-4 shrink-0 text-muted-foreground" />
+			<div className="flex min-w-0 flex-1 flex-col gap-1">
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
+					<span className="truncate font-medium text-sm">
+						{host.name ?? "MCP client"}
+					</span>
+					<Badge variant="secondary">
+						{agentHostPermissionStateLabel(host.permissionProfile)}
+					</Badge>
+				</div>
+				<p className="text-muted-foreground text-xs">
+					{accessDescription} Workspace membership and roles are still checked
+					for every action.
+				</p>
+			</div>
+			<Button
+				type="button"
+				variant="outline"
+				size="sm"
+				className="w-full sm:w-auto"
+				onClick={() => onDisconnect(host)}
+			>
+				Disconnect
+			</Button>
+		</div>
+	);
+}
+
 /**
  * Settings panel for the user's AI agents: what's connected, what each one
- * may do, and revocation. Revoke goes through the agent-auth plugin's own
- * endpoint so grants are revoked and audit events emitted with it.
+ * may do, and revocation. Revocation goes through the agent-auth plugin's own
+ * endpoints so grants are revoked and audit events emitted with it.
  */
 export function AgentsPanel() {
 	const queryClient = useQueryClient();
 	const query = useQuery(listAgentsQueryOptions());
 	const [connectOpen, setConnectOpen] = useState(false);
 	const [revoking, setRevoking] = useState<AgentSummary | null>(null);
+	const [disconnecting, setDisconnecting] = useState<AgentHostSummary | null>(
+		null,
+	);
 	const revoke = useMutation({
 		mutationFn: revokeAgent,
 		meta: { errorMode: "inline" },
 		onSuccess: () => {
 			setRevoking(null);
+			void invalidateAgents(queryClient);
+		},
+	});
+	const disconnect = useMutation({
+		mutationFn: (hostId: string) => disconnectAgentHost(hostId),
+		meta: { errorMode: "inline" },
+		onSuccess: () => {
+			setDisconnecting(null);
 			void invalidateAgents(queryClient);
 		},
 	});
@@ -265,11 +326,21 @@ export function AgentsPanel() {
 		setRevoking(agent);
 	}
 
+	function confirmDisconnectHost() {
+		if (!disconnecting || disconnect.isPending) return;
+		disconnect.mutate(disconnecting.id);
+	}
+
+	function openDisconnectHost(host: AgentHostSummary) {
+		disconnect.reset();
+		setDisconnecting(host);
+	}
+
 	return (
 		<Panel>
 			<PanelHeader
 				title="Agents"
-				description="AI agents you've approved to read and write your pages. Each agent acts as you, limited to the capabilities you granted."
+				description="Control which AI clients and agents can act on your behalf in Haunter."
 			/>
 			<section className="flex flex-col items-start gap-4 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-center">
 				<div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -290,9 +361,49 @@ export function AgentsPanel() {
 			</section>
 			<section className="flex flex-col gap-2">
 				<div className="flex flex-col gap-1">
-					<h3 className="font-medium text-sm">Connected agents</h3>
+					<h3 className="font-medium text-sm">Connected clients</h3>
 					<p className="text-muted-foreground text-xs">
-						Review access or revoke an agent at any time.
+						Access profiles are chosen during approval. Disconnect a client to
+						remove it and all of its agents.
+					</p>
+				</div>
+				{query.isPending ? (
+					<Skeleton className="h-20 w-full" />
+				) : query.isError && !query.data ? (
+					<div className="flex items-center gap-2 text-muted-foreground text-sm">
+						<span className="flex-1">Your clients could not be loaded.</span>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => void query.refetch()}
+						>
+							Try again
+						</Button>
+					</div>
+				) : query.data.hosts.length === 0 ? (
+					<div className="rounded-md border border-dashed p-4">
+						<p className="text-muted-foreground text-sm">
+							No clients connected yet.
+						</p>
+					</div>
+				) : (
+					<div className="flex flex-col gap-2">
+						{query.data.hosts.map((host) => (
+							<AgentHostRow
+								key={host.id}
+								host={host}
+								onDisconnect={openDisconnectHost}
+							/>
+						))}
+					</div>
+				)}
+			</section>
+			<section className="flex flex-col gap-2">
+				<div className="flex flex-col gap-1">
+					<h3 className="font-medium text-sm">Agents</h3>
+					<p className="text-muted-foreground text-xs">
+						Review current and previous agents, or revoke one individually.
 					</p>
 				</div>
 				{query.isPending ? (
@@ -331,6 +442,28 @@ export function AgentsPanel() {
 				)}
 			</section>
 			<AgentActivityList />
+			<DestructiveConfirmationDialog
+				open={disconnecting !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setDisconnecting(null);
+						disconnect.reset();
+					}
+				}}
+				title={`Disconnect “${disconnecting?.name ?? "MCP client"}”?`}
+				description="The client and every agent it created lose access immediately. To use this client again, reconnect it and approve a new access profile."
+				actionLabel="Disconnect client"
+				pendingLabel="Disconnecting…"
+				pending={disconnect.isPending}
+				error={
+					disconnect.isError
+						? disconnect.error instanceof Error
+							? disconnect.error.message
+							: "Could not disconnect this client."
+						: null
+				}
+				onConfirm={confirmDisconnectHost}
+			/>
 			<DestructiveConfirmationDialog
 				open={revoking !== null}
 				onOpenChange={(open) => {
