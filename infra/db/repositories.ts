@@ -1,6 +1,8 @@
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
 import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
 import { createDrizzleAgentAdminRepository } from "@/infra/agents/drizzle-agent-admin-repository";
+import { createDrizzleMcpConnectionRepository } from "@/infra/agents/drizzle-mcp-connection-repository";
+import { createDrizzleMcpOAuthClientRepository } from "@/infra/agents/drizzle-mcp-oauth-client-repository";
 import { createDrizzleCanvasRepository } from "@/infra/canvases/drizzle-canvas-repository";
 import { createDrizzleChangelogStateRepository } from "@/infra/changelog/drizzle-changelog-state-repository";
 import { createDrizzleMemberRepository } from "@/infra/members/drizzle-member-repository";
@@ -20,6 +22,8 @@ export function createRepositories(
 	return {
 		adminUsers: createDrizzleAdminUserRepository(db),
 		agents: createDrizzleAgentAdminRepository(db),
+		mcpConnections: createDrizzleMcpConnectionRepository(db),
+		mcpOAuthClients: createDrizzleMcpOAuthClientRepository(db),
 		canvases: createDrizzleCanvasRepository(db),
 		changelogState: createDrizzleChangelogStateRepository(db),
 		members: createDrizzleMemberRepository(db),

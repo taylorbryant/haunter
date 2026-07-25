@@ -1,3 +1,4 @@
+import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import {
 	adminClient,
 	emailOTPClient,
@@ -11,5 +12,6 @@ export const authClient = createAuthClient({
 		emailOTPClient(),
 		organizationClient({ ac: accessControl, roles }),
 		adminClient(),
+		oauthProviderClient(),
 	],
 });

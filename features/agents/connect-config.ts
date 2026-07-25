@@ -36,6 +36,35 @@ export type AgentClientSetup = {
 	restartInstruction: string;
 };
 
+function remoteMcpJson(resourceUrl: string) {
+	return JSON.stringify(
+		{
+			mcpServers: {
+				haunter: {
+					url: resourceUrl,
+				},
+			},
+		},
+		null,
+		2,
+	);
+}
+
+function remoteVsCodeJson(resourceUrl: string) {
+	return JSON.stringify(
+		{
+			servers: {
+				haunter: {
+					type: "http",
+					url: resourceUrl,
+				},
+			},
+		},
+		null,
+		2,
+	);
+}
+
 type ConnectionWorkspace = {
 	id: string;
 	name: string;
@@ -172,6 +201,78 @@ export function getAgentClientSetup(
 		installInstruction:
 			"Add this local stdio server using your client's MCP configuration.",
 		restartInstruction: "Restart or reload MCP servers in your client.",
+	};
+}
+
+export function getHostedAgentClientSetup(
+	id: AgentClientId,
+	resourceUrl: string,
+): AgentClientSetup {
+	if (!resourceUrl) {
+		return {
+			configuration: "Loading Haunter MCP URL…",
+			configurationLabel: "Remote MCP URL",
+			installInstruction: "Add Haunter as a remote HTTP MCP server.",
+			restartInstruction:
+				"Open or enable Haunter in your client, then sign in when prompted.",
+		};
+	}
+
+	if (id === "codex") {
+		return {
+			configuration: `[mcp_servers.haunter]\nurl = ${JSON.stringify(resourceUrl)}`,
+			configurationLabel: "~/.codex/config.toml",
+			installInstruction:
+				"Add this remote server to your Codex user configuration file.",
+			restartInstruction:
+				"Restart Codex, open /mcp, and sign in to Haunter when prompted.",
+		};
+	}
+
+	if (id === "claude-code") {
+		return {
+			configuration: `claude mcp add --transport http haunter ${JSON.stringify(resourceUrl)}`,
+			configurationLabel: "Terminal",
+			installInstruction: "Run this command in your terminal.",
+			restartInstruction:
+				"Start a new Claude Code session and sign in to Haunter when prompted.",
+		};
+	}
+
+	if (id === "vscode") {
+		return {
+			configuration: remoteVsCodeJson(resourceUrl),
+			configurationLabel: ".vscode/mcp.json",
+			installInstruction:
+				"Add this to your workspace MCP configuration, or use MCP: Open User Configuration for a global connection.",
+			restartInstruction:
+				"Run MCP: List Servers, start Haunter, and complete sign-in.",
+		};
+	}
+
+	if (id === "claude-desktop") {
+		return {
+			configuration: resourceUrl,
+			configurationLabel: "Remote MCP URL",
+			installInstruction:
+				"Open Settings → Connectors, choose Add custom connector, and enter this URL.",
+			restartInstruction:
+				"Connect Haunter and complete sign-in in the browser window.",
+		};
+	}
+
+	return {
+		configuration: remoteMcpJson(resourceUrl),
+		configurationLabel:
+			id === "cursor" ? "Cursor MCP configuration" : "MCP configuration",
+		installInstruction:
+			id === "cursor"
+				? "Open Cursor Settings → Tools & Integrations → MCP Tools, then add this configuration."
+				: "Add this remote HTTP server using your client's MCP configuration.",
+		restartInstruction:
+			id === "cursor"
+				? "Reload Cursor, enable Haunter, and complete sign-in."
+				: "Enable the Haunter server and complete sign-in.",
 	};
 }
 

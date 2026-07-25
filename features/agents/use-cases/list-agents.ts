@@ -39,8 +39,9 @@ export const listAgentsUseCase = useCase
 	.output(ListAgentsOutputSchema)
 	.run(async ({ ctx }) => {
 		const user = requireUser(ctx);
-		const [rows, workspaces] = await Promise.all([
+		const [rows, mcpConnections, workspaces] = await Promise.all([
 			ctx.ports.agents.listByUser(user.id),
+			ctx.ports.mcpConnections.listByUser(user.id),
 			ctx.ports.members.listForUser(user.id),
 		]);
 		const workspaceNames = new Map(
@@ -71,5 +72,18 @@ export const listAgentsUseCase = useCase
 		return {
 			items: rows.map((row) => toAgentSummary(row, workspaceNames)),
 			hosts: [...hosts.values()],
+			mcpResourceUrl: ctx.ports.mcpServerConfiguration.resourceUrl,
+			mcpConnections: mcpConnections.map((connection) => ({
+				id: connection.id,
+				clientId: connection.clientId,
+				clientName: connection.clientName,
+				permissionProfile: connection.permissionProfile,
+				workspaces: connection.workspaceIds.map((id) => ({
+					id,
+					name: workspaceNames.get(id) ?? "Unavailable workspace",
+				})),
+				lastUsedAt: connection.lastUsedAt?.toISOString() ?? null,
+				createdAt: connection.createdAt.toISOString(),
+			})),
 		};
 	});

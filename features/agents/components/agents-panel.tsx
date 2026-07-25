@@ -16,13 +16,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { disconnectAgentHost } from "@/features/agents/client/host-permissions";
+import { disconnectRemoteMcpConnection } from "@/features/agents/client/mcp-connections";
 import {
+	invalidateAgentActivity,
 	invalidateAgents,
 	listAgentActivityQueryOptions,
 	listAgentsQueryOptions,
 } from "@/features/agents/client/queries";
 import { AgentConnectDialog } from "@/features/agents/components/agent-connect-dialog";
 import {
+	AGENT_PERMISSION_PROFILES,
 	agentCapabilityLabel,
 	agentHostPermissionStateLabel,
 } from "@/features/agents/permission-profiles";
@@ -30,6 +33,7 @@ import type {
 	AgentActivity,
 	AgentHostSummary,
 	AgentSummary,
+	McpConnectionSummary,
 } from "@/features/agents/schemas";
 
 function statusVariant(status: string) {
@@ -286,6 +290,52 @@ function AgentHostRow({
 	);
 }
 
+function McpConnectionRow({
+	connection,
+	onDisconnect,
+}: {
+	connection: McpConnectionSummary;
+	onDisconnect: (connection: McpConnectionSummary) => void;
+}) {
+	const profile = AGENT_PERMISSION_PROFILES[connection.permissionProfile];
+	const workspaceNames = connection.workspaces
+		.map((workspace) => workspace.name)
+		.join(", ");
+
+	return (
+		<div className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-start">
+			<BotIcon className="mt-1 size-4 shrink-0 text-muted-foreground" />
+			<div className="flex min-w-0 flex-1 flex-col gap-1">
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
+					<span className="truncate font-medium text-sm">
+						{connection.clientName ?? "MCP client"}
+					</span>
+					<Badge variant="secondary">{profile.label}</Badge>
+					<Badge variant="outline">Hosted</Badge>
+				</div>
+				<p className="text-muted-foreground text-xs">
+					{profile.description} Workspaces: {workspaceNames || "None"}.
+				</p>
+				<p className="text-muted-foreground text-xs">
+					Connected {formatDate(connection.createdAt)}
+					{connection.lastUsedAt
+						? ` · last used ${formatDate(connection.lastUsedAt)}`
+						: " · never used"}
+				</p>
+			</div>
+			<Button
+				type="button"
+				variant="outline"
+				size="sm"
+				className="w-full sm:w-auto"
+				onClick={() => onDisconnect(connection)}
+			>
+				Disconnect
+			</Button>
+		</div>
+	);
+}
+
 /**
  * Settings panel for the user's AI agents: what's connected, what each one
  * may do, and revocation. Revocation goes through the agent-auth plugin's own
@@ -299,6 +349,8 @@ export function AgentsPanel() {
 	const [disconnecting, setDisconnecting] = useState<AgentHostSummary | null>(
 		null,
 	);
+	const [disconnectingRemote, setDisconnectingRemote] =
+		useState<McpConnectionSummary | null>(null);
 	const revoke = useMutation({
 		mutationFn: revokeAgent,
 		meta: { errorMode: "inline" },
@@ -313,6 +365,15 @@ export function AgentsPanel() {
 		onSuccess: () => {
 			setDisconnecting(null);
 			void invalidateAgents(queryClient);
+		},
+	});
+	const disconnectRemote = useMutation({
+		mutationFn: disconnectRemoteMcpConnection,
+		meta: { errorMode: "inline" },
+		onSuccess: () => {
+			setDisconnectingRemote(null);
+			void invalidateAgents(queryClient);
+			void invalidateAgentActivity(queryClient);
 		},
 	});
 
@@ -334,6 +395,16 @@ export function AgentsPanel() {
 	function openDisconnectHost(host: AgentHostSummary) {
 		disconnect.reset();
 		setDisconnecting(host);
+	}
+
+	function confirmDisconnectRemote() {
+		if (!disconnectingRemote || disconnectRemote.isPending) return;
+		disconnectRemote.mutate(disconnectingRemote.id);
+	}
+
+	function openDisconnectRemote(connection: McpConnectionSummary) {
+		disconnectRemote.reset();
+		setDisconnectingRemote(connection);
 	}
 
 	return (
@@ -381,7 +452,8 @@ export function AgentsPanel() {
 							Try again
 						</Button>
 					</div>
-				) : query.data.hosts.length === 0 ? (
+				) : query.data.hosts.length === 0 &&
+					query.data.mcpConnections.length === 0 ? (
 					<div className="rounded-md border border-dashed p-4">
 						<p className="text-muted-foreground text-sm">
 							No clients connected yet.
@@ -389,6 +461,13 @@ export function AgentsPanel() {
 					</div>
 				) : (
 					<div className="flex flex-col gap-2">
+						{query.data.mcpConnections.map((connection) => (
+							<McpConnectionRow
+								key={connection.id}
+								connection={connection}
+								onDisconnect={openDisconnectRemote}
+							/>
+						))}
 						{query.data.hosts.map((host) => (
 							<AgentHostRow
 								key={host.id}
@@ -443,6 +522,28 @@ export function AgentsPanel() {
 			</section>
 			<AgentActivityList />
 			<DestructiveConfirmationDialog
+				open={disconnectingRemote !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setDisconnectingRemote(null);
+						disconnectRemote.reset();
+					}
+				}}
+				title={`Disconnect “${disconnectingRemote?.clientName ?? "MCP client"}”?`}
+				description="This client loses access immediately, including any active tokens. To use it again, reconnect and choose an access profile and workspaces."
+				actionLabel="Disconnect client"
+				pendingLabel="Disconnecting…"
+				pending={disconnectRemote.isPending}
+				error={
+					disconnectRemote.isError
+						? disconnectRemote.error instanceof Error
+							? disconnectRemote.error.message
+							: "Could not disconnect this client."
+						: null
+				}
+				onConfirm={confirmDisconnectRemote}
+			/>
+			<DestructiveConfirmationDialog
 				open={disconnecting !== null}
 				onOpenChange={(open) => {
 					if (!open) {
@@ -486,7 +587,11 @@ export function AgentsPanel() {
 				}
 				onConfirm={confirmRevokeAgent}
 			/>
-			<AgentConnectDialog open={connectOpen} onOpenChange={setConnectOpen} />
+			<AgentConnectDialog
+				open={connectOpen}
+				onOpenChange={setConnectOpen}
+				resourceUrl={query.data?.mcpResourceUrl ?? ""}
+			/>
 		</Panel>
 	);
 }

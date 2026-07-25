@@ -1,10 +1,16 @@
 import "@beignet/core/server-only";
 import {
+	authorizeMcpConnection,
+	disconnectMcpConnection,
+	getMcpConsentContext,
 	getPendingAgent,
 	listAgentActivity,
 	listAgents,
 } from "@/features/agents/contracts";
 import {
+	authorizeMcpConnectionUseCase,
+	disconnectMcpConnectionUseCase,
+	getMcpConsentContextUseCase,
 	getPendingAgentUseCase,
 	listAgentActivityUseCase,
 	listAgentsUseCase,
@@ -19,5 +25,17 @@ export const agentRoutes = defineRouteGroup({
 		{ contract: listAgents, useCase: listAgentsUseCase },
 		{ contract: listAgentActivity, useCase: listAgentActivityUseCase },
 		{ contract: getPendingAgent, useCase: getPendingAgentUseCase },
+		{
+			contract: getMcpConsentContext,
+			useCase: getMcpConsentContextUseCase,
+		},
+		{
+			contract: authorizeMcpConnection,
+			useCase: authorizeMcpConnectionUseCase,
+		},
+		{
+			contract: disconnectMcpConnection,
+			useCase: disconnectMcpConnectionUseCase,
+		},
 	],
 });

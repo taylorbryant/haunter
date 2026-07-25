@@ -11,13 +11,24 @@ import type { AppContext } from "@/app-context";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
-import type { AgentActivityWrite, AgentAdminRow } from "../ports";
+import type {
+	AgentActivityWrite,
+	AgentAdminRow,
+	McpConnectionActivityWrite,
+	McpConnectionRow,
+} from "../ports";
 import {
+	authorizeMcpConnectionUseCase,
+	disconnectMcpConnectionUseCase,
+	getMcpConsentContextUseCase,
 	getPendingAgentUseCase,
 	listAgentActivityUseCase,
 	listAgentsUseCase,
 } from "../use-cases";
-import { createTestAgentAdminRepository } from "./helpers";
+import {
+	createTestAgentAdminRepository,
+	createTestMcpConnectionRepository,
+} from "./helpers";
 
 function agentRow(overrides: Partial<AgentAdminRow> = {}): AgentAdminRow {
 	return {
@@ -41,12 +52,46 @@ function createFixture(
 	rows: AgentAdminRow[],
 	activities: AgentActivityWrite[] = [],
 	currentApprovalIds?: Map<string, string | null>,
+	mcpRows: McpConnectionRow[] = [],
+	mcpActivities: McpConnectionActivityWrite[] = [],
 ) {
 	const agents = createTestAgentAdminRepository(
 		rows,
 		activities,
 		currentApprovalIds,
 	);
+	const mcpConnections = createTestMcpConnectionRepository(
+		mcpRows,
+		mcpActivities,
+	);
+	const mcpOAuthRequests = {
+		async verify(oauthQuery: string) {
+			return oauthQuery.startsWith("valid:")
+				? {
+						clientId: oauthQuery.slice("valid:".length),
+						redirectUri: "http://127.0.0.1:1455/callback",
+					}
+				: null;
+		},
+	};
+	const mcpOAuthClients = {
+		async findForConsent(input: { clientId: string; redirectUri: string }) {
+			return input.redirectUri === "http://127.0.0.1:1455/callback"
+				? {
+						...input,
+						clientName: "Test MCP client",
+						clientUri: "https://client.example",
+						identityVerified: false,
+					}
+				: null;
+		},
+		async countUnusedDynamic() {
+			return 0;
+		},
+		async retireUnusedDynamicBefore() {
+			return 0;
+		},
+	};
 	const workspaceId = "workspace_test";
 	const members = {
 		async findRole() {
@@ -73,11 +118,14 @@ function createFixture(
 		overrides: {
 			gate: appPorts.gate,
 			agents,
+			mcpConnections,
+			mcpOAuthClients,
+			mcpOAuthRequests,
 			members,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, agents, members }),
+			ports: (ports) => ({ ...ports, agents, mcpConnections, members }),
 		},
 	});
 	const createTestContext = createTestContextFactory<
@@ -116,6 +164,7 @@ describe("agents.list", () => {
 				permissionProfile: "ask",
 			},
 		]);
+		expect(result.mcpConnections).toEqual([]);
 	});
 
 	it("excludes unclaimed pending agents (no userId yet)", async () => {
@@ -142,6 +191,89 @@ describe("agents.list", () => {
 		expect(result.items).toHaveLength(1);
 		expect(result.items[0]?.status).toBe("revoked");
 		expect(result.hosts).toEqual([]);
+	});
+});
+
+describe("agents remote MCP connections", () => {
+	it("authorizes a profile for selected member workspaces", async () => {
+		const tester = createFixture([]);
+
+		const result = await tester.run(authorizeMcpConnectionUseCase, {
+			oauthQuery: "valid:oauth_client_test",
+			permissionProfile: "edit",
+			workspaceIds: ["workspace_test"],
+		});
+
+		expect(result).toMatchObject({
+			clientId: "oauth_client_test",
+			clientName: "Test MCP client",
+			permissionProfile: "edit",
+			workspaces: [{ id: "workspace_test", name: "Test Workspace" }],
+		});
+	});
+
+	it("returns a signed consent destination and explicit identity provenance", async () => {
+		const tester = createFixture([]);
+
+		const result = await tester.run(getMcpConsentContextUseCase, {
+			oauthQuery: "valid:oauth_client_test",
+		});
+
+		expect(result).toEqual({
+			clientId: "oauth_client_test",
+			clientName: "Test MCP client",
+			clientUri: "https://client.example/",
+			redirectUri: "http://127.0.0.1:1455/callback",
+			identityVerified: false,
+		});
+	});
+
+	it("rejects workspace access the user does not have", async () => {
+		const tester = createFixture([]);
+
+		await expect(
+			tester.run(authorizeMcpConnectionUseCase, {
+				oauthQuery: "valid:oauth_client_test",
+				permissionProfile: "view",
+				workspaceIds: ["workspace_other"],
+			}),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+	});
+
+	it("rejects a modified OAuth authorization query", async () => {
+		const tester = createFixture([]);
+
+		await expect(
+			tester.run(authorizeMcpConnectionUseCase, {
+				oauthQuery: "invalid",
+				permissionProfile: "full",
+				workspaceIds: ["workspace_test"],
+			}),
+		).rejects.toMatchObject({ code: "MCP_CLIENT_NOT_FOUND" });
+	});
+
+	it("disconnects only the caller's connection", async () => {
+		const connection: McpConnectionRow = {
+			id: crypto.randomUUID(),
+			userId: "user_test",
+			clientId: "oauth_client_test",
+			clientName: "Codex",
+			permissionProfile: "view",
+			status: "active",
+			workspaceIds: ["workspace_test"],
+			lastUsedAt: null,
+			createdAt: new Date("2026-07-10T12:00:00.000Z"),
+			updatedAt: new Date("2026-07-10T12:00:00.000Z"),
+		};
+		const tester = createFixture([], [], undefined, [connection]);
+
+		await expect(
+			tester.run(disconnectMcpConnectionUseCase, {
+				connectionId: connection.id,
+			}),
+		).resolves.toEqual({ disconnected: true });
+		expect(connection.status).toBe("revoked");
+		expect(connection.workspaceIds).toEqual([]);
 	});
 });
 
@@ -309,10 +441,54 @@ describe("agents.listActivity", () => {
 
 		expect(result.items).toHaveLength(1);
 		expect(result.items[0]).toMatchObject({
+			source: "agent-auth",
 			agentId: mine.id,
+			connectionId: null,
 			agentName: "Mine",
 			capability: "create_task",
 			resourceLabel: "Prepare notes",
 		});
+	});
+
+	it("merges hosted MCP activity in chronological order", async () => {
+		const connection: McpConnectionRow = {
+			id: crypto.randomUUID(),
+			userId: "user_test",
+			clientId: "oauth_client_test",
+			clientName: "Codex",
+			permissionProfile: "edit",
+			status: "active",
+			workspaceIds: ["workspace_test"],
+			lastUsedAt: null,
+			createdAt: new Date("2026-07-10T12:00:00.000Z"),
+			updatedAt: new Date("2026-07-10T12:00:00.000Z"),
+		};
+		const activity: McpConnectionActivityWrite = {
+			id: crypto.randomUUID(),
+			connectionId: connection.id,
+			userId: "user_test",
+			workspaceId: "workspace_test",
+			capability: "read_page",
+			status: "success",
+			resourceType: "page",
+			resourceId: crypto.randomUUID(),
+			resourceLabel: "Roadmap",
+			durationMs: 9,
+			errorCode: null,
+			createdAt: new Date("2026-07-11T12:00:00.000Z"),
+		};
+		const tester = createFixture([], [], undefined, [connection], [activity]);
+
+		const result = await tester.run(listAgentActivityUseCase, { limit: 25 });
+
+		expect(result.items).toEqual([
+			expect.objectContaining({
+				source: "remote-mcp",
+				agentId: null,
+				connectionId: connection.id,
+				agentName: "Codex",
+				capability: "read_page",
+			}),
+		]);
 	});
 });

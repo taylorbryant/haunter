@@ -32,6 +32,7 @@ export const starterDatabaseProvider = createProvider<{
 			| "changelogState"
 			| "idempotency"
 			| "members"
+			| "mcpOAuthClients"
 			| "notificationInbox"
 			| "pageLinks"
 			| "pages"

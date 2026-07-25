@@ -5,6 +5,10 @@ import type { AppContext } from "@/app-context";
 export type AgentPrincipal = {
 	agentId: string;
 	userId: string;
+	transport?: "agent-auth" | "remote-mcp";
+	remoteConnectionId?: string;
+	remoteClientId?: string;
+	authorizedWorkspaceIds?: readonly string[];
 };
 
 export const { defineAgentCapability, defineAgentCapabilityRegistry } =

@@ -34,9 +34,58 @@ export const AgentHostSummarySchema = z.object({
 	permissionProfile: AgentHostPermissionStateSchema,
 });
 
+export const McpConnectionWorkspaceSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+});
+
+export const McpConnectionSummarySchema = z.object({
+	id: z.string().uuid(),
+	clientId: z.string(),
+	clientName: z.string().nullable(),
+	permissionProfile: AgentPermissionProfileSchema,
+	workspaces: z.array(McpConnectionWorkspaceSchema),
+	lastUsedAt: z.string().datetime().nullable(),
+	createdAt: z.string().datetime(),
+});
+
 export const ListAgentsOutputSchema = z.object({
 	items: z.array(AgentSummarySchema),
 	hosts: z.array(AgentHostSummarySchema),
+	mcpConnections: z.array(McpConnectionSummarySchema),
+	mcpResourceUrl: z.string().url(),
+});
+
+export const AuthorizeMcpConnectionInputSchema = z.object({
+	oauthQuery: z.string().trim().min(1).max(16_384),
+	permissionProfile: AgentPermissionProfileSchema,
+	workspaceIds: z
+		.array(z.string().min(1))
+		.min(1)
+		.max(50)
+		.refine((ids) => new Set(ids).size === ids.length, {
+			message: "Choose each workspace only once.",
+		}),
+});
+
+export const GetMcpConsentContextInputSchema = z.object({
+	oauthQuery: z.string().trim().min(1).max(16_384),
+});
+
+export const McpConsentContextSchema = z.object({
+	clientId: z.string().min(1),
+	clientName: z.string().nullable(),
+	clientUri: z.string().url().nullable(),
+	redirectUri: z.string().min(1).max(2_048),
+	identityVerified: z.boolean(),
+});
+
+export const DisconnectMcpConnectionInputSchema = z.object({
+	connectionId: z.string().uuid(),
+});
+
+export const DisconnectMcpConnectionOutputSchema = z.object({
+	disconnected: z.literal(true),
 });
 
 export const ListAgentActivityInputSchema = z.object({
@@ -45,7 +94,9 @@ export const ListAgentActivityInputSchema = z.object({
 
 export const AgentActivitySchema = z.object({
 	id: z.string().uuid(),
-	agentId: z.string(),
+	source: z.enum(["agent-auth", "remote-mcp"]),
+	agentId: z.string().nullable(),
+	connectionId: z.string().uuid().nullable(),
 	agentName: z.string(),
 	workspaceId: z.string().nullable(),
 	capability: z.string(),
@@ -87,5 +138,7 @@ export const PendingAgentSchema = z.object({
 export type AgentGrant = z.infer<typeof AgentGrantSchema>;
 export type AgentSummary = z.infer<typeof AgentSummarySchema>;
 export type AgentHostSummary = z.infer<typeof AgentHostSummarySchema>;
+export type McpConnectionSummary = z.infer<typeof McpConnectionSummarySchema>;
+export type McpConsentContext = z.infer<typeof McpConsentContextSchema>;
 export type AgentActivity = z.infer<typeof AgentActivitySchema>;
 export type PendingAgent = z.infer<typeof PendingAgentSchema>;

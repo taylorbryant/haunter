@@ -81,6 +81,16 @@ export const errors = defineErrors({
 		status: 404,
 		message: "This agent request is no longer pending",
 	},
+	McpClientNotFound: {
+		code: "MCP_CLIENT_NOT_FOUND",
+		status: 404,
+		message: "This MCP client is no longer available",
+	},
+	McpConnectionNotFound: {
+		code: "MCP_CONNECTION_NOT_FOUND",
+		status: 404,
+		message: "This MCP connection is no longer active",
+	},
 	UserNotFound: {
 		code: "USER_NOT_FOUND",
 		status: 404,

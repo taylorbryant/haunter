@@ -16,6 +16,18 @@ const AuthHostPatterns = z
 	.string()
 	.transform((value) => value.split(",").map((host) => host.trim()))
 	.pipe(z.array(AuthHostPattern).min(1));
+const McpResourceUrl = z
+	.string()
+	.url()
+	.refine((value) => {
+		const url = new URL(value);
+		return (
+			url.pathname.replace(/\/$/, "") === "/mcp" &&
+			url.search === "" &&
+			url.hash === ""
+		);
+	}, "MCP_RESOURCE_URL must be the public /mcp endpoint without a query or hash.")
+	.transform((value) => value.replace(/\/$/, ""));
 const LOCAL_BETTER_AUTH_SECRET = "local-dev-better-auth-secret-change-me";
 const isProductionRuntime =
 	process.env.NODE_ENV === "production" &&
@@ -53,6 +65,12 @@ export const env = createEnv({
 		// Optional when auth is served by this app: APP_URL is the canonical
 		// origin. Set this only when Better Auth needs a different public origin.
 		BETTER_AUTH_URL: z.string().url().optional(),
+		// Canonical, audience-bound remote MCP endpoint. Keep this stable in
+		// production even when the app also serves preview or alias domains.
+		MCP_RESOURCE_URL: McpResourceUrl.optional(),
+		// Optional browser origins allowed to call the MCP transport. Server-side
+		// MCP clients generally omit Origin; present origins fail closed.
+		MCP_ALLOWED_ORIGINS: z.string().optional(),
 		BETTER_AUTH_ALLOWED_HOSTS: AuthHostPatterns.optional(),
 		BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
 		// Vercel supplies hostnames without a protocol. Exact deployment and
