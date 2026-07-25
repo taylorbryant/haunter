@@ -29,7 +29,7 @@
         "@hookform/resolvers": "^5.0.0",
         "@libsql/client": "^0.14.0",
         "@liveblocks/client": "^3.21.0",
-        "@liveblocks/node": "^3.21.0",
+        "@liveblocks/node": "^3.23.0",
         "@liveblocks/yjs": "^3.21.0",
         "@modelcontextprotocol/sdk": "1.26.0",
         "@shikijs/core": "^4.3.0",
@@ -408,7 +408,7 @@
 
     "@liveblocks/core": ["@liveblocks/core@3.21.0", "", { "peerDependencies": { "@types/json-schema": "^7" } }, "sha512-3z1Lu5Kg0hQFxZWsAzp/qqmE+aSTV4ca67h7s5LsZPO3CRnEzpUSXiHtxpx8lVPj/ndXt7itikmFWsc8nCkw5g=="],
 
-    "@liveblocks/node": ["@liveblocks/node@3.21.0", "", { "dependencies": { "@liveblocks/core": "3.21.0", "@stablelib/base64": "^1.0.1", "fast-sha256": "^1.3.0", "marked": "^15.0.11", "node-fetch": "^2.6.1" } }, "sha512-YGV014c6S5SrjOV7wAnSx1QKTyd0pyOpcKE8yohUuiy4LBCASHHAGeQI/iCU4XFHYCuQWqjx3yx6CFHoYohqwA=="],
+    "@liveblocks/node": ["@liveblocks/node@3.23.0", "", { "dependencies": { "@liveblocks/core": "3.23.0", "@stablelib/base64": "^1.0.1", "fast-sha256": "^1.3.0", "marked": "^15.0.11", "node-fetch": "^2.6.1" } }, "sha512-/k2NjYVvk56ub3CQDb2kcDjP2rkcyixzVdTEu30/URrq0UB/MngWgjFFyz1cSXjqyVAIdmdn9PLW+KM6E6K8+w=="],
 
     "@liveblocks/yjs": ["@liveblocks/yjs@3.21.0", "", { "dependencies": { "@liveblocks/client": "3.21.0", "@liveblocks/core": "3.21.0", "@noble/hashes": "^1.8.0", "js-base64": "^3.7.7", "lib0": "^0.2.0", "y-indexeddb": "^9.0.12" }, "peerDependencies": { "yjs": "^13" } }, "sha512-BANYY+OYHI3VfcJJSgZVCmqZxoMBUfvtq4lRpR6oIr3rtclJL5T+SBqo8p+5p4yiSSQdj07ICA6hnlyIfhR6yQ=="],
 
@@ -1727,6 +1727,8 @@
     "@esbuild-kit/core-utils/esbuild": ["esbuild@0.18.20", "", { "optionalDependencies": { "@esbuild/android-arm": "0.18.20", "@esbuild/android-arm64": "0.18.20", "@esbuild/android-x64": "0.18.20", "@esbuild/darwin-arm64": "0.18.20", "@esbuild/darwin-x64": "0.18.20", "@esbuild/freebsd-arm64": "0.18.20", "@esbuild/freebsd-x64": "0.18.20", "@esbuild/linux-arm": "0.18.20", "@esbuild/linux-arm64": "0.18.20", "@esbuild/linux-ia32": "0.18.20", "@esbuild/linux-loong64": "0.18.20", "@esbuild/linux-mips64el": "0.18.20", "@esbuild/linux-ppc64": "0.18.20", "@esbuild/linux-riscv64": "0.18.20", "@esbuild/linux-s390x": "0.18.20", "@esbuild/linux-x64": "0.18.20", "@esbuild/netbsd-x64": "0.18.20", "@esbuild/openbsd-x64": "0.18.20", "@esbuild/sunos-x64": "0.18.20", "@esbuild/win32-arm64": "0.18.20", "@esbuild/win32-ia32": "0.18.20", "@esbuild/win32-x64": "0.18.20" }, "bin": { "esbuild": "bin/esbuild" } }, "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA=="],
 
     "@libsql/hrana-client/node-fetch": ["node-fetch@3.3.2", "", { "dependencies": { "data-uri-to-buffer": "^4.0.0", "fetch-blob": "^3.1.4", "formdata-polyfill": "^4.0.10" } }, "sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA=="],
+
+    "@liveblocks/node/@liveblocks/core": ["@liveblocks/core@3.23.0", "", { "peerDependencies": { "@types/json-schema": "^7" } }, "sha512-VG7BTOxTVGE0pNV/uaF5rC8C6FqTy7uR0NPFZGDLQqi2gFYX2MCf4EuPydToFXF54WRWUukzQmItkhFMQb23Cg=="],
 
     "@tailwindcss/oxide-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.11.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" }, "bundled": true }, "sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ=="],
 

@@ -54,7 +54,7 @@
 		"@hookform/resolvers": "^5.0.0",
 		"@libsql/client": "^0.14.0",
 		"@liveblocks/client": "^3.21.0",
-		"@liveblocks/node": "^3.21.0",
+		"@liveblocks/node": "^3.23.0",
 		"@liveblocks/yjs": "^3.21.0",
 		"@modelcontextprotocol/sdk": "1.26.0",
 		"@shikijs/core": "^4.3.0",
