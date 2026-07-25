@@ -25,7 +25,7 @@ export async function cleanupUnusedOAuthClients(ctx: AppContext, at: Date) {
 export const CleanupOauthClientsSchedule = defineSchedule(
 	"agents.cleanup-oauth-clients",
 	{
-		cron: "0 * * * *",
+		cron: "0 3 * * *",
 		timezone: "UTC",
 		payload: CleanupOauthClientsSchedulePayloadSchema,
 		createPayload({ run }) {
