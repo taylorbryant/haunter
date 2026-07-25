@@ -1,9 +1,10 @@
 import { createServiceActor } from "@beignet/core/ports";
 import type { AppContext } from "@/app-context";
+import { agentSchedules } from "@/features/agents/schedules";
 import { taskSchedules } from "@/features/tasks/schedules";
 import { getServer } from "./index";
 
-export const schedules = [...taskSchedules] as const;
+export const schedules = [...taskSchedules, ...agentSchedules] as const;
 
 export async function createScheduleContext(): Promise<AppContext> {
 	const server = await getServer();

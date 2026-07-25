@@ -42,6 +42,120 @@ export type AgentActivityRow = AgentActivityWrite & {
 	agentName: string;
 };
 
+export type McpConnectionStatus = "active" | "revoked";
+
+export type McpConnectionRow = {
+	id: string;
+	userId: string;
+	clientId: string;
+	clientName: string | null;
+	permissionProfile: "view" | "edit" | "full";
+	status: McpConnectionStatus;
+	workspaceIds: string[];
+	lastUsedAt: Date | null;
+	createdAt: Date;
+	updatedAt: Date;
+};
+
+export type McpConnectionActivityWrite = {
+	id: string;
+	connectionId: string;
+	userId: string;
+	workspaceId: string | null;
+	capability: string;
+	status: AgentActivityStatus;
+	resourceType: AgentActivityResourceType | null;
+	resourceId: string | null;
+	resourceLabel: string | null;
+	durationMs: number;
+	errorCode: string | null;
+	createdAt: Date;
+};
+
+export type McpConnectionActivityRow = McpConnectionActivityWrite & {
+	clientName: string | null;
+};
+
+export type McpOAuthClientConsentContext = {
+	clientId: string;
+	clientName: string | null;
+	clientUri: string | null;
+	redirectUri: string;
+	identityVerified: boolean;
+};
+
+export interface McpOAuthClientRepository {
+	/**
+	 * Resolve the exact redirect from a signed authorization request against
+	 * the client's registered redirects. Client-provided identity metadata is
+	 * deliberately marked unverified unless Haunter adds a trusted registry.
+	 */
+	findForConsent(input: {
+		clientId: string;
+		redirectUri: string;
+	}): Promise<McpOAuthClientConsentContext | null>;
+	/**
+	 * Number of server-marked DCR clients that never reached user consent.
+	 * Passing an allocation key narrows the count to one registration source.
+	 */
+	countUnusedDynamic(allocationKey?: string): Promise<number>;
+	/**
+	 * Retire stale DCR registrations that have no consent, tokens, or active
+	 * app-level connection. Revoked connections are intentionally eligible.
+	 * Returns the number removed.
+	 */
+	retireUnusedDynamicBefore(cutoff: Date, limit: number): Promise<number>;
+}
+
+export interface McpConnectionRepository {
+	/**
+	 * Authorize a user/client pair. Returns null when the OAuth client does not
+	 * exist or has been disabled.
+	 */
+	authorize(input: {
+		id: string;
+		userId: string;
+		clientId: string;
+		permissionProfile: McpConnectionRow["permissionProfile"];
+		workspaceIds: string[];
+		now: Date;
+	}): Promise<McpConnectionRow | null>;
+	findActive(
+		userId: string,
+		clientId: string,
+	): Promise<McpConnectionRow | null>;
+	listByUser(userId: string): Promise<McpConnectionRow[]>;
+	/**
+	 * Revoke app authorization and the OAuth consent/refresh material for the
+	 * owning user. Current JWTs are stopped by the app connection check.
+	 */
+	disconnectOwned(
+		userId: string,
+		connectionId: string,
+		now: Date,
+	): Promise<boolean>;
+	recordActivity(activity: McpConnectionActivityWrite): Promise<void>;
+	listRecentActivityByUser(
+		userId: string,
+		limit: number,
+	): Promise<McpConnectionActivityRow[]>;
+}
+
+export interface McpOAuthRequestVerifier {
+	/**
+	 * Verify Better Auth's signed authorization query and return the client and
+	 * exact redirect it names. The signature expiry is enforced by the
+	 * implementation.
+	 */
+	verify(
+		oauthQuery: string,
+	): Promise<{ clientId: string; redirectUri: string } | null>;
+}
+
+export interface McpServerConfigurationPort {
+	resourceUrl: string;
+}
+
 /**
  * Read-side repository for agent administration. All writes (approve, deny,
  * revoke) go through the agent-auth plugin's own /api/auth endpoints so its

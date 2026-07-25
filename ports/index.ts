@@ -11,7 +11,13 @@ import type {
 } from "@beignet/core/ports";
 import type { ResendMailEscapeHatch } from "@beignet/provider-mail-resend";
 import type { AdminUserRepository } from "@/features/admin/ports";
-import type { AgentAdminRepository } from "@/features/agents/ports";
+import type {
+	AgentAdminRepository,
+	McpConnectionRepository,
+	McpOAuthClientRepository,
+	McpOAuthRequestVerifier,
+	McpServerConfigurationPort,
+} from "@/features/agents/ports";
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
@@ -43,6 +49,8 @@ export type AppPolicies = [
 export type AppTransactionPorts = {
 	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
+	mcpConnections: McpConnectionRepository;
+	mcpOAuthClients: McpOAuthClientRepository;
 	canvases: CanvasRepository;
 	changelogState: ChangelogStateRepository;
 	idempotency: IdempotencyPort;
@@ -61,6 +69,10 @@ export type AppGate = BoundGate<AppPolicies>;
 export type AppPorts = {
 	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
+	mcpConnections: McpConnectionRepository;
+	mcpOAuthClients: McpOAuthClientRepository;
+	mcpOAuthRequests: McpOAuthRequestVerifier;
+	mcpServerConfiguration: McpServerConfigurationPort;
 	auth: AuthPort;
 	canvases: CanvasRepository;
 	changelogState: ChangelogStateRepository;

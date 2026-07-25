@@ -5,6 +5,7 @@ import {
 	AGENT_PACKAGE_RUNNERS,
 	getAgentClientSetup,
 	getAgentConnectionPrompt,
+	getHostedAgentClientSetup,
 	HAUNTER_AGENT_AUTH_URL,
 } from "@/features/agents/connect-config";
 
@@ -48,6 +49,23 @@ describe("agent connection setup", () => {
 		expect(
 			JSON.parse(getAgentClientSetup("vscode").configuration),
 		).toHaveProperty("servers.haunter.type", "stdio");
+	});
+
+	test("generates remote HTTP setup for every supported client", () => {
+		const resourceUrl = "https://haunter.app/mcp";
+		for (const client of AGENT_CLIENTS) {
+			const setup = getHostedAgentClientSetup(client.id, resourceUrl);
+			expect(setup.configuration).toContain(resourceUrl);
+			expect(setup.configuration).not.toContain("@auth/agent-cli");
+		}
+		expect(getHostedAgentClientSetup("codex", resourceUrl).configuration).toBe(
+			`[mcp_servers.haunter]\nurl = "${resourceUrl}"`,
+		);
+		expect(
+			JSON.parse(
+				getHostedAgentClientSetup("vscode", resourceUrl).configuration,
+			),
+		).toHaveProperty("servers.haunter.type", "http");
 	});
 
 	test("builds a workspace-constrained connection prompt", () => {

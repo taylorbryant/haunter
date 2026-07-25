@@ -67,6 +67,51 @@ function activityResource(
 	return { resourceType: null, resourceId: null, resourceLabel: null };
 }
 
+export async function recordMcpConnectionActivity({
+	server,
+	connectionId,
+	userId,
+	capability,
+	args,
+	result,
+	status,
+	durationMs,
+	errorCode,
+}: {
+	server: AppServer;
+	connectionId: string;
+	userId: string;
+	capability: string;
+	args?: Record<string, unknown>;
+	result?: unknown;
+	status: AgentActivityStatus;
+	durationMs: number;
+	errorCode: string | null;
+}) {
+	const ports = server.ports as AppRuntimePorts;
+	const resource = activityResource(capability, args, result);
+	try {
+		await ports.mcpConnections.recordActivity({
+			id: crypto.randomUUID(),
+			connectionId,
+			userId,
+			workspaceId: stringValue(args?.workspaceId),
+			capability,
+			status,
+			...resource,
+			durationMs,
+			errorCode: errorCode?.slice(0, 100) ?? null,
+			createdAt: new Date(),
+		});
+	} catch (activityError) {
+		ports.logger.error("Could not record remote MCP activity", {
+			error: activityError,
+			connectionId,
+			capability,
+		});
+	}
+}
+
 export async function recordAgentActivity({
 	server,
 	agentId,

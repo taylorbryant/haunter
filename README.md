@@ -25,6 +25,9 @@ syntax-highlighted code/SQL blocks, and embedded tldraw canvases. Built on [Beig
 - **Canvases** are tldraw documents embedded as blocks; snapshots persist
   per-canvas with a debounce, and the tldraw chunk loads only when a canvas
   block renders.
+- **AI agents** connect through a hosted, OAuth-authenticated MCP server or the
+  local Agent Auth bridge. Users choose a permission profile and workspaces,
+  can review activity, and can disconnect a client immediately.
 
 ## Getting started
 
@@ -200,4 +203,12 @@ delivery is skipped. Users enable push separately for each device in Settings.
   expose system variables. Use
   `BETTER_AUTH_TRUSTED_ORIGINS` only for separate client origins that call the
   auth server.
+- Hosted MCP defaults to `${APP_URL}/mcp`. Set `MCP_RESOURCE_URL` when clients
+  should use a different stable public endpoint. It is also the OAuth token
+  audience, so it must match exactly and should not redirect. Browser-based
+  MCP clients with a separate origin must be listed in `MCP_ALLOWED_ORIGINS`;
+  native and server-side clients generally do not send an `Origin` header.
+- Apply the checked-in OAuth/MCP migration before enabling hosted MCP. The
+  authorization server publishes discovery below `/.well-known/`, while the
+  transport itself is served at `/mcp`.
 - Review the starter authorization policy before exposing user-owned data.

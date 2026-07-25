@@ -21,3 +21,7 @@ export function getPendingAgentQueryOptions(agentId: string) {
 export function invalidateAgents(queryClient: QueryClient) {
 	return rq(listAgents).invalidate(queryClient, {});
 }
+
+export function invalidateAgentActivity(queryClient: QueryClient) {
+	return rq(listAgentActivity).invalidate(queryClient, {});
+}

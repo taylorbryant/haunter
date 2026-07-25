@@ -1,9 +1,15 @@
 import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import {
+	AuthorizeMcpConnectionInputSchema,
+	DisconnectMcpConnectionInputSchema,
+	DisconnectMcpConnectionOutputSchema,
+	GetMcpConsentContextInputSchema,
 	ListAgentActivityInputSchema,
 	ListAgentActivityOutputSchema,
 	ListAgentsOutputSchema,
+	McpConnectionSummarySchema,
+	McpConsentContextSchema,
 	PendingAgentInputSchema,
 	PendingAgentSchema,
 } from "@/features/agents/schemas";
@@ -41,6 +47,43 @@ export const listAgentActivity = agents
 	})
 	.responses({
 		200: ListAgentActivityOutputSchema,
+	});
+
+export const authorizeMcpConnection = agents
+	.post("/api/agents/mcp-connections")
+	.body(AuthorizeMcpConnectionInputSchema)
+	.meta({ rateLimit: { max: 30, windowSec: 60, scope: "user" } })
+	.errors({
+		Unauthorized: errors.Unauthorized,
+		Forbidden: errors.Forbidden,
+		McpClientNotFound: errors.McpClientNotFound,
+	})
+	.responses({
+		200: McpConnectionSummarySchema,
+	});
+
+export const getMcpConsentContext = agents
+	.post("/api/agents/mcp-consent-context")
+	.body(GetMcpConsentContextInputSchema)
+	.meta({ rateLimit: { max: 60, windowSec: 60, scope: "user" } })
+	.errors({
+		Unauthorized: errors.Unauthorized,
+		McpClientNotFound: errors.McpClientNotFound,
+	})
+	.responses({
+		200: McpConsentContextSchema,
+	});
+
+export const disconnectMcpConnection = agents
+	.delete("/api/agents/mcp-connections/:connectionId")
+	.pathParams(DisconnectMcpConnectionInputSchema)
+	.meta({ rateLimit: { max: 30, windowSec: 60, scope: "user" } })
+	.errors({
+		Unauthorized: errors.Unauthorized,
+		McpConnectionNotFound: errors.McpConnectionNotFound,
+	})
+	.responses({
+		200: DisconnectMcpConnectionOutputSchema,
 	});
 
 // The device-approval page's read: the agent id comes from the verification

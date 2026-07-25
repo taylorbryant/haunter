@@ -14,8 +14,17 @@ export const listWorkspacesCapability = defineAgentCapability(
 			),
 		}),
 		async handle({ ctx, principal }) {
+			const authorizedWorkspaceIds = principal.authorizedWorkspaceIds
+				? new Set(principal.authorizedWorkspaceIds)
+				: null;
 			return {
-				workspaces: await ctx.ports.members.listForUser(principal.userId),
+				workspaces: (
+					await ctx.ports.members.listForUser(principal.userId)
+				).filter(
+					(workspace) =>
+						!authorizedWorkspaceIds ||
+						authorizedWorkspaceIds.has(workspace.id),
+				),
 			};
 		},
 	},

@@ -5,7 +5,11 @@ import {
 } from "@beignet/core/agent-capabilities";
 import { APIError } from "better-auth/api";
 import type { AppContext, AppRuntimePorts } from "@/app-context";
-import { recordAgentActivity } from "@/features/agents/use-cases/record-agent-activity";
+import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
+import {
+	recordAgentActivity,
+	recordMcpConnectionActivity,
+} from "@/features/agents/use-cases/record-agent-activity";
 import type { TaskAgentCapabilityDependencies } from "@/features/tasks/agent-capabilities";
 import type { AgentPrincipal } from "@/lib/agent-capabilities";
 import {
@@ -52,6 +56,28 @@ export async function createHaunterAgentCapabilityExecutor(
 				if (event.phase === "start") return;
 				const error =
 					event.phase === "error" ? executionError(event.error) : null;
+				if (
+					event.principal.transport === "remote-mcp" &&
+					event.principal.remoteConnectionId
+				) {
+					await recordMcpConnectionActivity({
+						server,
+						connectionId: event.principal.remoteConnectionId,
+						userId: event.principal.userId,
+						capability: event.name,
+						args: inputRecord(event.input),
+						...(event.phase === "end" ? { result: event.output } : {}),
+						status: event.phase === "end" ? "success" : "error",
+						durationMs: event.durationMs,
+						errorCode:
+							error instanceof AgentCapabilityError
+								? error.code
+								: error
+									? "execution_failed"
+									: null,
+					});
+					return;
+				}
 				await recordAgentActivity({
 					server,
 					agentId: event.principal.agentId,
@@ -93,6 +119,74 @@ export async function createHaunterAgentCapabilityExecutor(
 	});
 
 	return executor;
+}
+
+export async function getRemoteMcpConnection(
+	input: { userId: string; clientId: string },
+	dependencies: Pick<AgentCapabilityDependencies, "getServer">,
+) {
+	const server = await dependencies.getServer();
+	return server.ports.mcpConnections.findActive(input.userId, input.clientId);
+}
+
+export async function executeRemoteMcpCapability(
+	input: {
+		capability: string;
+		arguments?: Record<string, unknown>;
+		userId: string;
+		clientId: string;
+	},
+	dependencies: AgentCapabilityDependencies,
+): Promise<unknown> {
+	const server = await dependencies.getServer();
+	const connection = await server.ports.mcpConnections.findActive(
+		input.userId,
+		input.clientId,
+	);
+	if (!connection) {
+		throw new APIError("FORBIDDEN", {
+			message: "This MCP connection is not active.",
+		});
+	}
+	const allowedCapabilities = new Set<string>(
+		capabilitiesForAgentPermissionProfile(connection.permissionProfile),
+	);
+	const authorizedWorkspaceIds = new Set(connection.workspaceIds);
+
+	try {
+		return await (
+			await createHaunterAgentCapabilityExecutor(dependencies)
+		).executeDynamic({
+			name: input.capability,
+			principal: {
+				agentId: `mcp:${connection.id}`,
+				userId: input.userId,
+				transport: "remote-mcp",
+				remoteConnectionId: connection.id,
+				remoteClientId: input.clientId,
+				authorizedWorkspaceIds: connection.workspaceIds,
+			},
+			input: input.arguments ?? {},
+			authorize({ name, input: parsedInput }) {
+				if (!allowedCapabilities.has(name)) {
+					throw new APIError("FORBIDDEN", {
+						message: "This MCP connection does not allow that action.",
+					});
+				}
+				const workspaceId = inputRecord(parsedInput)?.workspaceId;
+				if (
+					typeof workspaceId === "string" &&
+					!authorizedWorkspaceIds.has(workspaceId)
+				) {
+					throw new APIError("FORBIDDEN", {
+						message: "This MCP connection cannot access that workspace.",
+					});
+				}
+			},
+		});
+	} catch (error) {
+		throw executionError(error);
+	}
 }
 
 export async function executeAgentCapability(
