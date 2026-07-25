@@ -31,6 +31,42 @@ export const CHANGELOG_RELEASES = [
 		title: "A faster, more connected Haunter",
 		file: "0.1.0.md",
 	},
+	{
+		version: "0.0.6",
+		date: "2026-07-14",
+		title: "Tasks, down to the minute",
+		file: "0.0.6.md",
+	},
+	{
+		version: "0.0.5",
+		date: "2026-07-11",
+		title: "Haunter for your agents",
+		file: "0.0.5.md",
+	},
+	{
+		version: "0.0.4",
+		date: "2026-07-09",
+		title: "Today and reminders",
+		file: "0.0.4.md",
+	},
+	{
+		version: "0.0.3",
+		date: "2026-07-07",
+		title: "Faster capture and editing",
+		file: "0.0.3.md",
+	},
+	{
+		version: "0.0.2",
+		date: "2026-07-04",
+		title: "Work together",
+		file: "0.0.2.md",
+	},
+	{
+		version: "0.0.1",
+		date: "2026-07-03",
+		title: "Meet Haunter",
+		file: "0.0.1.md",
+	},
 ] as const satisfies readonly ChangelogReleaseManifestItem[];
 
 export const LATEST_CHANGELOG_VERSION = CHANGELOG_RELEASES[0].version;
