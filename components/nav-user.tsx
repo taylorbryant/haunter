@@ -1,11 +1,13 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import {
 	ChevronsUpDownIcon,
 	LogOutIcon,
 	MonitorIcon,
 	MoonIcon,
 	SettingsIcon,
+	SparklesIcon,
 	SunIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -42,6 +44,9 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { changelogStatusQueryOptions } from "@/features/changelog/client/queries";
+import { ChangelogDialog } from "@/features/changelog/components/changelog-dialog";
+import type { ChangelogRelease } from "@/features/changelog/releases";
 import { isThemeMode, type ThemeMode } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 
@@ -102,11 +107,28 @@ function initials(name: string): string {
 
 export function NavUser({
 	user,
+	changelogReleases,
 }: {
 	user: { name: string; email: string; image: string | null };
+	changelogReleases: readonly ChangelogRelease[];
 }) {
 	const { isMobile } = useSidebar();
 	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [changelogOpen, setChangelogOpen] = useState(false);
+	const changelogStatus = useQuery({
+		...changelogStatusQueryOptions(),
+		meta: { errorMode: "silent" },
+	});
+	const hasUnreadChangelog = changelogStatus.data?.hasUnread === true;
+
+	useCommand({
+		id: "nav.changelog",
+		title: "Open changelog",
+		group: "Go to",
+		keywords: "whats new updates releases",
+		icon: SparklesIcon,
+		run: () => setChangelogOpen(true),
+	});
 
 	useCommand({
 		id: "settings.open",
@@ -152,6 +174,16 @@ export function NavUser({
 		</SidebarMenuButton>
 	);
 
+	const changelogIndicator = hasUnreadChangelog ? (
+		<>
+			<span
+				className="ml-auto size-2 shrink-0 rounded-full bg-primary"
+				aria-hidden
+			/>
+			<span className="sr-only">New updates</span>
+		</>
+	) : null;
+
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
@@ -173,6 +205,19 @@ export function NavUser({
 								</DrawerDescription>
 							</DrawerHeader>
 							<div className="flex flex-col gap-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+								<DrawerClose
+									render={
+										<Button
+											variant="ghost"
+											className="h-11 justify-start"
+											onClick={() => setChangelogOpen(true)}
+										/>
+									}
+								>
+									<SparklesIcon />
+									What’s new
+									{changelogIndicator}
+								</DrawerClose>
 								<DrawerClose
 									render={
 										<Button
@@ -220,6 +265,11 @@ export function NavUser({
 							<DropdownMenuSeparator />
 							<ThemeModePicker />
 							<DropdownMenuSeparator />
+							<DropdownMenuItem onClick={() => setChangelogOpen(true)}>
+								<SparklesIcon />
+								What’s new
+								{changelogIndicator}
+							</DropdownMenuItem>
 							<DropdownMenuItem onClick={() => setSettingsOpen(true)}>
 								<SettingsIcon />
 								Settings
@@ -232,6 +282,11 @@ export function NavUser({
 						</DropdownMenuContent>
 					</DropdownMenu>
 				)}
+				<ChangelogDialog
+					open={changelogOpen}
+					onOpenChange={setChangelogOpen}
+					releases={changelogReleases}
+				/>
 				<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 			</SidebarMenuItem>
 		</SidebarMenu>

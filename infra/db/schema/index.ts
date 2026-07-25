@@ -407,6 +407,15 @@ export const notificationPreferences = sqliteTable("notification_preferences", {
 	updatedAt: text("updated_at").notNull(),
 });
 
+export const changelogUserState = sqliteTable("changelog_user_state", {
+	userId: text("user_id")
+		.primaryKey()
+		.references(() => user.id, { onDelete: "cascade" }),
+	lastSeenVersion: text("last_seen_version").notNull(),
+	createdAt: text("created_at").notNull(),
+	updatedAt: text("updated_at").notNull(),
+});
+
 export const pushSubscriptions = sqliteTable(
 	"push_subscriptions",
 	{
