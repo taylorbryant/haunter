@@ -8,7 +8,11 @@ import {
 	markChangelogSeenMutationOptions,
 } from "@/features/changelog/client/queries";
 
-export function ChangelogSeenTracker() {
+export function ChangelogSeenTracker({
+	enabled = true,
+}: {
+	enabled?: boolean;
+}) {
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
 	const mutation = useMutation({
@@ -18,7 +22,7 @@ export function ChangelogSeenTracker() {
 	const started = useRef(false);
 
 	useEffect(() => {
-		if (isPending || !session || started.current) return;
+		if (!enabled || isPending || !session || started.current) return;
 		started.current = true;
 		mutation
 			.mutateAsync({ body: {} })
@@ -29,7 +33,7 @@ export function ChangelogSeenTracker() {
 				// The changelog is public. Signed-out visitors should still be
 				// able to read it; there is simply no per-user state to update.
 			});
-	}, [isPending, mutation, queryClient, session]);
+	}, [enabled, isPending, mutation, queryClient, session]);
 
 	return null;
 }

@@ -7,25 +7,27 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppCommands } from "@/components/command-palette/app-commands";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
 import { HeaderBreadcrumbs } from "@/components/header-breadcrumbs";
+import { HeaderPageActions } from "@/components/header-page-actions";
 import { HeaderPresence } from "@/components/header-presence";
 import { HeaderSaveIndicator } from "@/components/header-save-indicator";
-import { HeaderPageActions } from "@/components/header-page-actions";
-import { NotificationTimezoneInitializer } from "@/features/notifications/components/notification-timezone-initializer";
 import { Separator } from "@/components/ui/separator";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { loadChangelogReleases } from "@/features/changelog/content";
+import { NotificationTimezoneInitializer } from "@/features/notifications/components/notification-timezone-initializer";
 import { hasAppAccessSession } from "@/lib/auth";
 import { getAppRequestContext } from "@/lib/server-react-query";
 import { ADMIN_ROLE } from "@/ports/auth";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-	const [headerList, cookieStore, ctx] = await Promise.all([
+	const [headerList, cookieStore, ctx, changelogReleases] = await Promise.all([
 		headers(),
 		cookies(),
 		getAppRequestContext(),
+		loadChangelogReleases(),
 	]);
 	const session = ctx.auth;
 	const requestedPath = headerList.get("x-requested-path");
@@ -74,6 +76,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 								email: session.user.email ?? "",
 								image: session.user.image ?? null,
 							}}
+							changelogReleases={changelogReleases}
 							isAdmin={isAdmin}
 						/>
 						<SidebarInset>

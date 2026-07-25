@@ -23,6 +23,7 @@ import {
 	SidebarRail,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import type { ChangelogRelease } from "@/features/changelog/releases";
 import { NotificationCenter } from "@/features/notifications/components/notification-center";
 import { FavoritePages } from "@/features/pages/components/favorite-pages";
 import { PageTree } from "@/features/pages/components/page-tree";
@@ -30,9 +31,11 @@ import { WorkspaceSwitcher } from "@/features/workspaces/components/workspace-sw
 
 export function AppSidebar({
 	user,
+	changelogReleases,
 	isAdmin = false,
 }: {
 	user: { name: string; email: string; image: string | null };
+	changelogReleases: readonly ChangelogRelease[];
 	isAdmin?: boolean;
 }) {
 	const pathname = usePathname();
@@ -147,7 +150,7 @@ export function AppSidebar({
 				) : null}
 			</SidebarContent>
 			<SidebarFooter>
-				<NavUser user={user} />
+				<NavUser user={user} changelogReleases={changelogReleases} />
 			</SidebarFooter>
 			<SidebarRail />
 		</Sidebar>

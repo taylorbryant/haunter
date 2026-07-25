@@ -3,17 +3,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
 	CHANGELOG_RELEASES,
+	type ChangelogRelease,
 	type ChangelogReleaseManifestItem,
+	type ChangelogSection,
 } from "./releases";
-
-export type ChangelogSection = {
-	title: string;
-	items: string[];
-};
-
-export type ChangelogRelease = Omit<ChangelogReleaseManifestItem, "file"> & {
-	sections: ChangelogSection[];
-};
 
 type Frontmatter = Pick<ChangelogRelease, "version" | "date" | "title">;
 

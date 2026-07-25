@@ -4,11 +4,11 @@ import { GhostLogo } from "@/components/ghost-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChangelogSeenTracker } from "@/features/changelog/components/changelog-seen-tracker";
+import { loadChangelogReleases } from "@/features/changelog/content";
 import {
+	CHANGELOG_RELEASES,
 	type ChangelogRelease,
-	loadChangelogReleases,
-} from "@/features/changelog/content";
-import { CHANGELOG_RELEASES } from "@/features/changelog/releases";
+} from "@/features/changelog/releases";
 
 export const metadata: Metadata = {
 	title: "Changelog · Haunter",

@@ -5,6 +5,15 @@ export type ChangelogReleaseManifestItem = {
 	file: string;
 };
 
+export type ChangelogSection = {
+	title: string;
+	items: string[];
+};
+
+export type ChangelogRelease = Omit<ChangelogReleaseManifestItem, "file"> & {
+	sections: ChangelogSection[];
+};
+
 /**
  * Newest first. Add the Markdown file and its manifest entry in the same PR so
  * the public page, unread status, and source content advance together.
