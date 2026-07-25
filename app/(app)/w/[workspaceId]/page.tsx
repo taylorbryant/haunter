@@ -6,5 +6,5 @@ export default async function WorkspacePage({
 	params: Promise<{ workspaceId: string }>;
 }) {
 	const { workspaceId } = await params;
-	redirect(`/w/${workspaceId}/today`);
+	redirect(`/w/${workspaceId}/home`);
 }

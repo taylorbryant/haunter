@@ -1,8 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import type { BlockJson } from "@/features/pages/schemas";
+import type { TaskWithPage } from "@/features/tasks/schemas";
 import { extractTaskBlocks } from "../lib/extract-task-blocks";
-import { patchTaskBlock } from "../lib/patch-task-block";
+import {
+	formatUpcomingDateHeading,
+	groupTasksByDueDate,
+} from "../lib/group-tasks-by-due-date";
 import { parseTaskDateShortcut, toIsoDate } from "../lib/parse-task-input";
+import { patchTaskBlock } from "../lib/patch-task-block";
 import { reconcileTaskBlockProps } from "../lib/reconcile-task-block-props";
 import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
 
@@ -30,6 +35,59 @@ function task(
 		children,
 	};
 }
+
+function listedTask(id: string, dueDate: string | null): TaskWithPage {
+	return {
+		id,
+		userId: "user-1",
+		workspaceId: "workspace-1",
+		pageId: null,
+		sourceBlockId: null,
+		title: id,
+		completed: false,
+		dueDate,
+		dueTime: null,
+		assigneeId: "user-1",
+		assigneeName: "Taylor",
+		pageTitle: null,
+		completedAt: null,
+		createdAt: "2026-07-01T00:00:00.000Z",
+		updatedAt: "2026-07-01T00:00:00.000Z",
+	};
+}
+
+describe("upcoming task groups", () => {
+	it("groups due tasks without changing repository order", () => {
+		const groups = groupTasksByDueDate([
+			listedTask("first", "2026-07-10"),
+			listedTask("second", "2026-07-10"),
+			listedTask("third", "2026-07-12"),
+			listedTask("undated", null),
+		]);
+
+		expect(
+			groups.map((group) => ({
+				date: group.date,
+				ids: group.items.map((item) => item.id),
+			})),
+		).toEqual([
+			{ date: "2026-07-10", ids: ["first", "second"] },
+			{ date: "2026-07-12", ids: ["third"] },
+		]);
+	});
+
+	it("formats future headings from the supplied local date", () => {
+		expect(formatUpcomingDateHeading("2026-07-10", "2026-07-09")).toBe(
+			"Tomorrow",
+		);
+		expect(formatUpcomingDateHeading("2026-07-13", "2026-07-09")).toBe(
+			"Monday",
+		);
+		expect(formatUpcomingDateHeading("2026-07-16", "2026-07-09")).toBe(
+			"Thu, Jul 16",
+		);
+	});
+});
 
 describe("extractTaskBlocks", () => {
 	it("finds task blocks at any depth and reads their props", () => {

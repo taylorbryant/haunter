@@ -1,6 +1,7 @@
 "use client";
 
 import {
+	HouseIcon,
 	ListTodoIcon,
 	PlusIcon,
 	ShieldCheckIcon,
@@ -18,6 +19,18 @@ export function AppCommands({ isAdmin }: { isAdmin: boolean }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
+
+	useCommand(
+		workspaceId
+			? {
+					id: "nav.home",
+					title: "Go to Home",
+					group: "Go to",
+					icon: HouseIcon,
+					run: () => router.push(`/w/${workspaceId}/home`),
+				}
+			: null,
+	);
 
 	useCommand(
 		workspaceId

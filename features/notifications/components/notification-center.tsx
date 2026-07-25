@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -36,7 +37,7 @@ import {
 	markNotificationReadMutationOptions,
 } from "@/features/notifications/client/queries";
 import type { Notification } from "@/features/notifications/schemas";
-import { formatDueDateTimeLabel } from "@/lib/due-date";
+import { formatDueDateTimeLabel, parseIsoDate } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
 type BadgeNavigator = Navigator & {
@@ -73,6 +74,8 @@ function NotificationPanel({
 	onMarkAll: () => void;
 	markingAll: boolean;
 }) {
+	const deviceTime = useDeviceTime();
+
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="flex h-11 shrink-0 items-center justify-between border-b px-3">
@@ -145,10 +148,13 @@ function NotificationPanel({
 									</span>
 									<span className="mt-0.5 block text-muted-foreground text-xs">
 										Overdue ·{" "}
-										{formatDueDateTimeLabel(
-											item.payload.dueDate,
-											item.payload.dueTime,
-										)}
+										{deviceTime.ready
+											? formatDueDateTimeLabel(
+													item.payload.dueDate,
+													item.payload.dueTime,
+													parseIsoDate(deviceTime.today),
+												)
+											: item.payload.dueDate}
 									</span>
 								</span>
 								{item.readAt === null ? (
