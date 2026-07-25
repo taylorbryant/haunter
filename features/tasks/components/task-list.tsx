@@ -8,6 +8,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
+import { useDeviceTime } from "@/components/device-time-provider";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
@@ -25,6 +26,11 @@ import {
 	type TaskSubmissionResult,
 } from "@/features/tasks/components/task-composer";
 import {
+	formatUpcomingDateHeading,
+	groupTasksByDueDate,
+	UPCOMING_TASK_SUMMARY_LIMIT,
+} from "@/features/tasks/lib/group-tasks-by-due-date";
+import {
 	TASK_TITLE_MAX_LENGTH,
 	TASK_TITLE_TOO_LONG_MESSAGE,
 	type TaskFilter,
@@ -34,7 +40,7 @@ import {
 import {
 	formatDueDateTimeLabel,
 	isDueOverdue,
-	toIsoTime,
+	parseIsoDate,
 } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
@@ -58,32 +64,28 @@ function readTaskScope(value: string | null): TaskScope {
 
 function isOverdue(
 	task: TaskWithPage,
-	today?: string,
-	currentTime?: string,
+	today: string,
+	currentTime: string,
 ): boolean {
 	return (
 		!task.completed &&
-		isDueOverdue(
-			task.dueDate,
-			task.dueTime,
-			today,
-			currentTime ?? toIsoTime(new Date()),
-		)
+		isDueOverdue(task.dueDate, task.dueTime, today, currentTime)
 	);
 }
 
 export function TaskList({
 	workspaceId,
 	variant = "default",
-	todayDate,
-	currentTime,
+	upcomingStartDate,
+	upcomingEndDate,
 }: {
 	workspaceId: string;
-	variant?: "default" | "today";
-	todayDate?: string;
-	currentTime?: string;
+	variant?: "default" | "today" | "upcoming";
+	upcomingStartDate?: string;
+	upcomingEndDate?: string;
 }) {
 	const queryClient = useQueryClient();
+	const deviceTime = useDeviceTime();
 	const pathname = usePathname();
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -91,13 +93,22 @@ export function TaskList({
 	const canEdit = useCanEditWorkspace();
 	const currentUser = useCurrentUser();
 	const isTodayView = variant === "today";
-	const resolvedTodayDate = todayDate ?? new Date().toISOString().slice(0, 10);
-	const filter = isTodayView
+	const isUpcomingView = variant === "upcoming";
+	const isHomeView = isTodayView || isUpcomingView;
+	const resolvedTodayDate = deviceTime.ready ? deviceTime.today : "1970-01-01";
+	const resolvedCurrentTime = deviceTime.ready
+		? deviceTime.currentTime
+		: "00:00";
+	const filter = isHomeView
 		? "open"
 		: readTaskFilter(searchParams.get("filter"));
-	const scope = isTodayView ? "mine" : readTaskScope(searchParams.get("scope"));
+	const scope = isHomeView ? "mine" : readTaskScope(searchParams.get("scope"));
 	const [limit, setLimit] = useState(
-		isTodayView ? TODAY_PAGE_SIZE : TASK_PAGE_SIZE,
+		isTodayView
+			? TODAY_PAGE_SIZE
+			: isUpcomingView
+				? UPCOMING_TASK_SUMMARY_LIMIT
+				: TASK_PAGE_SIZE,
 	);
 	const [composing, setComposing] = useState(isTodayView);
 	const [editingId, setEditingId] = useState<string | null>(null);
@@ -109,15 +120,23 @@ export function TaskList({
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [taskToDelete, setTaskToDelete] = useState<TaskWithPage | null>(null);
 
-	const tasksQuery = useQuery(
-		listTasksQueryOptions(
+	const tasksQuery = useQuery({
+		...listTasksQueryOptions(
 			workspaceId,
 			filter,
 			scope,
 			limit,
-			isTodayView ? { dueOnOrBefore: resolvedTodayDate } : {},
+			isTodayView
+				? { dueOnOrBefore: resolvedTodayDate }
+				: isUpcomingView
+					? {
+							dueOnOrAfter: upcomingStartDate,
+							dueOnOrBefore: upcomingEndDate,
+						}
+					: {},
 		),
-	);
+		enabled: deviceTime.ready,
+	});
 	const createMutation = useMutation({
 		...createTaskMutationOptions(),
 		meta: { errorMode: "inline" },
@@ -135,20 +154,23 @@ export function TaskList({
 	const tasks = tasksQuery.data?.items ?? [];
 	const hasMore = tasksQuery.data?.hasMore ?? false;
 	const overdueTasks = isTodayView
-		? tasks.filter((task) => isOverdue(task, resolvedTodayDate, currentTime))
+		? tasks.filter((task) =>
+				isOverdue(task, resolvedTodayDate, resolvedCurrentTime),
+			)
 		: [];
 	const todayTasks = isTodayView
 		? tasks.filter(
 				(task) =>
 					task.dueDate === resolvedTodayDate &&
-					!isOverdue(task, resolvedTodayDate, currentTime),
+					!isOverdue(task, resolvedTodayDate, resolvedCurrentTime),
 			)
 		: [];
+	const upcomingGroups = isUpcomingView ? groupTasksByDueDate(tasks) : [];
 
 	// Opened from the ⌘K "Create task" command: reveal the composer, then strip
 	// the query param so a refresh or back-navigation doesn't reopen it.
 	useEffect(() => {
-		if (isTodayView || searchParams.get("compose") !== "1") return;
+		if (isHomeView || searchParams.get("compose") !== "1") return;
 		if (canEdit) setComposing(true);
 		const params = new URLSearchParams(searchParams);
 		params.delete("compose");
@@ -156,7 +178,7 @@ export function TaskList({
 		router.replace(`${pathname}${queryString ? `?${queryString}` : ""}`, {
 			scroll: false,
 		});
-	}, [searchParams, router, pathname, canEdit, isTodayView]);
+	}, [searchParams, router, pathname, canEdit, isHomeView]);
 
 	async function refresh(task?: TaskWithPage) {
 		await invalidateTasks(queryClient);
@@ -383,7 +405,7 @@ export function TaskList({
 								) : null}
 							</div>
 							<div className="flex items-center gap-1 sm:shrink-0">
-								{isTodayView ? null : (
+								{isHomeView ? null : (
 									<AssigneePicker
 										value={task.assigneeId}
 										label={
@@ -423,8 +445,8 @@ export function TaskList({
 												? "text-muted-foreground/70 hover:bg-muted focus-visible:bg-muted aria-expanded:bg-muted"
 												: isOverdue(
 															task,
-															isTodayView ? resolvedTodayDate : undefined,
-															isTodayView ? currentTime : undefined,
+															resolvedTodayDate,
+															resolvedCurrentTime,
 														)
 													? "bg-destructive/10 text-destructive"
 													: "bg-muted text-muted-foreground",
@@ -434,17 +456,17 @@ export function TaskList({
 									<span
 										className={cn(
 											"flex shrink-0 items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs",
-											isOverdue(
-												task,
-												isTodayView ? resolvedTodayDate : undefined,
-												isTodayView ? currentTime : undefined,
-											)
+											isOverdue(task, resolvedTodayDate, resolvedCurrentTime)
 												? "bg-destructive/10 text-destructive"
 												: "bg-muted text-muted-foreground",
 										)}
 									>
 										<CalendarIcon className="size-4 shrink-0" />
-										{formatDueDateTimeLabel(task.dueDate, task.dueTime)}
+										{formatDueDateTimeLabel(
+											task.dueDate,
+											task.dueTime,
+											parseIsoDate(resolvedTodayDate),
+										)}
 									</span>
 								) : null}
 								{task.sourceBlockId === null && canEdit ? (
@@ -468,6 +490,10 @@ export function TaskList({
 		);
 	}
 
+	if (!deviceTime.ready) {
+		return <p className="text-muted-foreground text-sm">Loading…</p>;
+	}
+
 	return (
 		<div className="flex flex-col gap-4">
 			{!canEdit ? null : isTodayView ? (
@@ -477,7 +503,7 @@ export function TaskList({
 					mode="compact"
 					onSubmit={createTask}
 				/>
-			) : composing ? (
+			) : isUpcomingView ? null : composing ? (
 				<TaskComposer
 					currentUserId={currentUser?.id ?? null}
 					onSubmit={createTask}
@@ -495,7 +521,7 @@ export function TaskList({
 					Add task
 				</Button>
 			)}
-			{isTodayView ? null : (
+			{isHomeView ? null : (
 				<div className="flex flex-wrap items-center gap-1">
 					{FILTERS.map(({ value, label }) => (
 						<Button
@@ -534,7 +560,9 @@ export function TaskList({
 					<p className="text-muted-foreground">
 						{isTodayView
 							? "Today could not be loaded."
-							: "Tasks could not be loaded."}
+							: isUpcomingView
+								? "Coming up could not be loaded."
+								: "Tasks could not be loaded."}
 					</p>
 					<Button
 						type="button"
@@ -573,13 +601,46 @@ export function TaskList({
 							</p>
 						)}
 					</section>
-					<Link
-						href={`/w/${workspaceId}/tasks?scope=mine`}
-						className="w-fit text-muted-foreground text-sm hover:text-foreground"
-					>
-						View all tasks
-					</Link>
 				</div>
+			) : isUpcomingView ? (
+				<section className="border-t pt-6" aria-labelledby="coming-up-heading">
+					<h2
+						id="coming-up-heading"
+						className="font-medium text-base sm:text-sm"
+					>
+						Coming up
+					</h2>
+					{upcomingGroups.length > 0 ? (
+						<div className="mt-2 flex flex-col gap-5">
+							{upcomingGroups.map((group) => (
+								<section
+									key={group.date}
+									aria-labelledby={`upcoming-${group.date}`}
+								>
+									<h3
+										id={`upcoming-${group.date}`}
+										className="font-medium text-muted-foreground text-base sm:text-sm"
+									>
+										{formatUpcomingDateHeading(group.date, resolvedTodayDate)}
+									</h3>
+									{renderTaskRows(group.items)}
+								</section>
+							))}
+						</div>
+					) : (
+						<p className="mt-2 text-pretty text-muted-foreground text-base sm:text-sm">
+							Nothing due in the next 7 days.
+						</p>
+					)}
+					{hasMore ? (
+						<Link
+							href={`/w/${workspaceId}/tasks?scope=mine`}
+							className="mt-3 inline-flex w-fit text-muted-foreground text-base hover:text-foreground sm:text-sm"
+						>
+							View all tasks
+						</Link>
+					) : null}
+				</section>
 			) : tasks.length === 0 ? (
 				<p className="text-muted-foreground text-sm">
 					{scope === "mine"

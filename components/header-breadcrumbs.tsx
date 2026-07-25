@@ -53,8 +53,8 @@ export function HeaderBreadcrumbs() {
 		return null;
 	}
 
-	const section = pathname.endsWith("/today")
-		? "Today"
+	const section = pathname.endsWith("/home")
+		? "Home"
 		: pathname.endsWith("/tasks")
 			? "Tasks"
 			: pathname.endsWith("/trash")

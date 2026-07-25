@@ -6,16 +6,21 @@ import {
 	type ReactCustomBlockRenderProps,
 } from "@blocknote/react";
 import {
+	createContext,
 	type FocusEvent,
 	type KeyboardEvent,
-	createContext,
 	useContext,
 } from "react";
+import { useDeviceTimeOrLocalFallback } from "@/components/device-time-provider";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import { parseTaskDateShortcut } from "@/features/tasks/lib/parse-task-input";
 import { AUTO_TASK_ASSIGNEE } from "@/features/tasks/lib/task-block-props";
-import { formatDueDateTimeLabel, isDueOverdue } from "@/lib/due-date";
+import {
+	formatDueDateTimeLabel,
+	isDueOverdue,
+	parseIsoDate,
+} from "@/lib/due-date";
 
 export const TaskBlockCurrentUserContext = createContext<string | null>(null);
 
@@ -39,6 +44,7 @@ function TaskBlockView({
 }: ReactCustomBlockRenderProps<typeof taskBlockConfig>) {
 	const { checked, due, dueTime, assignee } = block.props;
 	const currentUserId = useContext(TaskBlockCurrentUserContext);
+	const deviceTime = useDeviceTimeOrLocalFallback();
 	const shownAssignee =
 		assignee === AUTO_TASK_ASSIGNEE ? (currentUserId ?? "") : assignee;
 	// BlockNote's editable=false stops text editing, but this custom
@@ -99,7 +105,14 @@ function TaskBlockView({
 	}
 
 	const overdue =
-		!checked && isDueOverdue(due || null, dueTime === "" ? null : dueTime);
+		deviceTime.ready &&
+		!checked &&
+		isDueOverdue(
+			due || null,
+			dueTime === "" ? null : dueTime,
+			deviceTime.today,
+			deviceTime.currentTime,
+		);
 
 	return (
 		// flex-wrap + the content's flex-basis floor: on narrow screens
@@ -150,7 +163,13 @@ function TaskBlockView({
 								: "bg-muted text-muted-foreground"
 						}`}
 					>
-						{formatDueDateTimeLabel(due, dueTime || null)}
+						{deviceTime.ready
+							? formatDueDateTimeLabel(
+									due,
+									dueTime || null,
+									parseIsoDate(deviceTime.today),
+								)
+							: "Loading…"}
 					</span>
 				) : (
 					<DueDatePicker

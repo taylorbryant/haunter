@@ -1,7 +1,7 @@
 # Haunter <img src="app/icon.svg" alt="" width="28" height="28" align="top">
 
 A personal notes app — Notion-style nested pages and block editor, Todoist-style
-tasks that roll up into a focused Today home and per-workspace Tasks view,
+tasks that roll up into a focused Home dashboard and per-workspace Tasks view,
 syntax-highlighted code/SQL blocks, and embedded tldraw canvases. Built on [Beignet](https://beignetjs.com)
 (contract-first, scaffolded with `@beignet/cli`).
 
@@ -11,8 +11,8 @@ syntax-highlighted code/SQL blocks, and embedded tldraw canvases. Built on [Beig
 
 - **Workspaces** separate work and personal notes; each has its own page tree
   and task list.
-- **Today** keeps overdue and due-today tasks beside recently edited pages in a
-  focused daily home.
+- **Home** keeps overdue, due-today, and near-term tasks beside favorite and
+  recently viewed pages in a focused dashboard.
 - **Pages** nest arbitrarily and are edited with a BlockNote editor
   (headings, lists, code blocks with shiki highlighting, tasks, canvases) that
   autosaves with a debounce.
@@ -124,7 +124,7 @@ Use `bun beignet make feature projects --recipe full-slice` when you want a rich
   `features/tasks/`, and `features/workspaces/` are server-backed product
   slices. Each owns only the contracts, schemas, ports, policies, use cases,
   routes, client helpers, components, workflows, and tests its behavior needs.
-- `features/collab/`, `features/members/`, `features/today/`, and
+- `features/collab/`, `features/home/`, `features/members/`, and
   `features/waitlist/` are supporting slices that compose existing contracts,
   provide focused ports or helpers, or own route-level UI. They intentionally
   do not mirror a full server slice.

@@ -2,6 +2,7 @@
 
 import { CalendarIcon, ClockIcon } from "lucide-react";
 import { useState } from "react";
+import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -23,22 +24,22 @@ export type DueDateValue = {
 	time: string | null;
 };
 
-function addDays(days: number): Date {
-	const date = new Date();
+function addDays(from: Date, days: number): Date {
+	const date = new Date(from);
 	date.setDate(date.getDate() + days);
 	return date;
 }
 
-const DATE_PRESETS: { label: string; date: () => Date }[] = [
-	{ label: "Today", date: () => addDays(0) },
-	{ label: "Tomorrow", date: () => addDays(1) },
+const DATE_PRESETS: { label: string; date: (today: Date) => Date }[] = [
+	{ label: "Today", date: (today) => addDays(today, 0) },
+	{ label: "Tomorrow", date: (today) => addDays(today, 1) },
 	{
 		label: "This weekend",
-		date: () => addDays((6 - new Date().getDay() + 7) % 7),
+		date: (today) => addDays(today, (6 - today.getDay() + 7) % 7),
 	},
 	{
 		label: "Next week",
-		date: () => addDays((1 - new Date().getDay() + 7) % 7 || 7),
+		date: (today) => addDays(today, (1 - today.getDay() + 7) % 7 || 7),
 	},
 ];
 
@@ -63,15 +64,17 @@ export function DueDatePicker({
 	className?: string;
 	ariaLabel?: string;
 }) {
+	const deviceTime = useDeviceTime();
 	const [open, setOpen] = useState(false);
 	const [draft, setDraft] = useState<DueDateValue>({ date: value, time });
 	const selected = draft.date ? parseIsoDate(draft.date) : undefined;
+	const today = deviceTime.ready ? parseIsoDate(deviceTime.today) : null;
 	const [visibleMonth, setVisibleMonth] = useState<Date | undefined>(selected);
 
 	function changeOpen(nextOpen: boolean) {
-		if (nextOpen) {
+		if (nextOpen && today) {
 			setDraft({ date: value, time });
-			setVisibleMonth(value ? parseIsoDate(value) : new Date());
+			setVisibleMonth(value ? parseIsoDate(value) : today);
 		}
 		setOpen(nextOpen);
 	}
@@ -91,6 +94,24 @@ export function DueDatePicker({
 		}
 	}
 
+	if (!today) {
+		return (
+			<button
+				type="button"
+				disabled
+				aria-busy="true"
+				aria-label={ariaLabel}
+				className={cn(
+					"outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+					className,
+				)}
+			>
+				<CalendarIcon className="size-4 shrink-0" aria-hidden="true" />
+				{value ? "Loading…" : "Due"}
+			</button>
+		);
+	}
+
 	return (
 		<Popover open={open} onOpenChange={changeOpen}>
 			<PopoverTrigger
@@ -106,7 +127,7 @@ export function DueDatePicker({
 				}
 			>
 				<CalendarIcon className="size-4 shrink-0" aria-hidden="true" />
-				{value ? formatDueDateTimeLabel(value, time) : "Due"}
+				{value ? formatDueDateTimeLabel(value, time, today) : "Due"}
 			</PopoverTrigger>
 			<PopoverContent
 				className="w-auto max-w-[calc(100vw-1rem)] p-0"
@@ -123,7 +144,7 @@ export function DueDatePicker({
 					/>
 					<div className="flex min-w-36 flex-col gap-0.5 border-t p-2 sm:border-t-0 sm:border-l">
 						{DATE_PRESETS.map((preset) => {
-							const date = preset.date();
+							const date = preset.date(today);
 							const iso = toIsoDate(date);
 							return (
 								<Button
@@ -136,11 +157,11 @@ export function DueDatePicker({
 								>
 									{preset.label}
 									<span className="text-muted-foreground text-xs">
-										{formatDueDateLabel(iso) === preset.label
+										{formatDueDateLabel(iso, today) === preset.label
 											? date.toLocaleDateString(undefined, {
 													weekday: "short",
 												})
-											: formatDueDateLabel(iso)}
+											: formatDueDateLabel(iso, today)}
 									</span>
 								</Button>
 							);

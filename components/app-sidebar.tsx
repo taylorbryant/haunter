@@ -1,9 +1,9 @@
 "use client";
 
 import {
+	HouseIcon,
 	ListTodoIcon,
 	ShieldCheckIcon,
-	SunIcon,
 	Trash2Icon,
 } from "lucide-react";
 import Link from "next/link";
@@ -65,19 +65,19 @@ export function AppSidebar({
 							render={
 								<Link
 									href={
-										activeWorkspaceId ? `/w/${activeWorkspaceId}/today` : "/"
+										activeWorkspaceId ? `/w/${activeWorkspaceId}/home` : "/"
 									}
 									onClick={closeSheetOnMobile}
 								/>
 							}
 							isActive={
 								activeWorkspaceId !== null &&
-								pathname === `/w/${activeWorkspaceId}/today`
+								pathname === `/w/${activeWorkspaceId}/home`
 							}
-							tooltip="Today"
+							tooltip="Home"
 						>
-							<SunIcon />
-							<span>Today</span>
+							<HouseIcon />
+							<span>Home</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 					<SidebarMenuItem>

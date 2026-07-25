@@ -191,7 +191,7 @@ export function WorkspaceSwitcher({
 				organizationId: id,
 			});
 			if (result.error) throw result.error;
-			router.push(`/w/${id}/today`);
+			router.push(`/w/${id}/home`);
 		} catch (switchError) {
 			reportUserError(
 				authErrorMessage(switchError, "The workspace could not be opened."),
@@ -226,7 +226,7 @@ export function WorkspaceSwitcher({
 			});
 			setName("");
 			setDialogOpen(false);
-			router.push(`/w/${createdId}/today`);
+			router.push(`/w/${createdId}/home`);
 		} catch (createError) {
 			if (createdId) {
 				try {
@@ -319,7 +319,7 @@ export function WorkspaceSwitcher({
 					organizationId: next.id,
 				});
 				if (activeResult.error) throw activeResult.error;
-				router.push(`/w/${next.id}/today`);
+				router.push(`/w/${next.id}/home`);
 			} catch (activationError) {
 				reportUserError(
 					authErrorMessage(
