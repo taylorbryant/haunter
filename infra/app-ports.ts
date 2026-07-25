@@ -33,6 +33,7 @@ export const appPorts = definePorts<AppPorts>()({
 		"agents",
 		"auth",
 		"canvases",
+		"changelogState",
 		"idempotency",
 		"logger",
 		"mailer",

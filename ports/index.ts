@@ -14,6 +14,7 @@ import type { AdminUserRepository } from "@/features/admin/ports";
 import type { AgentAdminRepository } from "@/features/agents/ports";
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type { CanvasRepository } from "@/features/canvases/ports";
+import type { ChangelogStateRepository } from "@/features/changelog/ports";
 import type { MemberRepository } from "@/features/members/ports";
 import type {
 	NotificationRepository,
@@ -43,6 +44,7 @@ export type AppTransactionPorts = {
 	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
 	canvases: CanvasRepository;
+	changelogState: ChangelogStateRepository;
 	idempotency: IdempotencyPort;
 	members: MemberRepository;
 	notificationInbox: NotificationRepository;
@@ -61,6 +63,7 @@ export type AppPorts = {
 	agents: AgentAdminRepository;
 	auth: AuthPort;
 	canvases: CanvasRepository;
+	changelogState: ChangelogStateRepository;
 	errorReporter: ErrorReporterPort;
 	gate: GatePort<AuthorizationContext, AppPolicies>;
 	idempotency: IdempotencyPort;

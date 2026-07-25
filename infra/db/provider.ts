@@ -29,6 +29,7 @@ export const starterDatabaseProvider = createProvider<{
 		const providedPorts: Pick<
 			AppPorts,
 			| "canvases"
+			| "changelogState"
 			| "idempotency"
 			| "members"
 			| "notificationInbox"

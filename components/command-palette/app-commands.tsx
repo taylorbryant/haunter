@@ -4,6 +4,7 @@ import {
 	ListTodoIcon,
 	PlusIcon,
 	ShieldCheckIcon,
+	SparklesIcon,
 	Trash2Icon,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -55,6 +56,15 @@ export function AppCommands({ isAdmin }: { isAdmin: boolean }) {
 				}
 			: null,
 	);
+
+	useCommand({
+		id: "nav.changelog",
+		title: "Open changelog",
+		group: "Go to",
+		keywords: "whats new updates releases",
+		icon: SparklesIcon,
+		run: () => router.push("/changelog"),
+	});
 
 	useCommand(
 		isAdmin && {

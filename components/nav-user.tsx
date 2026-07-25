@@ -1,13 +1,16 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import {
 	ChevronsUpDownIcon,
 	LogOutIcon,
 	MonitorIcon,
 	MoonIcon,
 	SettingsIcon,
+	SparklesIcon,
 	SunIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { authErrorMessage, reportUserError } from "@/client/error-feedback";
@@ -42,6 +45,7 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { changelogStatusQueryOptions } from "@/features/changelog/client/queries";
 import { isThemeMode, type ThemeMode } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +111,11 @@ export function NavUser({
 }) {
 	const { isMobile } = useSidebar();
 	const [settingsOpen, setSettingsOpen] = useState(false);
+	const changelogStatus = useQuery({
+		...changelogStatusQueryOptions(),
+		meta: { errorMode: "silent" },
+	});
+	const hasUnreadChangelog = changelogStatus.data?.hasUnread === true;
 
 	useCommand({
 		id: "settings.open",
@@ -152,6 +161,16 @@ export function NavUser({
 		</SidebarMenuButton>
 	);
 
+	const changelogIndicator = hasUnreadChangelog ? (
+		<>
+			<span
+				className="ml-auto size-2 shrink-0 rounded-full bg-primary"
+				aria-hidden
+			/>
+			<span className="sr-only">New updates</span>
+		</>
+	) : null;
+
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
@@ -173,6 +192,21 @@ export function NavUser({
 								</DrawerDescription>
 							</DrawerHeader>
 							<div className="flex flex-col gap-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+								<DrawerClose
+									nativeButton={false}
+									render={
+										<Button
+											variant="ghost"
+											className="h-11 justify-start"
+											nativeButton={false}
+											render={<Link href="/changelog" />}
+										/>
+									}
+								>
+									<SparklesIcon />
+									What’s new
+									{changelogIndicator}
+								</DrawerClose>
 								<DrawerClose
 									render={
 										<Button
@@ -220,6 +254,11 @@ export function NavUser({
 							<DropdownMenuSeparator />
 							<ThemeModePicker />
 							<DropdownMenuSeparator />
+							<DropdownMenuItem render={<Link href="/changelog" />}>
+								<SparklesIcon />
+								What’s new
+								{changelogIndicator}
+							</DropdownMenuItem>
 							<DropdownMenuItem onClick={() => setSettingsOpen(true)}>
 								<SettingsIcon />
 								Settings
