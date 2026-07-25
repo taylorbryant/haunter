@@ -180,7 +180,7 @@ export function ChangelogDialog({
 	if (isMobile) {
 		return (
 			<Drawer showSwipeHandle open={open} onOpenChange={handleOpenChange}>
-				<DrawerContent className="h-[85dvh]">
+				<DrawerContent className="h-[94dvh] data-[swipe-axis=y]:[--drawer-content-max-height:94dvh]">
 					<ChangelogSeenTracker enabled={open} />
 					<DrawerHeader className="border-border/70 border-b p-2">
 						<div className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-2">
