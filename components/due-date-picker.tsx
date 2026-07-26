@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarIcon, ClockIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -67,6 +67,7 @@ export function DueDatePicker({
 	const deviceTime = useDeviceTime();
 	const [open, setOpen] = useState(false);
 	const [draft, setDraft] = useState<DueDateValue>({ date: value, time });
+	const dirtyRef = useRef(false);
 	const selected = draft.date ? parseIsoDate(draft.date) : undefined;
 	const today = deviceTime.ready ? parseIsoDate(deviceTime.today) : null;
 	const [visibleMonth, setVisibleMonth] = useState<Date | undefined>(selected);
@@ -75,23 +76,29 @@ export function DueDatePicker({
 		if (nextOpen && today) {
 			setDraft({ date: value, time });
 			setVisibleMonth(value ? parseIsoDate(value) : today);
+			dirtyRef.current = false;
+		} else if (!nextOpen) {
+			setOpen(false);
+			const shouldApply =
+				dirtyRef.current && (draft.date !== value || draft.time !== time);
+			dirtyRef.current = false;
+			if (shouldApply) onChange(draft);
+			return;
 		}
 		setOpen(nextOpen);
 	}
 
+	function changeDraft(next: DueDateValue) {
+		dirtyRef.current = true;
+		setDraft(next);
+	}
+
 	function changeDate(date: Date | undefined) {
 		if (date) setVisibleMonth(date);
-		setDraft({
+		changeDraft({
 			date: date ? toIsoDate(date) : null,
 			time: date ? draft.time : null,
 		});
-	}
-
-	function applyDraft() {
-		setOpen(false);
-		if (draft.date !== value || draft.time !== time) {
-			onChange(draft);
-		}
 	}
 
 	if (!today) {
@@ -183,7 +190,7 @@ export function DueDatePicker({
 							aria-label="Due time"
 							className="min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1.5 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
 							onChange={(event) =>
-								setDraft({
+								changeDraft({
 									date: draft.date,
 									time: event.target.value || null,
 								})
@@ -194,7 +201,7 @@ export function DueDatePicker({
 							variant="ghost"
 							size="sm"
 							disabled={!draft.date || draft.time === null}
-							onClick={() => setDraft({ date: draft.date, time: null })}
+							onClick={() => changeDraft({ date: draft.date, time: null })}
 						>
 							No time
 						</Button>
@@ -208,7 +215,7 @@ export function DueDatePicker({
 								size="sm"
 								disabled={!draft.date}
 								onClick={() =>
-									setDraft({ date: draft.date, time: preset.value })
+									changeDraft({ date: draft.date, time: preset.value })
 								}
 							>
 								{preset.label}
@@ -222,7 +229,7 @@ export function DueDatePicker({
 						variant="ghost"
 						size="sm"
 						disabled={!draft.date}
-						onClick={() => setDraft({ date: null, time: null })}
+						onClick={() => changeDraft({ date: null, time: null })}
 					>
 						Clear
 					</Button>
@@ -230,7 +237,7 @@ export function DueDatePicker({
 						type="button"
 						variant="secondary"
 						size="sm"
-						onClick={applyDraft}
+						onClick={() => changeOpen(false)}
 					>
 						Done
 					</Button>
