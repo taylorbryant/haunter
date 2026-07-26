@@ -9,6 +9,11 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
+import type {
+	NotificationRepository,
+	TaskAssignmentCandidate,
+} from "@/features/notifications/ports";
+import type { Notification } from "@/features/notifications/schemas";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { BlockJson } from "@/features/pages/schemas";
 import {
@@ -16,7 +21,10 @@ import {
 	createTestPageRepository,
 	createTestPageVersionRepository,
 } from "@/features/pages/tests/helpers";
-import { savePageContentUseCase } from "@/features/pages/use-cases";
+import {
+	createPageUseCase,
+	savePageContentUseCase,
+} from "@/features/pages/use-cases";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
@@ -44,7 +52,10 @@ function taskBlock(
 	};
 }
 
-async function createFixture(userId = "user_test") {
+async function createFixture(
+	userId = "user_test",
+	options: { assignmentDeliveryFails?: boolean } = {},
+) {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository({ pages });
 	// Better Auth org ids are nanoid-style, not UUIDs.
@@ -72,6 +83,63 @@ async function createFixture(userId = "user_test") {
 	};
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
+	const assignmentNotifications: Notification[] = [];
+	const afterResponseTasks: Array<() => Promise<void>> = [];
+	const pushDeliveries: unknown[] = [];
+	const afterResponse = {
+		schedule(work: () => Promise<void>) {
+			afterResponseTasks.push(work);
+		},
+	};
+	const notificationInbox = {
+		async getPreferences() {
+			return {
+				overdueTasksEnabled: true,
+				taskAssignmentsEnabled: true,
+				timezone: "UTC",
+				timezoneConfigured: false,
+			};
+		},
+		async createTaskAssigned(
+			candidate: TaskAssignmentCandidate,
+			createdAt: string,
+		) {
+			const notification: Notification = {
+				id: crypto.randomUUID(),
+				userId: candidate.userId,
+				workspaceId: candidate.workspaceId,
+				kind: "task.assigned",
+				entityId: candidate.taskId,
+				entityVersion: candidate.entityVersion,
+				payload: {
+					taskId: candidate.taskId,
+					title: candidate.title,
+					assignedByUserId: candidate.assignedByUserId,
+					assignedByName: candidate.assignedByName,
+					pageId: candidate.pageId,
+					sourceBlockId: candidate.sourceBlockId,
+				},
+				readAt: null,
+				createdAt,
+			};
+			assignmentNotifications.push(notification);
+			return notification;
+		},
+	} as unknown as NotificationRepository;
+	const notifications = {
+		async send(_definition: unknown, payload: unknown) {
+			if (options.assignmentDeliveryFails) {
+				throw new Error("Push provider unavailable");
+			}
+			pushDeliveries.push(payload);
+			return {
+				notificationName: "tasks.assigned",
+				payload,
+				channels: ["push"],
+				results: [],
+			};
+		},
+	} as unknown as AppContext["ports"]["notifications"];
 	// Workspace roster for assignee validation.
 	const memberIds = new Set([userId, "user_teammate"]);
 	const members = {
@@ -103,8 +171,11 @@ async function createFixture(userId = "user_test") {
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
+			afterResponse,
 			gate: appPorts.gate,
 			members,
+			notificationInbox,
+			notifications,
 			pageLinks,
 			pages,
 			pageVersions,
@@ -128,10 +199,50 @@ async function createFixture(userId = "user_test") {
 	const tester = createUseCaseTester<AppContext>(createTestContext);
 	const ctx = await tester.ctx();
 
-	return { pages, tasks, workspace, scope, page, tester, ctx };
+	return {
+		afterResponseTasks,
+		assignmentNotifications,
+		page,
+		pages,
+		pushDeliveries,
+		scope,
+		tasks,
+		tester,
+		workspace,
+		ctx,
+	};
 }
 
 describe("task reconciliation on page content save", () => {
+	it("notifies a teammate assigned in a newly imported page", async () => {
+		const { assignmentNotifications, tester, workspace, ctx } =
+			await createFixture();
+
+		await tester.run(
+			createPageUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "Imported plan",
+				initialContent: [
+					taskBlock("assigned-on-import", "Review the imported plan", {
+						assignee: "user_teammate",
+					}),
+				],
+			},
+			{ ctx },
+		);
+
+		expect(assignmentNotifications).toHaveLength(1);
+		expect(assignmentNotifications[0]).toMatchObject({
+			userId: "user_teammate",
+			kind: "task.assigned",
+			payload: {
+				title: "Review the imported plan",
+				assignedByName: "Test User",
+			},
+		});
+	});
+
 	it("creates task rows for new task blocks", async () => {
 		const { tasks, scope, page, tester, ctx } = await createFixture();
 
@@ -452,6 +563,36 @@ describe("tasks use cases", () => {
 		expect(all.items).toHaveLength(0);
 	});
 
+	it("commits an assignment when its best-effort push delivery fails", async () => {
+		const {
+			afterResponseTasks,
+			assignmentNotifications,
+			scope,
+			tasks,
+			tester,
+			workspace,
+			ctx,
+		} = await createFixture("user_test", { assignmentDeliveryFails: true });
+
+		const created = await tester.run(
+			createTaskUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "Review the launch plan",
+				assigneeId: "user_teammate",
+			},
+			{ ctx },
+		);
+
+		expect(await tasks.findById(scope, created.id)).toMatchObject({
+			assigneeId: "user_teammate",
+			title: "Review the launch plan",
+		});
+		expect(assignmentNotifications).toHaveLength(1);
+		expect(afterResponseTasks).toHaveLength(1);
+		await expect(afterResponseTasks[0]?.()).resolves.toBeUndefined();
+	});
+
 	it("accepts detailed task titles and rejects only genuinely excessive ones", async () => {
 		const { workspace, tester, ctx } = await createFixture();
 		const title =
@@ -566,7 +707,8 @@ describe("tasks use cases", () => {
 
 describe("task assignment", () => {
 	it("quick-add assigns the creator by default and accepts explicit assignees", async () => {
-		const { workspace, tester, ctx } = await createFixture();
+		const { assignmentNotifications, workspace, tester, ctx } =
+			await createFixture();
 
 		const mine = await tester.run(
 			createTaskUseCase,
@@ -592,10 +734,21 @@ describe("task assignment", () => {
 			{ ctx },
 		);
 		expect(unassigned.assigneeId).toBeNull();
+		expect(assignmentNotifications).toHaveLength(1);
+		expect(assignmentNotifications[0]).toMatchObject({
+			userId: "user_teammate",
+			kind: "task.assigned",
+			payload: {
+				title: "For teammate",
+				assignedByUserId: "user_test",
+				assignedByName: "Test User",
+			},
+		});
 	});
 
 	it("assigns new auto-assignee page task blocks to the saver", async () => {
-		const { tasks, scope, page, tester, ctx } = await createFixture();
+		const { assignmentNotifications, tasks, scope, page, tester, ctx } =
+			await createFixture();
 
 		await tester.run(
 			savePageContentUseCase,
@@ -641,6 +794,7 @@ describe("task assignment", () => {
 		);
 		[row] = await tasks.listByPage(scope, page.id);
 		expect(row.assigneeId).toBeNull();
+		expect(assignmentNotifications).toHaveLength(0);
 	});
 
 	it("rejects assigning to a non-member", async () => {
@@ -673,7 +827,8 @@ describe("task assignment", () => {
 	});
 
 	it("write-through: assigning from the list updates the source block", async () => {
-		const { pages, tasks, scope, page, tester, ctx } = await createFixture();
+		const { assignmentNotifications, pages, tasks, scope, page, tester, ctx } =
+			await createFixture();
 
 		await tester.run(
 			savePageContentUseCase,
@@ -694,10 +849,19 @@ describe("task assignment", () => {
 		const doc = await pages.findById(scope, page.id);
 		const block = doc?.content.find((candidate) => candidate.id === "b-assign");
 		expect(block?.props.assignee).toBe("user_teammate");
+		expect(assignmentNotifications).toHaveLength(1);
+
+		await tester.run(
+			updateTaskUseCase,
+			{ id: row.id, assigneeId: "user_teammate" },
+			{ ctx },
+		);
+		expect(assignmentNotifications).toHaveLength(1);
 	});
 
 	it("reconciles the assignee from block props on save", async () => {
-		const { tasks, scope, page, tester, ctx } = await createFixture();
+		const { assignmentNotifications, tasks, scope, page, tester, ctx } =
+			await createFixture();
 
 		await tester.run(
 			savePageContentUseCase,
@@ -720,6 +884,28 @@ describe("task assignment", () => {
 		);
 		[row] = await tasks.listByPage(scope, page.id);
 		expect(row.assigneeId).toBeNull();
+		expect(assignmentNotifications).toHaveLength(1);
+	});
+
+	it("does not notify when a completed task is assigned", async () => {
+		const { assignmentNotifications, workspace, tester, ctx } =
+			await createFixture();
+		const task = await tester.run(
+			createTaskUseCase,
+			{ workspaceId: workspace.id, title: "Already done", assigneeId: null },
+			{ ctx },
+		);
+		await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, completed: true },
+			{ ctx },
+		);
+		await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, assigneeId: "user_teammate" },
+			{ ctx },
+		);
+		expect(assignmentNotifications).toHaveLength(0);
 	});
 
 	it("lists tasks with server-side scope and limits", async () => {

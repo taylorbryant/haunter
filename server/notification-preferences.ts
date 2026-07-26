@@ -2,6 +2,10 @@ import "@beignet/core/server-only";
 import type { NotificationPreferencesPort } from "@beignet/core/notifications";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import {
+	TaskAssignedDeliveryPayloadSchema,
+	TaskAssignedNotification,
+} from "@/features/tasks/notifications/assigned";
+import {
 	TaskOverdueDeliveryPayloadSchema,
 	TaskOverdueNotification,
 } from "@/features/tasks/notifications/overdue";
@@ -19,22 +23,33 @@ type NotificationPreferenceContext = {
 
 export const notificationPreferences = {
 	async evaluate({ notification, payload, ctx, channel }) {
-		if (
-			notification.name !== TaskOverdueNotification.name ||
-			channel !== "push"
-		) {
-			return { deliver: true };
-		}
+		if (channel !== "push") return { deliver: true };
 
-		const delivery = TaskOverdueDeliveryPayloadSchema.parse(payload);
 		const { notificationInbox } = (ctx as NotificationPreferenceContext).ports;
-		const preferences = await notificationInbox.getPreferences(delivery.userId);
-		if (preferences.overdueTasksEnabled) return { deliver: true };
-
-		await notificationInbox.markPushSkipped(delivery.notificationIds);
-		return {
-			deliver: false,
-			reason: "Overdue notifications are disabled.",
-		};
+		if (notification.name === TaskOverdueNotification.name) {
+			const delivery = TaskOverdueDeliveryPayloadSchema.parse(payload);
+			const preferences = await notificationInbox.getPreferences(
+				delivery.userId,
+			);
+			if (preferences.overdueTasksEnabled) return { deliver: true };
+			await notificationInbox.markPushSkipped(delivery.notificationIds);
+			return {
+				deliver: false,
+				reason: "Overdue notifications are disabled.",
+			};
+		}
+		if (notification.name === TaskAssignedNotification.name) {
+			const delivery = TaskAssignedDeliveryPayloadSchema.parse(payload);
+			const preferences = await notificationInbox.getPreferences(
+				delivery.userId,
+			);
+			if (preferences.taskAssignmentsEnabled) return { deliver: true };
+			await notificationInbox.markPushSkipped(delivery.notificationIds);
+			return {
+				deliver: false,
+				reason: "Task assignment notifications are disabled.",
+			};
+		}
+		return { deliver: true };
 	},
 } satisfies NotificationPreferencesPort<unknown>;

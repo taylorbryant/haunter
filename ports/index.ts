@@ -66,8 +66,13 @@ export type AppTransactionPorts = {
 
 export type AppGate = BoundGate<AppPolicies>;
 
+export type AfterResponsePort = {
+	schedule(work: () => Promise<void>): void;
+};
+
 export type AppPorts = {
 	adminUsers: AdminUserRepository;
+	afterResponse: AfterResponsePort;
 	agents: AgentAdminRepository;
 	mcpConnections: McpConnectionRepository;
 	mcpOAuthClients: McpOAuthClientRepository;

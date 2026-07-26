@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppContext } from "@/app-context";
 import type { PendingPushNotification } from "@/features/notifications/ports";
+import { deliverTaskAssignmentNotifications } from "@/features/tasks/notifications/assigned";
 import { TaskOverdueNotification } from "@/features/tasks/notifications/overdue";
 import { defineSchedule } from "@/lib/schedules";
 import { localDateAndTime } from "@/lib/timezone";
@@ -19,6 +20,7 @@ const DELIVERY_LIMIT = 1_000;
 function groupPending(items: PendingPushNotification[]) {
 	const groups = new Map<string, PendingPushNotification[]>();
 	for (const item of items) {
+		if (item.kind !== "task.overdue") continue;
 		const key = `${item.userId}:${item.workspaceId}`;
 		groups.set(key, [...(groups.get(key) ?? []), item]);
 	}
@@ -62,7 +64,7 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 	const deliveryErrors: unknown[] = [];
 	for (const group of groupPending(pending)) {
 		const first = group[0];
-		if (!first) continue;
+		if (first?.kind !== "task.overdue") continue;
 		deliveryGroups += 1;
 		try {
 			await ctx.ports.notifications.send(TaskOverdueNotification, {
@@ -70,8 +72,23 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 				workspaceId: first.workspaceId,
 				notificationIds: group.map((item) => item.id),
 				attempt: Math.max(...group.map((item) => item.pushAttempts)) + 1,
-				items: group.map((item) => item.payload),
+				items: group.flatMap((item) =>
+					item.kind === "task.overdue" ? [item.payload] : [],
+				),
 			});
+		} catch (error) {
+			deliveryErrors.push(error);
+		}
+	}
+	const assignmentItems = pending.filter(
+		(item) => item.kind === "task.assigned",
+	);
+	if (assignmentItems.length > 0) {
+		try {
+			deliveryGroups += await deliverTaskAssignmentNotifications(
+				ctx,
+				assignmentItems,
+			);
 		} catch (error) {
 			deliveryErrors.push(error);
 		}
@@ -79,7 +96,7 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 	if (deliveryErrors.length > 0) {
 		throw new AggregateError(
 			deliveryErrors,
-			`Failed to deliver ${deliveryErrors.length} overdue notification group(s).`,
+			`Failed to deliver ${deliveryErrors.length} notification group(s).`,
 		);
 	}
 
