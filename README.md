@@ -1,10 +1,11 @@
-<img src="app/icon.svg" alt="Ghost" width="48" height="48">
+<img src="app/icon.svg" alt="" width="48" height="48">
 
 # Haunter
 
-Haunter is a workspace for notes, tasks, and AI-assisted workflows. Organize
-ideas in nested pages, keep tasks close to their source, and return to what
-matters from a focused Home dashboard.
+Haunter brings notes and tasks into one workspace, then lets approved AI
+clients work with them using only the permissions and workspaces you choose.
+Organize ideas in nested pages, keep tasks close to their source, and return to
+what matters from a focused Home dashboard.
 
 [Open Haunter](https://haunter.app) ·
 [View the changelog](https://haunter.app/changelog)
@@ -25,9 +26,10 @@ matters from a focused Home dashboard.
   the workspace task list.
 - **Collaboration** includes workspace roles, task assignment, optional
   real-time editing, and read-only public page links.
-- **Portability and personalization** include Markdown import and export,
-  themed HTML export, coordinated light and dark themes, and installable
-  app-like behavior.
+- **Import and export** move pages in and out as Markdown or create standalone
+  HTML files that preserve the selected Haunter theme.
+- **Themes and installation** provide coordinated light and dark app and code
+  themes. Install Haunter on a phone or computer for an app-like experience.
 - **AI clients** connect through Haunter's hosted OAuth-authenticated MCP
   server or a local Agent Auth bridge. Users choose a permission profile and
   workspaces, review activity, and can disconnect a client at any time.
@@ -111,8 +113,9 @@ bun beignet db migrate
 ```
 
 Use `bun beignet make --help` to see the available artifact generators. After
-changing the Drizzle schema in `infra/db/schema/`, always generate and apply a
-migration together.
+changing the Drizzle schema in `infra/db/schema/`, generate a migration and
+apply it to your local development database. Deployments apply checked-in
+migrations separately.
 
 ### Work with coding agents
 
@@ -155,7 +158,7 @@ bun run build
 bun run start
 ```
 
-Configure these production services and secrets:
+### Required configuration
 
 - Set `APP_URL` to the canonical public origin and generate a strong
   `BETTER_AUTH_SECRET`.
@@ -163,20 +166,25 @@ Configure these production services and secrets:
   persistent libSQL database such as Turso.
 - Set `RESEND_API_KEY` and `RESEND_FROM` to a verified sender for passwordless
   sign-in and workspace invitations.
-- Set `CRON_SECRET` to protect scheduled routes.
-- Set `BLOB_READ_WRITE_TOKEN` to use Vercel Blob for durable uploads. Local
-  filesystem storage is intended for development and does not survive
-  serverless deployments.
-- Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for durable,
-  distributed rate limiting.
-- Set `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` before using canvases on a production
-  domain.
 - Remove `DEVTOOLS_ENABLED=true` unless the production devtools route is
   protected appropriately.
-- Set `BOOTSTRAP_ADMIN_EMAIL` before the owner first signs in, and leave it
-  unset on established installations.
 - Review the authorization and workspace-role policies before exposing
   user-owned data.
+
+On a fresh installation, also set `BOOTSTRAP_ADMIN_EMAIL` before the owner
+first signs in. Leave it unset on established installations.
+
+### Optional services
+
+- **Uploads:** Set `BLOB_READ_WRITE_TOKEN` to use Vercel Blob. Local filesystem
+  storage does not survive serverless deployments.
+- **Distributed rate limiting:** Set `UPSTASH_REDIS_REST_URL` and
+  `UPSTASH_REDIS_REST_TOKEN`. Without them, Haunter uses an in-process limiter
+  intended for development.
+- **Canvases:** Set `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` before using tldraw on a
+  production domain.
+- **Scheduled notifications:** Set `CRON_SECRET` before enabling the
+  notification workflow described below.
 
 Real-time collaboration is optional and disabled by default. Enable it with
 `NEXT_PUBLIC_ENABLE_COLLABORATION=true`; add
