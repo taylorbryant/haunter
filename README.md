@@ -5,7 +5,9 @@ tasks that roll up into a focused Home dashboard and per-workspace Tasks view,
 syntax-highlighted code/SQL blocks, and embedded tldraw canvases. Built on [Beignet](https://beignetjs.com)
 (contract-first, scaffolded with `@beignet/cli`).
 
-![Haunter — the demo Start here page with navigation, task blocks, a callout, and syntax-highlighted SQL](docs/screenshot.png)
+![Haunter — a demo Home dashboard with today’s tasks, favorite pages, and recently viewed notes](docs/screenshot.png)
+
+![Haunter — a populated page with rich text, task blocks, a callout, and syntax-highlighted SQL](docs/page-screenshot.png)
 
 ## Features
 
