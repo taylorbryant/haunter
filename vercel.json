@@ -1,6 +1,10 @@
 {
 	"crons": [
 		{
+			"path": "/api/cron/tasks/check-overdue",
+			"schedule": "*/5 * * * *"
+		},
+		{
 			"path": "/api/cron/agents/cleanup-oauth-clients",
 			"schedule": "0 3 * * *"
 		}
