@@ -15,7 +15,7 @@ import {
 export function listNotificationsQueryOptions(limit = 30) {
 	return {
 		...rq(listNotifications).queryOptions({ query: { limit } }),
-		refetchInterval: 60_000,
+		refetchInterval: 30_000,
 	};
 }
 

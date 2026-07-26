@@ -14,6 +14,7 @@ import { starterDatabaseProvider } from "@/infra/db/provider";
 import * as schema from "@/infra/db/schema";
 import { webPushProvider } from "@/infra/notifications/web-push-provider";
 import { memoryRateLimitProvider } from "@/infra/rate-limit/memory-rate-limit-provider";
+import { nextAfterResponseProvider } from "@/infra/runtime/next-after-response-provider";
 import { auth } from "@/lib/better-auth";
 import { env } from "@/lib/env";
 import type { AuthSessionMetadata, AuthUser } from "@/ports/auth";
@@ -28,6 +29,7 @@ export const providers = [
 	createDevtoolsProvider(),
 	createBetterAuthProvider<AuthUser, AuthSessionMetadata>({ auth }),
 	createPinoLoggerProvider(),
+	nextAfterResponseProvider,
 	drizzleSqliteProvider,
 	starterDatabaseProvider,
 	liveblocksPageCollaborationProvider,

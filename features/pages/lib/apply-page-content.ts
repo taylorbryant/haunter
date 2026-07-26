@@ -1,11 +1,14 @@
 import type { TenantScope } from "@beignet/core/ports";
 import type { MemberRepository } from "@/features/members/ports";
+import type { NotificationRepository } from "@/features/notifications/ports";
+import type { Notification } from "@/features/notifications/schemas";
 import type {
 	PageLinkRepository,
 	PageRepository,
 } from "@/features/pages/ports";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { reconcilePageTasks } from "@/features/tasks/lib/reconcile-page-tasks";
+import type { TaskAssignmentActor } from "@/features/tasks/notifications/assigned";
 import type { TaskRepository } from "@/features/tasks/ports";
 import { extractPageLinks } from "./extract-page-links";
 
@@ -43,6 +46,7 @@ export async function reconcilePageLinks(
 export async function reconcilePageDerivations(
 	tx: {
 		members: MemberRepository;
+		notificationInbox: NotificationRepository;
 		pages: Pick<PageRepository, "findMetaByIds">;
 		pageLinks: PageLinkRepository;
 		tasks: TaskRepository;
@@ -50,17 +54,35 @@ export async function reconcilePageDerivations(
 	scope: TenantScope,
 	page: PageMeta,
 	content: BlockJson[],
-	options: { defaultTaskAssigneeId?: string | null } = {},
-): Promise<{ tasksChanged: boolean; linksChanged: boolean }> {
-	const tasksChanged = await reconcilePageTasks(
-		{ members: tx.members, tasks: tx.tasks },
+	options: {
+		assignmentActor?: TaskAssignmentActor;
+		defaultTaskAssigneeId?: string | null;
+	} = {},
+): Promise<{
+	tasksChanged: boolean;
+	linksChanged: boolean;
+	assignmentNotifications: Notification[];
+}> {
+	const taskResult = await reconcilePageTasks(
+		{
+			members: tx.members,
+			notificationInbox: tx.notificationInbox,
+			tasks: tx.tasks,
+		},
 		scope,
 		page,
 		content,
-		{ defaultAssigneeId: options.defaultTaskAssigneeId },
+		{
+			assignmentActor: options.assignmentActor,
+			defaultAssigneeId: options.defaultTaskAssigneeId,
+		},
 	);
 
 	const linksChanged = await reconcilePageLinks(tx, scope, page, content);
 
-	return { tasksChanged, linksChanged };
+	return {
+		tasksChanged: taskResult.changed,
+		linksChanged,
+		assignmentNotifications: taskResult.assignmentNotifications,
+	};
 }

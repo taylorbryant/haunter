@@ -36,10 +36,11 @@ function createScheduleFixture(
 	candidates: OverdueTaskCandidate[],
 	options: {
 		deliveryError?: (payload: unknown) => Error | null;
+		pending?: PendingPushNotification[];
 	} = {},
 ) {
 	const createdKeys = new Set<string>();
-	const pending: PendingPushNotification[] = [];
+	const pending: PendingPushNotification[] = [...(options.pending ?? [])];
 	const deliveries: unknown[] = [];
 	const notificationInbox = {
 		async findOverdueCandidates() {
@@ -99,6 +100,29 @@ function createScheduleFixture(
 	return { ctx, createdKeys, deliveries };
 }
 
+function pendingAssignment(): PendingPushNotification {
+	const taskId = crypto.randomUUID();
+	return {
+		id: crypto.randomUUID(),
+		userId: "user_assigned",
+		workspaceId: WORKSPACE_ID,
+		kind: "task.assigned",
+		entityId: taskId,
+		entityVersion: `user_assigned:${crypto.randomUUID()}`,
+		payload: {
+			taskId,
+			title: "Review the brief",
+			assignedByUserId: "user_manager",
+			assignedByName: "Manager",
+			pageId: null,
+			sourceBlockId: null,
+		},
+		readAt: null,
+		createdAt: "2026-07-10T14:00:00.000Z",
+		pushAttempts: 0,
+	};
+}
+
 describe("overdue notification schedule", () => {
 	it("keeps date-only notifications created before timed tasks were added", () => {
 		const parsed = NotificationSchema.parse({
@@ -119,6 +143,9 @@ describe("overdue notification schedule", () => {
 			createdAt: "2026-07-10T14:00:00.000Z",
 		});
 
+		if (parsed.kind !== "task.overdue") {
+			throw new Error("Expected an overdue notification");
+		}
 		expect(parsed.payload.dueTime).toBeNull();
 	});
 
@@ -218,6 +245,28 @@ describe("overdue notification schedule", () => {
 				(delivery) => (delivery as { userId: string }).userId,
 			),
 		).toEqual(["user_failing", "user_delivered"]);
+	});
+
+	it("recovers assignment and overdue pushes without mixing their payloads", async () => {
+		const fixture = createScheduleFixture([candidate()], {
+			pending: [pendingAssignment()],
+		});
+
+		const result = await processOverdueNotifications(
+			fixture.ctx,
+			new Date("2026-07-10T14:00:00.000Z"),
+		);
+
+		expect(result.deliveryGroups).toBe(2);
+		expect(fixture.deliveries).toHaveLength(2);
+		const assignmentDelivery = fixture.deliveries.find(
+			(delivery) => (delivery as { userId: string }).userId === "user_assigned",
+		) as { items: Array<Record<string, unknown>> } | undefined;
+		expect(assignmentDelivery?.items[0]).toMatchObject({
+			title: "Review the brief",
+			assignedByName: "Manager",
+		});
+		expect(assignmentDelivery?.items[0]).not.toHaveProperty("dueDate");
 	});
 
 	it("validates IANA timezones", () => {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const NotificationKindSchema = z.literal("task.overdue");
+export const NotificationKindSchema = z.enum(["task.overdue", "task.assigned"]);
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;
 
 export const TaskOverdueNotificationPayloadSchema = z.object({
@@ -19,17 +19,45 @@ export type TaskOverdueNotificationPayload = z.infer<
 	typeof TaskOverdueNotificationPayloadSchema
 >;
 
-export const NotificationSchema = z.object({
+export const TaskAssignedNotificationPayloadSchema = z.object({
+	taskId: z.string().uuid(),
+	title: z.string(),
+	assignedByUserId: z.string(),
+	assignedByName: z.string(),
+	pageId: z.string().uuid().nullable(),
+	sourceBlockId: z.string().nullable(),
+});
+export type TaskAssignedNotificationPayload = z.infer<
+	typeof TaskAssignedNotificationPayloadSchema
+>;
+
+const NotificationBaseSchema = z.object({
 	id: z.string().uuid(),
 	userId: z.string(),
 	workspaceId: z.string(),
-	kind: NotificationKindSchema,
 	entityId: z.string().uuid(),
 	entityVersion: z.string(),
-	payload: TaskOverdueNotificationPayloadSchema,
 	readAt: z.string().datetime().nullable(),
 	createdAt: z.string().datetime(),
 });
+
+export const TaskOverdueInboxNotificationSchema = NotificationBaseSchema.extend(
+	{
+		kind: z.literal("task.overdue"),
+		payload: TaskOverdueNotificationPayloadSchema,
+	},
+);
+
+export const TaskAssignedInboxNotificationSchema =
+	NotificationBaseSchema.extend({
+		kind: z.literal("task.assigned"),
+		payload: TaskAssignedNotificationPayloadSchema,
+	});
+
+export const NotificationSchema = z.discriminatedUnion("kind", [
+	TaskOverdueInboxNotificationSchema,
+	TaskAssignedInboxNotificationSchema,
+]);
 export type Notification = z.infer<typeof NotificationSchema>;
 
 export const ListNotificationsInputSchema = z.object({
@@ -49,6 +77,7 @@ export const NotificationIdInputSchema = z.object({
 
 export const NotificationPreferencesSchema = z.object({
 	overdueTasksEnabled: z.boolean(),
+	taskAssignmentsEnabled: z.boolean(),
 	timezone: z.string().min(1).max(100),
 	timezoneConfigured: z.boolean(),
 });
@@ -64,6 +93,7 @@ export const NotificationSettingsSchema = NotificationPreferencesSchema.extend({
 export const UpdateNotificationPreferencesSchema = z
 	.object({
 		overdueTasksEnabled: z.boolean().optional(),
+		taskAssignmentsEnabled: z.boolean().optional(),
 		timezone: z.string().min(1).max(100).optional(),
 	})
 	.refine((value) => Object.keys(value).length > 0, {

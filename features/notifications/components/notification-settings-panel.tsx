@@ -8,6 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
+	currentPushSubscription,
+	enablePush,
+	pushAvailable,
+	serializePushSubscription,
+} from "@/features/notifications/client/push";
+import {
 	invalidateNotificationSettings,
 	notificationSettingsQueryOptions,
 	subscribePushMutationOptions,
@@ -15,12 +21,6 @@ import {
 	unsubscribePushMutationOptions,
 	updateNotificationSettingsMutationOptions,
 } from "@/features/notifications/client/queries";
-import {
-	currentPushSubscription,
-	enablePush,
-	pushAvailable,
-	serializePushSubscription,
-} from "@/features/notifications/client/push";
 import { getBrowserTimezone } from "@/features/notifications/client/timezone";
 
 type PushState = "checking" | "enabled" | "disabled" | "unavailable";
@@ -85,6 +85,24 @@ export function NotificationSettingsPanel() {
 		setError(null);
 		updateSettings.mutate(
 			{ body: { overdueTasksEnabled: checked } },
+			{
+				onSuccess: () => void invalidateNotificationSettings(queryClient),
+				onError: (updateError) =>
+					setError(
+						userErrorMessage(
+							updateError,
+							"Notification settings could not be updated.",
+						),
+					),
+			},
+		);
+	}
+
+	function updateTaskAssignments(checked: boolean) {
+		setMessage(null);
+		setError(null);
+		updateSettings.mutate(
+			{ body: { taskAssignmentsEnabled: checked } },
 			{
 				onSuccess: () => void invalidateNotificationSettings(queryClient),
 				onError: (updateError) =>
@@ -176,6 +194,7 @@ export function NotificationSettingsPanel() {
 				<Skeleton className="h-16 w-full" />
 				<Skeleton className="h-16 w-full" />
 				<Skeleton className="h-16 w-full" />
+				<Skeleton className="h-16 w-full" />
 			</Panel>
 		);
 	}
@@ -214,6 +233,25 @@ export function NotificationSettingsPanel() {
 				title="Notifications"
 				description="Choose when Haunter should get your attention."
 			/>
+			<div className="flex items-center justify-between gap-4">
+				<div className="flex min-w-0 flex-col gap-0.5">
+					<label
+						htmlFor="task-assignment-notifications"
+						className="font-medium text-sm"
+					>
+						Task assignments
+					</label>
+					<p className="text-muted-foreground text-sm">
+						Notify me when another member assigns me a task.
+					</p>
+				</div>
+				<Switch
+					id="task-assignment-notifications"
+					checked={value.taskAssignmentsEnabled}
+					disabled={updateSettings.isPending}
+					onCheckedChange={updateTaskAssignments}
+				/>
+			</div>
 			<div className="flex items-center justify-between gap-4">
 				<div className="flex min-w-0 flex-col gap-0.5">
 					<label

@@ -628,6 +628,11 @@ export const notificationPreferences = sqliteTable("notification_preferences", {
 	overdueTasksEnabled: integer("overdue_tasks_enabled", { mode: "boolean" })
 		.notNull()
 		.default(true),
+	taskAssignmentsEnabled: integer("task_assignments_enabled", {
+		mode: "boolean",
+	})
+		.notNull()
+		.default(true),
 	timezone: text("timezone").notNull().default("UTC"),
 	timezoneConfigured: integer("timezone_configured", { mode: "boolean" })
 		.notNull()

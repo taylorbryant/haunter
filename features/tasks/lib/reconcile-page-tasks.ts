@@ -1,6 +1,12 @@
+import type { MemberRepository } from "@/features/members/ports";
+import type { NotificationRepository } from "@/features/notifications/ports";
+import type { Notification } from "@/features/notifications/schemas";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
-import type { MemberRepository } from "@/features/members/ports";
+import {
+	createTaskAssignmentNotification,
+	type TaskAssignmentActor,
+} from "@/features/tasks/notifications/assigned";
 import type { TaskRepository } from "@/features/tasks/ports";
 import { extractTaskBlocks } from "./extract-task-blocks";
 
@@ -9,10 +15,12 @@ const DUE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 type TaskReconciliationPorts = {
 	members: MemberRepository;
+	notificationInbox: NotificationRepository;
 	tasks: TaskRepository;
 };
 
 type ReconcilePageTasksOptions = {
+	assignmentActor?: TaskAssignmentActor;
 	defaultAssigneeId?: string | null;
 };
 
@@ -66,7 +74,7 @@ export async function reconcilePageTasks(
 	page: PageMeta,
 	content: BlockJson[],
 	options: ReconcilePageTasksOptions = {},
-): Promise<boolean> {
+): Promise<{ changed: boolean; assignmentNotifications: Notification[] }> {
 	const now = new Date().toISOString();
 	const found = extractTaskBlocks(content);
 	const existing = await ports.tasks.listByPage(scope, page.id);
@@ -110,13 +118,14 @@ export async function reconcilePageTasks(
 	}
 
 	let changed = false;
+	const assignmentNotifications: Notification[] = [];
 
 	for (const block of resolved) {
 		const current = existingByBlockId.get(block.blockId);
 
 		if (!current) {
 			changed = true;
-			await ports.tasks.create(scope, {
+			const created = await ports.tasks.create(scope, {
 				userId: page.userId,
 				pageId: page.id,
 				sourceBlockId: block.blockId,
@@ -127,6 +136,13 @@ export async function reconcilePageTasks(
 				assigneeId: block.resolvedAssigneeId,
 				completedAt: block.checked ? now : null,
 			});
+			const notification = await createTaskAssignmentNotification(
+				ports.notificationInbox,
+				created,
+				null,
+				options.assignmentActor,
+			);
+			if (notification) assignmentNotifications.push(notification);
 			continue;
 		}
 
@@ -139,7 +155,7 @@ export async function reconcilePageTasks(
 
 		if (rowChanged) {
 			changed = true;
-			await ports.tasks.update(scope, current.id, {
+			const updated = await ports.tasks.update(scope, current.id, {
 				title: block.title,
 				completed: block.checked,
 				dueDate: block.due,
@@ -150,6 +166,13 @@ export async function reconcilePageTasks(
 					? { completedAt: block.checked ? now : null }
 					: {}),
 			});
+			const notification = await createTaskAssignmentNotification(
+				ports.notificationInbox,
+				updated,
+				current.assigneeId,
+				options.assignmentActor,
+			);
+			if (notification) assignmentNotifications.push(notification);
 		}
 	}
 
@@ -166,6 +189,7 @@ export async function reconcilePageTasks(
 		await ports.tasks.deleteByIds(scope, orphanIds);
 	}
 
-	return changed;
+	return { changed, assignmentNotifications };
 }
-import { tenantScopeId, type TenantScope } from "@beignet/core/ports";
+
+import { type TenantScope, tenantScopeId } from "@beignet/core/ports";

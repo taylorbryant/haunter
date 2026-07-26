@@ -1,0 +1,1 @@
+ALTER TABLE `notification_preferences` ADD `task_assignments_enabled` integer DEFAULT true NOT NULL;

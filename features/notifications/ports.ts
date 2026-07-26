@@ -2,6 +2,7 @@ import type {
 	Notification,
 	NotificationPreferences,
 	PushSubscriptionInput,
+	TaskAssignedNotificationPayload,
 	TaskOverdueNotificationPayload,
 } from "@/features/notifications/schemas";
 
@@ -12,6 +13,7 @@ export type NotificationCursor = {
 
 export type NotificationPreferencesUpdate = {
 	overdueTasksEnabled?: boolean;
+	taskAssignmentsEnabled?: boolean;
 	timezone?: string;
 };
 
@@ -19,6 +21,12 @@ export type OverdueTaskCandidate = TaskOverdueNotificationPayload & {
 	userId: string;
 	workspaceId: string;
 	timezone: string;
+};
+
+export type TaskAssignmentCandidate = TaskAssignedNotificationPayload & {
+	userId: string;
+	workspaceId: string;
+	entityVersion: string;
 };
 
 export type PendingPushNotification = Notification & {
@@ -55,6 +63,10 @@ export interface NotificationRepository {
 	): Promise<OverdueTaskCandidate[]>;
 	createOverdue(
 		candidate: OverdueTaskCandidate,
+		createdAt: string,
+	): Promise<Notification | null>;
+	createTaskAssigned(
+		candidate: TaskAssignmentCandidate,
 		createdAt: string,
 	): Promise<Notification | null>;
 	listPendingPush(

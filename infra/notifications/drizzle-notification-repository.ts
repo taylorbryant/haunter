@@ -19,6 +19,7 @@ import type {
 	NotificationRepository,
 	OverdueTaskCandidate,
 	StoredPushSubscription,
+	TaskAssignmentCandidate,
 } from "@/features/notifications/ports";
 import {
 	type Notification,
@@ -70,11 +71,13 @@ export function createDrizzleNotificationRepository(
 		return row
 			? {
 					overdueTasksEnabled: row.overdueTasksEnabled,
+					taskAssignmentsEnabled: row.taskAssignmentsEnabled,
 					timezone: row.timezone,
 					timezoneConfigured: row.timezoneConfigured,
 				}
 			: {
 					overdueTasksEnabled: true,
+					taskAssignmentsEnabled: true,
 					timezone: "UTC",
 					timezoneConfigured: false,
 				};
@@ -193,6 +196,8 @@ export function createDrizzleNotificationRepository(
 			const values = {
 				overdueTasksEnabled:
 					input.overdueTasksEnabled ?? current.overdueTasksEnabled,
+				taskAssignmentsEnabled:
+					input.taskAssignmentsEnabled ?? current.taskAssignmentsEnabled,
 				timezone: input.timezone ?? current.timezone,
 				timezoneConfigured:
 					input.timezone === undefined ? current.timezoneConfigured : true,
@@ -208,6 +213,7 @@ export function createDrizzleNotificationRepository(
 			if (!row) throw new Error("Failed to update notification preferences");
 			return {
 				overdueTasksEnabled: row.overdueTasksEnabled,
+				taskAssignmentsEnabled: row.taskAssignmentsEnabled,
 				timezone: row.timezone,
 				timezoneConfigured: row.timezoneConfigured,
 			};
@@ -220,6 +226,7 @@ export function createDrizzleNotificationRepository(
 				.values({
 					userId,
 					overdueTasksEnabled: true,
+					taskAssignmentsEnabled: true,
 					timezone,
 					timezoneConfigured: true,
 					createdAt: now,
@@ -322,6 +329,34 @@ export function createDrizzleNotificationRepository(
 						title: candidate.title,
 						dueDate: candidate.dueDate,
 						dueTime: candidate.dueTime,
+						pageId: candidate.pageId,
+						sourceBlockId: candidate.sourceBlockId,
+					}),
+					createdAt,
+				})
+				.onConflictDoNothing()
+				.returning();
+			return row ? toNotification(row) : null;
+		},
+
+		async createTaskAssigned(
+			candidate: TaskAssignmentCandidate,
+			createdAt: string,
+		) {
+			const [row] = await db
+				.insert(schema.notifications)
+				.values({
+					id: crypto.randomUUID(),
+					userId: candidate.userId,
+					workspaceId: candidate.workspaceId,
+					kind: "task.assigned",
+					entityId: candidate.taskId,
+					entityVersion: candidate.entityVersion,
+					payload: JSON.stringify({
+						taskId: candidate.taskId,
+						title: candidate.title,
+						assignedByUserId: candidate.assignedByUserId,
+						assignedByName: candidate.assignedByName,
 						pageId: candidate.pageId,
 						sourceBlockId: candidate.sourceBlockId,
 					}),

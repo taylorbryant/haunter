@@ -6,6 +6,7 @@ import {
 	BellOffIcon,
 	CheckCheckIcon,
 	FileTextIcon,
+	UserRoundCheckIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -124,7 +125,7 @@ function NotificationPanel({
 						<BellOffIcon className="size-5 text-muted-foreground" />
 						<p className="font-medium text-sm">You’re all caught up</p>
 						<p className="text-muted-foreground text-xs">
-							Overdue task notifications will appear here.
+							Task assignments and overdue reminders will appear here.
 						</p>
 					</div>
 				) : (
@@ -139,22 +140,41 @@ function NotificationPanel({
 								)}
 								onClick={() => onOpen(item)}
 							>
-								<span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive">
-									<FileTextIcon className="size-4" />
+								<span
+									className={cn(
+										"mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md",
+										item.kind === "task.assigned"
+											? "bg-primary/10 text-primary"
+											: "bg-destructive/10 text-destructive",
+									)}
+								>
+									{item.kind === "task.assigned" ? (
+										<UserRoundCheckIcon className="size-4" />
+									) : (
+										<FileTextIcon className="size-4" />
+									)}
 								</span>
 								<span className="min-w-0 flex-1">
 									<span className="block break-words font-medium text-sm">
-										{item.payload.title}
+										{item.kind === "task.assigned"
+											? `${item.payload.assignedByName} assigned you a task`
+											: item.payload.title}
 									</span>
 									<span className="mt-0.5 block text-muted-foreground text-xs">
-										Overdue ·{" "}
-										{deviceTime.ready
-											? formatDueDateTimeLabel(
-													item.payload.dueDate,
-													item.payload.dueTime,
-													parseIsoDate(deviceTime.today),
-												)
-											: item.payload.dueDate}
+										{item.kind === "task.assigned" ? (
+											item.payload.title
+										) : (
+											<>
+												Overdue ·{" "}
+												{deviceTime.ready
+													? formatDueDateTimeLabel(
+															item.payload.dueDate,
+															item.payload.dueTime,
+															parseIsoDate(deviceTime.today),
+														)
+													: item.payload.dueDate}
+											</>
+										)}
 									</span>
 								</span>
 								{item.readAt === null ? (

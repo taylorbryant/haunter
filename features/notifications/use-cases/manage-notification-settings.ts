@@ -1,18 +1,19 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
-import { appError } from "@/features/shared/errors";
 import {
 	InitializeNotificationTimezoneSchema,
 	isValidTimezone,
 	NotificationSettingsSchema,
 	UpdateNotificationPreferencesSchema,
 } from "@/features/notifications/schemas";
+import { appError } from "@/features/shared/errors";
 import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 
 function withPushSettings(
 	preferences: {
 		overdueTasksEnabled: boolean;
+		taskAssignmentsEnabled: boolean;
 		timezone: string;
 		timezoneConfigured: boolean;
 	},
