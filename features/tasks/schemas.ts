@@ -17,6 +17,14 @@ export const DueTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, {
 	message: "Due time must be HH:mm",
 });
 
+export const TASK_REMINDER_OFFSETS = [0, 15, 60, 1_440] as const;
+export const ReminderOffsetMinutesSchema = z.union([
+	z.literal(0),
+	z.literal(15),
+	z.literal(60),
+	z.literal(1_440),
+]);
+
 export const TaskSchema = z.object({
 	id: z.string().uuid(),
 	/** The member who created the task — not necessarily who it's for. */
@@ -28,6 +36,7 @@ export const TaskSchema = z.object({
 	completed: z.boolean(),
 	dueDate: DueDateSchema.nullable(),
 	dueTime: DueTimeSchema.nullable(),
+	reminderOffsetMinutes: ReminderOffsetMinutesSchema.nullable(),
 	/** The member responsible for the task; null when unassigned. */
 	assigneeId: z.string().nullable(),
 	completedAt: z.string().datetime().nullable(),
@@ -82,6 +91,7 @@ export const CreateTaskInputSchema = z
 		title: TaskTitleInputSchema,
 		dueDate: DueDateSchema.optional(),
 		dueTime: DueTimeSchema.optional(),
+		reminderOffsetMinutes: ReminderOffsetMinutesSchema.optional(),
 		// Omitted = assign to the creator (quick-add is "a task for me").
 		// Explicit null = create unassigned.
 		assigneeId: z.string().nullable().optional(),
@@ -92,12 +102,21 @@ export const CreateTaskInputSchema = z
 			message: "A due date is required when a due time is set",
 			path: ["dueDate"],
 		},
+	)
+	.refine(
+		(input) =>
+			input.reminderOffsetMinutes === undefined || input.dueDate !== undefined,
+		{
+			message: "A due date is required when a reminder is set",
+			path: ["dueDate"],
+		},
 	);
 
 export const UpdateTaskBodySchema = z.object({
 	completed: z.boolean().optional(),
 	dueDate: DueDateSchema.nullable().optional(),
 	dueTime: DueTimeSchema.nullable().optional(),
+	reminderOffsetMinutes: ReminderOffsetMinutesSchema.nullable().optional(),
 	title: TaskTitleInputSchema.optional(),
 	assigneeId: z.string().nullable().optional(),
 });

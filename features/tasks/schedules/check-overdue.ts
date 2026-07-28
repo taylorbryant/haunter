@@ -3,6 +3,10 @@ import type { AppContext } from "@/app-context";
 import type { PendingPushNotification } from "@/features/notifications/ports";
 import { deliverTaskAssignmentNotifications } from "@/features/tasks/notifications/assigned";
 import { TaskOverdueNotification } from "@/features/tasks/notifications/overdue";
+import {
+	deliverTaskReminderNotifications,
+	shouldCreateTaskReminder,
+} from "@/features/tasks/notifications/reminder";
 import { defineSchedule } from "@/lib/schedules";
 import { localDateAndTime } from "@/lib/timezone";
 
@@ -15,19 +19,63 @@ export type CheckOverdueSchedulePayload = z.infer<
 >;
 
 const CANDIDATE_LIMIT = 5_000;
+const REMINDER_CANDIDATE_PAGE_SIZE = 250;
 const DELIVERY_LIMIT = 1_000;
 
 function groupPending(items: PendingPushNotification[]) {
 	const groups = new Map<string, PendingPushNotification[]>();
 	for (const item of items) {
 		if (item.kind !== "task.overdue") continue;
-		const key = `${item.userId}:${item.workspaceId}`;
+		const key = `${item.userId}:${item.workspaceId}:${item.pushAttempts}`;
 		groups.set(key, [...(groups.get(key) ?? []), item]);
 	}
 	return groups.values();
 }
 
 export async function processOverdueNotifications(ctx: AppContext, at: Date) {
+	// A one-day reminder can target a date that is already tomorrow in UTC+14.
+	// Query from yesterday through two UTC dates ahead, then apply the exact
+	// timezone-aware window. Keyset pagination scans the complete finite window
+	// without letting an inactive prefix hide later actionable reminders.
+	const reminderStart = new Date(at);
+	reminderStart.setUTCDate(reminderStart.getUTCDate() - 1);
+	const reminderCutoff = new Date(at);
+	reminderCutoff.setUTCDate(reminderCutoff.getUTCDate() + 2);
+	const reminderWindow = {
+		fromDate: reminderStart.toISOString().slice(0, 10),
+		cutoffDate: reminderCutoff.toISOString().slice(0, 10),
+	};
+	let reminderCursor:
+		| {
+				dueDate: string;
+				dueTime: string;
+				createdAt: string;
+				taskId: string;
+		  }
+		| undefined;
+	let reminderCandidates = 0;
+	let remindersCreated = 0;
+	do {
+		const page = await ctx.ports.notificationInbox.findReminderCandidates({
+			...reminderWindow,
+			limit: REMINDER_CANDIDATE_PAGE_SIZE,
+			cursor: reminderCursor,
+		});
+		reminderCandidates += page.items.length;
+		for (const candidate of page.items) {
+			if (!shouldCreateTaskReminder(candidate, at)) continue;
+			if (
+				await ctx.ports.notificationInbox.createTaskReminder(
+					candidate,
+					at.toISOString(),
+				)
+			) {
+				remindersCreated += 1;
+			}
+		}
+		reminderCursor = page.nextCursor ?? undefined;
+	} while (reminderCursor);
+
 	// UTC+14 may already be on the next date, so include today's UTC due dates
 	// in the bounded candidate query and apply the exact local-date rule below.
 	const cutoff = new Date(at);
@@ -71,7 +119,7 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 				userId: first.userId,
 				workspaceId: first.workspaceId,
 				notificationIds: group.map((item) => item.id),
-				attempt: Math.max(...group.map((item) => item.pushAttempts)) + 1,
+				attempt: first.pushAttempts + 1,
 				items: group.flatMap((item) =>
 					item.kind === "task.overdue" ? [item.payload] : [],
 				),
@@ -93,6 +141,17 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 			deliveryErrors.push(error);
 		}
 	}
+	const reminderItems = pending.filter((item) => item.kind === "task.reminder");
+	if (reminderItems.length > 0) {
+		try {
+			deliveryGroups += await deliverTaskReminderNotifications(
+				ctx,
+				reminderItems,
+			);
+		} catch (error) {
+			deliveryErrors.push(error);
+		}
+	}
 	if (deliveryErrors.length > 0) {
 		throw new AggregateError(
 			deliveryErrors,
@@ -100,7 +159,13 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 		);
 	}
 
-	return { candidates: candidates.length, created, deliveryGroups };
+	return {
+		candidates: candidates.length,
+		created,
+		reminderCandidates,
+		remindersCreated,
+		deliveryGroups,
+	};
 }
 
 export const CheckOverdueSchedule = defineSchedule("tasks.check-overdue", {
@@ -112,7 +177,7 @@ export const CheckOverdueSchedule = defineSchedule("tasks.check-overdue", {
 	},
 	async handle({ payload, ctx }) {
 		const result = await processOverdueNotifications(ctx, new Date(payload.at));
-		ctx.ports.logger.info("Overdue task notifications reconciled", {
+		ctx.ports.logger.info("Task notifications reconciled", {
 			scheduleName: "tasks.check-overdue",
 			...result,
 		});

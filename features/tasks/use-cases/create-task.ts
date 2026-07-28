@@ -44,6 +44,11 @@ export const createTaskUseCase = useCase
 					completed: false,
 					dueDate: input.dueDate ?? null,
 					dueTime: input.dueTime ?? null,
+					reminderOffsetMinutes: input.reminderOffsetMinutes ?? null,
+					reminderConfiguredAt:
+						input.reminderOffsetMinutes !== undefined
+							? new Date().toISOString()
+							: null,
 					assigneeId,
 					completedAt: null,
 				});

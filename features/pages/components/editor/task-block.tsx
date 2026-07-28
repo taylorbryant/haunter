@@ -15,6 +15,7 @@ import { useDeviceTimeOrLocalFallback } from "@/components/device-time-provider"
 import { DueDatePicker } from "@/components/due-date-picker";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import { parseTaskDateShortcut } from "@/features/tasks/lib/parse-task-input";
+import { parseTaskReminderOffset } from "@/features/tasks/lib/reminder-options";
 import { AUTO_TASK_ASSIGNEE } from "@/features/tasks/lib/task-block-props";
 import {
 	formatDueDateTimeLabel,
@@ -30,6 +31,7 @@ const taskBlockConfig = {
 		checked: { default: false },
 		due: { default: "" },
 		dueTime: { default: "" },
+		reminder: { default: "" },
 		// Assigned member's user id. AUTO_TASK_ASSIGNEE means "default to
 		// whoever creates/saves this new block"; "" is explicitly unassigned.
 		assignee: { default: AUTO_TASK_ASSIGNEE },
@@ -42,7 +44,7 @@ function TaskBlockView({
 	editor,
 	contentRef,
 }: ReactCustomBlockRenderProps<typeof taskBlockConfig>) {
-	const { checked, due, dueTime, assignee } = block.props;
+	const { checked, due, dueTime, reminder, assignee } = block.props;
 	const currentUserId = useContext(TaskBlockCurrentUserContext);
 	const deviceTime = useDeviceTimeOrLocalFallback();
 	const shownAssignee =
@@ -56,6 +58,7 @@ function TaskBlockView({
 		checked?: boolean;
 		due?: string;
 		dueTime?: string;
+		reminder?: string;
 		assignee?: string;
 	}) {
 		if (!editor.isEditable) return;
@@ -175,8 +178,18 @@ function TaskBlockView({
 					<DueDatePicker
 						value={due === "" ? null : due}
 						time={dueTime === "" ? null : dueTime}
+						reminderOffsetMinutes={
+							reminder === "" ? null : parseTaskReminderOffset(reminder)
+						}
 						onChange={(next) =>
-							update({ due: next.date ?? "", dueTime: next.time ?? "" })
+							update({
+								due: next.date ?? "",
+								dueTime: next.time ?? "",
+								reminder:
+									next.reminderOffsetMinutes === null
+										? ""
+										: String(next.reminderOffsetMinutes),
+							})
 						}
 						className={`flex cursor-pointer items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs ${
 							due === ""

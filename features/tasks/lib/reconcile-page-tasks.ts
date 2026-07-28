@@ -8,10 +8,12 @@ import {
 	type TaskAssignmentActor,
 } from "@/features/tasks/notifications/assigned";
 import type { TaskRepository } from "@/features/tasks/ports";
+import type { Task } from "@/features/tasks/schemas";
 import { extractTaskBlocks } from "./extract-task-blocks";
 
 const DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DUE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const REMINDER_OFFSETS = new Set([0, 15, 60, 1_440]);
 
 type TaskReconciliationPorts = {
 	members: MemberRepository;
@@ -46,6 +48,20 @@ async function validateTaskBlock(
 				blockId: block.blockId,
 				due: block.due,
 				dueTime: block.dueTime,
+			},
+		});
+	}
+	if (
+		block.reminderOffsetMinutes !== null &&
+		(!REMINDER_OFFSETS.has(block.reminderOffsetMinutes) || block.due === null)
+	) {
+		throw appError("InvalidPageContent", {
+			message:
+				"Task reminders must use a supported offset and include a due date.",
+			details: {
+				blockId: block.blockId,
+				due: block.due,
+				reminderOffsetMinutes: block.reminderOffsetMinutes,
 			},
 		});
 	}
@@ -133,6 +149,9 @@ export async function reconcilePageTasks(
 				completed: block.checked,
 				dueDate: block.due,
 				dueTime: block.dueTime,
+				reminderOffsetMinutes:
+					block.reminderOffsetMinutes as Task["reminderOffsetMinutes"],
+				reminderConfiguredAt: block.reminderOffsetMinutes !== null ? now : null,
 				assigneeId: block.resolvedAssigneeId,
 				completedAt: block.checked ? now : null,
 			});
@@ -151,6 +170,7 @@ export async function reconcilePageTasks(
 			current.completed !== block.checked ||
 			current.dueDate !== block.due ||
 			current.dueTime !== block.dueTime ||
+			current.reminderOffsetMinutes !== block.reminderOffsetMinutes ||
 			current.assigneeId !== block.resolvedAssigneeId;
 
 		if (rowChanged) {
@@ -160,7 +180,15 @@ export async function reconcilePageTasks(
 				completed: block.checked,
 				dueDate: block.due,
 				dueTime: block.dueTime,
+				reminderOffsetMinutes:
+					block.reminderOffsetMinutes as Task["reminderOffsetMinutes"],
 				assigneeId: block.resolvedAssigneeId,
+				...(current.dueDate !== block.due ||
+				current.dueTime !== block.dueTime ||
+				current.reminderOffsetMinutes !== block.reminderOffsetMinutes ||
+				current.assigneeId !== block.resolvedAssigneeId
+					? { reminderConfiguredAt: now }
+					: {}),
 				// Stamp/clear completedAt only when the completed state flips.
 				...(current.completed !== block.checked
 					? { completedAt: block.checked ? now : null }

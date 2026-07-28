@@ -56,15 +56,36 @@ export const updateTaskUseCase = useCase
 						: input.dueTime !== undefined
 							? input.dueTime
 							: task.dueTime;
+				const reminderOffsetMinutes =
+					input.dueDate === null
+						? null
+						: input.reminderOffsetMinutes !== undefined
+							? input.reminderOffsetMinutes
+							: task.reminderOffsetMinutes;
 				if (dueTime !== null && dueDate === null) {
 					throw appError("InvalidTaskDue");
 				}
+				if (reminderOffsetMinutes !== null && dueDate === null) {
+					throw appError("InvalidTaskDue");
+				}
+				const assigneeId =
+					input.assigneeId !== undefined ? input.assigneeId : task.assigneeId;
+				const schedulingChanged =
+					dueDate !== task.dueDate ||
+					dueTime !== task.dueTime ||
+					reminderOffsetMinutes !== task.reminderOffsetMinutes ||
+					assigneeId !== task.assigneeId;
 				const updated = await tx.tasks.update(scope, task.id, {
 					...(input.title !== undefined ? { title: input.title } : {}),
 					...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
 					...(input.dueDate !== undefined || input.dueTime !== undefined
 						? { dueTime }
 						: {}),
+					...(input.dueDate === null ||
+					input.reminderOffsetMinutes !== undefined
+						? { reminderOffsetMinutes }
+						: {}),
+					...(schedulingChanged ? { reminderConfiguredAt: now } : {}),
 					...(input.assigneeId !== undefined
 						? { assigneeId: input.assigneeId }
 						: {}),
@@ -84,6 +105,7 @@ export const updateTaskUseCase = useCase
 					(input.completed !== undefined ||
 						input.dueDate !== undefined ||
 						input.dueTime !== undefined ||
+						input.reminderOffsetMinutes !== undefined ||
 						input.assigneeId !== undefined)
 				) {
 					const page = await tx.pages.findById(scope, task.pageId);
@@ -98,6 +120,10 @@ export const updateTaskUseCase = useCase
 								...(input.dueDate !== undefined ? { due: input.dueDate } : {}),
 								...(input.dueDate !== undefined || input.dueTime !== undefined
 									? { dueTime }
+									: {}),
+								...(input.dueDate === null ||
+								input.reminderOffsetMinutes !== undefined
+									? { reminderOffsetMinutes }
 									: {}),
 								...(input.assigneeId !== undefined
 									? { assignee: input.assigneeId }

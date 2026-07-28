@@ -16,6 +16,7 @@ import type { CanvasRepository } from "@/features/canvases/ports";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { PageRepository } from "@/features/pages/ports";
+import type { BlockJson } from "@/features/pages/schemas";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
 import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
 import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
@@ -194,6 +195,55 @@ describe("page shares", () => {
 				{ ctx: anonymousCtx },
 			),
 		).rejects.toThrow(/no longer available/);
+	});
+
+	it("does not expose task reminder configuration on public shares", async () => {
+		const { pages, scope, page, tester, ctx, anonymous, anonymousCtx } =
+			await createFixture();
+		const content: BlockJson[] = [
+			{
+				id: "task-parent",
+				type: "paragraph",
+				props: {},
+				content: [],
+				children: [
+					{
+						id: "task-private",
+						type: "task",
+						props: {
+							checked: false,
+							due: "2026-08-01",
+							dueTime: "14:00",
+							reminder: "60",
+						},
+						content: [{ type: "text", text: "Private reminder", styles: {} }],
+						children: [],
+					},
+				],
+			},
+		];
+		await pages.saveContent(
+			scope,
+			page.id,
+			JSON.stringify(content),
+			extractPageSearchText(content),
+		);
+		const share = await tester.run(
+			createPageShareUseCase,
+			{ pageId: page.id },
+			{ ctx },
+		);
+
+		const shared = await anonymous.run(
+			getSharedPageUseCase,
+			{ token: share.token },
+			{ ctx: anonymousCtx },
+		);
+		expect(shared.content[0]?.children[0]?.props).toEqual({
+			checked: false,
+			due: "2026-08-01",
+			dueTime: "14:00",
+		});
 	});
 
 	it("revoking the link kills anonymous access", async () => {

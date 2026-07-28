@@ -4,6 +4,7 @@ export type TaskBlockPatch = {
 	checked?: boolean;
 	due?: string | null;
 	dueTime?: string | null;
+	reminderOffsetMinutes?: number | null;
 	assignee?: string | null;
 };
 
@@ -35,6 +36,14 @@ export function patchTaskBlock(
 						...(patch.due !== undefined ? { due: patch.due ?? "" } : {}),
 						...(patch.dueTime !== undefined
 							? { dueTime: patch.dueTime ?? "" }
+							: {}),
+						...(patch.reminderOffsetMinutes !== undefined
+							? {
+									reminder:
+										patch.reminderOffsetMinutes === null
+											? ""
+											: String(patch.reminderOffsetMinutes),
+								}
 							: {}),
 						...(patch.assignee !== undefined
 							? { assignee: patch.assignee ?? "" }

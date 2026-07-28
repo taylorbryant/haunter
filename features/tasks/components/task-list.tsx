@@ -2,7 +2,13 @@
 
 import { contractErrorMessage } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import {
+	BellIcon,
+	CalendarIcon,
+	FileTextIcon,
+	PlusIcon,
+	Trash2Icon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -31,6 +37,7 @@ import {
 	groupTasksByDueDate,
 	UPCOMING_TASK_SUMMARY_LIMIT,
 } from "@/features/tasks/lib/group-tasks-by-due-date";
+import type { TaskReminderOffsetMinutes } from "@/features/tasks/lib/reminder-options";
 import {
 	TASK_TITLE_MAX_LENGTH,
 	TASK_TITLE_TOO_LONG_MESSAGE,
@@ -233,6 +240,7 @@ export function TaskList({
 		title: string;
 		dueDate: string | null;
 		dueTime: string | null;
+		reminderOffsetMinutes: TaskReminderOffsetMinutes;
 		assigneeId?: string | null;
 	}): Promise<TaskSubmissionResult> {
 		return new Promise<TaskSubmissionResult>((resolve) => {
@@ -243,6 +251,9 @@ export function TaskList({
 						title: input.title,
 						...(input.dueDate ? { dueDate: input.dueDate } : {}),
 						...(input.dueTime ? { dueTime: input.dueTime } : {}),
+						...(input.reminderOffsetMinutes !== null
+							? { reminderOffsetMinutes: input.reminderOffsetMinutes }
+							: {}),
 						...(input.assigneeId !== undefined
 							? { assigneeId: input.assigneeId }
 							: {}),
@@ -428,6 +439,7 @@ export function TaskList({
 									<DueDatePicker
 										value={task.dueDate}
 										time={task.dueTime}
+										reminderOffsetMinutes={task.reminderOffsetMinutes}
 										onChange={(next) =>
 											updateMutation.mutate(
 												{
@@ -435,6 +447,7 @@ export function TaskList({
 													body: {
 														dueDate: next.date,
 														dueTime: next.time,
+														reminderOffsetMinutes: next.reminderOffsetMinutes,
 													},
 												},
 												{ onSuccess: () => refresh(task) },
@@ -468,6 +481,12 @@ export function TaskList({
 											task.dueTime,
 											parseIsoDate(resolvedTodayDate),
 										)}
+										{task.reminderOffsetMinutes !== null ? (
+											<BellIcon
+												className="size-3 shrink-0"
+												aria-hidden="true"
+											/>
+										) : null}
 									</span>
 								) : null}
 								{task.sourceBlockId === null && canEdit ? (

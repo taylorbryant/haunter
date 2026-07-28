@@ -4,6 +4,7 @@ import type {
 	PushSubscriptionInput,
 	TaskAssignedNotificationPayload,
 	TaskOverdueNotificationPayload,
+	TaskReminderNotificationPayload,
 } from "@/features/notifications/schemas";
 
 export type NotificationCursor = {
@@ -14,6 +15,7 @@ export type NotificationCursor = {
 export type NotificationPreferencesUpdate = {
 	overdueTasksEnabled?: boolean;
 	taskAssignmentsEnabled?: boolean;
+	taskRemindersEnabled?: boolean;
 	timezone?: string;
 };
 
@@ -27,6 +29,26 @@ export type TaskAssignmentCandidate = TaskAssignedNotificationPayload & {
 	userId: string;
 	workspaceId: string;
 	entityVersion: string;
+};
+
+export type TaskReminderCandidate = TaskReminderNotificationPayload & {
+	userId: string;
+	workspaceId: string;
+	timezone: string;
+	entityVersion: string;
+	reminderConfiguredAt: string;
+};
+
+export type TaskReminderScanCursor = {
+	dueDate: string;
+	dueTime: string;
+	createdAt: string;
+	taskId: string;
+};
+
+export type TaskReminderCandidatePage = {
+	items: TaskReminderCandidate[];
+	nextCursor: TaskReminderScanCursor | null;
 };
 
 export type PendingPushNotification = Notification & {
@@ -61,8 +83,18 @@ export interface NotificationRepository {
 		cutoffDate: string,
 		limit: number,
 	): Promise<OverdueTaskCandidate[]>;
+	findReminderCandidates(options: {
+		fromDate: string;
+		cutoffDate: string;
+		limit: number;
+		cursor?: TaskReminderScanCursor;
+	}): Promise<TaskReminderCandidatePage>;
 	createOverdue(
 		candidate: OverdueTaskCandidate,
+		createdAt: string,
+	): Promise<Notification | null>;
+	createTaskReminder(
+		candidate: TaskReminderCandidate,
 		createdAt: string,
 	): Promise<Notification | null>;
 	createTaskAssigned(
@@ -73,6 +105,7 @@ export interface NotificationRepository {
 		now: string,
 		limit: number,
 	): Promise<PendingPushNotification[]>;
+	listValidReminderPush(ids: string[]): Promise<string[]>;
 	claimPush(ids: string[], leaseUntil: string): Promise<boolean>;
 	markPushDelivered(ids: string[], deliveredAt: string): Promise<void>;
 	markPushSkipped(ids: string[]): Promise<void>;

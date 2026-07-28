@@ -28,7 +28,12 @@ describe("blocksToMarkdown", () => {
 			block("paragraph", {}, "Hello world"),
 			block(
 				"task",
-				{ checked: false, due: "2026-07-10", dueTime: "14:00" },
+				{
+					checked: false,
+					due: "2026-07-10",
+					dueTime: "14:00",
+					reminder: "60",
+				},
 				"Ship it",
 			),
 			block("task", { checked: true }, "Done thing"),
@@ -43,6 +48,7 @@ describe("blocksToMarkdown", () => {
 		expect(markdown).toContain("## Plans");
 		expect(markdown).toContain("Hello world");
 		expect(markdown).toContain("- [ ] Ship it (due: 2026-07-10 14:00)");
+		expect(markdown).not.toContain("reminder");
 		expect(markdown).toContain("- [x] Done thing");
 		expect(markdown).toContain("- One");
 		expect(markdown).toContain("1. First");

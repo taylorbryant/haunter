@@ -7,6 +7,7 @@ export type ExtractedTaskBlock = {
 	checked: boolean;
 	due: string | null;
 	dueTime: string | null;
+	reminderOffsetMinutes: number | null;
 	/** User id from the block's assignee prop; null when unassigned. */
 	assignee: string | null;
 	/** New editor task blocks can request assignment to the current saver. */
@@ -48,6 +49,7 @@ export function extractTaskBlocks(blocks: BlockJson[]): ExtractedTaskBlock[] {
 				seen.add(block.id);
 				const due = block.props.due;
 				const dueTime = block.props.dueTime;
+				const reminder = block.props.reminder;
 				const assignee = block.props.assignee;
 				const useDefaultAssignee = isAutoTaskAssignee(assignee);
 				found.push({
@@ -57,6 +59,10 @@ export function extractTaskBlocks(blocks: BlockJson[]): ExtractedTaskBlock[] {
 					due: typeof due === "string" && due.length > 0 ? due : null,
 					dueTime:
 						typeof dueTime === "string" && dueTime.length > 0 ? dueTime : null,
+					reminderOffsetMinutes:
+						typeof reminder === "string" && reminder.length > 0
+							? Number(reminder)
+							: null,
 					assignee:
 						typeof assignee === "string" &&
 						assignee.length > 0 &&

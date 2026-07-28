@@ -14,6 +14,7 @@ function withPushSettings(
 	preferences: {
 		overdueTasksEnabled: boolean;
 		taskAssignmentsEnabled: boolean;
+		taskRemindersEnabled: boolean;
 		timezone: string;
 		timezoneConfigured: boolean;
 	},

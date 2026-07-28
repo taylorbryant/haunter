@@ -116,6 +116,24 @@ export function NotificationSettingsPanel() {
 		);
 	}
 
+	function updateTaskReminders(checked: boolean) {
+		setMessage(null);
+		setError(null);
+		updateSettings.mutate(
+			{ body: { taskRemindersEnabled: checked } },
+			{
+				onSuccess: () => void invalidateNotificationSettings(queryClient),
+				onError: (updateError) =>
+					setError(
+						userErrorMessage(
+							updateError,
+							"Notification settings could not be updated.",
+						),
+					),
+			},
+		);
+	}
+
 	async function useCurrentTimezone() {
 		if (!browserTimezone) return;
 		setMessage(null);
@@ -195,6 +213,7 @@ export function NotificationSettingsPanel() {
 				<Skeleton className="h-16 w-full" />
 				<Skeleton className="h-16 w-full" />
 				<Skeleton className="h-16 w-full" />
+				<Skeleton className="h-16 w-full" />
 			</Panel>
 		);
 	}
@@ -255,6 +274,25 @@ export function NotificationSettingsPanel() {
 			<div className="flex items-center justify-between gap-4">
 				<div className="flex min-w-0 flex-col gap-0.5">
 					<label
+						htmlFor="task-reminder-notifications"
+						className="font-medium text-sm"
+					>
+						Task reminders
+					</label>
+					<p className="text-muted-foreground text-sm">
+						Notify me when a reminder I set for an assigned task is due.
+					</p>
+				</div>
+				<Switch
+					id="task-reminder-notifications"
+					checked={value.taskRemindersEnabled}
+					disabled={updateSettings.isPending}
+					onCheckedChange={updateTaskReminders}
+				/>
+			</div>
+			<div className="flex items-center justify-between gap-4">
+				<div className="flex min-w-0 flex-col gap-0.5">
+					<label
 						htmlFor="overdue-task-notifications"
 						className="font-medium text-sm"
 					>
@@ -275,8 +313,8 @@ export function NotificationSettingsPanel() {
 				<div className="flex min-w-0 flex-col gap-0.5">
 					<p className="font-medium text-sm">Delivery timezone</p>
 					<p className="text-muted-foreground text-sm">
-						Overdue reminders arrive around 9:00 AM in{" "}
-						{value?.timezone ?? "UTC"}.
+						Date-only reminders and overdue tasks use 9:00 AM in{" "}
+						{value.timezone}.
 					</p>
 				</div>
 				<Button
@@ -305,7 +343,7 @@ export function NotificationSettingsPanel() {
 					</label>
 					<p className="text-muted-foreground text-sm">
 						{pushSupported
-							? "Receive overdue reminders when Haunter is closed."
+							? "Receive task reminders, assignments, and overdue alerts when Haunter is closed."
 							: "Push is unavailable in this browser or installation."}
 					</p>
 				</div>

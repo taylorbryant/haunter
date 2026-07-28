@@ -162,6 +162,7 @@ describe("task assignment push channel", () => {
 			completed: false,
 			dueDate: null,
 			dueTime: null,
+			reminderOffsetMinutes: null,
 			assigneeId: "user_assigned",
 			completedAt: null,
 			createdAt: new Date().toISOString(),

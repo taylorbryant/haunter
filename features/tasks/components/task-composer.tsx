@@ -11,6 +11,7 @@ import {
 	humanizeDueDate,
 	parseTaskInput,
 } from "@/features/tasks/lib/parse-task-input";
+import type { TaskReminderOffsetMinutes } from "@/features/tasks/lib/reminder-options";
 import {
 	TASK_TITLE_MAX_LENGTH,
 	TASK_TITLE_TOO_LONG_MESSAGE,
@@ -37,6 +38,7 @@ export function TaskComposer({
 		title: string;
 		dueDate: string | null;
 		dueTime: string | null;
+		reminderOffsetMinutes: TaskReminderOffsetMinutes;
 		assigneeId?: string | null;
 	}) => Promise<TaskSubmissionResult>;
 	onCancel?: () => void;
@@ -80,6 +82,8 @@ export function TaskComposer({
 			: activeMatch
 				? parsed.dueTime
 				: null;
+	const reminderOffsetMinutes =
+		manualDue !== undefined ? manualDue.reminderOffsetMinutes : null;
 	const title = activeMatch ? parsed.title : text.trim();
 
 	async function submit() {
@@ -100,6 +104,7 @@ export function TaskComposer({
 				title,
 				dueDate,
 				dueTime,
+				reminderOffsetMinutes,
 				...(submitAssigneeId !== undefined
 					? { assigneeId: submitAssigneeId }
 					: {}),
@@ -132,7 +137,11 @@ export function TaskComposer({
 	}
 
 	function clearDate() {
-		setManualDue({ date: null, time: null });
+		setManualDue({
+			date: null,
+			time: null,
+			reminderOffsetMinutes: null,
+		});
 		if (activeMatch) setIgnoredMatchText(activeMatch.text);
 		else setIgnoredMatchText(null);
 	}
@@ -292,6 +301,7 @@ export function TaskComposer({
 					<DueDatePicker
 						value={dueDate}
 						time={dueTime}
+						reminderOffsetMinutes={reminderOffsetMinutes}
 						disabled={pending}
 						onChange={(next) => {
 							setManualDue(next);

@@ -10,6 +10,12 @@ import { localDateAndTime } from "@/lib/timezone";
 
 const DueDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const DueTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const ReminderOffsetMinutes = z.union([
+	z.literal(0),
+	z.literal(15),
+	z.literal(60),
+	z.literal(1_440),
+]);
 const WorkspaceInput = z.object({ workspaceId: z.string().min(1) });
 const TaskInput = WorkspaceInput.extend({ taskId: z.string().uuid() });
 
@@ -65,6 +71,7 @@ export function createTaskAgentCapabilities(
 					completed: z.boolean(),
 					dueDate: DueDate.nullable(),
 					dueTime: DueTime.nullable(),
+					reminderOffsetMinutes: ReminderOffsetMinutes.nullable(),
 					assigneeId: z.string().nullable(),
 					assigneeName: z.string().nullable(),
 					pageId: z.string().uuid().nullable(),
@@ -126,6 +133,7 @@ export function createTaskAgentCapabilities(
 					completed: task.completed,
 					dueDate: task.dueDate,
 					dueTime: task.dueTime,
+					reminderOffsetMinutes: task.reminderOffsetMinutes,
 					assigneeId: task.assigneeId,
 					assigneeName: task.assigneeName,
 					pageId: task.pageId,
@@ -140,17 +148,21 @@ export function createTaskAgentCapabilities(
 
 	const createTaskCapability = defineAgentCapability("create_task", {
 		description:
-			"Create a standalone task in a workspace. The task is assigned to the acting user by default; dueDate uses YYYY-MM-DD and optional dueTime uses HH:mm.",
+			"Create a standalone task in a workspace. The task is assigned to the acting user by default; dueDate uses YYYY-MM-DD, optional dueTime uses HH:mm, and reminderOffsetMinutes may be 0, 15, 60, or 1440.",
 		input: WorkspaceInput.extend({
 			title: z.string().trim().min(1).max(TASK_TITLE_MAX_LENGTH, {
 				message: TASK_TITLE_TOO_LONG_MESSAGE,
 			}),
 			dueDate: DueDate.optional(),
 			dueTime: DueTime.optional(),
+			reminderOffsetMinutes: ReminderOffsetMinutes.optional(),
 			assigneeId: z.string().nullable().optional(),
 		}).refine(
-			(input) => input.dueTime === undefined || input.dueDate !== undefined,
-			{ message: "dueDate is required when dueTime is set." },
+			(input) =>
+				(input.dueTime === undefined &&
+					input.reminderOffsetMinutes === undefined) ||
+				input.dueDate !== undefined,
+			{ message: "dueDate is required when dueTime or a reminder is set." },
 		),
 		output: z.object({
 			taskId: z.string().uuid(),
@@ -158,6 +170,7 @@ export function createTaskAgentCapabilities(
 			completed: z.boolean(),
 			dueDate: DueDate.nullable(),
 			dueTime: DueTime.nullable(),
+			reminderOffsetMinutes: ReminderOffsetMinutes.nullable(),
 			assigneeId: z.string().nullable(),
 			createdAt: z.string(),
 			updatedAt: z.string(),
@@ -171,6 +184,9 @@ export function createTaskAgentCapabilities(
 					title: input.title,
 					...(input.dueDate ? { dueDate: input.dueDate } : {}),
 					...(input.dueTime ? { dueTime: input.dueTime } : {}),
+					...(input.reminderOffsetMinutes !== undefined
+						? { reminderOffsetMinutes: input.reminderOffsetMinutes }
+						: {}),
 					...(input.assigneeId !== undefined
 						? { assigneeId: input.assigneeId }
 						: {}),
@@ -182,6 +198,7 @@ export function createTaskAgentCapabilities(
 				completed: task.completed,
 				dueDate: task.dueDate,
 				dueTime: task.dueTime,
+				reminderOffsetMinutes: task.reminderOffsetMinutes,
 				assigneeId: task.assigneeId,
 				createdAt: task.createdAt,
 				updatedAt: task.updatedAt,
@@ -191,7 +208,7 @@ export function createTaskAgentCapabilities(
 
 	const updateTaskCapability = defineAgentCapability("update_task", {
 		description:
-			"Update a task's title, due date/time, or assignee. Set dueDate to null to clear both date and time; set dueTime to null to keep the date without a time. Page-backed task titles must still be edited in their page.",
+			"Update a task's title, due date/time, reminder, or assignee. Set dueDate to null to clear the date, time, and reminder; set dueTime to null to keep the date without a time; set reminderOffsetMinutes to null to disable reminders. Page-backed task titles must still be edited in their page.",
 		input: TaskInput.extend({
 			title: z
 				.string()
@@ -203,15 +220,18 @@ export function createTaskAgentCapabilities(
 				.optional(),
 			dueDate: DueDate.nullable().optional(),
 			dueTime: DueTime.nullable().optional(),
+			reminderOffsetMinutes: ReminderOffsetMinutes.nullable().optional(),
 			assigneeId: z.string().nullable().optional(),
 		}).refine(
 			(input) =>
 				input.title !== undefined ||
 				input.dueDate !== undefined ||
 				input.dueTime !== undefined ||
+				input.reminderOffsetMinutes !== undefined ||
 				input.assigneeId !== undefined,
 			{
-				message: "Provide a title, dueDate, dueTime, or assigneeId to update.",
+				message:
+					"Provide a title, dueDate, dueTime, reminderOffsetMinutes, or assigneeId to update.",
 			},
 		),
 		output: z.object({
@@ -220,6 +240,7 @@ export function createTaskAgentCapabilities(
 			completed: z.boolean(),
 			dueDate: DueDate.nullable(),
 			dueTime: DueTime.nullable(),
+			reminderOffsetMinutes: ReminderOffsetMinutes.nullable(),
 			assigneeId: z.string().nullable(),
 			updatedAt: z.string(),
 		}),
@@ -232,6 +253,9 @@ export function createTaskAgentCapabilities(
 					...(input.title !== undefined ? { title: input.title } : {}),
 					...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
 					...(input.dueTime !== undefined ? { dueTime: input.dueTime } : {}),
+					...(input.reminderOffsetMinutes !== undefined
+						? { reminderOffsetMinutes: input.reminderOffsetMinutes }
+						: {}),
 					...(input.assigneeId !== undefined
 						? { assigneeId: input.assigneeId }
 						: {}),
@@ -243,6 +267,7 @@ export function createTaskAgentCapabilities(
 				completed: task.completed,
 				dueDate: task.dueDate,
 				dueTime: task.dueTime,
+				reminderOffsetMinutes: task.reminderOffsetMinutes,
 				assigneeId: task.assigneeId,
 				updatedAt: task.updatedAt,
 			};

@@ -47,6 +47,7 @@ function listedTask(id: string, dueDate: string | null): TaskWithPage {
 		completed: false,
 		dueDate,
 		dueTime: null,
+		reminderOffsetMinutes: null,
 		assigneeId: "user-1",
 		assigneeName: "Taylor",
 		pageTitle: null,
@@ -106,6 +107,7 @@ describe("extractTaskBlocks", () => {
 				checked: true,
 				due: "2026-07-03",
 				dueTime: null,
+				reminderOffsetMinutes: null,
 				assignee: null,
 				useDefaultAssignee: false,
 			},
@@ -115,6 +117,7 @@ describe("extractTaskBlocks", () => {
 				checked: false,
 				due: null,
 				dueTime: null,
+				reminderOffsetMinutes: null,
 				assignee: null,
 				useDefaultAssignee: false,
 			},
@@ -237,6 +240,23 @@ describe("patchTaskBlock", () => {
 		expect(doc[0]?.children[0]?.props).toEqual({ checked: false, due: "" });
 	});
 
+	it("patches and clears a task reminder using the compatible string prop", () => {
+		const doc = [
+			task("t1", "Nested", {
+				due: "2026-07-04",
+				reminder: "",
+			}),
+		];
+		const scheduled = patchTaskBlock(doc, "t1", {
+			reminderOffsetMinutes: 60,
+		});
+		expect(scheduled.blocks[0]?.props.reminder).toBe("60");
+		const cleared = patchTaskBlock(scheduled.blocks, "t1", {
+			reminderOffsetMinutes: null,
+		});
+		expect(cleared.blocks[0]?.props.reminder).toBe("");
+	});
+
 	it("reports found=false when the block id is missing", () => {
 		const { found } = patchTaskBlock([paragraph("p1")], "ghost", {
 			checked: true,
@@ -285,6 +305,7 @@ describe("reconcileTaskBlockProps", () => {
 			checked: true,
 			due: "2026-07-04",
 			dueTime: "",
+			reminder: "",
 			assignee: "user_teammate",
 			color: "red",
 		});

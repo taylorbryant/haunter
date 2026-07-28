@@ -43,6 +43,12 @@ function createScheduleFixture(
 	const pending: PendingPushNotification[] = [...(options.pending ?? [])];
 	const deliveries: unknown[] = [];
 	const notificationInbox = {
+		async findReminderCandidates() {
+			return { items: [], nextCursor: null };
+		},
+		async createTaskReminder() {
+			return null;
+		},
 		async findOverdueCandidates() {
 			return candidates;
 		},
@@ -77,6 +83,10 @@ function createScheduleFixture(
 		async listPendingPush() {
 			return pending;
 		},
+		async listValidReminderPush(ids: string[]) {
+			return ids;
+		},
+		async markPushSkipped() {},
 	};
 	const ctx = {
 		ports: {

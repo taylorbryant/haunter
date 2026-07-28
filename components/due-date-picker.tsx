@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarIcon, ClockIcon } from "lucide-react";
+import { BellIcon, CalendarIcon, ClockIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,21 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { formatDueDatePickerAccessibleName } from "@/features/tasks/lib/due-date-accessibility";
+import {
+	formatTaskReminderLabel,
+	parseTaskReminderOffset,
+	TASK_REMINDER_OPTIONS,
+	type TaskReminderOffsetMinutes,
+} from "@/features/tasks/lib/reminder-options";
 import {
 	formatDueDateLabel,
 	formatDueDateTimeLabel,
@@ -22,6 +36,7 @@ import { cn } from "@/lib/utils";
 export type DueDateValue = {
 	date: string | null;
 	time: string | null;
+	reminderOffsetMinutes: TaskReminderOffsetMinutes;
 };
 
 function addDays(from: Date, days: number): Date {
@@ -54,13 +69,15 @@ const TIME_PRESETS = [
 export function DueDatePicker({
 	value,
 	time = null,
+	reminderOffsetMinutes = null,
 	onChange,
 	className,
-	ariaLabel = "Due date and time",
+	ariaLabel = "Due date, time, and reminder",
 	disabled = false,
 }: {
 	value: string | null;
 	time?: string | null;
+	reminderOffsetMinutes?: TaskReminderOffsetMinutes;
 	onChange: (next: DueDateValue) => void;
 	className?: string;
 	ariaLabel?: string;
@@ -68,11 +85,25 @@ export function DueDatePicker({
 }) {
 	const deviceTime = useDeviceTime();
 	const [open, setOpen] = useState(false);
-	const [draft, setDraft] = useState<DueDateValue>({ date: value, time });
+	const [draft, setDraft] = useState<DueDateValue>({
+		date: value,
+		time,
+		reminderOffsetMinutes,
+	});
+	const draftRef = useRef(draft);
 	const dirtyRef = useRef(false);
 	const selected = draft.date ? parseIsoDate(draft.date) : undefined;
 	const today = deviceTime.ready ? parseIsoDate(deviceTime.today) : null;
 	const [visibleMonth, setVisibleMonth] = useState<Date | undefined>(selected);
+	const accessibleName = formatDueDatePickerAccessibleName({
+		action: ariaLabel,
+		dueDate: value,
+		dueTime: time,
+		reminderOffsetMinutes,
+		today: deviceTime.ready ? deviceTime.today : null,
+		loading: !deviceTime.ready,
+		disabled: disabled || !deviceTime.ready,
+	});
 
 	useEffect(() => {
 		if (!disabled) return;
@@ -87,15 +118,21 @@ export function DueDatePicker({
 			return;
 		}
 		if (nextOpen && today) {
-			setDraft({ date: value, time });
+			const nextDraft = { date: value, time, reminderOffsetMinutes };
+			draftRef.current = nextDraft;
+			setDraft(nextDraft);
 			setVisibleMonth(value ? parseIsoDate(value) : today);
 			dirtyRef.current = false;
 		} else if (!nextOpen) {
 			setOpen(false);
+			const latestDraft = draftRef.current;
 			const shouldApply =
-				dirtyRef.current && (draft.date !== value || draft.time !== time);
+				dirtyRef.current &&
+				(latestDraft.date !== value ||
+					latestDraft.time !== time ||
+					latestDraft.reminderOffsetMinutes !== reminderOffsetMinutes);
 			dirtyRef.current = false;
-			if (shouldApply) onChange(draft);
+			if (shouldApply) onChange(latestDraft);
 			return;
 		}
 		setOpen(nextOpen);
@@ -104,6 +141,7 @@ export function DueDatePicker({
 	function changeDraft(next: DueDateValue) {
 		if (disabled) return;
 		dirtyRef.current = true;
+		draftRef.current = next;
 		setDraft(next);
 	}
 
@@ -112,6 +150,7 @@ export function DueDatePicker({
 		changeDraft({
 			date: date ? toIsoDate(date) : null,
 			time: date ? draft.time : null,
+			reminderOffsetMinutes: date ? draft.reminderOffsetMinutes : null,
 		});
 	}
 
@@ -121,7 +160,7 @@ export function DueDatePicker({
 				type="button"
 				disabled
 				aria-busy="true"
-				aria-label={ariaLabel}
+				aria-label={accessibleName}
 				className={cn(
 					"outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
 					className,
@@ -144,12 +183,15 @@ export function DueDatePicker({
 							"outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
 							className,
 						)}
-						aria-label={ariaLabel}
+						aria-label={accessibleName}
 					/>
 				}
 			>
 				<CalendarIcon className="size-4 shrink-0" aria-hidden="true" />
 				{value ? formatDueDateTimeLabel(value, time, today) : "Due"}
+				{value && reminderOffsetMinutes !== null ? (
+					<BellIcon className="size-3 shrink-0" aria-hidden="true" />
+				) : null}
 			</PopoverTrigger>
 			<PopoverContent
 				className="w-auto max-w-[calc(100vw-1rem)] p-0"
@@ -208,6 +250,7 @@ export function DueDatePicker({
 								changeDraft({
 									date: draft.date,
 									time: event.target.value || null,
+									reminderOffsetMinutes: draft.reminderOffsetMinutes,
 								})
 							}
 						/>
@@ -216,7 +259,13 @@ export function DueDatePicker({
 							variant="ghost"
 							size="sm"
 							disabled={!draft.date || draft.time === null}
-							onClick={() => changeDraft({ date: draft.date, time: null })}
+							onClick={() =>
+								changeDraft({
+									date: draft.date,
+									time: null,
+									reminderOffsetMinutes: draft.reminderOffsetMinutes,
+								})
+							}
 						>
 							No time
 						</Button>
@@ -230,7 +279,11 @@ export function DueDatePicker({
 								size="sm"
 								disabled={!draft.date}
 								onClick={() =>
-									changeDraft({ date: draft.date, time: preset.value })
+									changeDraft({
+										date: draft.date,
+										time: preset.value,
+										reminderOffsetMinutes: draft.reminderOffsetMinutes,
+									})
 								}
 							>
 								{preset.label}
@@ -238,13 +291,64 @@ export function DueDatePicker({
 						))}
 					</div>
 				</div>
+				<div className="flex items-center gap-2 border-t p-2">
+					<BellIcon
+						className="size-4 shrink-0 stroke-muted-foreground"
+						aria-hidden="true"
+					/>
+					<Select
+						items={TASK_REMINDER_OPTIONS.map((option) => ({
+							label:
+								option.value === "0" && draft.time === null
+									? formatTaskReminderLabel(0, null)
+									: option.label,
+							value: option.value,
+						}))}
+						value={
+							draft.reminderOffsetMinutes === null
+								? "none"
+								: String(draft.reminderOffsetMinutes)
+						}
+						disabled={!draft.date}
+						onValueChange={(next) =>
+							changeDraft({
+								...draft,
+								reminderOffsetMinutes:
+									next === null ? null : parseTaskReminderOffset(next),
+							})
+						}
+					>
+						<SelectTrigger
+							size="sm"
+							className="w-full border-0 bg-transparent shadow-none"
+							aria-label="Task reminder"
+						>
+							<SelectValue placeholder="No reminder" />
+						</SelectTrigger>
+						<SelectContent align="start" alignItemWithTrigger={false}>
+							{TASK_REMINDER_OPTIONS.map((option) => (
+								<SelectItem key={option.value} value={option.value}>
+									{option.value === "0" && draft.time === null
+										? formatTaskReminderLabel(0, null)
+										: option.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
 				<div className="flex items-center justify-between border-t p-2">
 					<Button
 						type="button"
 						variant="ghost"
 						size="sm"
 						disabled={!draft.date}
-						onClick={() => changeDraft({ date: null, time: null })}
+						onClick={() =>
+							changeDraft({
+								date: null,
+								time: null,
+								reminderOffsetMinutes: null,
+							})
+						}
 					>
 						Clear
 					</Button>

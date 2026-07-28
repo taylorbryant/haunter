@@ -36,6 +36,7 @@ import {
 	listTasksUseCase,
 	updateTaskUseCase,
 } from "../use-cases";
+import type { UpdateTaskData } from "../ports";
 import { createTestTaskRepository } from "./helpers";
 
 function taskBlock(
@@ -386,6 +387,37 @@ describe("task reconciliation on page content save", () => {
 				{
 					id: page.id,
 					content: [
+						taskBlock("bad-reminder", "Bad reminder", {
+							reminder: "60",
+						}),
+					],
+				},
+				{ ctx },
+			),
+		).rejects.toThrow("Task reminders must use a supported offset");
+
+		await expect(
+			tester.run(
+				savePageContentUseCase,
+				{
+					id: page.id,
+					content: [
+						taskBlock("unsupported-reminder", "Bad reminder", {
+							due: "2026-07-03",
+							reminder: "30",
+						}),
+					],
+				},
+				{ ctx },
+			),
+		).rejects.toThrow("Task reminders must use a supported offset");
+
+		await expect(
+			tester.run(
+				savePageContentUseCase,
+				{
+					id: page.id,
+					content: [
 						taskBlock("bad-assignee", "Bad assignee", {
 							assignee: "user_stranger",
 						}),
@@ -643,6 +675,103 @@ describe("tasks use cases", () => {
 
 		expect(scheduled.dueTime).toBe("14:00");
 		expect(cleared).toMatchObject({ dueDate: null, dueTime: null });
+	});
+
+	it("validates, preserves, and clears proactive reminders with the due date", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+
+		await expect(
+			tester.run(
+				createTaskUseCase,
+				{
+					workspaceId: workspace.id,
+					title: "Prepare update",
+					reminderOffsetMinutes: 15,
+				},
+				{ ctx },
+			),
+		).rejects.toThrow("A due date is required when a reminder is set");
+
+		const task = await tester.run(
+			createTaskUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "Prepare update",
+				dueDate: "2026-07-14",
+				reminderOffsetMinutes: 60,
+			},
+			{ ctx },
+		);
+		expect(task.reminderOffsetMinutes).toBe(60);
+
+		const timed = await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, dueTime: "14:00" },
+			{ ctx },
+		);
+		expect(timed.reminderOffsetMinutes).toBe(60);
+
+		const cleared = await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, dueDate: null },
+			{ ctx },
+		);
+		expect(cleared).toMatchObject({
+			dueDate: null,
+			dueTime: null,
+			reminderOffsetMinutes: null,
+		});
+	});
+
+	it("versions reminders only when scheduling inputs change", async () => {
+		const { workspace, tasks, tester, ctx } = await createFixture();
+		const updates: UpdateTaskData[] = [];
+		const update = tasks.update.bind(tasks);
+		tasks.update = async (scope, id, input) => {
+			updates.push(input);
+			return update(scope, id, input);
+		};
+		const task = await tester.run(
+			createTaskUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "Prepare update",
+				dueDate: "2026-07-14",
+				reminderOffsetMinutes: 15,
+			},
+			{ ctx },
+		);
+
+		await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, title: "Prepare launch update" },
+			{ ctx },
+		);
+		await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, completed: true },
+			{ ctx },
+		);
+		await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, dueTime: "14:00" },
+			{ ctx },
+		);
+		await tester.run(
+			updateTaskUseCase,
+			{
+				id: task.id,
+				dueDate: "2026-07-14",
+				dueTime: "14:00",
+				reminderOffsetMinutes: 15,
+			},
+			{ ctx },
+		);
+
+		expect(updates[0]?.reminderConfiguredAt).toBeUndefined();
+		expect(updates[1]?.reminderConfiguredAt).toBeUndefined();
+		expect(typeof updates[2]?.reminderConfiguredAt).toBe("string");
+		expect(updates[3]?.reminderConfiguredAt).toBeUndefined();
 	});
 
 	it("treats a task in another workspace as not found", async () => {

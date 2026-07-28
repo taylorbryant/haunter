@@ -578,6 +578,8 @@ export const tasks = sqliteTable(
 			.default(false),
 		dueDate: text("due_date"),
 		dueTime: text("due_time"),
+		reminderOffsetMinutes: integer("reminder_offset_minutes"),
+		reminderConfiguredAt: text("reminder_configured_at"),
 		completedAt: text("completed_at"),
 		createdAt: text("created_at").notNull(),
 		updatedAt: text("updated_at").notNull(),
@@ -616,6 +618,12 @@ export const tasks = sqliteTable(
 			table.dueTime,
 			table.assigneeId,
 		),
+		reminderCandidateIdx: index("tasks_reminder_candidate_idx").on(
+			table.completed,
+			table.reminderOffsetMinutes,
+			table.dueDate,
+			table.assigneeId,
+		),
 		pageIdx: index("tasks_page_idx").on(table.pageId),
 		userIdx: index("tasks_user_idx").on(table.userId),
 	}),
@@ -629,6 +637,11 @@ export const notificationPreferences = sqliteTable("notification_preferences", {
 		.notNull()
 		.default(true),
 	taskAssignmentsEnabled: integer("task_assignments_enabled", {
+		mode: "boolean",
+	})
+		.notNull()
+		.default(true),
+	taskRemindersEnabled: integer("task_reminders_enabled", {
 		mode: "boolean",
 	})
 		.notNull()

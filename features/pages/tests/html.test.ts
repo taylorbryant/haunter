@@ -71,7 +71,12 @@ describe("pageToHtmlDocument", () => {
 				]),
 				block(
 					"task",
-					{ checked: true, due: "2026-08-01", dueTime: "14:00" },
+					{
+						checked: true,
+						due: "2026-08-01",
+						dueTime: "14:00",
+						reminder: "60",
+					},
 					"Announce",
 				),
 				block("codeBlock", { language: "ts" }, "const done = true;"),
@@ -94,6 +99,7 @@ describe("pageToHtmlDocument", () => {
 		expect(html).toContain("<ul><li>Ship<ul><li>Verify</li></ul></li></ul>");
 		expect(html).toContain('class="task checked"');
 		expect(html).toContain('datetime="2026-08-01T14:00"');
+		expect(html).not.toContain("reminder");
 		expect(html).toContain("typescript:const done = true;");
 		expect(html).toContain("script-src 'none'");
 	});
