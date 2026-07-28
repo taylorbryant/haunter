@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES = [
 	{
 		version: "0.4.0",
 		date: "2026-07-27",
-		title: "Capture now, organize later",
+		title: "Create pages and tasks faster",
 		file: "0.4.0.md",
 	},
 	{

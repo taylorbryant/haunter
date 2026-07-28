@@ -9,7 +9,6 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
-import { createTestInboxRepository } from "@/features/inbox/tests/helpers";
 import type {
 	NotificationRepository,
 	TaskAssignmentCandidate,
@@ -84,7 +83,6 @@ async function createFixture(
 	};
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
-	const inboxItems = createTestInboxRepository({ pages, tasks });
 	const assignmentNotifications: Notification[] = [];
 	const afterResponseTasks: Array<() => Promise<void>> = [];
 	const pushDeliveries: unknown[] = [];
@@ -175,7 +173,6 @@ async function createFixture(
 		overrides: {
 			afterResponse,
 			gate: appPorts.gate,
-			inboxItems,
 			members,
 			notificationInbox,
 			notifications,
@@ -186,14 +183,7 @@ async function createFixture(
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({
-				...ports,
-				inboxItems,
-				members,
-				pages,
-				pageVersions,
-				tasks,
-			}),
+			ports: (ports) => ({ ...ports, members, pages, pageVersions, tasks }),
 		},
 	});
 	const createTestContext = createTestContextFactory<

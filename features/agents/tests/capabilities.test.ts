@@ -12,7 +12,6 @@ import type { AppContext } from "@/app-context";
 import type { AgentActivityWrite } from "@/features/agents/ports";
 import { createTestAgentAdminRepository } from "@/features/agents/tests/helpers";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
-import { createTestInboxRepository } from "@/features/inbox/tests/helpers";
 import {
 	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
@@ -36,7 +35,6 @@ async function createFixture() {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository({ pages });
 	const canvases = createTestCanvasRepository();
-	const inboxItems = createTestInboxRepository({ pages, tasks });
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
 	const pageCollaboration = createTestPageCollaborationPort();
@@ -74,7 +72,6 @@ async function createFixture() {
 			agents,
 			gate: appPorts.gate,
 			canvases,
-			inboxItems,
 			members,
 			pageLinks,
 			pageCollaboration,
@@ -88,7 +85,6 @@ async function createFixture() {
 				...ports,
 				agents,
 				canvases,
-				inboxItems,
 				members,
 				pageLinks,
 				pages,
@@ -314,7 +310,9 @@ describe("Haunter agent capabilities", () => {
 
 	it("rejects oversized markdown before creating an agent page", async () => {
 		const { execute, pages, scope, workspaceId } = await createFixture();
-		const markdown = Array.from({ length: 10_001 }, () => "x").join("\n\n");
+		const markdown = Array.from({ length: 10_001 }, () => "x").join(
+			"\n\n",
+		);
 
 		await expect(
 			execute("create_page", {
@@ -332,7 +330,9 @@ describe("Haunter agent capabilities", () => {
 			workspaceId,
 			title: "Append target",
 		})) as { pageId: string };
-		const markdown = Array.from({ length: 10_001 }, () => "x").join("\n\n");
+		const markdown = Array.from({ length: 10_001 }, () => "x").join(
+			"\n\n",
+		);
 
 		await expect(
 			execute("append_to_page", {

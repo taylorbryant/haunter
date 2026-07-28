@@ -10,7 +10,6 @@ import {
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
-import { createTestInboxRepository } from "@/features/inbox/tests/helpers";
 import type {
 	PageNavigationRepository,
 	PageRepository,
@@ -65,7 +64,6 @@ function createTester(
 		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	};
 	const canvases = createTestCanvasRepository();
-	const inboxItems = createTestInboxRepository({ pages, tasks });
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
 	const testFixture = createTestPorts<AppContext["ports"], AppTransactionPorts>(
@@ -74,7 +72,6 @@ function createTester(
 			overrides: {
 				gate: appPorts.gate,
 				canvases,
-				inboxItems,
 				pageLinks,
 				pageNavigation,
 				pageCollaboration,
@@ -87,7 +84,6 @@ function createTester(
 				ports: (ports) => ({
 					...ports,
 					canvases,
-					inboxItems,
 					pageLinks,
 					pageNavigation,
 					pages,

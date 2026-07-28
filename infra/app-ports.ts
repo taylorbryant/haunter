@@ -43,7 +43,6 @@ export const appPorts = definePorts<AppPorts>()({
 		"canvases",
 		"changelogState",
 		"idempotency",
-		"inboxItems",
 		"logger",
 		"mailer",
 		"members",

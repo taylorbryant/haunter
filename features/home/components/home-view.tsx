@@ -13,7 +13,6 @@ import {
 	getHomeUpcomingRange,
 	HOME_PAGE_LIST_LIMIT,
 } from "@/features/home/lib/home";
-import { InboxSection } from "@/features/inbox/components/inbox-section";
 import { getPageNavigationQueryOptions } from "@/features/pages/client/queries";
 import { formatViewedAt } from "@/features/pages/lib/format-viewed-at";
 import type { PageNavigationItem } from "@/features/pages/schemas";
@@ -93,8 +92,6 @@ export function HomeView({ workspaceId }: { workspaceId: string }) {
 					<Skeleton className="h-5 w-44" aria-label="Loading local date" />
 				)}
 			</header>
-
-			<InboxSection workspaceId={workspaceId} />
 
 			{deviceTime.ready && upcomingRange ? (
 				<>

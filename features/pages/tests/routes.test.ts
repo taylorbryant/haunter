@@ -10,7 +10,6 @@ import { createInMemoryDevtools } from "@beignet/devtools";
 import { createTestApp, createTestRequester } from "@beignet/web/testing";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
-import { createTestInboxRepository } from "@/features/inbox/tests/helpers";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
@@ -61,7 +60,6 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository();
 	const canvases = createTestCanvasRepository();
-	const inboxItems = createTestInboxRepository({ pages, tasks });
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageNavigation = createTestPageNavigationRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
@@ -82,7 +80,6 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 		base: appPorts,
 		overrides: {
 			gate: appPorts.gate,
-			inboxItems,
 			members,
 			pageLinks,
 			pageNavigation,
@@ -100,7 +97,6 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 		transaction: {
 			ports: (ports) => ({
 				...ports,
-				inboxItems,
 				pageVersions,
 				members,
 				pageLinks,

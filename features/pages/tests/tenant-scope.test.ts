@@ -74,12 +74,6 @@ describe("tenant-scoped repositories", () => {
 				assigneeId: null,
 				completedAt: null,
 			});
-			const inboxItem = await repositories.inboxItems.create(scopeA, {
-				userId: "user_scope_test",
-				kind: "page",
-				pageId: pageA.id,
-				taskId: null,
-			});
 			const canvas = await repositories.canvases.create(scopeA, {
 				userId: "user_scope_test",
 				pageId: pageA.id,
@@ -101,18 +95,6 @@ describe("tenant-scoped repositories", () => {
 			expect(pageA.workspaceId).toBe("workspace_a");
 			expect(await repositories.pages.findById(scopeB, pageA.id)).toBeNull();
 			expect(await repositories.tasks.findById(scopeB, task.id)).toBeNull();
-			expect(
-				await repositories.inboxItems.findForUser(
-					scopeB,
-					"user_scope_test",
-					inboxItem.id,
-				),
-			).toBeNull();
-			expect(
-				await repositories.inboxItems.listForUser(scopeB, "user_scope_test", {
-					limit: 20,
-				}),
-			).toEqual({ items: [], nextCursor: null });
 			expect(
 				await repositories.canvases.findById(scopeB, canvas.id),
 			).toBeNull();
@@ -179,14 +161,6 @@ describe("tenant-scoped repositories", () => {
 				}),
 			).rejects.toThrow("outside the tenant scope");
 			await expect(
-				repositories.inboxItems.create(scopeA, {
-					userId: "user_scope_test",
-					kind: "page",
-					pageId: pageB.id,
-					taskId: null,
-				}),
-			).rejects.toThrow("outside the tenant scope");
-			await expect(
 				repositories.canvases.create(scopeA, {
 					userId: "user_scope_test",
 					pageId: pageB.id,
@@ -214,11 +188,6 @@ describe("tenant-scoped repositories", () => {
 				repositories.pages.update(scopeB, pageA.id, { title: "Hijacked" }),
 			).rejects.toThrow();
 			await repositories.tasks.delete(scopeB, task.id);
-			await repositories.inboxItems.deleteForUser(
-				scopeB,
-				"user_scope_test",
-				inboxItem.id,
-			);
 			await repositories.canvases.deleteByPageIds(scopeB, [pageA.id]);
 			await repositories.shares.deleteByPage(scopeB, pageA.id);
 			await repositories.pages.setDeletedByIds(
@@ -231,13 +200,6 @@ describe("tenant-scoped repositories", () => {
 				"Workspace A page",
 			);
 			expect(await repositories.tasks.findById(scopeA, task.id)).not.toBeNull();
-			expect(
-				await repositories.inboxItems.findForUser(
-					scopeA,
-					"user_scope_test",
-					inboxItem.id,
-				),
-			).not.toBeNull();
 			expect(
 				await repositories.canvases.findById(scopeA, canvas.id),
 			).not.toBeNull();

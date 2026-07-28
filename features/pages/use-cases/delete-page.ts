@@ -47,6 +47,5 @@ export const deletePageUseCase = useCase
 
 			const subtree = await collectSubtreeIds(tx.pages, scope, page.id);
 			await tx.pages.setDeletedByIds(scope, subtree, new Date().toISOString());
-			await tx.inboxItems.deleteByPageIds(scope, subtree);
 		});
 	});

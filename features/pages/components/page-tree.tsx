@@ -67,7 +67,6 @@ import {
 	SidebarMenuSub,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import { invalidateInboxItems } from "@/features/inbox/client/queries";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	focusTitleOnArrival,
@@ -365,10 +364,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						current?.pageId === pageId ? null : current,
 					);
 					setPageTitleInCache(queryClient, page.id, page.title, page.updatedAt);
-					void Promise.all([
-						invalidatePages(queryClient),
-						invalidateInboxItems(queryClient),
-					]);
+					void invalidatePages(queryClient);
 				},
 				onError: (error) =>
 					setRenameError({
@@ -453,7 +449,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					await Promise.all([
 						invalidatePages(queryClient),
 						invalidatePageNavigation(queryClient, workspaceId),
-						invalidateInboxItems(queryClient),
 						invalidateTrash(queryClient),
 						// Tasks on trashed pages are filtered out server-side, so the
 						// subtree's tasks just left the My Tasks list.

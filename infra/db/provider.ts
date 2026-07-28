@@ -31,7 +31,6 @@ export const starterDatabaseProvider = createProvider<{
 			| "canvases"
 			| "changelogState"
 			| "idempotency"
-			| "inboxItems"
 			| "members"
 			| "mcpOAuthClients"
 			| "notificationInbox"

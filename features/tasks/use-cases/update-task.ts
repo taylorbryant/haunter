@@ -76,9 +76,6 @@ export const updateTaskUseCase = useCase
 						? { completedAt: input.completed ? now : null }
 						: {}),
 				});
-				if (input.completed === true) {
-					await tx.inboxItems.deleteByTaskIds(scope, [task.id]);
-				}
 
 				// Write the change through to the source page so the doc agrees.
 				if (

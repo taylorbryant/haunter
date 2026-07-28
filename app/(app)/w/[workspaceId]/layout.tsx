@@ -2,8 +2,8 @@
 
 import type { ReactNode } from "react";
 import { use } from "react";
+import { CreateDialogProvider } from "@/components/create-dialog-provider";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CaptureProvider } from "@/features/inbox/components/capture-provider";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 
 /**
@@ -32,7 +32,9 @@ export default function WorkspaceLayout({
 	if (!synced) return <WorkspaceSyncFallback />;
 
 	return (
-		<CaptureProvider workspaceId={workspaceId}>{children}</CaptureProvider>
+		<CreateDialogProvider workspaceId={workspaceId}>
+			{children}
+		</CreateDialogProvider>
 	);
 }
 
