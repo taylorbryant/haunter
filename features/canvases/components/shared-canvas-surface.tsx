@@ -4,9 +4,11 @@ import "tldraw/tldraw.css";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { type Editor, Tldraw } from "tldraw";
+import type { Editor } from "tldraw";
 import { rq } from "@/client";
 import { Button } from "@/components/ui/button";
+import { TldrawWithFonts } from "@/features/canvases/components/tldraw-with-fonts";
+import { haunterShapeUtils } from "@/features/canvases/lib/shape-utils";
 import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import { getSharedCanvas } from "@/features/shares/contracts";
@@ -63,8 +65,10 @@ export default function SharedCanvasSurface({
 
 	return (
 		<div className="relative h-full w-full">
-			<Tldraw
+			<TldrawWithFonts
+				documentSnapshot={snapshot}
 				licenseKey={TLDRAW_LICENSE_KEY}
+				shapeUtils={haunterShapeUtils}
 				snapshot={snapshot}
 				onMount={handleMount}
 			/>

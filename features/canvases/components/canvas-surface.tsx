@@ -9,10 +9,8 @@ import { useRef, useState } from "react";
 import {
 	createTLStore,
 	defaultBindingUtils,
-	defaultShapeUtils,
 	type Editor,
 	getSnapshot,
-	Tldraw,
 } from "tldraw";
 import { userErrorMessage } from "@/client/error-feedback";
 import { useCurrentUser } from "@/components/app-session-provider";
@@ -32,11 +30,13 @@ import {
 	rememberPendingCanvasSave,
 } from "@/features/canvases/client/save-state";
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
+import { TldrawWithFonts } from "@/features/canvases/components/tldraw-with-fonts";
 import { useCanvasTheme } from "@/features/canvases/components/use-canvas-theme";
 import {
 	type CanvasCollabUser,
 	useCollabCanvasStore,
 } from "@/features/canvases/components/use-collab-canvas-store";
+import { haunterShapeUtils } from "@/features/canvases/lib/shape-utils";
 import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
@@ -145,7 +145,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		localStoreRef.current = {
 			canvasId,
 			store: createTLStore({
-				shapeUtils: defaultShapeUtils,
+				shapeUtils: haunterShapeUtils,
 				bindingUtils: defaultBindingUtils,
 				snapshot,
 			}),
@@ -319,8 +319,10 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 
 	return (
 		<div className="relative h-full w-full">
-			<Tldraw
+			<TldrawWithFonts
+				documentSnapshot={snapshot}
 				licenseKey={TLDRAW_LICENSE_KEY}
+				shapeUtils={haunterShapeUtils}
 				store={localStore}
 				onMount={handleMount}
 			/>
@@ -490,8 +492,10 @@ function CollabCanvasSurface({
 
 	return (
 		<div className="relative h-full w-full">
-			<Tldraw
+			<TldrawWithFonts
+				documentSnapshot={snapshot}
 				licenseKey={TLDRAW_LICENSE_KEY}
+				shapeUtils={haunterShapeUtils}
 				store={storeWithStatus}
 				onMount={handleMount}
 			/>
