@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES = [
 	{
 		version: "0.4.0",
 		date: "2026-07-27",
-		title: "Create pages and tasks faster",
+		title: "Create from anywhere",
 		file: "0.4.0.md",
 	},
 	{
