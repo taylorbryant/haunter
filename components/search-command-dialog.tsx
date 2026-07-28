@@ -13,6 +13,7 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
+	CommandShortcut,
 } from "@/components/ui/command";
 import {
 	getPageNavigationQueryOptions,
@@ -114,6 +115,9 @@ export function SearchCommandDialog({
 												<CornerDownLeftIcon className="text-muted-foreground" />
 											)}
 											<span className="truncate">{command.title}</span>
+											{command.shortcut ? (
+												<CommandShortcut>{command.shortcut}</CommandShortcut>
+											) : null}
 										</CommandItem>
 									))}
 								</CommandGroup>

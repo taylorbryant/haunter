@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCurrentUser } from "@/components/app-session-provider";
+import { useCreateDialog } from "@/components/create-dialog-provider";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { useDeviceTime } from "@/components/device-time-provider";
 import { DueDatePicker } from "@/components/due-date-picker";
@@ -92,6 +93,7 @@ export function TaskList({
 	// Viewers see the list but get no add/toggle/edit/delete controls.
 	const canEdit = useCanEditWorkspace();
 	const currentUser = useCurrentUser();
+	const { openCreateTask } = useCreateDialog();
 	const isTodayView = variant === "today";
 	const isUpcomingView = variant === "upcoming";
 	const isHomeView = isTodayView || isUpcomingView;
@@ -110,7 +112,6 @@ export function TaskList({
 				? UPCOMING_TASK_SUMMARY_LIMIT
 				: TASK_PAGE_SIZE,
 	);
-	const [composing, setComposing] = useState(isTodayView);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editTitle, setEditTitle] = useState("");
 	const [editError, setEditError] = useState<{
@@ -167,18 +168,18 @@ export function TaskList({
 		: [];
 	const upcomingGroups = isUpcomingView ? groupTasksByDueDate(tasks) : [];
 
-	// Opened from the ⌘K "Create task" command: reveal the composer, then strip
-	// the query param so a refresh or back-navigation doesn't reopen it.
+	// Keep old bookmarked task-create URLs working while the command palette
+	// and task button now open the workspace dialog directly.
 	useEffect(() => {
 		if (isHomeView || searchParams.get("compose") !== "1") return;
-		if (canEdit) setComposing(true);
+		if (canEdit) openCreateTask();
 		const params = new URLSearchParams(searchParams);
 		params.delete("compose");
 		const queryString = params.toString();
 		router.replace(`${pathname}${queryString ? `?${queryString}` : ""}`, {
 			scroll: false,
 		});
-	}, [searchParams, router, pathname, canEdit, isHomeView]);
+	}, [searchParams, router, pathname, canEdit, isHomeView, openCreateTask]);
 
 	async function refresh(task?: TaskWithPage) {
 		await invalidateTasks(queryClient);
@@ -503,19 +504,13 @@ export function TaskList({
 					mode="compact"
 					onSubmit={createTask}
 				/>
-			) : isUpcomingView ? null : composing ? (
-				<TaskComposer
-					currentUserId={currentUser?.id ?? null}
-					onSubmit={createTask}
-					onCancel={() => setComposing(false)}
-				/>
-			) : (
+			) : isUpcomingView ? null : (
 				<Button
 					type="button"
 					variant="ghost"
 					size="sm"
 					className="w-fit text-muted-foreground"
-					onClick={() => setComposing(true)}
+					onClick={openCreateTask}
 				>
 					<PlusIcon />
 					Add task

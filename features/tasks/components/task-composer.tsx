@@ -3,6 +3,7 @@
 import { CalendarIcon, PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { DueDatePicker, type DueDateValue } from "@/components/due-date-picker";
+import { ResponsiveDialogFooter } from "@/components/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
@@ -26,6 +27,8 @@ export function TaskComposer({
 	currentUserId,
 	onSubmit,
 	onCancel,
+	onPendingChange,
+	onSuccess,
 	defaultDueDate = null,
 	mode = "full",
 }: {
@@ -37,8 +40,10 @@ export function TaskComposer({
 		assigneeId?: string | null;
 	}) => Promise<TaskSubmissionResult>;
 	onCancel?: () => void;
+	onPendingChange?: (pending: boolean) => void;
+	onSuccess?: () => void;
 	defaultDueDate?: string | null;
-	mode?: "full" | "compact";
+	mode?: "full" | "compact" | "dialog";
 }) {
 	const errorId = useId();
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -86,24 +91,36 @@ export function TaskComposer({
 		}
 		setError(null);
 		setPending(true);
+		onPendingChange?.(true);
 		const submitAssigneeId =
 			assigneeTouched || assigneeId !== null ? assigneeId : undefined;
-		const result = await onSubmit({
-			title,
-			dueDate,
-			dueTime,
-			...(submitAssigneeId !== undefined
-				? { assigneeId: submitAssigneeId }
-				: {}),
-		});
-		setPending(false);
+		let result: TaskSubmissionResult;
+		try {
+			result = await onSubmit({
+				title,
+				dueDate,
+				dueTime,
+				...(submitAssigneeId !== undefined
+					? { assigneeId: submitAssigneeId }
+					: {}),
+			});
+		} catch {
+			result = {
+				ok: false,
+				error: "Task could not be added. Try again.",
+			};
+		} finally {
+			setPending(false);
+			onPendingChange?.(false);
+		}
 		if (result.ok) {
 			setText("");
 			setManualDue(undefined);
 			setIgnoredMatchText(null);
 			setAssigneeId(currentUserId);
 			setAssigneeTouched(false);
-			inputRef.current?.focus();
+			if (onSuccess) onSuccess();
+			else inputRef.current?.focus();
 		} else {
 			setError(result.error);
 		}
@@ -139,6 +156,7 @@ export function TaskComposer({
 						) : null}
 						<input
 							ref={inputRef}
+							disabled={pending}
 							value={text}
 							placeholder="Add a task for today…"
 							aria-label="Add a task"
@@ -186,9 +204,35 @@ export function TaskComposer({
 		);
 	}
 
+	const actions = (
+		<>
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				disabled={pending}
+				onClick={() => onCancel?.()}
+			>
+				Cancel
+			</Button>
+			<Button
+				type="button"
+				size="sm"
+				disabled={!title || pending}
+				onClick={submit}
+			>
+				{pending ? "Adding…" : "Add task"}
+			</Button>
+		</>
+	);
+
 	return (
-		<div className="rounded-xl border">
-			<div className="flex flex-col gap-2 p-3">
+		<div
+			className={cn(
+				mode === "dialog" ? "flex flex-col gap-5" : "rounded-xl border",
+			)}
+		>
+			<div className={cn("flex flex-col gap-2", mode !== "dialog" && "p-3")}>
 				<div className="relative">
 					{activeMatch ? (
 						// Mirror behind a transparent-text input renders the
@@ -210,8 +254,9 @@ export function TaskComposer({
 					) : null}
 					<input
 						ref={inputRef}
-						// biome-ignore lint/a11y/noAutofocus: full composer opens after an explicit user action
-						autoFocus={mode === "full"}
+						disabled={pending}
+						// biome-ignore lint/a11y/noAutofocus: full and dialog composers open after an explicit user action
+						autoFocus
 						value={text}
 						placeholder="Task name, e.g. “pick up meds tomorrow at 2”"
 						aria-label="Task name"
@@ -224,7 +269,7 @@ export function TaskComposer({
 						onChange={(event) => changeText(event.target.value)}
 						onKeyDown={(event) => {
 							if (event.key === "Enter") submit();
-							if (event.key === "Escape") onCancel?.();
+							if (event.key === "Escape" && !pending) onCancel?.();
 						}}
 					/>
 				</div>
@@ -237,6 +282,7 @@ export function TaskComposer({
 					<AssigneePicker
 						value={assigneeId}
 						label={assigneeId ? "Assigned" : null}
+						disabled={pending}
 						onChange={(next) => {
 							setAssigneeTouched(true);
 							setAssigneeId(next);
@@ -246,6 +292,7 @@ export function TaskComposer({
 					<DueDatePicker
 						value={dueDate}
 						time={dueTime}
+						disabled={pending}
 						onChange={(next) => {
 							setManualDue(next);
 							if (next.date === null && activeMatch) {
@@ -262,6 +309,7 @@ export function TaskComposer({
 					{dueDate ? (
 						<button
 							type="button"
+							disabled={pending}
 							aria-label="Remove due date"
 							className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
 							onClick={clearDate}
@@ -271,25 +319,16 @@ export function TaskComposer({
 					) : null}
 				</div>
 			</div>
-			<Separator />
-			<div className="flex items-center justify-end gap-2 p-2">
-				<Button
-					type="button"
-					variant="ghost"
-					size="sm"
-					onClick={() => onCancel?.()}
-				>
-					Cancel
-				</Button>
-				<Button
-					type="button"
-					size="sm"
-					disabled={!title || pending}
-					onClick={submit}
-				>
-					{pending ? "Adding…" : "Add task"}
-				</Button>
-			</div>
+			{mode === "dialog" ? (
+				<ResponsiveDialogFooter>{actions}</ResponsiveDialogFooter>
+			) : (
+				<>
+					<Separator />
+					<div className="flex items-center justify-end gap-2 p-2">
+						{actions}
+					</div>
+				</>
+			)}
 		</div>
 	);
 }

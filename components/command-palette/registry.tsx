@@ -25,6 +25,8 @@ export type Command = {
 	/** Extra space-separated search terms beyond the title. */
 	keywords?: string;
 	icon?: ComponentType<{ className?: string }>;
+	/** Human-readable keyboard shortcut shown in the command palette. */
+	shortcut?: string;
 	/**
 	 * Lower sorts first within a group; commands with the same weight keep
 	 * registration order. Defaults to 0.
@@ -119,6 +121,7 @@ export function useCommand(command: Command | null | false): void {
 	const group = command ? command.group : null;
 	const keywords = command ? command.keywords : undefined;
 	const icon = command ? command.icon : undefined;
+	const shortcut = command ? command.shortcut : undefined;
 	const weight = command ? command.weight : undefined;
 
 	useEffect(() => {
@@ -129,11 +132,12 @@ export function useCommand(command: Command | null | false): void {
 			group,
 			keywords,
 			icon,
+			shortcut,
 			weight,
 			run: () => runRef.current?.(),
 		});
 		return () => store.remove(id);
-	}, [store, id, title, group, keywords, icon, weight]);
+	}, [store, id, title, group, keywords, icon, shortcut, weight]);
 }
 
 /**

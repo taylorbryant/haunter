@@ -3,7 +3,6 @@
 import {
 	HouseIcon,
 	ListTodoIcon,
-	PlusIcon,
 	ShieldCheckIcon,
 	Trash2Icon,
 } from "lucide-react";
@@ -28,19 +27,6 @@ export function AppCommands({ isAdmin }: { isAdmin: boolean }) {
 					group: "Go to",
 					icon: HouseIcon,
 					run: () => router.push(`/w/${workspaceId}/home`),
-				}
-			: null,
-	);
-
-	useCommand(
-		workspaceId
-			? {
-					id: "task.create",
-					title: "Create task",
-					group: "Tasks",
-					keywords: "new todo add",
-					icon: PlusIcon,
-					run: () => router.push(`/w/${workspaceId}/tasks?compose=1`),
 				}
 			: null,
 	);
