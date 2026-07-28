@@ -5,6 +5,7 @@ import { createDrizzleMcpConnectionRepository } from "@/infra/agents/drizzle-mcp
 import { createDrizzleMcpOAuthClientRepository } from "@/infra/agents/drizzle-mcp-oauth-client-repository";
 import { createDrizzleCanvasRepository } from "@/infra/canvases/drizzle-canvas-repository";
 import { createDrizzleChangelogStateRepository } from "@/infra/changelog/drizzle-changelog-state-repository";
+import { createDrizzleInboxRepository } from "@/infra/inbox/drizzle-inbox-repository";
 import { createDrizzleMemberRepository } from "@/infra/members/drizzle-member-repository";
 import { createDrizzleNotificationRepository } from "@/infra/notifications/drizzle-notification-repository";
 import { createDrizzlePageLinkRepository } from "@/infra/pages/drizzle-page-link-repository";
@@ -26,6 +27,7 @@ export function createRepositories(
 		mcpOAuthClients: createDrizzleMcpOAuthClientRepository(db),
 		canvases: createDrizzleCanvasRepository(db),
 		changelogState: createDrizzleChangelogStateRepository(db),
+		inboxItems: createDrizzleInboxRepository(db),
 		members: createDrizzleMemberRepository(db),
 		notificationInbox: createDrizzleNotificationRepository(db),
 		pageLinks: createDrizzlePageLinkRepository(db),

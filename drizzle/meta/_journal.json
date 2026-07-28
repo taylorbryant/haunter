@@ -218,6 +218,13 @@
       "when": 1785035647670,
       "tag": "0030_marvelous_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1785198588363,
+      "tag": "0031_closed_captain_america",
+      "breakpoints": true
     }
   ]
 }

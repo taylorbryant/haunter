@@ -41,6 +41,16 @@ export const errors = defineErrors({
 		status: 422,
 		message: "This task lives in a page; edit it in the editor",
 	},
+	InboxItemNotFound: {
+		code: "INBOX_ITEM_NOT_FOUND",
+		status: 404,
+		message: "This inbox item is no longer available",
+	},
+	InvalidInboxAction: {
+		code: "INVALID_INBOX_ACTION",
+		status: 422,
+		message: "That action is not available for this inbox item",
+	},
 	InvalidTaskDue: {
 		code: "INVALID_TASK_DUE",
 		status: 422,

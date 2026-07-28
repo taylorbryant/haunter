@@ -11,6 +11,7 @@ import { DestructiveConfirmationDialog } from "@/components/destructive-confirma
 import { useDeviceTime } from "@/components/device-time-provider";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
+import { invalidateInboxItems } from "@/features/inbox/client/queries";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import { invalidatePage } from "@/features/pages/client/queries";
@@ -181,11 +182,14 @@ export function TaskList({
 	}, [searchParams, router, pathname, canEdit, isHomeView]);
 
 	async function refresh(task?: TaskWithPage) {
-		await invalidateTasks(queryClient);
-		// Keep an open editor for the source page consistent.
-		if (task?.pageId) {
-			await invalidatePage(queryClient, task.pageId);
-		}
+		await Promise.all([
+			invalidateTasks(queryClient),
+			invalidateInboxItems(queryClient),
+			// Keep an open editor for the source page consistent.
+			task?.pageId
+				? invalidatePage(queryClient, task.pageId)
+				: Promise.resolve(),
+		]);
 	}
 
 	// Standalone tasks are renamed here; page-sourced titles live in the page

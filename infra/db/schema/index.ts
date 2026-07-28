@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
 	type AnySQLiteColumn,
+	check,
 	foreignKey,
 	index,
 	integer,
@@ -618,6 +619,49 @@ export const tasks = sqliteTable(
 		),
 		pageIdx: index("tasks_page_idx").on(table.pageId),
 		userIdx: index("tasks_user_idx").on(table.userId),
+	}),
+);
+
+export const inboxItems = sqliteTable(
+	"inbox_items",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		kind: text("kind", { enum: ["page", "task"] }).notNull(),
+		pageId: text("page_id").references(() => pages.id, {
+			onDelete: "cascade",
+		}),
+		taskId: text("task_id").references(() => tasks.id, {
+			onDelete: "cascade",
+		}),
+		createdAt: text("created_at").notNull(),
+	},
+	(table) => ({
+		membershipFk: foreignKey({
+			columns: [table.workspaceId, table.userId],
+			foreignColumns: [member.organizationId, member.userId],
+			name: "inbox_items_membership_fk",
+		}).onDelete("cascade"),
+		resourceCheck: check(
+			"inbox_items_resource_check",
+			sql`(${table.kind} = 'page' AND ${table.pageId} IS NOT NULL AND ${table.taskId} IS NULL) OR (${table.kind} = 'task' AND ${table.taskId} IS NOT NULL AND ${table.pageId} IS NULL)`,
+		),
+		userPageIdx: uniqueIndex("inbox_items_user_page_idx")
+			.on(table.userId, table.pageId)
+			.where(sql`${table.pageId} IS NOT NULL`),
+		userTaskIdx: uniqueIndex("inbox_items_user_task_idx")
+			.on(table.userId, table.taskId)
+			.where(sql`${table.taskId} IS NOT NULL`),
+		userListIdx: index("inbox_items_user_list_idx").on(
+			table.workspaceId,
+			table.userId,
+			table.createdAt,
+		),
 	}),
 );
 

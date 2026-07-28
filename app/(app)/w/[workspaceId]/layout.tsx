@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { use } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CaptureProvider } from "@/features/inbox/components/capture-provider";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 
 /**
@@ -30,7 +31,9 @@ export default function WorkspaceLayout({
 
 	if (!synced) return <WorkspaceSyncFallback />;
 
-	return <>{children}</>;
+	return (
+		<CaptureProvider workspaceId={workspaceId}>{children}</CaptureProvider>
+	);
 }
 
 function WorkspaceSyncFallback() {

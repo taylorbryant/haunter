@@ -21,6 +21,7 @@ import type {
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
+import type { InboxRepository } from "@/features/inbox/ports";
 import type { MemberRepository } from "@/features/members/ports";
 import type {
 	NotificationRepository,
@@ -53,6 +54,7 @@ export type AppTransactionPorts = {
 	mcpOAuthClients: McpOAuthClientRepository;
 	canvases: CanvasRepository;
 	changelogState: ChangelogStateRepository;
+	inboxItems: InboxRepository;
 	idempotency: IdempotencyPort;
 	members: MemberRepository;
 	notificationInbox: NotificationRepository;
@@ -81,6 +83,7 @@ export type AppPorts = {
 	auth: AuthPort;
 	canvases: CanvasRepository;
 	changelogState: ChangelogStateRepository;
+	inboxItems: InboxRepository;
 	errorReporter: ErrorReporterPort;
 	gate: GatePort<AuthorizationContext, AppPolicies>;
 	idempotency: IdempotencyPort;

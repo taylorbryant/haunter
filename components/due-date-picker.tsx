@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarIcon, ClockIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -57,12 +57,14 @@ export function DueDatePicker({
 	onChange,
 	className,
 	ariaLabel = "Due date and time",
+	disabled = false,
 }: {
 	value: string | null;
 	time?: string | null;
 	onChange: (next: DueDateValue) => void;
 	className?: string;
 	ariaLabel?: string;
+	disabled?: boolean;
 }) {
 	const deviceTime = useDeviceTime();
 	const [open, setOpen] = useState(false);
@@ -72,7 +74,18 @@ export function DueDatePicker({
 	const today = deviceTime.ready ? parseIsoDate(deviceTime.today) : null;
 	const [visibleMonth, setVisibleMonth] = useState<Date | undefined>(selected);
 
+	useEffect(() => {
+		if (!disabled) return;
+		dirtyRef.current = false;
+		setOpen(false);
+	}, [disabled]);
+
 	function changeOpen(nextOpen: boolean) {
+		if (disabled) {
+			dirtyRef.current = false;
+			setOpen(false);
+			return;
+		}
 		if (nextOpen && today) {
 			setDraft({ date: value, time });
 			setVisibleMonth(value ? parseIsoDate(value) : today);
@@ -89,6 +102,7 @@ export function DueDatePicker({
 	}
 
 	function changeDraft(next: DueDateValue) {
+		if (disabled) return;
 		dirtyRef.current = true;
 		setDraft(next);
 	}
@@ -125,6 +139,7 @@ export function DueDatePicker({
 				render={
 					<button
 						type="button"
+						disabled={disabled}
 						className={cn(
 							"outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
 							className,
