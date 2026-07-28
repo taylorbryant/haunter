@@ -9,6 +9,7 @@ import type {
 	UpdateTaskData,
 } from "@/features/tasks/ports";
 import type { Task, TaskFilter, TaskWithPage } from "@/features/tasks/schemas";
+import { ReminderOffsetMinutesSchema } from "@/features/tasks/schemas";
 import * as schema from "@/infra/db/schema";
 import { assertPageInScope } from "@/infra/db/tenant-scope";
 
@@ -25,6 +26,10 @@ function toTask(row: TaskRow): Task {
 		completed: row.completed,
 		dueDate: row.dueDate,
 		dueTime: row.dueTime,
+		reminderOffsetMinutes:
+			row.reminderOffsetMinutes === null
+				? null
+				: ReminderOffsetMinutesSchema.parse(row.reminderOffsetMinutes),
 		assigneeId: row.assigneeId,
 		completedAt: row.completedAt,
 		createdAt: row.createdAt,
@@ -145,6 +150,8 @@ export function createDrizzleTaskRepository(
 				completed: input.completed,
 				dueDate: input.dueDate,
 				dueTime: input.dueTime,
+				reminderOffsetMinutes: input.reminderOffsetMinutes ?? null,
+				reminderConfiguredAt: input.reminderConfiguredAt ?? null,
 				assigneeId: input.assigneeId,
 				completedAt: input.completedAt,
 				createdAt: now,

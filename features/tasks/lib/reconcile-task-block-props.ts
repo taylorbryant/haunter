@@ -4,6 +4,7 @@ type TaskProps = {
 	checked: boolean;
 	due: string;
 	dueTime: string;
+	reminder: string;
 	assignee: string;
 };
 
@@ -15,11 +16,13 @@ export type ReconcileTaskBlockPropsResult = {
 function taskProps(block: BlockJson): TaskProps {
 	const due = block.props.due;
 	const dueTime = block.props.dueTime;
+	const reminder = block.props.reminder;
 	const assignee = block.props.assignee;
 	return {
 		checked: block.props.checked === true,
 		due: typeof due === "string" ? due : "",
 		dueTime: typeof dueTime === "string" ? dueTime : "",
+		reminder: typeof reminder === "string" ? reminder : "",
 		assignee: typeof assignee === "string" ? assignee : "",
 	};
 }
@@ -31,11 +34,13 @@ function sameTaskProps(
 	const checked = left.checked === true;
 	const due = left.due;
 	const dueTime = left.dueTime;
+	const reminder = left.reminder;
 	const assignee = left.assignee;
 	return (
 		checked === right.checked &&
 		(typeof due === "string" ? due : "") === right.due &&
 		(typeof dueTime === "string" ? dueTime : "") === right.dueTime &&
+		(typeof reminder === "string" ? reminder : "") === right.reminder &&
 		(typeof assignee === "string" ? assignee : "") === right.assignee
 	);
 }
@@ -77,6 +82,7 @@ export function reconcileTaskBlockProps(
 						checked: authoritativeProps.checked,
 						due: authoritativeProps.due,
 						dueTime: authoritativeProps.dueTime,
+						reminder: authoritativeProps.reminder,
 						assignee: authoritativeProps.assignee,
 					},
 				};

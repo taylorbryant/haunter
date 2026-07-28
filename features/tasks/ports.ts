@@ -9,6 +9,8 @@ export type NewTask = {
 	completed: boolean;
 	dueDate: string | null;
 	dueTime: string | null;
+	reminderOffsetMinutes?: Task["reminderOffsetMinutes"];
+	reminderConfiguredAt?: string | null;
 	assigneeId: string | null;
 	completedAt: string | null;
 };
@@ -18,6 +20,8 @@ export type UpdateTaskData = {
 	completed?: boolean;
 	dueDate?: string | null;
 	dueTime?: string | null;
+	reminderOffsetMinutes?: Task["reminderOffsetMinutes"];
+	reminderConfiguredAt?: string | null;
 	assigneeId?: string | null;
 	completedAt?: string | null;
 };

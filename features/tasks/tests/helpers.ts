@@ -98,6 +98,7 @@ export function createTestTaskRepository(options?: {
 				completed: input.completed,
 				dueDate: input.dueDate,
 				dueTime: input.dueTime,
+				reminderOffsetMinutes: input.reminderOffsetMinutes ?? null,
 				assigneeId: input.assigneeId,
 				completedAt: input.completedAt,
 				createdAt: now,

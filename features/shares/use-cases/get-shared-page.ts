@@ -3,6 +3,7 @@ import { createTenant, createTenantScope } from "@beignet/core/ports";
 import { appError } from "@/features/shared/errors";
 import { useCase } from "@/lib/use-case";
 import { rewriteFileUrls } from "../lib/rewrite-file-urls";
+import { stripPrivateTaskProps } from "../lib/strip-private-task-props";
 import { SharedPageSchema, SharedTokenInputSchema } from "../schemas";
 
 /**
@@ -33,7 +34,10 @@ export const getSharedPageUseCase = useCase
 			icon: page.icon,
 			// Point embedded files at the share-scoped read route so anonymous
 			// visitors can load them.
-			content: rewriteFileUrls(page.content, input.token),
+			content: rewriteFileUrls(
+				stripPrivateTaskProps(page.content),
+				input.token,
+			),
 			updatedAt: page.updatedAt,
 		};
 	});

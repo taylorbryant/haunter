@@ -41,6 +41,7 @@ import {
 	TaskComposer,
 	type TaskSubmissionResult,
 } from "@/features/tasks/components/task-composer";
+import type { TaskReminderOffsetMinutes } from "@/features/tasks/lib/reminder-options";
 
 const PAGE_DETAILS_MAX_LENGTH = 20_000;
 
@@ -249,6 +250,7 @@ function CreateTaskDialog({
 		title: string;
 		dueDate: string | null;
 		dueTime: string | null;
+		reminderOffsetMinutes: TaskReminderOffsetMinutes;
 		assigneeId?: string | null;
 	}): Promise<TaskSubmissionResult> {
 		try {
@@ -258,6 +260,9 @@ function CreateTaskDialog({
 					title: input.title,
 					...(input.dueDate ? { dueDate: input.dueDate } : {}),
 					...(input.dueTime ? { dueTime: input.dueTime } : {}),
+					...(input.reminderOffsetMinutes !== null
+						? { reminderOffsetMinutes: input.reminderOffsetMinutes }
+						: {}),
 					...(input.assigneeId !== undefined
 						? { assigneeId: input.assigneeId }
 						: {}),

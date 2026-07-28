@@ -310,9 +310,7 @@ describe("Haunter agent capabilities", () => {
 
 	it("rejects oversized markdown before creating an agent page", async () => {
 		const { execute, pages, scope, workspaceId } = await createFixture();
-		const markdown = Array.from({ length: 10_001 }, () => "x").join(
-			"\n\n",
-		);
+		const markdown = Array.from({ length: 10_001 }, () => "x").join("\n\n");
 
 		await expect(
 			execute("create_page", {
@@ -330,9 +328,7 @@ describe("Haunter agent capabilities", () => {
 			workspaceId,
 			title: "Append target",
 		})) as { pageId: string };
-		const markdown = Array.from({ length: 10_001 }, () => "x").join(
-			"\n\n",
-		);
+		const markdown = Array.from({ length: 10_001 }, () => "x").join("\n\n");
 
 		await expect(
 			execute("append_to_page", {
@@ -526,13 +522,20 @@ describe("Haunter agent capabilities", () => {
 			title: "Prepare launch notes",
 			dueDate: "2026-07-15",
 			dueTime: "14:00",
+			reminderOffsetMinutes: 60,
 		})) as {
 			taskId: string;
 			assigneeId: string | null;
 			dueTime: string | null;
+			reminderOffsetMinutes: number | null;
 		};
 		const listed = (await execute("list_tasks", { workspaceId })) as {
-			tasks: Array<{ taskId: string; title: string; dueTime: string | null }>;
+			tasks: Array<{
+				taskId: string;
+				title: string;
+				dueTime: string | null;
+				reminderOffsetMinutes: number | null;
+			}>;
 			hasMore: boolean;
 		};
 		const updated = (await execute("update_task", {
@@ -540,7 +543,12 @@ describe("Haunter agent capabilities", () => {
 			taskId: created.taskId,
 			title: "Prepare release notes",
 			dueDate: null,
-		})) as { title: string; dueDate: string | null; dueTime: string | null };
+		})) as {
+			title: string;
+			dueDate: string | null;
+			dueTime: string | null;
+			reminderOffsetMinutes: number | null;
+		};
 		const completed = (await execute("complete_task", {
 			workspaceId,
 			taskId: created.taskId,
@@ -558,12 +566,14 @@ describe("Haunter agent capabilities", () => {
 
 		expect(created.assigneeId).toBe(userId);
 		expect(created.dueTime).toBe("14:00");
+		expect(created.reminderOffsetMinutes).toBe(60);
 		expect(listed).toMatchObject({
 			tasks: [
 				expect.objectContaining({
 					taskId: created.taskId,
 					title: "Prepare launch notes",
 					dueTime: "14:00",
+					reminderOffsetMinutes: 60,
 				}),
 			],
 			hasMore: false,
@@ -572,6 +582,7 @@ describe("Haunter agent capabilities", () => {
 			title: "Prepare release notes",
 			dueDate: null,
 			dueTime: null,
+			reminderOffsetMinutes: null,
 		});
 		expect(completed.completed).toBe(true);
 		expect(completed.completedAt).not.toBeNull();

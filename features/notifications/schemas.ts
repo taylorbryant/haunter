@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-export const NotificationKindSchema = z.enum(["task.overdue", "task.assigned"]);
+export const NotificationKindSchema = z.enum([
+	"task.overdue",
+	"task.assigned",
+	"task.reminder",
+]);
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;
 
 export const TaskOverdueNotificationPayloadSchema = z.object({
@@ -31,6 +35,27 @@ export type TaskAssignedNotificationPayload = z.infer<
 	typeof TaskAssignedNotificationPayloadSchema
 >;
 
+export const TaskReminderNotificationPayloadSchema = z.object({
+	taskId: z.string().uuid(),
+	title: z.string(),
+	dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+	dueTime: z
+		.string()
+		.regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+		.nullable(),
+	reminderOffsetMinutes: z.union([
+		z.literal(0),
+		z.literal(15),
+		z.literal(60),
+		z.literal(1_440),
+	]),
+	pageId: z.string().uuid().nullable(),
+	sourceBlockId: z.string().nullable(),
+});
+export type TaskReminderNotificationPayload = z.infer<
+	typeof TaskReminderNotificationPayloadSchema
+>;
+
 const NotificationBaseSchema = z.object({
 	id: z.string().uuid(),
 	userId: z.string(),
@@ -54,9 +79,16 @@ export const TaskAssignedInboxNotificationSchema =
 		payload: TaskAssignedNotificationPayloadSchema,
 	});
 
+export const TaskReminderInboxNotificationSchema =
+	NotificationBaseSchema.extend({
+		kind: z.literal("task.reminder"),
+		payload: TaskReminderNotificationPayloadSchema,
+	});
+
 export const NotificationSchema = z.discriminatedUnion("kind", [
 	TaskOverdueInboxNotificationSchema,
 	TaskAssignedInboxNotificationSchema,
+	TaskReminderInboxNotificationSchema,
 ]);
 export type Notification = z.infer<typeof NotificationSchema>;
 
@@ -78,6 +110,7 @@ export const NotificationIdInputSchema = z.object({
 export const NotificationPreferencesSchema = z.object({
 	overdueTasksEnabled: z.boolean(),
 	taskAssignmentsEnabled: z.boolean(),
+	taskRemindersEnabled: z.boolean(),
 	timezone: z.string().min(1).max(100),
 	timezoneConfigured: z.boolean(),
 });
@@ -94,6 +127,7 @@ export const UpdateNotificationPreferencesSchema = z
 	.object({
 		overdueTasksEnabled: z.boolean().optional(),
 		taskAssignmentsEnabled: z.boolean().optional(),
+		taskRemindersEnabled: z.boolean().optional(),
 		timezone: z.string().min(1).max(100).optional(),
 	})
 	.refine((value) => Object.keys(value).length > 0, {

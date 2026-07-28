@@ -9,6 +9,10 @@ import {
 	TaskOverdueDeliveryPayloadSchema,
 	TaskOverdueNotification,
 } from "@/features/tasks/notifications/overdue";
+import {
+	TaskReminderDeliveryPayloadSchema,
+	TaskReminderNotification,
+} from "@/features/tasks/notifications/reminder";
 
 // AppContext includes provider-inferred ports, so provider wiring must depend on
 // this minimal context shape instead of introducing a recursive type.
@@ -48,6 +52,18 @@ export const notificationPreferences = {
 			return {
 				deliver: false,
 				reason: "Task assignment notifications are disabled.",
+			};
+		}
+		if (notification.name === TaskReminderNotification.name) {
+			const delivery = TaskReminderDeliveryPayloadSchema.parse(payload);
+			const preferences = await notificationInbox.getPreferences(
+				delivery.userId,
+			);
+			if (preferences.taskRemindersEnabled) return { deliver: true };
+			await notificationInbox.markPushSkipped(delivery.notificationIds);
+			return {
+				deliver: false,
+				reason: "Task reminders are disabled.",
 			};
 		}
 		return { deliver: true };

@@ -125,7 +125,7 @@ function NotificationPanel({
 						<BellOffIcon className="size-5 text-muted-foreground" />
 						<p className="font-medium text-sm">You’re all caught up</p>
 						<p className="text-muted-foreground text-xs">
-							Task assignments and overdue reminders will appear here.
+							Task reminders, assignments, and overdue alerts will appear here.
 						</p>
 					</div>
 				) : (
@@ -145,11 +145,15 @@ function NotificationPanel({
 										"mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md",
 										item.kind === "task.assigned"
 											? "bg-primary/10 text-primary"
-											: "bg-destructive/10 text-destructive",
+											: item.kind === "task.reminder"
+												? "bg-primary/10 text-primary"
+												: "bg-destructive/10 text-destructive",
 									)}
 								>
 									{item.kind === "task.assigned" ? (
 										<UserRoundCheckIcon className="size-4" />
+									) : item.kind === "task.reminder" ? (
+										<BellIcon className="size-4" />
 									) : (
 										<FileTextIcon className="size-4" />
 									)}
@@ -165,7 +169,8 @@ function NotificationPanel({
 											item.payload.title
 										) : (
 											<>
-												Overdue ·{" "}
+												{item.kind === "task.reminder" ? "Reminder" : "Overdue"}{" "}
+												·{" "}
 												{deviceTime.ready
 													? formatDueDateTimeLabel(
 															item.payload.dueDate,
