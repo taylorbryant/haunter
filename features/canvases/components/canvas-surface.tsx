@@ -5,14 +5,12 @@ import "tldraw/tldraw.css";
 import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
 	createTLStore,
 	defaultBindingUtils,
-	defaultShapeUtils,
 	type Editor,
 	getSnapshot,
-	Tldraw,
 } from "tldraw";
 import { userErrorMessage } from "@/client/error-feedback";
 import { useCurrentUser } from "@/components/app-session-provider";
@@ -32,11 +30,13 @@ import {
 	rememberPendingCanvasSave,
 } from "@/features/canvases/client/save-state";
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
+import { TldrawWithFonts } from "@/features/canvases/components/tldraw-with-fonts";
 import { useCanvasTheme } from "@/features/canvases/components/use-canvas-theme";
 import {
 	type CanvasCollabUser,
 	useCollabCanvasStore,
 } from "@/features/canvases/components/use-collab-canvas-store";
+import { haunterShapeUtils } from "@/features/canvases/lib/shape-utils";
 import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
@@ -145,7 +145,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		localStoreRef.current = {
 			canvasId,
 			store: createTLStore({
-				shapeUtils: defaultShapeUtils,
+				shapeUtils: haunterShapeUtils,
 				bindingUtils: defaultBindingUtils,
 				snapshot,
 			}),
@@ -319,8 +319,10 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 
 	return (
 		<div className="relative h-full w-full">
-			<Tldraw
+			<TldrawWithFonts
+				documentSnapshot={snapshot}
 				licenseKey={TLDRAW_LICENSE_KEY}
+				shapeUtils={haunterShapeUtils}
 				store={localStore}
 				onMount={handleMount}
 			/>
@@ -384,6 +386,13 @@ function CollabCanvasSurface({
 			}
 		: undefined;
 	const storeWithStatus = useCollabCanvasStore(room, snapshot, collabUser);
+	const synchronizedSnapshot = useMemo(() => {
+		if (storeWithStatus.status !== "synced-remote") return null;
+		return getSnapshot(storeWithStatus.store).document as unknown as Record<
+			string,
+			unknown
+		>;
+	}, [storeWithStatus]);
 
 	const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(
 		"saved",
@@ -488,10 +497,20 @@ function CollabCanvasSurface({
 		};
 	}
 
+	if (!synchronizedSnapshot) {
+		return (
+			<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+				Loading canvas…
+			</div>
+		);
+	}
+
 	return (
 		<div className="relative h-full w-full">
-			<Tldraw
+			<TldrawWithFonts
+				documentSnapshot={synchronizedSnapshot}
 				licenseKey={TLDRAW_LICENSE_KEY}
+				shapeUtils={haunterShapeUtils}
 				store={storeWithStatus}
 				onMount={handleMount}
 			/>

@@ -3,14 +3,8 @@
 import { createReactBlockSpec } from "@blocknote/react";
 import { Maximize2Icon, XIcon } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useRef, useState } from "react";
-import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogTitle,
-} from "@/components/ui/dialog";
-import { flushPendingCanvasSave } from "@/features/canvases/client/save-state";
+import { memo, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 // tldraw is a ~MB chunk: load it only when a canvas block actually renders.
 const CanvasSurface = dynamic(
@@ -25,79 +19,184 @@ const CanvasSurface = dynamic(
 	},
 );
 
+// Fullscreen state belongs to the surrounding chrome. Keep it from rerunning
+// tldraw's onMount lifecycle while the container changes size.
+const StableCanvasSurface = memo(function StableCanvasSurface({
+	canvasId,
+}: {
+	canvasId: string;
+}) {
+	return <CanvasSurface canvasId={canvasId} />;
+});
+
+const FOCUSABLE_SELECTOR = [
+	"a[href]",
+	"button:not([disabled])",
+	"input:not([disabled])",
+	"select:not([disabled])",
+	"textarea:not([disabled])",
+	'[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function visibleFocusableElements(container: HTMLElement): HTMLElement[] {
+	return [
+		...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+	].filter(
+		(element) =>
+			element.tabIndex >= 0 &&
+			element.getClientRects().length > 0 &&
+			element.getAttribute("aria-hidden") !== "true",
+	);
+}
+
 function CanvasBlockView({ canvasId }: { canvasId: string }) {
 	const [expanded, setExpanded] = useState(false);
-	const [changingView, setChangingView] = useState(false);
-	const changingViewRef = useRef(false);
+	const overlayRef = useRef<HTMLDivElement>(null);
+	const expandButtonRef = useRef<HTMLButtonElement>(null);
+	const closeButtonRef = useRef<HTMLButtonElement>(null);
+	const dialogProps = expanded
+		? ({
+				role: "dialog",
+				"aria-label": "Canvas",
+				"aria-modal": true,
+			} as const)
+		: {};
 
-	async function changeExpanded(nextExpanded: boolean) {
-		if (changingViewRef.current || nextExpanded === expanded) return;
-		changingViewRef.current = true;
-		setChangingView(true);
-		try {
-			const saved = await flushPendingCanvasSave(canvasId);
-			if (saved) setExpanded(nextExpanded);
-		} finally {
-			changingViewRef.current = false;
-			setChangingView(false);
+	// Keep the same tldraw editor mounted while fullscreen. Recreating it resets
+	// camera/undo state and can rebuild text measurements before fonts settle.
+	useEffect(() => {
+		if (!expanded) return;
+
+		const overlay = overlayRef.current;
+		if (!overlay) return;
+		const modalOverlay: HTMLElement = overlay;
+		const bodyOverflow = document.body.style.overflow;
+		const appMain = modalOverlay.closest("main");
+		const mainZIndex = appMain?.style.zIndex ?? "";
+		const inertElements: Array<{ element: HTMLElement; inert: boolean }> = [];
+
+		// The app's <main> is an isolation boundary. Raise that boundary above
+		// the sidebar while its descendant is acting as the modal overlay.
+		if (appMain instanceof HTMLElement) appMain.style.zIndex = "50";
+		document.body.style.overflow = "hidden";
+
+		// Portaling would remount tldraw, so reproduce modal inertness in place
+		// by disabling siblings along the canvas-to-body ancestor path.
+		let current: HTMLElement = modalOverlay;
+		while (current.parentElement && current.parentElement !== document.body) {
+			const parent = current.parentElement;
+			for (const sibling of parent.children) {
+				if (sibling === current || !(sibling instanceof HTMLElement)) continue;
+				inertElements.push({ element: sibling, inert: sibling.inert });
+				sibling.inert = true;
+			}
+			current = parent;
 		}
-	}
+		for (const sibling of document.body.children) {
+			if (sibling === current || !(sibling instanceof HTMLElement)) continue;
+			inertElements.push({ element: sibling, inert: sibling.inert });
+			sibling.inert = true;
+		}
+
+		function handleKeyDown(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				event.preventDefault();
+				setExpanded(false);
+				return;
+			}
+			if (event.key !== "Tab") return;
+
+			const focusable = visibleFocusableElements(modalOverlay);
+			if (focusable.length === 0) {
+				event.preventDefault();
+				closeButtonRef.current?.focus();
+				return;
+			}
+
+			const first = focusable[0];
+			const last = focusable.at(-1);
+			const active = document.activeElement;
+			if (
+				event.shiftKey
+					? active === first || !modalOverlay.contains(active)
+					: active === last || !modalOverlay.contains(active)
+			) {
+				event.preventDefault();
+				(event.shiftKey ? last : first)?.focus();
+			}
+		}
+
+		document.addEventListener("keydown", handleKeyDown);
+		closeButtonRef.current?.focus();
+
+		return () => {
+			document.removeEventListener("keydown", handleKeyDown);
+			document.body.style.overflow = bodyOverflow;
+			if (appMain instanceof HTMLElement) appMain.style.zIndex = mainZIndex;
+			for (const { element, inert } of inertElements) element.inert = inert;
+			expandButtonRef.current?.focus();
+		};
+	}, [expanded]);
 
 	return (
-		<div className="flex h-full w-full flex-col">
-			<div className="flex h-9 shrink-0 items-center justify-end border-b bg-background/95 px-2">
-				<button
-					type="button"
-					aria-label="Expand canvas"
-					className="keyboard-focus-ring flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-					disabled={changingView}
-					onClick={() => void changeExpanded(true)}
+		<div
+			ref={overlayRef}
+			{...dialogProps}
+			className={cn(
+				"isolate flex h-full w-full flex-col overflow-hidden rounded-lg bg-background text-foreground",
+				expanded &&
+					"fixed inset-0 z-50 items-center justify-center overflow-visible rounded-none bg-black/80",
+			)}
+			onPointerDown={(event) => {
+				if (expanded && event.target === event.currentTarget) {
+					setExpanded(false);
+				}
+			}}
+		>
+			<div
+				className={cn(
+					"relative flex h-full w-full flex-col",
+					expanded &&
+						"h-[85dvh] w-[90vw] overflow-visible rounded-lg border bg-background shadow-lg",
+				)}
+			>
+				<div
+					className={cn(
+						"flex h-9 shrink-0 items-center justify-end border-b bg-background/95 px-2",
+						expanded && "hidden",
+					)}
 				>
-					<Maximize2Icon className="size-4" />
+					<button
+						ref={expandButtonRef}
+						type="button"
+						aria-label="Expand canvas"
+						className="keyboard-focus-ring flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						onClick={() => setExpanded(true)}
+					>
+						<Maximize2Icon className="size-4" />
+					</button>
+				</div>
+				<div
+					className={cn(
+						"min-h-0 flex-1",
+						expanded && "overflow-hidden rounded-lg",
+					)}
+				>
+					<StableCanvasSurface canvasId={canvasId} />
+				</div>
+				<button
+					ref={closeButtonRef}
+					type="button"
+					aria-label="Close canvas"
+					className={cn(
+						"-top-3 -right-3 absolute z-10 flex size-9 items-center justify-center rounded-full bg-background/70 text-muted-foreground ring-1 ring-border/60 backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground",
+						!expanded && "hidden",
+					)}
+					onClick={() => setExpanded(false)}
+				>
+					<XIcon className="size-5" />
 				</button>
 			</div>
-			<div className="min-h-0 flex-1">
-				{expanded ? (
-					<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-						Editing in expanded view…
-					</div>
-				) : (
-					<CanvasSurface canvasId={canvasId} />
-				)}
-			</div>
-			{expanded ? (
-				<Dialog
-					open
-					onOpenChange={(open) => !open && void changeExpanded(false)}
-				>
-					<DialogContent
-						showCloseButton={false}
-						className="h-[85vh] overflow-visible p-0 sm:max-w-[90vw]"
-					>
-						<DialogTitle className="sr-only">Canvas</DialogTitle>
-						{/* Only one tldraw instance per canvas at a time: the inline
-						    surface is unmounted while the dialog is open. */}
-						<div className="isolate h-full w-full overflow-hidden rounded-lg">
-							<CanvasSurface canvasId={canvasId} />
-						</div>
-						{/* Close sits just outside the card's top-right corner — over
-						    the backdrop and clear of tldraw's own top-right UI — as a
-						    semi-transparent circle. */}
-						<DialogClose
-							disabled={changingView}
-							render={
-								<button
-									type="button"
-									aria-label="Close canvas"
-									className="-top-3 -right-3 absolute z-10 flex size-9 items-center justify-center rounded-full bg-background/70 text-muted-foreground ring-1 ring-border/60 backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground"
-								/>
-							}
-						>
-							<XIcon className="size-5" />
-						</DialogClose>
-					</DialogContent>
-				</Dialog>
-			) : null}
 		</div>
 	);
 }
@@ -118,8 +217,8 @@ export const canvasBlockSpec = createReactBlockSpec(
 			const canvasId = block.props.canvasId;
 
 			return (
-				// `isolate` traps tldraw's internal z-indexes (its UI layer is
-				// z-300) inside this block so editor menus can float above it.
+				// CanvasBlockView owns the isolation boundary so it can temporarily
+				// become a viewport overlay without remounting tldraw.
 				// ProseMirror treats non-editable node views as draggable — kill
 				// dragstart here so drawing strokes never drag the whole block.
 				// The pointer/mouse/touch handlers stop the events from bubbling to
@@ -128,7 +227,7 @@ export const canvasBlockSpec = createReactBlockSpec(
 				// descendant, still receives them.
 				// biome-ignore lint/a11y/noStaticElementInteractions: handlers only shield ProseMirror; all interaction lives in the embedded tldraw canvas
 				<div
-					className="isolate my-2 h-[480px] w-full overflow-hidden rounded-lg border"
+					className="my-2 h-[480px] w-full overflow-visible rounded-lg border"
 					contentEditable={false}
 					draggable={false}
 					onDragStart={(event) => {

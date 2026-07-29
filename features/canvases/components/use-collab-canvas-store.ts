@@ -6,7 +6,6 @@ import {
 	createPresenceStateDerivation,
 	createTLStore,
 	defaultBindingUtils,
-	defaultShapeUtils,
 	getSnapshot,
 	InstancePresenceRecordType,
 	loadSnapshot,
@@ -17,8 +16,9 @@ import {
 	type TLUser,
 } from "tldraw";
 import type { Transaction, YMapEvent } from "yjs";
-import type { CollabRoom } from "@/features/collab/client/session";
+import { haunterShapeUtils } from "@/features/canvases/lib/shape-utils";
 import { isLoadableSnapshot } from "@/features/canvases/lib/snapshot";
+import type { CollabRoom } from "@/features/collab/client/session";
 
 export type CanvasCollabUser = { id: string; name: string; color: string };
 
@@ -62,7 +62,7 @@ export function useCollabCanvasStore(
 
 	useEffect(() => {
 		const store = createTLStore({
-			shapeUtils: defaultShapeUtils,
+			shapeUtils: haunterShapeUtils,
 			bindingUtils: defaultBindingUtils,
 		});
 		const yRecords = room.doc.getMap<TLRecord>("tldraw");
