@@ -10,9 +10,11 @@ import {
 	insertOrUpdateBlockForSlashMenu,
 } from "@blocknote/core";
 import {
-	BlockColorsItem,
 	DragHandleMenu,
+	FormattingToolbar,
+	FormattingToolbarController,
 	getDefaultReactSlashMenuItems,
+	getFormattingToolbarItems,
 	RemoveBlockItem,
 	SideMenu,
 	SideMenuController,
@@ -96,6 +98,16 @@ type HaunterBlockNoteEditor = BlockNoteEditor<
 	(typeof editorSchema)["inlineContentSchema"],
 	(typeof editorSchema)["styleSchema"]
 >;
+
+function FormattingToolbarWithoutColors() {
+	return (
+		<FormattingToolbar>
+			{getFormattingToolbarItems().filter(
+				(item) => item.key !== "colorStyleButton",
+			)}
+		</FormattingToolbar>
+	);
+}
 
 function normalizeEditorCodeBlockLanguages(editor: HaunterBlockNoteEditor) {
 	const visit = (blocks: BlockJson[]) => {
@@ -760,9 +772,13 @@ export default function HaunterEditor({
 					editable={editable}
 					onChange={handleChange}
 					theme={getResolvedThemeColorScheme(resolvedTheme)}
+					formattingToolbar={false}
 					slashMenu={false}
 					sideMenu={false}
 				>
+					<FormattingToolbarController
+						formattingToolbar={FormattingToolbarWithoutColors}
+					/>
 					<SuggestionMenuController
 						triggerCharacter="/"
 						getItems={(query) =>
@@ -819,7 +835,6 @@ export default function HaunterEditor({
 									dragHandleMenu={() => (
 										<DragHandleMenu>
 											<RemoveBlockItem>Delete</RemoveBlockItem>
-											<BlockColorsItem>Colors</BlockColorsItem>
 										</DragHandleMenu>
 									)}
 								/>
