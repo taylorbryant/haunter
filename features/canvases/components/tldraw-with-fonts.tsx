@@ -8,6 +8,8 @@ import {
 	tldrawFontFaceKey,
 } from "@/features/canvases/client/tldraw-fonts";
 
+const FONT_PRELOAD_TIMEOUT_MS = 4_000;
+
 type Props = ComponentProps<typeof Tldraw> & {
 	documentSnapshot?: {
 		store?: Record<string, unknown>;
@@ -30,11 +32,17 @@ export function TldrawWithFonts({ documentSnapshot, ...props }: Props) {
 			return;
 		}
 		let cancelled = false;
-		void preloadTldrawFonts(document, faces).then(() => {
+		const finishLoading = () => {
 			if (!cancelled) setLoadedFontKey(fontKey);
+		};
+		const timeout = setTimeout(finishLoading, FONT_PRELOAD_TIMEOUT_MS);
+		void preloadTldrawFonts(document, faces).then(() => {
+			clearTimeout(timeout);
+			finishLoading();
 		});
 		return () => {
 			cancelled = true;
+			clearTimeout(timeout);
 		};
 	}, [faces, fontKey]);
 
