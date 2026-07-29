@@ -5,7 +5,7 @@ import "tldraw/tldraw.css";
 import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
 	createTLStore,
 	defaultBindingUtils,
@@ -386,6 +386,13 @@ function CollabCanvasSurface({
 			}
 		: undefined;
 	const storeWithStatus = useCollabCanvasStore(room, snapshot, collabUser);
+	const synchronizedSnapshot = useMemo(() => {
+		if (storeWithStatus.status !== "synced-remote") return null;
+		return getSnapshot(storeWithStatus.store).document as unknown as Record<
+			string,
+			unknown
+		>;
+	}, [storeWithStatus]);
 
 	const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(
 		"saved",
@@ -490,10 +497,18 @@ function CollabCanvasSurface({
 		};
 	}
 
+	if (!synchronizedSnapshot) {
+		return (
+			<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+				Loading canvas…
+			</div>
+		);
+	}
+
 	return (
 		<div className="relative h-full w-full">
 			<TldrawWithFonts
-				documentSnapshot={snapshot}
+				documentSnapshot={synchronizedSnapshot}
 				licenseKey={TLDRAW_LICENSE_KEY}
 				shapeUtils={haunterShapeUtils}
 				store={storeWithStatus}

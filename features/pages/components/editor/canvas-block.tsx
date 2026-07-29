@@ -29,6 +29,26 @@ const StableCanvasSurface = memo(function StableCanvasSurface({
 	return <CanvasSurface canvasId={canvasId} />;
 });
 
+const FOCUSABLE_SELECTOR = [
+	"a[href]",
+	"button:not([disabled])",
+	"input:not([disabled])",
+	"select:not([disabled])",
+	"textarea:not([disabled])",
+	'[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function visibleFocusableElements(container: HTMLElement): HTMLElement[] {
+	return [
+		...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+	].filter(
+		(element) =>
+			element.tabIndex >= 0 &&
+			element.getClientRects().length > 0 &&
+			element.getAttribute("aria-hidden") !== "true",
+	);
+}
+
 function CanvasBlockView({ canvasId }: { canvasId: string }) {
 	const [expanded, setExpanded] = useState(false);
 	const overlayRef = useRef<HTMLDivElement>(null);
@@ -49,8 +69,9 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 
 		const overlay = overlayRef.current;
 		if (!overlay) return;
+		const modalOverlay: HTMLElement = overlay;
 		const bodyOverflow = document.body.style.overflow;
-		const appMain = overlay.closest("main");
+		const appMain = modalOverlay.closest("main");
 		const mainZIndex = appMain?.style.zIndex ?? "";
 		const inertElements: Array<{ element: HTMLElement; inert: boolean }> = [];
 
@@ -61,7 +82,7 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 
 		// Portaling would remount tldraw, so reproduce modal inertness in place
 		// by disabling siblings along the canvas-to-body ancestor path.
-		let current: HTMLElement = overlay;
+		let current: HTMLElement = modalOverlay;
 		while (current.parentElement && current.parentElement !== document.body) {
 			const parent = current.parentElement;
 			for (const sibling of parent.children) {
@@ -78,9 +99,31 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 		}
 
 		function handleKeyDown(event: KeyboardEvent) {
-			if (event.key !== "Escape") return;
-			event.preventDefault();
-			setExpanded(false);
+			if (event.key === "Escape") {
+				event.preventDefault();
+				setExpanded(false);
+				return;
+			}
+			if (event.key !== "Tab") return;
+
+			const focusable = visibleFocusableElements(modalOverlay);
+			if (focusable.length === 0) {
+				event.preventDefault();
+				closeButtonRef.current?.focus();
+				return;
+			}
+
+			const first = focusable[0];
+			const last = focusable.at(-1);
+			const active = document.activeElement;
+			if (
+				event.shiftKey
+					? active === first || !modalOverlay.contains(active)
+					: active === last || !modalOverlay.contains(active)
+			) {
+				event.preventDefault();
+				(event.shiftKey ? last : first)?.focus();
+			}
 		}
 
 		document.addEventListener("keydown", handleKeyDown);
