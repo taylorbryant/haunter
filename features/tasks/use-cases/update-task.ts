@@ -1,7 +1,6 @@
 import "@beignet/core/server-only";
-import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
+import type { PublishTaskBlockPatchInput } from "@/features/pages/ports";
 import { appError } from "@/features/shared/errors";
-import { patchTaskBlock } from "@/features/tasks/lib/patch-task-block";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import {
@@ -10,6 +9,7 @@ import {
 	scheduleTaskAssignmentDelivery,
 } from "../notifications/assigned";
 import { TaskSchema, UpdateTaskInputSchema } from "../schemas";
+import { savePageTaskBlockPatch } from "./save-page-task-block-patch";
 
 export const updateTaskUseCase = useCase
 	.command("tasks.update")
@@ -19,8 +19,8 @@ export const updateTaskUseCase = useCase
 		const user = requireUser(ctx);
 		const scope = requireActiveWorkspaceScope(ctx);
 
-		const { updated, assignmentNotification } = await ctx.ports.uow.transaction(
-			async (tx) => {
+		const { updated, assignmentNotification, collaborationPatch } =
+			await ctx.ports.uow.transaction(async (tx) => {
 				const task = await tx.tasks.findById(scope, input.id);
 				if (!task) {
 					throw appError("TaskNotFound", { details: { id: input.id } });
@@ -104,10 +104,11 @@ export const updateTaskUseCase = useCase
 						now,
 					);
 				} else if (schedulingChanged) {
-					await tx.notificationInbox.dismissSnoozedForTasks([task.id], now);
+					await tx.notificationInbox.dismissScheduledForTasks([task.id], now);
 				}
 
 				// Write the change through to the source page so the doc agrees.
+				let collaborationPatch: PublishTaskBlockPatchInput | null = null;
 				if (
 					task.pageId !== null &&
 					task.sourceBlockId !== null &&
@@ -117,39 +118,26 @@ export const updateTaskUseCase = useCase
 						input.reminderOffsetMinutes !== undefined ||
 						input.assigneeId !== undefined)
 				) {
-					const page = await tx.pages.findById(scope, task.pageId);
-					if (page) {
-						const { blocks, found } = patchTaskBlock(
-							page.content,
-							task.sourceBlockId,
-							{
-								...(input.completed !== undefined
-									? { checked: input.completed }
-									: {}),
-								...(input.dueDate !== undefined ? { due: input.dueDate } : {}),
-								...(input.dueDate !== undefined || input.dueTime !== undefined
-									? { dueTime }
-									: {}),
-								...(input.dueDate === null ||
-								input.reminderOffsetMinutes !== undefined
-									? { reminderOffsetMinutes }
-									: {}),
-								...(input.assigneeId !== undefined
-									? { assignee: input.assigneeId }
-									: {}),
-							},
-						);
-						// A missing block means the row is stale; the next content save
-						// will orphan-delete it. Update the row anyway.
-						if (found) {
-							await tx.pages.saveContent(
-								scope,
-								page.id,
-								JSON.stringify(blocks),
-								extractPageSearchText(blocks),
-							);
-						}
-					}
+					collaborationPatch = await savePageTaskBlockPatch(tx.pages, scope, {
+						pageId: task.pageId,
+						blockId: task.sourceBlockId,
+						patch: {
+							...(input.completed !== undefined
+								? { checked: input.completed }
+								: {}),
+							...(input.dueDate !== undefined ? { due: input.dueDate } : {}),
+							...(input.dueDate !== undefined || input.dueTime !== undefined
+								? { dueTime }
+								: {}),
+							...(input.dueDate === null ||
+							input.reminderOffsetMinutes !== undefined
+								? { reminderOffsetMinutes }
+								: {}),
+							...(input.assigneeId !== undefined
+								? { assignee: input.assigneeId }
+								: {}),
+						},
+					});
 				}
 
 				const actor =
@@ -166,12 +154,27 @@ export const updateTaskUseCase = useCase
 							)
 						: null;
 
-				return { updated, assignmentNotification };
-			},
-		);
+				return { updated, assignmentNotification, collaborationPatch };
+			});
 		scheduleTaskAssignmentDelivery(
 			ctx,
 			assignmentNotification ? [assignmentNotification] : [],
 		);
+		if (collaborationPatch) {
+			try {
+				await ctx.ports.pageCollaboration.publishTaskBlockPatch(
+					collaborationPatch,
+				);
+			} catch (error) {
+				ctx.ports.logger.warn(
+					"Failed to propagate task properties to collaboration",
+					{
+						error,
+						pageId: collaborationPatch.pageId,
+						taskId: updated.id,
+					},
+				);
+			}
+		}
 		return updated;
 	});

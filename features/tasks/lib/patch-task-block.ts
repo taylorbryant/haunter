@@ -1,3 +1,4 @@
+import type { CollaborativeTaskBlockProps } from "@/features/pages/ports";
 import type { BlockJson } from "@/features/pages/schemas";
 
 export type TaskBlockPatch = {
@@ -13,6 +14,25 @@ export type PatchResult = {
 	found: boolean;
 };
 
+export function toCollaborativeTaskBlockProps(
+	patch: TaskBlockPatch,
+): CollaborativeTaskBlockProps {
+	return {
+		...(patch.checked !== undefined ? { checked: patch.checked } : {}),
+		...(patch.due !== undefined ? { due: patch.due ?? "" } : {}),
+		...(patch.dueTime !== undefined ? { dueTime: patch.dueTime ?? "" } : {}),
+		...(patch.reminderOffsetMinutes !== undefined
+			? {
+					reminder:
+						patch.reminderOffsetMinutes === null
+							? ""
+							: String(patch.reminderOffsetMinutes),
+				}
+			: {}),
+		...(patch.assignee !== undefined ? { assignee: patch.assignee ?? "" } : {}),
+	};
+}
+
 /**
  * Return a new document tree with the given task block's props updated.
  * The original tree is not mutated. `found` reports whether the block exists.
@@ -23,6 +43,7 @@ export function patchTaskBlock(
 	patch: TaskBlockPatch,
 ): PatchResult {
 	let found = false;
+	const props = toCollaborativeTaskBlockProps(patch);
 
 	function walk(nodes: BlockJson[]): BlockJson[] {
 		return nodes.map((block) => {
@@ -32,22 +53,7 @@ export function patchTaskBlock(
 					...block,
 					props: {
 						...block.props,
-						...(patch.checked !== undefined ? { checked: patch.checked } : {}),
-						...(patch.due !== undefined ? { due: patch.due ?? "" } : {}),
-						...(patch.dueTime !== undefined
-							? { dueTime: patch.dueTime ?? "" }
-							: {}),
-						...(patch.reminderOffsetMinutes !== undefined
-							? {
-									reminder:
-										patch.reminderOffsetMinutes === null
-											? ""
-											: String(patch.reminderOffsetMinutes),
-								}
-							: {}),
-						...(patch.assignee !== undefined
-							? { assignee: patch.assignee ?? "" }
-							: {}),
+						...props,
 					},
 				};
 			}

@@ -6,6 +6,7 @@ import {
 import type { AppContext } from "@/app-context";
 import type {
 	PendingPushNotification,
+	StoredPushSubscription,
 	TaskReminderCandidate,
 } from "@/features/notifications/ports";
 import type { Notification } from "@/features/notifications/schemas";
@@ -383,6 +384,65 @@ describe("proactive task reminder schedule", () => {
 });
 
 describe("task reminder push preferences", () => {
+	it("uses generic copy when a snoozed reminder is rearmed", async () => {
+		const item = pendingReminder();
+		if (item.kind !== "task.reminder") {
+			throw new Error("Expected a task reminder");
+		}
+		const subscription: StoredPushSubscription = {
+			id: crypto.randomUUID(),
+			userId: item.userId,
+			endpoint: "https://push.example.com/subscription",
+			expirationTime: null,
+			keys: { p256dh: "key", auth: "auth" },
+			createdAt: new Date().toISOString(),
+			updatedAt: new Date().toISOString(),
+		};
+		const sent: Array<{ title: string }> = [];
+		const ctx = {
+			ports: {
+				notificationInbox: {
+					async listPushSubscriptions() {
+						return [subscription];
+					},
+					async claimPush() {
+						return true;
+					},
+					async countUnread() {
+						return 1;
+					},
+					async deletePushSubscription() {},
+					async markPushDelivered() {},
+				},
+				webPush: {
+					isConfigured: () => true,
+					async send(
+						_subscription: StoredPushSubscription,
+						message: { title: string },
+					) {
+						sent.push(message);
+						return { status: "sent" as const };
+					},
+				},
+			},
+		} as unknown as AppContext;
+
+		await TaskReminderNotification.channels.push({
+			notification: TaskReminderNotification,
+			payload: {
+				userId: item.userId,
+				workspaceId: item.workspaceId,
+				notificationIds: [item.id],
+				attempt: 1,
+				items: [{ ...item.payload, rearmed: true }],
+			},
+			ctx,
+			channel: "push",
+		});
+
+		expect(sent).toEqual([expect.objectContaining({ title: "Task reminder" })]);
+	});
+
 	it("skips disabled task reminders", async () => {
 		const item = pendingReminder();
 		const skipped: string[][] = [];

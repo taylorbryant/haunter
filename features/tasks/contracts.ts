@@ -7,10 +7,10 @@ import {
 	ListTasksOutputSchema,
 	TaskFilterSchema,
 	TaskIdInputSchema,
-	TaskScopeSchema,
-	TaskSchema,
 	TaskNotificationActionBodySchema,
 	TaskNotificationActionOutputSchema,
+	TaskSchema,
+	TaskScopeSchema,
 	UpdateTaskBodySchema,
 } from "@/features/tasks/schemas";
 
@@ -67,6 +67,7 @@ export const updateTask = tasks
 	.errors({
 		Forbidden: errors.Forbidden,
 		InvalidTaskDue: errors.InvalidTaskDue,
+		StaleWrite: errors.StaleWrite,
 		TaskNotFound: errors.TaskNotFound,
 		TaskNotEditable: errors.TaskNotEditable,
 	})
@@ -95,6 +96,7 @@ export const actOnTaskNotification = tasks
 		Forbidden: errors.Forbidden,
 		NotificationNotFound: errors.NotificationNotFound,
 		NotificationNotActionable: errors.NotificationNotActionable,
+		StaleWrite: errors.StaleWrite,
 	})
 	.responses({
 		200: TaskNotificationActionOutputSchema,

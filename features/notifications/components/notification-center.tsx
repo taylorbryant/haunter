@@ -11,16 +11,10 @@ import {
 	UserRoundCheckIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { reportUserError } from "@/client/error-feedback";
 import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
 	Drawer,
 	DrawerContent,
@@ -29,6 +23,12 @@ import {
 	DrawerTitle,
 	DrawerTrigger,
 } from "@/components/ui/drawer";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
 	Popover,
 	PopoverContent,
@@ -163,6 +163,8 @@ function NotificationPanel({
 								item.taskAvailable &&
 								!item.taskCompleted &&
 								item.taskAssigneeId === item.userId;
+							const canComplete = actionable && item.taskCanComplete === true;
+							const canSnooze = actionable && item.kind !== "task.assigned";
 							return (
 								<div
 									key={item.id}
@@ -225,19 +227,23 @@ function NotificationPanel({
 												<CheckIcon className="size-3" />
 												Completed
 											</span>
-										) : actionable ? (
+										) : canComplete || canSnooze ? (
 											<div className="mt-2 flex items-center gap-1">
-												<Button
-													type="button"
-													variant="ghost"
-													size="xs"
-													disabled={pending}
-													onClick={() => onAction(item, { action: "complete" })}
-												>
-													<CheckIcon />
-													Complete
-												</Button>
-												{item.kind !== "task.assigned" ? (
+												{canComplete ? (
+													<Button
+														type="button"
+														variant="ghost"
+														size="xs"
+														disabled={pending}
+														onClick={() =>
+															onAction(item, { action: "complete" })
+														}
+													>
+														<CheckIcon />
+														Complete
+													</Button>
+												) : null}
+												{canSnooze ? (
 													<DropdownMenu>
 														<DropdownMenuTrigger
 															render={
@@ -316,6 +322,7 @@ export function NotificationCenter() {
 	const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(
 		() => new Set(),
 	);
+	const pendingActionIdsRef = useRef(new Set<string>());
 	const query = useQuery(listNotificationsQueryOptions());
 	const markRead = useMutation({
 		...markNotificationReadMutationOptions(),
@@ -369,7 +376,7 @@ export function NotificationCenter() {
 		);
 	}
 
-	function actOnNotification(
+	async function actOnNotification(
 		item: Notification,
 		request:
 			| { action: "complete" }
@@ -378,7 +385,8 @@ export function NotificationCenter() {
 					preset: "15m" | "1h" | "tomorrow_9am";
 			  },
 	) {
-		if (pendingActionIds.has(item.id)) return;
+		if (pendingActionIdsRef.current.has(item.id)) return;
+		pendingActionIdsRef.current.add(item.id);
 		setPendingActionIds((current) => new Set(current).add(item.id));
 		const variables =
 			request.action === "complete"
@@ -390,25 +398,25 @@ export function NotificationCenter() {
 							preset: request.preset,
 						},
 					};
-		action.mutate(variables, {
-			onSuccess: async (result) => {
-				await Promise.all([
-					invalidateNotifications(queryClient),
-					invalidateTasks(queryClient),
-					result.pageId
-						? invalidatePage(queryClient, result.pageId)
-						: Promise.resolve(),
-				]);
-			},
-			onError: (error) =>
-				reportUserError(error, "The notification could not be updated."),
-			onSettled: () =>
-				setPendingActionIds((current) => {
-					const next = new Set(current);
-					next.delete(item.id);
-					return next;
-				}),
-		});
+		try {
+			const result = await action.mutateAsync(variables);
+			await Promise.all([
+				invalidateNotifications(queryClient),
+				invalidateTasks(queryClient),
+				result.pageId
+					? invalidatePage(queryClient, result.pageId)
+					: Promise.resolve(),
+			]);
+		} catch (error) {
+			reportUserError(error, "The notification could not be updated.");
+		} finally {
+			pendingActionIdsRef.current.delete(item.id);
+			setPendingActionIds((current) => {
+				const next = new Set(current);
+				next.delete(item.id);
+				return next;
+			});
+		}
 	}
 
 	const triggerLabel =

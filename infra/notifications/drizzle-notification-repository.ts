@@ -30,7 +30,12 @@ import {
 	NotificationSchema,
 	type PushSubscriptionInput,
 } from "@/features/notifications/schemas";
+import {
+	isTaskOverdueAt,
+	shouldCreateTaskReminder,
+} from "@/features/tasks/lib/reminder-time";
 import * as schema from "@/infra/db/schema";
+import { canEditContent } from "@/lib/org-access";
 
 type NotificationRow = typeof schema.notifications.$inferSelect;
 const notificationColumns = getTableColumns(schema.notifications);
@@ -40,12 +45,25 @@ type NotificationLiveState = {
 	taskAssigneeId?: string | null;
 	taskId?: string | null;
 	pageDeletedAt?: string | null;
+	memberRole?: string | null;
+	currentReminderVersion?: string | null;
+	currentOverdueVersion?: string | null;
 };
 
 function toNotification(
 	row: NotificationRow,
 	live: NotificationLiveState = {},
 ): Notification {
+	const scheduleVersionMatches =
+		row.kind === "task.assigned"
+			? live.taskAssigneeId === undefined || live.taskAssigneeId === row.userId
+			: row.kind === "task.reminder"
+				? live.currentReminderVersion === undefined ||
+					live.currentReminderVersion === row.entityVersion
+				: row.kind === "task.overdue"
+					? live.currentOverdueVersion === undefined ||
+						live.currentOverdueVersion === row.entityVersion
+					: true;
 	return NotificationSchema.parse({
 		id: row.id,
 		userId: row.userId,
@@ -61,10 +79,16 @@ function toNotification(
 		snoozedUntil: row.snoozedUntil,
 		taskCompleted: live.taskCompleted ?? false,
 		taskAssigneeId: live.taskAssigneeId ?? null,
+		taskCanComplete:
+			live.memberRole === undefined
+				? undefined
+				: canEditContent(live.memberRole),
 		taskAvailable:
 			live.taskId === undefined
 				? true
-				: live.taskId !== null && live.pageDeletedAt === null,
+				: live.taskId !== null &&
+					live.pageDeletedAt === null &&
+					scheduleVersionMatches,
 	});
 }
 
@@ -88,6 +112,35 @@ function taskReminderEntityVersion() {
 		${schema.tasks.reminderOffsetMinutes} || ':' ||
 		${schema.tasks.assigneeId} || ':' ||
 		${schema.tasks.reminderConfiguredAt}`;
+}
+
+function taskOverdueEntityVersion() {
+	return sql<string>`CASE
+		WHEN ${schema.tasks.dueTime} IS NULL
+			THEN ${schema.tasks.dueDate} || ':' || ${schema.tasks.assigneeId}
+			ELSE ${schema.tasks.dueDate} || ':' || ${schema.tasks.dueTime} || ':' || ${schema.tasks.assigneeId}
+		END`;
+}
+
+function currentScheduleVersionCondition() {
+	return or(
+		and(
+			eq(schema.notifications.kind, "task.assigned"),
+			eq(schema.tasks.assigneeId, schema.notifications.userId),
+		),
+		and(
+			eq(schema.notifications.kind, "task.reminder"),
+			eq(schema.notifications.entityVersion, taskReminderEntityVersion()),
+		),
+		and(
+			eq(schema.notifications.kind, "task.overdue"),
+			eq(schema.notifications.entityVersion, taskOverdueEntityVersion()),
+		),
+	);
+}
+
+function isReminderOffset(value: number | null): value is 0 | 15 | 60 | 1_440 {
+	return value === 0 || value === 15 || value === 60 || value === 1_440;
 }
 
 export function createDrizzleNotificationRepository(
@@ -134,6 +187,7 @@ export function createDrizzleNotificationRepository(
 					taskCompleted: schema.tasks.completed,
 					taskAssigneeId: schema.tasks.assigneeId,
 					pageDeletedAt: schema.pages.deletedAt,
+					memberRole: schema.member.role,
 				})
 				.from(schema.notifications)
 				.innerJoin(
@@ -157,8 +211,11 @@ export function createDrizzleNotificationRepository(
 						isNotNull(schema.tasks.id),
 						or(isNull(schema.tasks.pageId), isNull(schema.pages.deletedAt)),
 						or(
-							isNull(schema.notifications.actionState),
 							eq(schema.notifications.actionState, "completed"),
+							and(
+								isNull(schema.notifications.actionState),
+								currentScheduleVersionCondition(),
+							),
 						),
 						cursorCondition,
 					),
@@ -178,6 +235,7 @@ export function createDrizzleNotificationRepository(
 						taskCompleted: row.taskCompleted,
 						taskAssigneeId: row.taskAssigneeId,
 						pageDeletedAt: row.pageDeletedAt,
+						memberRole: row.memberRole,
 					}),
 				),
 				nextCursor:
@@ -212,7 +270,9 @@ export function createDrizzleNotificationRepository(
 						isNull(schema.notifications.readAt),
 						isNull(schema.notifications.actionState),
 						eq(schema.tasks.completed, false),
+						eq(schema.tasks.assigneeId, schema.notifications.userId),
 						or(isNull(schema.tasks.pageId), isNull(schema.pages.deletedAt)),
+						currentScheduleVersionCondition(),
 					),
 				);
 			return Number(row?.count ?? 0);
@@ -226,8 +286,18 @@ export function createDrizzleNotificationRepository(
 					taskCompleted: schema.tasks.completed,
 					taskAssigneeId: schema.tasks.assigneeId,
 					pageDeletedAt: schema.pages.deletedAt,
+					memberRole: schema.member.role,
+					currentReminderVersion: taskReminderEntityVersion(),
+					currentOverdueVersion: taskOverdueEntityVersion(),
 				})
 				.from(schema.notifications)
+				.leftJoin(
+					schema.member,
+					and(
+						eq(schema.member.userId, schema.notifications.userId),
+						eq(schema.member.organizationId, schema.notifications.workspaceId),
+					),
+				)
 				.leftJoin(
 					schema.tasks,
 					and(
@@ -249,6 +319,9 @@ export function createDrizzleNotificationRepository(
 						taskCompleted: row.taskCompleted,
 						taskAssigneeId: row.taskAssigneeId,
 						pageDeletedAt: row.pageDeletedAt,
+						memberRole: row.memberRole,
+						currentReminderVersion: row.currentReminderVersion,
+						currentOverdueVersion: row.currentOverdueVersion,
 					})
 				: null;
 		},
@@ -294,11 +367,6 @@ export function createDrizzleNotificationRepository(
 		},
 
 		async snooze(userId, id, snoozedUntil, actionAt) {
-			const overdueVersion = sql<string>`CASE
-				WHEN ${schema.tasks.dueTime} IS NULL
-					THEN ${schema.tasks.dueDate} || ':' || ${schema.tasks.assigneeId}
-					ELSE ${schema.tasks.dueDate} || ':' || ${schema.tasks.dueTime} || ':' || ${schema.tasks.assigneeId}
-				END`;
 			const rows = await db
 				.update(schema.notifications)
 				.set({
@@ -350,7 +418,10 @@ export function createDrizzleNotificationRepository(
 											),
 											and(
 												eq(schema.notifications.kind, "task.overdue"),
-												eq(schema.notifications.entityVersion, overdueVersion),
+												eq(
+													schema.notifications.entityVersion,
+													taskOverdueEntityVersion(),
+												),
 											),
 										),
 									),
@@ -391,7 +462,7 @@ export function createDrizzleNotificationRepository(
 				.where(eq(schema.notifications.entityId, taskId));
 		},
 
-		async dismissSnoozedForTasks(taskIds, actionAt) {
+		async dismissScheduledForTasks(taskIds, actionAt) {
 			if (taskIds.length === 0) return;
 			await db
 				.update(schema.notifications)
@@ -407,7 +478,14 @@ export function createDrizzleNotificationRepository(
 				.where(
 					and(
 						inArray(schema.notifications.entityId, taskIds),
-						eq(schema.notifications.actionState, "snoozed"),
+						inArray(schema.notifications.kind, [
+							"task.reminder",
+							"task.overdue",
+						]),
+						or(
+							isNull(schema.notifications.actionState),
+							eq(schema.notifications.actionState, "snoozed"),
+						),
 					),
 				);
 		},
@@ -429,6 +507,7 @@ export function createDrizzleNotificationRepository(
 					pageDeletedAt: schema.pages.deletedAt,
 					overdueEnabled: schema.notificationPreferences.overdueTasksEnabled,
 					remindersEnabled: schema.notificationPreferences.taskRemindersEnabled,
+					timezone: sql<string>`COALESCE(${schema.notificationPreferences.timezone}, 'UTC')`,
 				})
 				.from(schema.notifications)
 				.innerJoin(
@@ -463,6 +542,7 @@ export function createDrizzleNotificationRepository(
 				.limit(limit);
 
 			let rearmed = 0;
+			const rearmAt = new Date(now);
 			for (const row of rows) {
 				const item = row.notification;
 				const baseValid =
@@ -483,14 +563,50 @@ export function createDrizzleNotificationRepository(
 							? `${row.dueDate}:${row.dueTime}:${row.assigneeId}`
 							: `${row.dueDate}:${row.assigneeId}`
 						: null;
+				const reminderWindowOpen =
+					row.taskId !== null &&
+					row.title !== null &&
+					row.dueDate !== null &&
+					isReminderOffset(row.reminderOffsetMinutes) &&
+					row.reminderConfiguredAt !== null &&
+					currentReminderVersion !== null &&
+					shouldCreateTaskReminder(
+						{
+							taskId: row.taskId,
+							userId: item.userId,
+							workspaceId: item.workspaceId,
+							title: row.title,
+							dueDate: row.dueDate,
+							dueTime: row.dueTime,
+							reminderOffsetMinutes: row.reminderOffsetMinutes,
+							pageId: row.pageId,
+							sourceBlockId: row.sourceBlockId,
+							timezone: row.timezone,
+							entityVersion: currentReminderVersion,
+							reminderConfiguredAt: row.reminderConfiguredAt,
+						},
+						rearmAt,
+					);
+				const stillOverdue =
+					row.dueDate !== null &&
+					isTaskOverdueAt(
+						{
+							dueDate: row.dueDate,
+							dueTime: row.dueTime,
+							timezone: row.timezone,
+						},
+						rearmAt,
+					);
 				const valid =
 					baseValid &&
 					((item.kind === "task.reminder" &&
 						row.remindersEnabled !== false &&
-						currentReminderVersion === item.entityVersion) ||
+						currentReminderVersion === item.entityVersion &&
+						reminderWindowOpen) ||
 						(item.kind === "task.overdue" &&
 							row.overdueEnabled !== false &&
-							currentOverdueVersion === item.entityVersion));
+							currentOverdueVersion === item.entityVersion &&
+							stillOverdue));
 
 				if (!valid || row.taskId === null || row.title === null) {
 					await db
@@ -519,6 +635,7 @@ export function createDrizzleNotificationRepository(
 								dueDate: row.dueDate,
 								dueTime: row.dueTime,
 								reminderOffsetMinutes: row.reminderOffsetMinutes,
+								rearmed: true,
 								pageId: row.pageId,
 								sourceBlockId: row.sourceBlockId,
 							}
@@ -684,6 +801,10 @@ export function createDrizzleNotificationRepository(
 										eq(
 											schema.notifications.entityVersion,
 											taskReminderEntityVersion(),
+										),
+										or(
+											isNull(schema.notifications.actionState),
+											ne(schema.notifications.actionState, "dismissed"),
 										),
 									),
 								),
@@ -948,9 +1069,21 @@ export function createDrizzleNotificationRepository(
 						eq(schema.member.organizationId, schema.notifications.workspaceId),
 					),
 				)
+				.innerJoin(
+					schema.tasks,
+					and(
+						eq(schema.tasks.id, schema.notifications.entityId),
+						eq(schema.tasks.workspaceId, schema.notifications.workspaceId),
+						eq(schema.tasks.assigneeId, schema.notifications.userId),
+					),
+				)
+				.leftJoin(schema.pages, eq(schema.tasks.pageId, schema.pages.id))
 				.where(
 					and(
 						isNull(schema.notifications.actionState),
+						eq(schema.tasks.completed, false),
+						or(isNull(schema.tasks.pageId), isNull(schema.pages.deletedAt)),
+						currentScheduleVersionCondition(),
 						lt(schema.notifications.pushAttempts, 3),
 						or(
 							eq(schema.notifications.pushState, "pending"),

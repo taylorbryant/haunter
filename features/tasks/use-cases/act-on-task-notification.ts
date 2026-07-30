@@ -1,9 +1,8 @@
 import "@beignet/core/server-only";
 import { createTenant, createTenantScope } from "@beignet/core/ports";
-import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
+import type { PublishTaskBlockPatchInput } from "@/features/pages/ports";
 import { appError } from "@/features/shared/errors";
-import { patchTaskBlock } from "@/features/tasks/lib/patch-task-block";
-import { zonedDateTimeToUtc } from "@/features/tasks/notifications/reminder";
+import { zonedDateTimeToUtc } from "@/features/tasks/lib/reminder-time";
 import { requireUser } from "@/lib/auth";
 import { canEditContent } from "@/lib/org-access";
 import { localDateAndTime } from "@/lib/timezone";
@@ -12,6 +11,7 @@ import {
 	TaskNotificationActionInputSchema,
 	TaskNotificationActionOutputSchema,
 } from "../schemas";
+import { savePageTaskBlockPatch } from "./save-page-task-block-patch";
 
 const MINUTE_MS = 60_000;
 
@@ -127,7 +127,7 @@ export const actOnTaskNotificationUseCase = useCase
 			throw appError("NotificationNotActionable");
 		}
 
-		await ctx.ports.uow.transaction(async (tx) => {
+		const collaborationPatch = await ctx.ports.uow.transaction(async (tx) => {
 			const currentRole = await tx.members.findRole(
 				notification.workspaceId,
 				user.id,
@@ -161,37 +161,46 @@ export const actOnTaskNotificationUseCase = useCase
 					"completed",
 					actionAt,
 				);
-				return;
+				return null;
 			}
 
 			await tx.tasks.update(scope, currentTask.id, {
 				completed: true,
 				completedAt: actionAt,
 			});
+			let collaborationPatch: PublishTaskBlockPatchInput | null = null;
 			if (currentTask.pageId && currentTask.sourceBlockId) {
-				const page = await tx.pages.findById(scope, currentTask.pageId);
-				if (page) {
-					const patched = patchTaskBlock(
-						page.content,
-						currentTask.sourceBlockId,
-						{ checked: true },
-					);
-					if (patched.found) {
-						await tx.pages.saveContent(
-							scope,
-							page.id,
-							JSON.stringify(patched.blocks),
-							extractPageSearchText(patched.blocks),
-						);
-					}
-				}
+				collaborationPatch = await savePageTaskBlockPatch(tx.pages, scope, {
+					pageId: currentTask.pageId,
+					blockId: currentTask.sourceBlockId,
+					patch: { checked: true },
+				});
 			}
 			await tx.notificationInbox.resolveTaskNotifications(
 				currentTask.id,
 				"completed",
 				actionAt,
 			);
+			return collaborationPatch;
 		});
+
+		if (collaborationPatch) {
+			try {
+				await ctx.ports.pageCollaboration.publishTaskBlockPatch(
+					collaborationPatch,
+				);
+			} catch (error) {
+				ctx.ports.logger.warn(
+					"Failed to propagate a completed task block to collaboration",
+					{
+						error,
+						notificationId: notification.id,
+						pageId: collaborationPatch.pageId,
+						taskId: task.id,
+					},
+				);
+			}
+		}
 
 		return {
 			action: "complete",

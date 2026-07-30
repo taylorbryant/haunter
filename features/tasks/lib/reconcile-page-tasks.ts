@@ -206,7 +206,10 @@ export async function reconcilePageTasks(
 				current.reminderOffsetMinutes !== block.reminderOffsetMinutes ||
 				current.assigneeId !== block.resolvedAssigneeId
 			) {
-				await ports.notificationInbox.dismissSnoozedForTasks([current.id], now);
+				await ports.notificationInbox.dismissScheduledForTasks(
+					[current.id],
+					now,
+				);
 			}
 			const notification = await createTaskAssignmentNotification(
 				ports.notificationInbox,
@@ -228,7 +231,7 @@ export async function reconcilePageTasks(
 
 	if (orphanIds.length > 0) {
 		changed = true;
-		await ports.notificationInbox.dismissSnoozedForTasks(orphanIds, now);
+		await ports.notificationInbox.dismissScheduledForTasks(orphanIds, now);
 		await ports.tasks.deleteByIds(scope, orphanIds);
 	}
 

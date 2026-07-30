@@ -83,7 +83,7 @@ export interface NotificationRepository {
 		state: Exclude<NotificationActionState, "snoozed">,
 		actionAt: string,
 	): Promise<void>;
-	dismissSnoozedForTasks(taskIds: string[], actionAt: string): Promise<void>;
+	dismissScheduledForTasks(taskIds: string[], actionAt: string): Promise<void>;
 	rearmDueSnoozes(now: string, limit: number): Promise<number>;
 	getPreferences(userId: string): Promise<NotificationPreferences>;
 	updatePreferences(

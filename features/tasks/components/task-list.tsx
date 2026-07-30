@@ -20,6 +20,7 @@ import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
+import { invalidateNotifications } from "@/features/notifications/client/queries";
 import { invalidatePage } from "@/features/pages/client/queries";
 import {
 	createTaskMutationOptions,
@@ -189,7 +190,10 @@ export function TaskList({
 	}, [searchParams, router, pathname, canEdit, isHomeView, openCreateTask]);
 
 	async function refresh(task?: TaskWithPage) {
-		await invalidateTasks(queryClient);
+		await Promise.all([
+			invalidateTasks(queryClient),
+			invalidateNotifications(queryClient),
+		]);
 		// Keep an open editor for the source page consistent.
 		if (task?.pageId) {
 			await invalidatePage(queryClient, task.pageId);

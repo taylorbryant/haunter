@@ -58,6 +58,7 @@ export const TaskReminderNotificationPayloadSchema = z.object({
 		z.literal(60),
 		z.literal(1_440),
 	]),
+	rearmed: z.boolean().optional(),
 	pageId: z.string().uuid().nullable(),
 	sourceBlockId: z.string().nullable(),
 });
@@ -79,6 +80,7 @@ const NotificationBaseSchema = z.object({
 	taskCompleted: z.boolean().optional(),
 	taskAssigneeId: z.string().nullable().optional(),
 	taskAvailable: z.boolean().optional(),
+	taskCanComplete: z.boolean().optional(),
 });
 
 export const TaskOverdueInboxNotificationSchema = NotificationBaseSchema.extend(

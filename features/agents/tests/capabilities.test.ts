@@ -9,10 +9,10 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
-import type { NotificationRepository } from "@/features/notifications/ports";
 import type { AgentActivityWrite } from "@/features/agents/ports";
 import { createTestAgentAdminRepository } from "@/features/agents/tests/helpers";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import type { NotificationRepository } from "@/features/notifications/ports";
 import {
 	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
@@ -69,7 +69,7 @@ async function createFixture() {
 	};
 	const notificationInbox = {
 		async resolveTaskNotifications() {},
-		async dismissSnoozedForTasks() {},
+		async dismissScheduledForTasks() {},
 	} as unknown as NotificationRepository;
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
