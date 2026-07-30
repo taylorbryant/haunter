@@ -35,7 +35,7 @@
 		"@beignet/core": "0.0.45",
 		"@beignet/devtools": "0.0.45",
 		"@beignet/next": "0.0.45",
-		"@beignet/provider-auth-better-auth": "0.0.45",
+		"@beignet/provider-auth-better-auth": "0.0.47",
 		"@beignet/provider-db-drizzle": "0.0.45",
 		"@beignet/provider-logger-pino": "0.0.45",
 		"@beignet/provider-mail-resend": "0.0.45",
