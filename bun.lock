@@ -8,7 +8,7 @@
         "@base-ui/react": "1.6.0",
         "@beignet/agent-auth-better-auth": "0.0.45",
         "@beignet/core": "0.0.45",
-        "@beignet/devtools": "0.0.45",
+        "@beignet/devtools": "0.0.47",
         "@beignet/next": "0.0.45",
         "@beignet/provider-auth-better-auth": "0.0.45",
         "@beignet/provider-db-drizzle": "0.0.45",
@@ -157,7 +157,7 @@
 
     "@beignet/core": ["@beignet/core@0.0.45", "", { "dependencies": { "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "zod": "^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-wXY4gsGHEJWky5X6cRK6QYj/DyseBsq6RMjCCd1RsCfnJSplIeUVaitAar0wmbX/f1wr2BkHk/Tr0lioeaRmtw=="],
 
-    "@beignet/devtools": ["@beignet/devtools@0.0.45", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0" } }, "sha512-DqgmS1J4UHRLRT8Wp3eOYWNp9sLSm2RACt9lfGBs8Sts7KastTNy3lMID6r0n5fsVyX52FNFTQ77rpzyJnYFXw=="],
+    "@beignet/devtools": ["@beignet/devtools@0.0.47", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0" } }, "sha512-zj3ztgWgtuC0cF1IDHlsqzJignRB3vYXzusnFCfsYB5m25zzQXlf0sTDfOx0bA/nhjSN6XlOvmt6nJs9gR7ANA=="],
 
     "@beignet/next": ["@beignet/next@0.0.45", "", { "dependencies": { "@beignet/web": "^0.0.45", "@standard-schema/spec": "^1.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "next": "^14.0.0 || ^15.0.0 || ^16.0.0" } }, "sha512-0Otv3kyfj94748CWt3Cth7vlALHVvl42Jbeej0NlgUvsiA2kHovNGUeHf7fRY+tBF0HJiumf48YNsot87m9Ciw=="],
 
