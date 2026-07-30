@@ -14,10 +14,16 @@ import type { Page, PageMeta, PageVersion } from "@/features/pages/schemas";
 
 export function createTestPageCollaborationPort(
 	published: Parameters<PageCollaborationPort["publishSubpageLink"]>[0][] = [],
+	publishedTaskPatches: Parameters<
+		PageCollaborationPort["publishTaskBlockPatch"]
+	>[0][] = [],
 ): PageCollaborationPort {
 	return {
 		async publishSubpageLink(input) {
 			published.push(input);
+		},
+		async publishTaskBlockPatch(input) {
+			publishedTaskPatches.push(input);
 		},
 	};
 }

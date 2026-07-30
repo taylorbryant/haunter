@@ -1,11 +1,13 @@
 import "@beignet/core/server-only";
 import {
+	actOnTaskNotification,
 	createTask,
 	deleteTask,
 	listTasks,
 	updateTask,
 } from "@/features/tasks/contracts";
 import {
+	actOnTaskNotificationUseCase,
 	createTaskUseCase,
 	deleteTaskUseCase,
 	listTasksUseCase,
@@ -18,6 +20,10 @@ export const taskRoutes = defineRouteGroup({
 	name: "tasks",
 	hooks: [routeAuth.required()],
 	routes: [
+		{
+			contract: actOnTaskNotification,
+			useCase: actOnTaskNotificationUseCase,
+		},
 		{ contract: listTasks, useCase: listTasksUseCase },
 		{ contract: createTask, useCase: createTaskUseCase },
 		{ contract: updateTask, useCase: updateTaskUseCase },

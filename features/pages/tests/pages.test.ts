@@ -10,6 +10,7 @@ import {
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import type { NotificationRepository } from "@/features/notifications/ports";
 import type {
 	PageNavigationRepository,
 	PageRepository,
@@ -66,12 +67,17 @@ function createTester(
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
+	const notificationInbox = {
+		async resolveTaskNotifications() {},
+		async dismissScheduledForTasks() {},
+	} as unknown as NotificationRepository;
 	const testFixture = createTestPorts<AppContext["ports"], AppTransactionPorts>(
 		{
 			base: appPorts,
 			overrides: {
 				gate: appPorts.gate,
 				canvases,
+				notificationInbox,
 				pageLinks,
 				pageNavigation,
 				pageCollaboration,
@@ -84,6 +90,7 @@ function createTester(
 				ports: (ports) => ({
 					...ports,
 					canvases,
+					notificationInbox,
 					pageLinks,
 					pageNavigation,
 					pages,
@@ -385,6 +392,7 @@ describe("pages use cases", () => {
 				async publishSubpageLink() {
 					throw new Error("Liveblocks unavailable");
 				},
+				async publishTaskBlockPatch() {},
 			},
 		);
 		const ctx = await tester.ctx();

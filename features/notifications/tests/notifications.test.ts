@@ -43,6 +43,9 @@ function createScheduleFixture(
 	const pending: PendingPushNotification[] = [...(options.pending ?? [])];
 	const deliveries: unknown[] = [];
 	const notificationInbox = {
+		async rearmDueSnoozes() {
+			return 0;
+		},
 		async findReminderCandidates() {
 			return { items: [], nextCursor: null };
 		},

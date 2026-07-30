@@ -194,6 +194,23 @@ export async function reconcilePageTasks(
 					? { completedAt: block.checked ? now : null }
 					: {}),
 			});
+			if (block.checked && !current.completed) {
+				await ports.notificationInbox.resolveTaskNotifications(
+					current.id,
+					"completed",
+					now,
+				);
+			} else if (
+				current.dueDate !== block.due ||
+				current.dueTime !== block.dueTime ||
+				current.reminderOffsetMinutes !== block.reminderOffsetMinutes ||
+				current.assigneeId !== block.resolvedAssigneeId
+			) {
+				await ports.notificationInbox.dismissScheduledForTasks(
+					[current.id],
+					now,
+				);
+			}
 			const notification = await createTaskAssignmentNotification(
 				ports.notificationInbox,
 				updated,
@@ -214,6 +231,7 @@ export async function reconcilePageTasks(
 
 	if (orphanIds.length > 0) {
 		changed = true;
+		await ports.notificationInbox.dismissScheduledForTasks(orphanIds, now);
 		await ports.tasks.deleteByIds(scope, orphanIds);
 	}
 

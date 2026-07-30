@@ -7,8 +7,10 @@ import {
 	ListTasksOutputSchema,
 	TaskFilterSchema,
 	TaskIdInputSchema,
-	TaskScopeSchema,
+	TaskNotificationActionBodySchema,
+	TaskNotificationActionOutputSchema,
 	TaskSchema,
+	TaskScopeSchema,
 	UpdateTaskBodySchema,
 } from "@/features/tasks/schemas";
 
@@ -65,6 +67,7 @@ export const updateTask = tasks
 	.errors({
 		Forbidden: errors.Forbidden,
 		InvalidTaskDue: errors.InvalidTaskDue,
+		StaleWrite: errors.StaleWrite,
 		TaskNotFound: errors.TaskNotFound,
 		TaskNotEditable: errors.TaskNotEditable,
 	})
@@ -82,4 +85,19 @@ export const deleteTask = tasks
 	})
 	.responses({
 		204: null,
+	});
+
+export const actOnTaskNotification = tasks
+	.post("/api/task-notifications/:id/action")
+	.pathParams(TaskIdInputSchema)
+	.body(TaskNotificationActionBodySchema)
+	.meta({ idempotency: { header: "idempotency-key", scope: "actor" } })
+	.errors({
+		Forbidden: errors.Forbidden,
+		NotificationNotFound: errors.NotificationNotFound,
+		NotificationNotActionable: errors.NotificationNotActionable,
+		StaleWrite: errors.StaleWrite,
+	})
+	.responses({
+		200: TaskNotificationActionOutputSchema,
 	});

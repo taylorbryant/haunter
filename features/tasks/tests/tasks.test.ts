@@ -17,6 +17,7 @@ import type { Notification } from "@/features/notifications/schemas";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { BlockJson } from "@/features/pages/schemas";
 import {
+	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
@@ -29,14 +30,16 @@ import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
+import type { UpdateTaskData } from "../ports";
 import { TASK_TITLE_MAX_LENGTH, TASK_TITLE_TOO_LONG_MESSAGE } from "../schemas";
 import {
+	actOnTaskNotificationUseCase,
 	createTaskUseCase,
 	deleteTaskUseCase,
 	listTasksUseCase,
 	updateTaskUseCase,
 } from "../use-cases";
-import type { UpdateTaskData } from "../ports";
+import { resolveSnoozedUntil } from "../use-cases/act-on-task-notification";
 import { createTestTaskRepository } from "./helpers";
 
 function taskBlock(
@@ -84,7 +87,15 @@ async function createFixture(
 	};
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
+	const publishedTaskBlockPatches: Parameters<
+		ReturnType<typeof createTestPageCollaborationPort>["publishTaskBlockPatch"]
+	>[0][] = [];
+	const pageCollaboration = createTestPageCollaborationPort(
+		[],
+		publishedTaskBlockPatches,
+	);
 	const assignmentNotifications: Notification[] = [];
+	const dismissedScheduledTaskIds: string[] = [];
 	const afterResponseTasks: Array<() => Promise<void>> = [];
 	const pushDeliveries: unknown[] = [];
 	const afterResponse = {
@@ -93,6 +104,45 @@ async function createFixture(
 		},
 	};
 	const notificationInbox = {
+		async findByUser(candidateUserId: string, id: string) {
+			const notification = assignmentNotifications.find(
+				(item) => item.id === id && item.userId === candidateUserId,
+			);
+			if (!notification) return null;
+			const task = await tasks.findById(scope, notification.entityId);
+			return {
+				...notification,
+				actionState: notification.actionState ?? null,
+				actionAt: notification.actionAt ?? null,
+				snoozedUntil: notification.snoozedUntil ?? null,
+				taskCompleted: task?.completed ?? false,
+				taskAssigneeId: task?.assigneeId ?? null,
+				taskAvailable: task !== null,
+			};
+		},
+		async countUnread(candidateUserId: string) {
+			return assignmentNotifications.filter(
+				(item) =>
+					item.userId === candidateUserId &&
+					item.readAt === null &&
+					(item.actionState ?? null) === null,
+			).length;
+		},
+		async resolveTaskNotifications(
+			taskId: string,
+			state: "completed" | "dismissed",
+			actionAt: string,
+		) {
+			for (const item of assignmentNotifications) {
+				if (item.entityId !== taskId) continue;
+				item.actionState = state;
+				item.actionAt = actionAt;
+				item.readAt = actionAt;
+			}
+		},
+		async dismissScheduledForTasks(taskIds: string[]) {
+			dismissedScheduledTaskIds.push(...taskIds);
+		},
 		async getPreferences() {
 			return {
 				overdueTasksEnabled: true,
@@ -177,6 +227,7 @@ async function createFixture(
 			members,
 			notificationInbox,
 			notifications,
+			pageCollaboration,
 			pageLinks,
 			pages,
 			pageVersions,
@@ -203,9 +254,12 @@ async function createFixture(
 	return {
 		afterResponseTasks,
 		assignmentNotifications,
+		dismissedScheduledTaskIds,
+		notificationInbox,
 		page,
 		pages,
 		pushDeliveries,
+		publishedTaskBlockPatches,
 		scope,
 		tasks,
 		tester,
@@ -432,8 +486,178 @@ describe("task reconciliation on page content save", () => {
 });
 
 describe("tasks use cases", () => {
+	it("resolves tomorrow morning in the saved notification timezone", () => {
+		expect(
+			resolveSnoozedUntil(
+				"tomorrow_9am",
+				new Date("2026-03-07T18:00:00.000Z"),
+				"America/Chicago",
+			).toISOString(),
+		).toBe("2026-03-08T14:00:00.000Z");
+	});
+
+	it("completes an assigned task from its notification", async () => {
+		const {
+			assignmentNotifications,
+			notificationInbox,
+			scope,
+			tasks,
+			tester,
+			ctx,
+			workspace,
+		} = await createFixture();
+		const task = await tester.run(
+			createTaskUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "Review the release",
+				assigneeId: "user_test",
+			},
+			{ ctx },
+		);
+		await notificationInbox.createTaskAssigned(
+			{
+				taskId: task.id,
+				userId: "user_test",
+				workspaceId: workspace.id,
+				entityVersion: "assignment_test",
+				title: task.title,
+				assignedByUserId: "user_teammate",
+				assignedByName: "Team Mate",
+				pageId: null,
+				sourceBlockId: null,
+			},
+			"2026-07-28T12:00:00.000Z",
+		);
+		const notification = assignmentNotifications.at(-1);
+		if (!notification) throw new Error("Expected an assignment notification");
+
+		const result = await tester.run(
+			actOnTaskNotificationUseCase,
+			{ id: notification.id, action: "complete" },
+			{ ctx },
+		);
+
+		expect(result).toMatchObject({
+			action: "complete",
+			notificationId: notification.id,
+			taskId: task.id,
+			unreadCount: 0,
+		});
+		expect((await tasks.findById(scope, task.id))?.completed).toBe(true);
+		expect(notification.actionState).toBe("completed");
+	});
+
+	it("merges notification completion with a concurrent page edit", async () => {
+		const {
+			assignmentNotifications,
+			notificationInbox,
+			page,
+			pages,
+			publishedTaskBlockPatches,
+			scope,
+			tasks,
+			tester,
+			ctx,
+		} = await createFixture();
+		await tester.run(
+			savePageContentUseCase,
+			{
+				id: page.id,
+				content: [
+					taskBlock("page-task", "Review the shared page", {
+						assignee: "user_test",
+					}),
+				],
+			},
+			{ ctx },
+		);
+		const [task] = await tasks.listByPage(scope, page.id);
+		if (!task) throw new Error("Expected a page-backed task");
+		await notificationInbox.createTaskAssigned(
+			{
+				taskId: task.id,
+				userId: "user_test",
+				workspaceId: task.workspaceId,
+				entityVersion: "assignment_page_task",
+				title: task.title,
+				assignedByUserId: "user_teammate",
+				assignedByName: "Team Mate",
+				pageId: page.id,
+				sourceBlockId: "page-task",
+			},
+			"2026-07-28T12:00:00.000Z",
+		);
+		const notification = assignmentNotifications.at(-1);
+		if (!notification) throw new Error("Expected an assignment notification");
+
+		const concurrentParagraph: BlockJson = {
+			id: "concurrent-note",
+			type: "paragraph",
+			props: {},
+			content: [
+				{
+					type: "text",
+					text: "A concurrent edit that must be preserved",
+					styles: {},
+				},
+			],
+			children: [],
+		};
+		const originalSaveContentIf = pages.saveContentIf.bind(pages);
+		let injectedConflict = false;
+		pages.saveContentIf = async (...args) => {
+			if (!injectedConflict) {
+				injectedConflict = true;
+				const current = await pages.findById(scope, page.id);
+				if (!current) throw new Error("Expected the source page");
+				const concurrentContent = [...current.content, concurrentParagraph];
+				await pages.saveContent(
+					scope,
+					page.id,
+					JSON.stringify(concurrentContent),
+					extractPageSearchText(concurrentContent),
+				);
+				return null;
+			}
+			return originalSaveContentIf(...args);
+		};
+
+		await tester.run(
+			actOnTaskNotificationUseCase,
+			{ id: notification.id, action: "complete" },
+			{ ctx },
+		);
+
+		expect(publishedTaskBlockPatches).toEqual([
+			{
+				pageId: page.id,
+				pageContentUpdatedAt: expect.any(String),
+				blockId: "page-task",
+				props: { checked: true },
+			},
+		]);
+		expect((await tasks.findById(scope, task.id))?.completed).toBe(true);
+		const savedPage = await pages.findById(scope, page.id);
+		expect(savedPage?.content).toEqual([
+			expect.objectContaining({
+				id: "page-task",
+				props: expect.objectContaining({ checked: true }),
+			}),
+			concurrentParagraph,
+		]);
+	});
+
 	it("writes My Tasks toggles through to the source page document", async () => {
-		const { pages, tasks, scope, page, tester, ctx } = await createFixture();
+		const {
+			page,
+			pages,
+			publishedTaskBlockPatches,
+			scope,
+			tasks,
+			tester,
+			ctx,
+		} = await createFixture();
 
 		await tester.run(
 			savePageContentUseCase,
@@ -458,6 +682,18 @@ describe("tasks use cases", () => {
 			due: "2026-07-04",
 			dueTime: "",
 		});
+		expect(publishedTaskBlockPatches).toEqual([
+			{
+				pageId: page.id,
+				pageContentUpdatedAt: expect.any(String),
+				blockId: "b1",
+				props: {
+					checked: true,
+					due: "2026-07-04",
+					dueTime: "",
+				},
+			},
+		]);
 	});
 
 	it("does not let a stale page save revert task-list write-through changes", async () => {
@@ -724,7 +960,8 @@ describe("tasks use cases", () => {
 	});
 
 	it("versions reminders only when scheduling inputs change", async () => {
-		const { workspace, tasks, tester, ctx } = await createFixture();
+		const { dismissedScheduledTaskIds, workspace, tasks, tester, ctx } =
+			await createFixture();
 		const updates: UpdateTaskData[] = [];
 		const update = tasks.update.bind(tasks);
 		tasks.update = async (scope, id, input) => {
@@ -772,6 +1009,7 @@ describe("tasks use cases", () => {
 		expect(updates[1]?.reminderConfiguredAt).toBeUndefined();
 		expect(typeof updates[2]?.reminderConfiguredAt).toBe("string");
 		expect(updates[3]?.reminderConfiguredAt).toBeUndefined();
+		expect(dismissedScheduledTaskIds).toEqual([task.id]);
 	});
 
 	it("treats a task in another workspace as not found", async () => {

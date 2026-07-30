@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppContext } from "@/app-context";
 import type { PendingPushNotification } from "@/features/notifications/ports";
+import { isTaskOverdueAt } from "@/features/tasks/lib/reminder-time";
 import { deliverTaskAssignmentNotifications } from "@/features/tasks/notifications/assigned";
 import { TaskOverdueNotification } from "@/features/tasks/notifications/overdue";
 import {
@@ -8,7 +9,6 @@ import {
 	shouldCreateTaskReminder,
 } from "@/features/tasks/notifications/reminder";
 import { defineSchedule } from "@/lib/schedules";
-import { localDateAndTime } from "@/lib/timezone";
 
 export const CheckOverdueSchedulePayloadSchema = z.object({
 	at: z.string().datetime(),
@@ -33,6 +33,10 @@ function groupPending(items: PendingPushNotification[]) {
 }
 
 export async function processOverdueNotifications(ctx: AppContext, at: Date) {
+	const snoozesRearmed = await ctx.ports.notificationInbox.rearmDueSnoozes(
+		at.toISOString(),
+		DELIVERY_LIMIT,
+	);
 	// A one-day reminder can target a date that is already tomorrow in UTC+14.
 	// Query from yesterday through two UTC dates ahead, then apply the exact
 	// timezone-aware window. Keyset pagination scans the complete finite window
@@ -88,12 +92,7 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 
 	let created = 0;
 	for (const candidate of candidates) {
-		const local = localDateAndTime(at, candidate.timezone);
-		const overdue = candidate.dueTime
-			? candidate.dueDate < local.date ||
-				(candidate.dueDate === local.date && candidate.dueTime <= local.time)
-			: local.hour >= 9 && candidate.dueDate < local.date;
-		if (!overdue) continue;
+		if (!isTaskOverdueAt(candidate, at)) continue;
 		if (
 			await ctx.ports.notificationInbox.createOverdue(
 				candidate,
@@ -164,6 +163,7 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 		created,
 		reminderCandidates,
 		remindersCreated,
+		snoozesRearmed,
 		deliveryGroups,
 	};
 }

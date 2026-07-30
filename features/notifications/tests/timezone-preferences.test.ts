@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import {
 	member,
 	notificationPreferences,
+	notifications,
 	organization,
 	tasks,
 	user,
@@ -77,15 +78,38 @@ describe("task assignment notifications", () => {
 			createdAt: now,
 			updatedAt: now,
 		});
+		await database.db.insert(user).values({
+			id: "user_replacement",
+			name: "Replacement User",
+			email: "replacement@example.com",
+			createdAt: now,
+			updatedAt: now,
+		});
 		await database.db.insert(organization).values({
 			id: "workspace_test",
 			name: "Test workspace",
 			slug: `test-${crypto.randomUUID()}`,
 			createdAt: now,
 		});
+		await database.db.insert(member).values({
+			id: crypto.randomUUID(),
+			organizationId: "workspace_test",
+			userId: "user_assigned",
+			role: "viewer",
+			createdAt: now,
+		});
 
 		const repository = database.repositories.notificationInbox;
 		const taskId = crypto.randomUUID();
+		await database.db.insert(tasks).values({
+			id: taskId,
+			userId: "user_assigned",
+			workspaceId: "workspace_test",
+			assigneeId: "user_assigned",
+			title: "Review the launch plan",
+			createdAt: now.toISOString(),
+			updatedAt: now.toISOString(),
+		});
 		const candidate = {
 			userId: "user_assigned",
 			workspaceId: "workspace_test",
@@ -117,6 +141,42 @@ describe("task assignment notifications", () => {
 			},
 		});
 		expect(duplicate).toBeNull();
+
+		const viewerNotification = await repository.listByUser("user_assigned", {
+			limit: 10,
+		});
+		expect(viewerNotification.items).toHaveLength(1);
+		expect(viewerNotification.items[0]).toMatchObject({
+			id: created?.id,
+			taskAvailable: true,
+			taskCanComplete: false,
+		});
+
+		await database.db
+			.update(member)
+			.set({ role: "member" })
+			.where(eq(member.userId, "user_assigned"));
+		expect(
+			(await repository.listByUser("user_assigned", { limit: 10 })).items[0],
+		).toMatchObject({
+			id: created?.id,
+			taskCanComplete: true,
+		});
+
+		await database.db
+			.update(tasks)
+			.set({ assigneeId: "user_replacement" })
+			.where(eq(tasks.id, taskId));
+		expect(
+			(await repository.listByUser("user_assigned", { limit: 10 })).items,
+		).toEqual([]);
+		if (!created) throw new Error("Expected assignment notification");
+		expect(
+			await repository.findByUser("user_assigned", created.id),
+		).toMatchObject({
+			taskAssigneeId: "user_replacement",
+			taskAvailable: false,
+		});
 	});
 });
 
@@ -287,5 +347,288 @@ describe("task reminder persistence", () => {
 			.set({ completed: true })
 			.where(eq(tasks.id, taskId));
 		expect(await repository.listValidReminderPush([created.id])).toEqual([]);
+	});
+
+	it("hides snoozed reminders and atomically re-arms them when due", async () => {
+		database = await createTestDatabase();
+		const now = new Date("2026-07-28T14:00:00.000Z");
+		await database.db.insert(user).values({
+			id: "user_snooze",
+			name: "Snooze User",
+			email: "snooze@example.com",
+			createdAt: now,
+			updatedAt: now,
+		});
+		await database.db.insert(organization).values({
+			id: "workspace_snooze",
+			name: "Snooze workspace",
+			slug: `snooze-${crypto.randomUUID()}`,
+			createdAt: now,
+		});
+		await database.db.insert(member).values({
+			id: crypto.randomUUID(),
+			organizationId: "workspace_snooze",
+			userId: "user_snooze",
+			role: "member",
+			createdAt: now,
+		});
+		const taskId = crypto.randomUUID();
+		await database.db.insert(tasks).values({
+			id: taskId,
+			userId: "user_snooze",
+			workspaceId: "workspace_snooze",
+			assigneeId: "user_snooze",
+			title: "Review the draft",
+			dueDate: "2026-07-28",
+			dueTime: "16:00",
+			reminderOffsetMinutes: 60,
+			reminderConfiguredAt: now.toISOString(),
+			createdAt: now.toISOString(),
+			updatedAt: now.toISOString(),
+		});
+
+		const repository = database.repositories.notificationInbox;
+		const [candidate] = (
+			await repository.findReminderCandidates({
+				fromDate: "2026-07-28",
+				cutoffDate: "2026-07-28",
+				limit: 10,
+			})
+		).items;
+		if (!candidate) throw new Error("Expected a reminder candidate");
+		const notification = await repository.createTaskReminder(
+			candidate,
+			now.toISOString(),
+		);
+		if (!notification) throw new Error("Expected a reminder notification");
+
+		const snoozedUntil = "2026-07-28T15:00:00.000Z";
+		expect(
+			await repository.snooze(
+				"user_snooze",
+				notification.id,
+				snoozedUntil,
+				now.toISOString(),
+			),
+		).toBe(true);
+		expect(
+			(await repository.listByUser("user_snooze", { limit: 10 })).items,
+		).toEqual([]);
+		expect(await repository.countUnread("user_snooze")).toBe(0);
+		expect(
+			await repository.rearmDueSnoozes("2026-07-28T14:59:59.000Z", 10),
+		).toBe(0);
+		expect(
+			await repository.rearmDueSnoozes("2026-07-28T15:00:00.000Z", 10),
+		).toBe(1);
+
+		const rearmed = await repository.listByUser("user_snooze", { limit: 10 });
+		expect(rearmed.items).toHaveLength(1);
+		expect(rearmed.items[0]).toMatchObject({
+			id: notification.id,
+			actionState: null,
+			readAt: null,
+			payload: { title: "Review the draft", rearmed: true },
+		});
+		expect(await repository.countUnread("user_snooze")).toBe(1);
+
+		await repository.resolveTaskNotifications(
+			taskId,
+			"completed",
+			"2026-07-28T15:01:00.000Z",
+		);
+		const completed = await repository.listByUser("user_snooze", {
+			limit: 10,
+		});
+		expect(completed.items).toEqual([]);
+		const [storedCompleted] = await database.db
+			.select({
+				actionState: notifications.actionState,
+				readAt: notifications.readAt,
+			})
+			.from(notifications)
+			.where(eq(notifications.id, notification.id));
+		expect(storedCompleted).toMatchObject({
+			actionState: "completed",
+			readAt: "2026-07-28T15:01:00.000Z",
+		});
+		expect(await repository.countUnread("user_snooze")).toBe(0);
+	});
+
+	it("hides active overdue notifications after the task is rescheduled", async () => {
+		database = await createTestDatabase();
+		const now = new Date("2026-07-28T14:00:00.000Z");
+		await database.db.insert(user).values({
+			id: "user_rescheduled",
+			name: "Rescheduled User",
+			email: "rescheduled@example.com",
+			createdAt: now,
+			updatedAt: now,
+		});
+		await database.db.insert(organization).values({
+			id: "workspace_rescheduled",
+			name: "Rescheduled workspace",
+			slug: `rescheduled-${crypto.randomUUID()}`,
+			createdAt: now,
+		});
+		await database.db.insert(member).values({
+			id: crypto.randomUUID(),
+			organizationId: "workspace_rescheduled",
+			userId: "user_rescheduled",
+			role: "member",
+			createdAt: now,
+		});
+		const taskId = crypto.randomUUID();
+		await database.db.insert(tasks).values({
+			id: taskId,
+			userId: "user_rescheduled",
+			workspaceId: "workspace_rescheduled",
+			assigneeId: "user_rescheduled",
+			title: "Take down the birdhouse",
+			dueDate: "2026-07-18",
+			dueTime: "12:00",
+			createdAt: now.toISOString(),
+			updatedAt: now.toISOString(),
+		});
+
+		const repository = database.repositories.notificationInbox;
+		const created = await repository.createOverdue(
+			{
+				taskId,
+				userId: "user_rescheduled",
+				workspaceId: "workspace_rescheduled",
+				title: "Take down the birdhouse",
+				dueDate: "2026-07-18",
+				dueTime: "12:00",
+				pageId: null,
+				sourceBlockId: null,
+				timezone: "UTC",
+			},
+			now.toISOString(),
+		);
+		expect(created).not.toBeNull();
+		if (!created) throw new Error("Expected an overdue notification");
+		expect(
+			(await repository.listByUser("user_rescheduled", { limit: 10 })).items,
+		).toHaveLength(1);
+
+		await database.db
+			.update(tasks)
+			.set({
+				completed: true,
+				completedAt: "2026-07-28T14:00:30.000Z",
+				updatedAt: "2026-07-28T14:00:30.000Z",
+			})
+			.where(eq(tasks.id, taskId));
+
+		expect(
+			(await repository.listByUser("user_rescheduled", { limit: 10 })).items,
+		).toEqual([]);
+		expect(await repository.countUnread("user_rescheduled")).toBe(0);
+		const [preserved] = await database.db
+			.select({ actionState: notifications.actionState })
+			.from(notifications)
+			.where(eq(notifications.id, created.id));
+		expect(preserved?.actionState).toBeNull();
+
+		await database.db
+			.update(tasks)
+			.set({
+				completed: false,
+				completedAt: null,
+				dueDate: "2026-08-01",
+				dueTime: "12:00",
+				updatedAt: "2026-07-28T14:01:00.000Z",
+			})
+			.where(eq(tasks.id, taskId));
+
+		expect(
+			(await repository.listByUser("user_rescheduled", { limit: 10 })).items,
+		).toEqual([]);
+		expect(await repository.countUnread("user_rescheduled")).toBe(0);
+		expect(
+			await repository.listPendingPush("2026-07-28T14:01:00.000Z", 10),
+		).toEqual([]);
+	});
+
+	it("allows an overdue alert after a snoozed reminder window has passed", async () => {
+		database = await createTestDatabase();
+		const now = new Date("2026-07-28T14:00:00.000Z");
+		await database.db.insert(user).values({
+			id: "user_late_snooze",
+			name: "Late Snooze User",
+			email: "late-snooze@example.com",
+			createdAt: now,
+			updatedAt: now,
+		});
+		await database.db.insert(organization).values({
+			id: "workspace_late_snooze",
+			name: "Late snooze workspace",
+			slug: `late-snooze-${crypto.randomUUID()}`,
+			createdAt: now,
+		});
+		await database.db.insert(member).values({
+			id: crypto.randomUUID(),
+			organizationId: "workspace_late_snooze",
+			userId: "user_late_snooze",
+			role: "member",
+			createdAt: now,
+		});
+		const taskId = crypto.randomUUID();
+		await database.db.insert(tasks).values({
+			id: taskId,
+			userId: "user_late_snooze",
+			workspaceId: "workspace_late_snooze",
+			assigneeId: "user_late_snooze",
+			title: "Review the draft",
+			dueDate: "2026-07-28",
+			dueTime: "14:10",
+			reminderOffsetMinutes: 15,
+			reminderConfiguredAt: "2026-07-28T13:00:00.000Z",
+			createdAt: now.toISOString(),
+			updatedAt: now.toISOString(),
+		});
+
+		const repository = database.repositories.notificationInbox;
+		const [candidate] = (
+			await repository.findReminderCandidates({
+				fromDate: "2026-07-28",
+				cutoffDate: "2026-07-28",
+				limit: 10,
+			})
+		).items;
+		if (!candidate) throw new Error("Expected a reminder candidate");
+		const notification = await repository.createTaskReminder(
+			candidate,
+			now.toISOString(),
+		);
+		if (!notification) throw new Error("Expected a reminder notification");
+		expect(
+			await repository.snooze(
+				"user_late_snooze",
+				notification.id,
+				"2026-07-28T15:00:00.000Z",
+				now.toISOString(),
+			),
+		).toBe(true);
+
+		expect(
+			await repository.rearmDueSnoozes("2026-07-28T15:00:00.000Z", 10),
+		).toBe(0);
+		const [stored] = await database.db
+			.select({ actionState: notifications.actionState })
+			.from(notifications)
+			.where(eq(notifications.id, notification.id));
+		expect(stored?.actionState).toBe("dismissed");
+		expect(
+			(await repository.listByUser("user_late_snooze", { limit: 10 })).items,
+		).toEqual([]);
+		expect(await repository.findOverdueCandidates("2026-07-29", 10)).toEqual([
+			expect.objectContaining({
+				taskId,
+				userId: "user_late_snooze",
+				workspaceId: "workspace_late_snooze",
+			}),
+		]);
 	});
 });

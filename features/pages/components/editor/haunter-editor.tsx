@@ -40,6 +40,7 @@ import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
 import { setCollabPresence } from "@/features/collab/client/presence-state";
 import type { CollabRoom } from "@/features/collab/client/session";
+import { invalidateNotifications } from "@/features/notifications/client/queries";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-content";
 import {
@@ -67,8 +68,10 @@ import {
 	COLLAB_CONTENT_VERSION_KEY,
 	COLLAB_SEEDED_KEY,
 	COLLAB_SUBPAGE_LINKS_KEY,
+	COLLAB_TASK_BLOCK_PATCHES_KEY,
 	isSameOrNewerContentVersion,
 	isSubpageLinkedCollabEvent,
+	isTaskBlockPatchedCollabEvent,
 	type SubpageLinkedCollabEvent,
 } from "@/features/pages/lib/collab-document";
 import {
@@ -254,8 +257,7 @@ type DocumentSaveOutcome =
 	| { status: "conflict" }
 	| { status: "error"; error: unknown };
 
-const documentSaveQueues =
-	createInFlightSaveQueueStore<DocumentSaveOutcome>();
+const documentSaveQueues = createInFlightSaveQueueStore<DocumentSaveOutcome>();
 
 type HaunterEditorProps = {
 	pageId: string;
@@ -466,6 +468,41 @@ export default function HaunterEditor({
 		return () => pending.unobserve(applyPending);
 	}, [collab, editable, appendSubpageLink]);
 
+	useEffect(() => {
+		if (!collab) return;
+		const pending = collab.doc.getMap<unknown>(COLLAB_TASK_BLOCK_PATCHES_KEY);
+		const applyPending = () => {
+			for (const candidate of pending.values()) {
+				if (!isTaskBlockPatchedCollabEvent(candidate)) continue;
+				if (
+					contentUpdatedAt &&
+					!isSameOrNewerContentVersion(
+						candidate.pageContentUpdatedAt,
+						contentUpdatedAt,
+					)
+				) {
+					continue;
+				}
+				const block = editor.getBlock(candidate.blockId);
+				if (block?.type !== "task") continue;
+				const currentProps = block.props as Record<string, unknown>;
+				if (
+					Object.entries(candidate.props).every(
+						([key, value]) => currentProps[key] === value,
+					)
+				) {
+					continue;
+				}
+				editor.updateBlock(candidate.blockId, {
+					props: candidate.props,
+				} as never);
+			}
+		};
+		pending.observe(applyPending);
+		applyPending();
+		return () => pending.unobserve(applyPending);
+	}, [collab, contentUpdatedAt, editor]);
+
 	// Seed a brand-new shared doc from the database copy exactly once.
 	const seededRef = useRef(false);
 	useEffect(() => {
@@ -628,6 +665,7 @@ export default function HaunterEditor({
 					}
 					if (result.tasksChanged) {
 						invalidateTasks(queryClient);
+						invalidateNotifications(queryClient);
 					}
 					return {
 						status: "saved",
@@ -652,16 +690,16 @@ export default function HaunterEditor({
 					return { status: "error", error } satisfies DocumentSaveOutcome;
 				},
 			);
-		const run = documentSaveQueues.track(documentSaveQueue, request).then(
-			(outcome) => {
+		const run = documentSaveQueues
+			.track(documentSaveQueue, request)
+			.then((outcome) => {
 				// A debounce can fire while the preceding request is still running.
 				// Hand the newer document to a fresh request once that save succeeds.
 				if (outcome.status === "saved" && saveAgainAfterSuccess) {
 					void saveRef.current();
 				}
 				return outcome.status === "saved";
-			},
-		);
+			});
 		return run;
 	};
 

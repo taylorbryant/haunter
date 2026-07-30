@@ -24,6 +24,11 @@ export const deleteTaskUseCase = useCase
 				throw appError("TaskNotEditable", { details: { id: input.id } });
 			}
 
+			await tx.notificationInbox.resolveTaskNotifications(
+				task.id,
+				"dismissed",
+				new Date().toISOString(),
+			);
 			await tx.tasks.delete(scope, task.id);
 		});
 	});

@@ -4,8 +4,11 @@ import {
 	COLLAB_CONTENT_VERSION_KEY,
 	COLLAB_SEEDED_KEY,
 	COLLAB_SUBPAGE_LINKS_KEY,
+	COLLAB_TASK_BLOCK_PATCHES_KEY,
 	isSubpageLinkedCollabEvent,
+	isTaskBlockPatchedCollabEvent,
 	queueSubpageLinkInCollabDocument,
+	queueTaskBlockPatchInCollabDocument,
 } from "@/features/pages/lib/collab-document";
 
 const child = {
@@ -49,6 +52,41 @@ describe("collaborative page document mutations", () => {
 
 		expect(meta.get(COLLAB_CONTENT_VERSION_KEY)).toBe(
 			"2026-07-16T21:00:00.000Z",
+		);
+		doc.destroy();
+	});
+
+	it("queues task property patches only after the room is seeded", () => {
+		const doc = new Y.Doc();
+		const updatedAt = "2026-07-29T12:00:00.000Z";
+
+		expect(
+			queueTaskBlockPatchInCollabDocument(
+				doc,
+				"task-block",
+				{ checked: true },
+				updatedAt,
+			),
+		).toBe(false);
+		doc.getMap("haunter-meta").set(COLLAB_SEEDED_KEY, true);
+		expect(
+			queueTaskBlockPatchInCollabDocument(
+				doc,
+				"task-block",
+				{ checked: true },
+				updatedAt,
+			),
+		).toBe(true);
+
+		const event = doc.getMap(COLLAB_TASK_BLOCK_PATCHES_KEY).get("task-block");
+		expect(isTaskBlockPatchedCollabEvent(event)).toBe(true);
+		expect(event).toMatchObject({
+			blockId: "task-block",
+			props: { checked: true },
+			pageContentUpdatedAt: updatedAt,
+		});
+		expect(doc.getMap("haunter-meta").get(COLLAB_CONTENT_VERSION_KEY)).toBe(
+			updatedAt,
 		);
 		doc.destroy();
 	});

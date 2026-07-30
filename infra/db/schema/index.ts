@@ -701,6 +701,9 @@ export const notifications = sqliteTable(
 		payload: text("payload").notNull(),
 		readAt: text("read_at"),
 		createdAt: text("created_at").notNull(),
+		actionState: text("action_state"),
+		actionAt: text("action_at"),
+		snoozedUntil: text("snoozed_until"),
 		pushState: text("push_state").notNull().default("pending"),
 		pushAttempts: integer("push_attempts").notNull().default(0),
 		pushNextAttemptAt: text("push_next_attempt_at"),
@@ -728,6 +731,10 @@ export const notifications = sqliteTable(
 			table.pushState,
 			table.pushNextAttemptAt,
 			table.pushLeaseUntil,
+		),
+		snoozedIdx: index("notifications_snoozed_idx").on(
+			table.actionState,
+			table.snoozedUntil,
 		),
 	}),
 );

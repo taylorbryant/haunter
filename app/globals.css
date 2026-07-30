@@ -1297,3 +1297,14 @@ html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
 #liveblocks-badge {
 	display: none;
 }
+
+/* Base UI's modal dropdowns lock document scrolling, but Haunter also has
+   independent app scroll roots such as the desktop sidebar. Lock those roots
+   while a dropdown is open so background content cannot move behind the menu.
+   The portaled dropdown content remains independently scrollable. */
+html:has([data-slot="dropdown-menu-content"][data-open])
+	[data-app-scroll-root] {
+	overflow: hidden;
+	overscroll-behavior: none;
+	touch-action: none;
+}
