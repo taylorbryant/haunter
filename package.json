@@ -43,7 +43,7 @@
 		"@beignet/provider-storage-local": "0.0.45",
 		"@beignet/provider-storage-vercel-blob": "0.0.45",
 		"@beignet/react-hook-form": "0.0.45",
-		"@beignet/react-query": "0.0.45",
+		"@beignet/react-query": "0.0.47",
 		"@better-auth/agent-auth": "0.6.2",
 		"@better-auth/core": "1.6.25",
 		"@better-auth/oauth-provider": "1.6.25",
