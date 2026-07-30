@@ -126,6 +126,36 @@ export const UpdateTaskInputSchema =
 
 export const DeleteTaskOutputSchema = z.void();
 
+export const TaskNotificationActionBodySchema = z.discriminatedUnion("action", [
+	z.object({ action: z.literal("complete") }),
+	z.object({
+		action: z.literal("snooze"),
+		preset: z.enum(["15m", "1h", "tomorrow_9am"]),
+	}),
+]);
+
+export const TaskNotificationActionInputSchema = z.discriminatedUnion(
+	"action",
+	[
+		z.object({ id: z.string().uuid(), action: z.literal("complete") }),
+		z.object({
+			id: z.string().uuid(),
+			action: z.literal("snooze"),
+			preset: z.enum(["15m", "1h", "tomorrow_9am"]),
+		}),
+	],
+);
+
+export const TaskNotificationActionOutputSchema = z.object({
+	action: z.enum(["complete", "snooze"]),
+	notificationId: z.string().uuid(),
+	taskId: z.string().uuid(),
+	workspaceId: z.string(),
+	pageId: z.string().uuid().nullable(),
+	snoozedUntil: z.string().datetime().nullable(),
+	unreadCount: z.number().int().min(0),
+});
+
 export type Task = z.infer<typeof TaskSchema>;
 export type TaskWithPage = z.infer<typeof TaskWithPageSchema>;
 export type TaskFilter = z.infer<typeof TaskFilterSchema>;

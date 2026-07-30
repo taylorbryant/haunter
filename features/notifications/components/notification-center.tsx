@@ -5,13 +5,22 @@ import {
 	BellIcon,
 	BellOffIcon,
 	CheckCheckIcon,
+	CheckIcon,
 	FileTextIcon,
+	TimerIcon,
 	UserRoundCheckIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { reportUserError } from "@/client/error-feedback";
 import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
 	Drawer,
 	DrawerContent,
@@ -38,6 +47,11 @@ import {
 	markNotificationReadMutationOptions,
 } from "@/features/notifications/client/queries";
 import type { Notification } from "@/features/notifications/schemas";
+import { invalidatePage } from "@/features/pages/client/queries";
+import {
+	actOnTaskNotificationMutationOptions,
+	invalidateTasks,
+} from "@/features/tasks/client/queries";
 import { formatDueDateTimeLabel, parseIsoDate } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +79,8 @@ function NotificationPanel({
 	onOpen,
 	onMarkAll,
 	markingAll,
+	onAction,
+	pendingItemIds,
 }: {
 	items: Notification[];
 	unreadCount: number;
@@ -74,6 +90,16 @@ function NotificationPanel({
 	onOpen: (item: Notification) => void;
 	onMarkAll: () => void;
 	markingAll: boolean;
+	onAction: (
+		item: Notification,
+		action:
+			| { action: "complete" }
+			| {
+					action: "snooze";
+					preset: "15m" | "1h" | "tomorrow_9am";
+			  },
+	) => void;
+	pendingItemIds: ReadonlySet<string>;
 }) {
 	const deviceTime = useDeviceTime();
 
@@ -130,69 +156,151 @@ function NotificationPanel({
 					</div>
 				) : (
 					<div className="divide-y">
-						{items.map((item) => (
-							<button
-								type="button"
-								key={item.id}
-								className={cn(
-									"flex w-full gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
-									item.readAt === null && "bg-muted/30",
-								)}
-								onClick={() => onOpen(item)}
-							>
-								<span
+						{items.map((item) => {
+							const pending = pendingItemIds.has(item.id);
+							const actionable =
+								item.actionState === null &&
+								item.taskAvailable &&
+								!item.taskCompleted &&
+								item.taskAssigneeId === item.userId;
+							return (
+								<div
+									key={item.id}
 									className={cn(
-										"mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md",
-										item.kind === "task.assigned"
-											? "bg-primary/10 text-primary"
-											: item.kind === "task.reminder"
-												? "bg-primary/10 text-primary"
-												: "bg-destructive/10 text-destructive",
+										"flex w-full gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/60",
+										item.readAt === null && "bg-muted/30",
 									)}
 								>
-									{item.kind === "task.assigned" ? (
-										<UserRoundCheckIcon className="size-4" />
-									) : item.kind === "task.reminder" ? (
-										<BellIcon className="size-4" />
-									) : (
-										<FileTextIcon className="size-4" />
-									)}
-								</span>
-								<span className="min-w-0 flex-1">
-									<span className="block break-words font-medium text-sm">
-										{item.kind === "task.assigned"
-											? `${item.payload.assignedByName} assigned you a task`
-											: item.payload.title}
-									</span>
-									<span className="mt-0.5 block text-muted-foreground text-xs">
+									<span
+										className={cn(
+											"mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md",
+											item.kind === "task.assigned"
+												? "bg-primary/10 text-primary"
+												: item.kind === "task.reminder"
+													? "bg-primary/10 text-primary"
+													: "bg-destructive/10 text-destructive",
+										)}
+									>
 										{item.kind === "task.assigned" ? (
-											item.payload.title
+											<UserRoundCheckIcon className="size-4" />
+										) : item.kind === "task.reminder" ? (
+											<BellIcon className="size-4" />
 										) : (
-											<>
-												{item.kind === "task.reminder" ? "Reminder" : "Overdue"}{" "}
-												·{" "}
-												{deviceTime.ready
-													? formatDueDateTimeLabel(
-															item.payload.dueDate,
-															item.payload.dueTime,
-															parseIsoDate(deviceTime.today),
-														)
-													: item.payload.dueDate}
-											</>
+											<FileTextIcon className="size-4" />
 										)}
 									</span>
-								</span>
-								{item.readAt === null ? (
-									<>
-										<span
-											className="mt-2 size-1.5 shrink-0 rounded-full bg-primary"
-											aria-hidden
-										/>
-										<span className="sr-only">Unread</span>
-									</>
-								) : null}
-							</button>
-						))}
+									<div className="min-w-0 flex-1">
+										<button
+											type="button"
+											className="block w-full rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+											onClick={() => onOpen(item)}
+										>
+											<span className="block break-words font-medium text-sm">
+												{item.kind === "task.assigned"
+													? `${item.payload.assignedByName} assigned you a task`
+													: item.payload.title}
+											</span>
+											<span className="mt-0.5 block text-muted-foreground text-xs">
+												{item.kind === "task.assigned" ? (
+													item.payload.title
+												) : (
+													<>
+														{item.kind === "task.reminder"
+															? "Reminder"
+															: "Overdue"}{" "}
+														·{" "}
+														{deviceTime.ready
+															? formatDueDateTimeLabel(
+																	item.payload.dueDate,
+																	item.payload.dueTime,
+																	parseIsoDate(deviceTime.today),
+																)
+															: item.payload.dueDate}
+													</>
+												)}
+											</span>
+										</button>
+										{item.actionState === "completed" || item.taskCompleted ? (
+											<span className="mt-2 inline-flex items-center gap-1 font-medium text-muted-foreground text-xs">
+												<CheckIcon className="size-3" />
+												Completed
+											</span>
+										) : actionable ? (
+											<div className="mt-2 flex items-center gap-1">
+												<Button
+													type="button"
+													variant="ghost"
+													size="xs"
+													disabled={pending}
+													onClick={() => onAction(item, { action: "complete" })}
+												>
+													<CheckIcon />
+													Complete
+												</Button>
+												{item.kind !== "task.assigned" ? (
+													<DropdownMenu>
+														<DropdownMenuTrigger
+															render={
+																<Button
+																	type="button"
+																	variant="ghost"
+																	size="xs"
+																	disabled={pending}
+																/>
+															}
+														>
+															<TimerIcon />
+															Snooze
+														</DropdownMenuTrigger>
+														<DropdownMenuContent align="start">
+															<DropdownMenuItem
+																onClick={() =>
+																	onAction(item, {
+																		action: "snooze",
+																		preset: "15m",
+																	})
+																}
+															>
+																15 minutes
+															</DropdownMenuItem>
+															<DropdownMenuItem
+																onClick={() =>
+																	onAction(item, {
+																		action: "snooze",
+																		preset: "1h",
+																	})
+																}
+															>
+																1 hour
+															</DropdownMenuItem>
+															<DropdownMenuItem
+																onClick={() =>
+																	onAction(item, {
+																		action: "snooze",
+																		preset: "tomorrow_9am",
+																	})
+																}
+															>
+																Tomorrow at 9:00 AM
+															</DropdownMenuItem>
+														</DropdownMenuContent>
+													</DropdownMenu>
+												) : null}
+											</div>
+										) : null}
+									</div>
+									{item.readAt === null && !item.taskCompleted ? (
+										<>
+											<span
+												className="mt-2 size-1.5 shrink-0 rounded-full bg-primary"
+												aria-hidden
+											/>
+											<span className="sr-only">Unread</span>
+										</>
+									) : null}
+								</div>
+							);
+						})}
 					</div>
 				)}
 			</div>
@@ -205,12 +313,19 @@ export function NotificationCenter() {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const [open, setOpen] = useState(false);
+	const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(
+		() => new Set(),
+	);
 	const query = useQuery(listNotificationsQueryOptions());
 	const markRead = useMutation({
 		...markNotificationReadMutationOptions(),
 		meta: { errorMode: "silent" },
 	});
 	const markAll = useMutation(markAllNotificationsReadMutationOptions());
+	const action = useMutation({
+		...actOnTaskNotificationMutationOptions(),
+		meta: { errorMode: "silent" },
+	});
 	const items = query.data?.items ?? [];
 	const unreadCount = query.data?.unreadCount ?? 0;
 
@@ -254,6 +369,48 @@ export function NotificationCenter() {
 		);
 	}
 
+	function actOnNotification(
+		item: Notification,
+		request:
+			| { action: "complete" }
+			| {
+					action: "snooze";
+					preset: "15m" | "1h" | "tomorrow_9am";
+			  },
+	) {
+		if (pendingActionIds.has(item.id)) return;
+		setPendingActionIds((current) => new Set(current).add(item.id));
+		const variables =
+			request.action === "complete"
+				? { path: { id: item.id }, body: { action: "complete" as const } }
+				: {
+						path: { id: item.id },
+						body: {
+							action: "snooze" as const,
+							preset: request.preset,
+						},
+					};
+		action.mutate(variables, {
+			onSuccess: async (result) => {
+				await Promise.all([
+					invalidateNotifications(queryClient),
+					invalidateTasks(queryClient),
+					result.pageId
+						? invalidatePage(queryClient, result.pageId)
+						: Promise.resolve(),
+				]);
+			},
+			onError: (error) =>
+				reportUserError(error, "The notification could not be updated."),
+			onSettled: () =>
+				setPendingActionIds((current) => {
+					const next = new Set(current);
+					next.delete(item.id);
+					return next;
+				}),
+		});
+	}
+
 	const triggerLabel =
 		unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications";
 	const triggerContent = (
@@ -280,6 +437,8 @@ export function NotificationCenter() {
 			onOpen={openNotification}
 			onMarkAll={markAllRead}
 			markingAll={markAll.isPending}
+			onAction={actOnNotification}
+			pendingItemIds={pendingActionIds}
 		/>
 	);
 

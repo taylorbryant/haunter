@@ -4,6 +4,7 @@ import {
 	and,
 	desc,
 	eq,
+	exists,
 	getTableColumns,
 	gte,
 	inArray,
@@ -34,7 +35,17 @@ import * as schema from "@/infra/db/schema";
 type NotificationRow = typeof schema.notifications.$inferSelect;
 const notificationColumns = getTableColumns(schema.notifications);
 
-function toNotification(row: NotificationRow): Notification {
+type NotificationLiveState = {
+	taskCompleted?: boolean | null;
+	taskAssigneeId?: string | null;
+	taskId?: string | null;
+	pageDeletedAt?: string | null;
+};
+
+function toNotification(
+	row: NotificationRow,
+	live: NotificationLiveState = {},
+): Notification {
 	return NotificationSchema.parse({
 		id: row.id,
 		userId: row.userId,
@@ -45,6 +56,15 @@ function toNotification(row: NotificationRow): Notification {
 		payload: JSON.parse(row.payload),
 		readAt: row.readAt,
 		createdAt: row.createdAt,
+		actionState: row.actionState,
+		actionAt: row.actionAt,
+		snoozedUntil: row.snoozedUntil,
+		taskCompleted: live.taskCompleted ?? false,
+		taskAssigneeId: live.taskAssigneeId ?? null,
+		taskAvailable:
+			live.taskId === undefined
+				? true
+				: live.taskId !== null && live.pageDeletedAt === null,
 	});
 }
 
@@ -108,7 +128,13 @@ export function createDrizzleNotificationRepository(
 					)
 				: undefined;
 			const rows = await db
-				.select(notificationColumns)
+				.select({
+					notification: notificationColumns,
+					taskId: schema.tasks.id,
+					taskCompleted: schema.tasks.completed,
+					taskAssigneeId: schema.tasks.assigneeId,
+					pageDeletedAt: schema.pages.deletedAt,
+				})
 				.from(schema.notifications)
 				.innerJoin(
 					schema.member,
@@ -117,10 +143,25 @@ export function createDrizzleNotificationRepository(
 						eq(schema.member.organizationId, schema.notifications.workspaceId),
 					),
 				)
+				.leftJoin(
+					schema.tasks,
+					and(
+						eq(schema.tasks.id, schema.notifications.entityId),
+						eq(schema.tasks.workspaceId, schema.notifications.workspaceId),
+					),
+				)
+				.leftJoin(schema.pages, eq(schema.tasks.pageId, schema.pages.id))
 				.where(
-					cursorCondition
-						? and(eq(schema.notifications.userId, userId), cursorCondition)
-						: eq(schema.notifications.userId, userId),
+					and(
+						eq(schema.notifications.userId, userId),
+						isNotNull(schema.tasks.id),
+						or(isNull(schema.tasks.pageId), isNull(schema.pages.deletedAt)),
+						or(
+							isNull(schema.notifications.actionState),
+							eq(schema.notifications.actionState, "completed"),
+						),
+						cursorCondition,
+					),
 				)
 				.orderBy(
 					desc(schema.notifications.createdAt),
@@ -129,9 +170,16 @@ export function createDrizzleNotificationRepository(
 				.limit(options.limit + 1);
 
 			const page = rows.slice(0, options.limit);
-			const last = page.at(-1);
+			const last = page.at(-1)?.notification;
 			return {
-				items: page.map(toNotification),
+				items: page.map((row) =>
+					toNotification(row.notification, {
+						taskId: row.taskId,
+						taskCompleted: row.taskCompleted,
+						taskAssigneeId: row.taskAssigneeId,
+						pageDeletedAt: row.pageDeletedAt,
+					}),
+				),
 				nextCursor:
 					rows.length > options.limit && last
 						? { createdAt: last.createdAt, id: last.id }
@@ -150,13 +198,59 @@ export function createDrizzleNotificationRepository(
 						eq(schema.member.organizationId, schema.notifications.workspaceId),
 					),
 				)
+				.innerJoin(
+					schema.tasks,
+					and(
+						eq(schema.tasks.id, schema.notifications.entityId),
+						eq(schema.tasks.workspaceId, schema.notifications.workspaceId),
+					),
+				)
+				.leftJoin(schema.pages, eq(schema.tasks.pageId, schema.pages.id))
 				.where(
 					and(
 						eq(schema.notifications.userId, userId),
 						isNull(schema.notifications.readAt),
+						isNull(schema.notifications.actionState),
+						eq(schema.tasks.completed, false),
+						or(isNull(schema.tasks.pageId), isNull(schema.pages.deletedAt)),
 					),
 				);
 			return Number(row?.count ?? 0);
+		},
+
+		async findByUser(userId, id) {
+			const [row] = await db
+				.select({
+					notification: notificationColumns,
+					taskId: schema.tasks.id,
+					taskCompleted: schema.tasks.completed,
+					taskAssigneeId: schema.tasks.assigneeId,
+					pageDeletedAt: schema.pages.deletedAt,
+				})
+				.from(schema.notifications)
+				.leftJoin(
+					schema.tasks,
+					and(
+						eq(schema.tasks.id, schema.notifications.entityId),
+						eq(schema.tasks.workspaceId, schema.notifications.workspaceId),
+					),
+				)
+				.leftJoin(schema.pages, eq(schema.tasks.pageId, schema.pages.id))
+				.where(
+					and(
+						eq(schema.notifications.id, id),
+						eq(schema.notifications.userId, userId),
+					),
+				)
+				.limit(1);
+			return row
+				? toNotification(row.notification, {
+						taskId: row.taskId,
+						taskCompleted: row.taskCompleted,
+						taskAssigneeId: row.taskAssigneeId,
+						pageDeletedAt: row.pageDeletedAt,
+					})
+				: null;
 		},
 
 		async markRead(userId, id) {
@@ -197,6 +291,271 @@ export function createDrizzleNotificationRepository(
 						),
 					),
 				);
+		},
+
+		async snooze(userId, id, snoozedUntil, actionAt) {
+			const overdueVersion = sql<string>`CASE
+				WHEN ${schema.tasks.dueTime} IS NULL
+					THEN ${schema.tasks.dueDate} || ':' || ${schema.tasks.assigneeId}
+					ELSE ${schema.tasks.dueDate} || ':' || ${schema.tasks.dueTime} || ':' || ${schema.tasks.assigneeId}
+				END`;
+			const rows = await db
+				.update(schema.notifications)
+				.set({
+					actionState: "snoozed",
+					actionAt,
+					snoozedUntil,
+					readAt: actionAt,
+					pushState: "skipped",
+					pushLeaseUntil: null,
+					pushNextAttemptAt: null,
+				})
+				.where(
+					and(
+						eq(schema.notifications.id, id),
+						eq(schema.notifications.userId, userId),
+						inArray(schema.notifications.kind, [
+							"task.reminder",
+							"task.overdue",
+						]),
+						isNull(schema.notifications.actionState),
+						exists(
+							db
+								.select({ id: schema.tasks.id })
+								.from(schema.tasks)
+								.leftJoin(
+									schema.pages,
+									eq(schema.tasks.pageId, schema.pages.id),
+								)
+								.where(
+									and(
+										eq(schema.tasks.id, schema.notifications.entityId),
+										eq(
+											schema.tasks.workspaceId,
+											schema.notifications.workspaceId,
+										),
+										eq(schema.tasks.assigneeId, userId),
+										eq(schema.tasks.completed, false),
+										or(
+											isNull(schema.tasks.pageId),
+											isNull(schema.pages.deletedAt),
+										),
+										or(
+											and(
+												eq(schema.notifications.kind, "task.reminder"),
+												eq(
+													schema.notifications.entityVersion,
+													taskReminderEntityVersion(),
+												),
+											),
+											and(
+												eq(schema.notifications.kind, "task.overdue"),
+												eq(schema.notifications.entityVersion, overdueVersion),
+											),
+										),
+									),
+								),
+						),
+						exists(
+							db
+								.select({ id: schema.member.id })
+								.from(schema.member)
+								.where(
+									and(
+										eq(schema.member.userId, userId),
+										eq(
+											schema.member.organizationId,
+											schema.notifications.workspaceId,
+										),
+									),
+								),
+						),
+					),
+				)
+				.returning({ id: schema.notifications.id });
+			return rows.length === 1;
+		},
+
+		async resolveTaskNotifications(taskId, state, actionAt) {
+			await db
+				.update(schema.notifications)
+				.set({
+					actionState: state,
+					actionAt,
+					snoozedUntil: null,
+					readAt: actionAt,
+					pushState: "skipped",
+					pushLeaseUntil: null,
+					pushNextAttemptAt: null,
+				})
+				.where(eq(schema.notifications.entityId, taskId));
+		},
+
+		async dismissSnoozedForTasks(taskIds, actionAt) {
+			if (taskIds.length === 0) return;
+			await db
+				.update(schema.notifications)
+				.set({
+					actionState: "dismissed",
+					actionAt,
+					snoozedUntil: null,
+					readAt: actionAt,
+					pushState: "skipped",
+					pushLeaseUntil: null,
+					pushNextAttemptAt: null,
+				})
+				.where(
+					and(
+						inArray(schema.notifications.entityId, taskIds),
+						eq(schema.notifications.actionState, "snoozed"),
+					),
+				);
+		},
+
+		async rearmDueSnoozes(now, limit) {
+			const rows = await db
+				.select({
+					notification: notificationColumns,
+					taskId: schema.tasks.id,
+					title: schema.tasks.title,
+					completed: schema.tasks.completed,
+					dueDate: schema.tasks.dueDate,
+					dueTime: schema.tasks.dueTime,
+					reminderOffsetMinutes: schema.tasks.reminderOffsetMinutes,
+					reminderConfiguredAt: schema.tasks.reminderConfiguredAt,
+					assigneeId: schema.tasks.assigneeId,
+					pageId: schema.tasks.pageId,
+					sourceBlockId: schema.tasks.sourceBlockId,
+					pageDeletedAt: schema.pages.deletedAt,
+					overdueEnabled: schema.notificationPreferences.overdueTasksEnabled,
+					remindersEnabled: schema.notificationPreferences.taskRemindersEnabled,
+				})
+				.from(schema.notifications)
+				.innerJoin(
+					schema.member,
+					and(
+						eq(schema.member.userId, schema.notifications.userId),
+						eq(schema.member.organizationId, schema.notifications.workspaceId),
+					),
+				)
+				.leftJoin(
+					schema.tasks,
+					and(
+						eq(schema.tasks.id, schema.notifications.entityId),
+						eq(schema.tasks.workspaceId, schema.notifications.workspaceId),
+					),
+				)
+				.leftJoin(schema.pages, eq(schema.tasks.pageId, schema.pages.id))
+				.leftJoin(
+					schema.notificationPreferences,
+					eq(
+						schema.notifications.userId,
+						schema.notificationPreferences.userId,
+					),
+				)
+				.where(
+					and(
+						eq(schema.notifications.actionState, "snoozed"),
+						lte(schema.notifications.snoozedUntil, now),
+					),
+				)
+				.orderBy(schema.notifications.snoozedUntil)
+				.limit(limit);
+
+			let rearmed = 0;
+			for (const row of rows) {
+				const item = row.notification;
+				const baseValid =
+					row.taskId !== null &&
+					!row.completed &&
+					row.assigneeId === item.userId &&
+					(row.pageId === null || row.pageDeletedAt === null);
+				const currentReminderVersion =
+					row.dueDate !== null &&
+					row.reminderOffsetMinutes !== null &&
+					row.reminderConfiguredAt !== null &&
+					row.assigneeId !== null
+						? `${row.dueDate}:${row.dueTime ?? ""}:${row.reminderOffsetMinutes}:${row.assigneeId}:${row.reminderConfiguredAt}`
+						: null;
+				const currentOverdueVersion =
+					row.dueDate !== null && row.assigneeId !== null
+						? row.dueTime
+							? `${row.dueDate}:${row.dueTime}:${row.assigneeId}`
+							: `${row.dueDate}:${row.assigneeId}`
+						: null;
+				const valid =
+					baseValid &&
+					((item.kind === "task.reminder" &&
+						row.remindersEnabled !== false &&
+						currentReminderVersion === item.entityVersion) ||
+						(item.kind === "task.overdue" &&
+							row.overdueEnabled !== false &&
+							currentOverdueVersion === item.entityVersion));
+
+				if (!valid || row.taskId === null || row.title === null) {
+					await db
+						.update(schema.notifications)
+						.set({
+							actionState: "dismissed",
+							actionAt: now,
+							snoozedUntil: null,
+							pushState: "skipped",
+						})
+						.where(
+							and(
+								eq(schema.notifications.id, item.id),
+								eq(schema.notifications.actionState, "snoozed"),
+								lte(schema.notifications.snoozedUntil, now),
+							),
+						);
+					continue;
+				}
+
+				const payload =
+					item.kind === "task.reminder"
+						? {
+								taskId: row.taskId,
+								title: row.title,
+								dueDate: row.dueDate,
+								dueTime: row.dueTime,
+								reminderOffsetMinutes: row.reminderOffsetMinutes,
+								pageId: row.pageId,
+								sourceBlockId: row.sourceBlockId,
+							}
+						: {
+								taskId: row.taskId,
+								title: row.title,
+								dueDate: row.dueDate,
+								dueTime: row.dueTime,
+								pageId: row.pageId,
+								sourceBlockId: row.sourceBlockId,
+							};
+				const claimed = await db
+					.update(schema.notifications)
+					.set({
+						payload: JSON.stringify(payload),
+						actionState: null,
+						actionAt: null,
+						snoozedUntil: null,
+						readAt: null,
+						createdAt: now,
+						pushState: "pending",
+						pushAttempts: 0,
+						pushNextAttemptAt: null,
+						pushLeaseUntil: null,
+						pushDeliveredAt: null,
+					})
+					.where(
+						and(
+							eq(schema.notifications.id, item.id),
+							eq(schema.notifications.actionState, "snoozed"),
+							lte(schema.notifications.snoozedUntil, now),
+						),
+					)
+					.returning({ id: schema.notifications.id });
+				rearmed += claimed.length;
+			}
+			return rearmed;
 		},
 
 		async getPreferences(userId) {
@@ -591,6 +950,7 @@ export function createDrizzleNotificationRepository(
 				)
 				.where(
 					and(
+						isNull(schema.notifications.actionState),
 						lt(schema.notifications.pushAttempts, 3),
 						or(
 							eq(schema.notifications.pushState, "pending"),

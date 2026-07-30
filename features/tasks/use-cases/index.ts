@@ -1,3 +1,4 @@
+export { actOnTaskNotificationUseCase } from "./act-on-task-notification";
 export { createTaskUseCase } from "./create-task";
 export { deleteTaskUseCase } from "./delete-task";
 export { listTasksUseCase } from "./list-tasks";

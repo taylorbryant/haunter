@@ -288,4 +288,102 @@ describe("task reminder persistence", () => {
 			.where(eq(tasks.id, taskId));
 		expect(await repository.listValidReminderPush([created.id])).toEqual([]);
 	});
+
+	it("hides snoozed reminders and atomically re-arms them when due", async () => {
+		database = await createTestDatabase();
+		const now = new Date("2026-07-28T14:00:00.000Z");
+		await database.db.insert(user).values({
+			id: "user_snooze",
+			name: "Snooze User",
+			email: "snooze@example.com",
+			createdAt: now,
+			updatedAt: now,
+		});
+		await database.db.insert(organization).values({
+			id: "workspace_snooze",
+			name: "Snooze workspace",
+			slug: `snooze-${crypto.randomUUID()}`,
+			createdAt: now,
+		});
+		await database.db.insert(member).values({
+			id: crypto.randomUUID(),
+			organizationId: "workspace_snooze",
+			userId: "user_snooze",
+			role: "member",
+			createdAt: now,
+		});
+		const taskId = crypto.randomUUID();
+		await database.db.insert(tasks).values({
+			id: taskId,
+			userId: "user_snooze",
+			workspaceId: "workspace_snooze",
+			assigneeId: "user_snooze",
+			title: "Review the draft",
+			dueDate: "2026-07-28",
+			dueTime: "10:00",
+			reminderOffsetMinutes: 60,
+			reminderConfiguredAt: now.toISOString(),
+			createdAt: now.toISOString(),
+			updatedAt: now.toISOString(),
+		});
+
+		const repository = database.repositories.notificationInbox;
+		const [candidate] = (
+			await repository.findReminderCandidates({
+				fromDate: "2026-07-28",
+				cutoffDate: "2026-07-28",
+				limit: 10,
+			})
+		).items;
+		if (!candidate) throw new Error("Expected a reminder candidate");
+		const notification = await repository.createTaskReminder(
+			candidate,
+			now.toISOString(),
+		);
+		if (!notification) throw new Error("Expected a reminder notification");
+
+		const snoozedUntil = "2026-07-28T15:00:00.000Z";
+		expect(
+			await repository.snooze(
+				"user_snooze",
+				notification.id,
+				snoozedUntil,
+				now.toISOString(),
+			),
+		).toBe(true);
+		expect(
+			(await repository.listByUser("user_snooze", { limit: 10 })).items,
+		).toEqual([]);
+		expect(await repository.countUnread("user_snooze")).toBe(0);
+		expect(
+			await repository.rearmDueSnoozes("2026-07-28T14:59:59.000Z", 10),
+		).toBe(0);
+		expect(
+			await repository.rearmDueSnoozes("2026-07-28T15:00:00.000Z", 10),
+		).toBe(1);
+
+		const rearmed = await repository.listByUser("user_snooze", { limit: 10 });
+		expect(rearmed.items).toHaveLength(1);
+		expect(rearmed.items[0]).toMatchObject({
+			id: notification.id,
+			actionState: null,
+			readAt: null,
+			payload: { title: "Review the draft" },
+		});
+		expect(await repository.countUnread("user_snooze")).toBe(1);
+
+		await repository.resolveTaskNotifications(
+			taskId,
+			"completed",
+			"2026-07-28T15:01:00.000Z",
+		);
+		const completed = await repository.listByUser("user_snooze", {
+			limit: 10,
+		});
+		expect(completed.items[0]).toMatchObject({
+			actionState: "completed",
+			readAt: "2026-07-28T15:01:00.000Z",
+		});
+		expect(await repository.countUnread("user_snooze")).toBe(0);
+	});
 });

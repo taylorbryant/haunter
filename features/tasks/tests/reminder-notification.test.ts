@@ -191,6 +191,9 @@ describe("proactive task reminder schedule", () => {
 		const pending: PendingPushNotification[] = [];
 		const deliveries: unknown[] = [];
 		const notificationInbox = {
+			async rearmDueSnoozes() {
+				return 0;
+			},
 			async findReminderCandidates() {
 				return { items: [item], nextCursor: null };
 			},
@@ -274,6 +277,9 @@ describe("proactive task reminder schedule", () => {
 		let pagesRead = 0;
 		const created: string[] = [];
 		const notificationInbox = {
+			async rearmDueSnoozes() {
+				return 0;
+			},
 			async findReminderCandidates({
 				cursor,
 			}: {

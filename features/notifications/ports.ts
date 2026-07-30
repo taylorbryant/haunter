@@ -1,5 +1,6 @@
 import type {
 	Notification,
+	NotificationActionState,
 	NotificationPreferences,
 	PushSubscriptionInput,
 	TaskAssignedNotificationPayload,
@@ -68,8 +69,22 @@ export interface NotificationRepository {
 		options: { cursor?: NotificationCursor; limit: number },
 	): Promise<{ items: Notification[]; nextCursor: NotificationCursor | null }>;
 	countUnread(userId: string): Promise<number>;
+	findByUser(userId: string, id: string): Promise<Notification | null>;
 	markRead(userId: string, id: string): Promise<boolean>;
 	markAllRead(userId: string): Promise<void>;
+	snooze(
+		userId: string,
+		id: string,
+		snoozedUntil: string,
+		actionAt: string,
+	): Promise<boolean>;
+	resolveTaskNotifications(
+		taskId: string,
+		state: Exclude<NotificationActionState, "snoozed">,
+		actionAt: string,
+	): Promise<void>;
+	dismissSnoozedForTasks(taskIds: string[], actionAt: string): Promise<void>;
+	rearmDueSnoozes(now: string, limit: number): Promise<number>;
 	getPreferences(userId: string): Promise<NotificationPreferences>;
 	updatePreferences(
 		userId: string,

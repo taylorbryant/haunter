@@ -33,6 +33,10 @@ function groupPending(items: PendingPushNotification[]) {
 }
 
 export async function processOverdueNotifications(ctx: AppContext, at: Date) {
+	const snoozesRearmed = await ctx.ports.notificationInbox.rearmDueSnoozes(
+		at.toISOString(),
+		DELIVERY_LIMIT,
+	);
 	// A one-day reminder can target a date that is already tomorrow in UTC+14.
 	// Query from yesterday through two UTC dates ahead, then apply the exact
 	// timezone-aware window. Keyset pagination scans the complete finite window
@@ -164,6 +168,7 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 		created,
 		reminderCandidates,
 		remindersCreated,
+		snoozesRearmed,
 		deliveryGroups,
 	};
 }

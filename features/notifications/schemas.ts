@@ -7,6 +7,15 @@ export const NotificationKindSchema = z.enum([
 ]);
 export type NotificationKind = z.infer<typeof NotificationKindSchema>;
 
+export const NotificationActionStateSchema = z.enum([
+	"completed",
+	"snoozed",
+	"dismissed",
+]);
+export type NotificationActionState = z.infer<
+	typeof NotificationActionStateSchema
+>;
+
 export const TaskOverdueNotificationPayloadSchema = z.object({
 	taskId: z.string().uuid(),
 	title: z.string(),
@@ -64,6 +73,12 @@ const NotificationBaseSchema = z.object({
 	entityVersion: z.string(),
 	readAt: z.string().datetime().nullable(),
 	createdAt: z.string().datetime(),
+	actionState: NotificationActionStateSchema.nullable().optional(),
+	actionAt: z.string().datetime().nullable().optional(),
+	snoozedUntil: z.string().datetime().nullable().optional(),
+	taskCompleted: z.boolean().optional(),
+	taskAssigneeId: z.string().nullable().optional(),
+	taskAvailable: z.boolean().optional(),
 });
 
 export const TaskOverdueInboxNotificationSchema = NotificationBaseSchema.extend(

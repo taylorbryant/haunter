@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
+	actOnTaskNotification,
 	createTask,
 	deleteTask,
 	listTasks,
@@ -28,6 +29,10 @@ export function listTasksQueryOptions(
 
 export function createTaskMutationOptions() {
 	return rq(createTask).mutationOptions();
+}
+
+export function actOnTaskNotificationMutationOptions() {
+	return rq(actOnTaskNotification).mutationOptions();
 }
 
 export function updateTaskMutationOptions() {

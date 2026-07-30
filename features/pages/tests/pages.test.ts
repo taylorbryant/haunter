@@ -9,6 +9,7 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
+import type { NotificationRepository } from "@/features/notifications/ports";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import type {
 	PageNavigationRepository,
@@ -66,12 +67,17 @@ function createTester(
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
+	const notificationInbox = {
+		async resolveTaskNotifications() {},
+		async dismissSnoozedForTasks() {},
+	} as unknown as NotificationRepository;
 	const testFixture = createTestPorts<AppContext["ports"], AppTransactionPorts>(
 		{
 			base: appPorts,
 			overrides: {
 				gate: appPorts.gate,
 				canvases,
+				notificationInbox,
 				pageLinks,
 				pageNavigation,
 				pageCollaboration,
@@ -84,6 +90,7 @@ function createTester(
 				ports: (ports) => ({
 					...ports,
 					canvases,
+					notificationInbox,
 					pageLinks,
 					pageNavigation,
 					pages,

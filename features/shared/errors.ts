@@ -51,6 +51,11 @@ export const errors = defineErrors({
 		status: 404,
 		message: "Notification not found",
 	},
+	NotificationNotActionable: {
+		code: "NOTIFICATION_NOT_ACTIONABLE",
+		status: 409,
+		message: "This notification can no longer be acted on",
+	},
 	PushUnavailable: {
 		code: "PUSH_UNAVAILABLE",
 		status: 422,

@@ -9,6 +9,8 @@ import {
 	TaskIdInputSchema,
 	TaskScopeSchema,
 	TaskSchema,
+	TaskNotificationActionBodySchema,
+	TaskNotificationActionOutputSchema,
 	UpdateTaskBodySchema,
 } from "@/features/tasks/schemas";
 
@@ -82,4 +84,18 @@ export const deleteTask = tasks
 	})
 	.responses({
 		204: null,
+	});
+
+export const actOnTaskNotification = tasks
+	.post("/api/task-notifications/:id/action")
+	.pathParams(TaskIdInputSchema)
+	.body(TaskNotificationActionBodySchema)
+	.meta({ idempotency: { header: "idempotency-key", scope: "actor" } })
+	.errors({
+		Forbidden: errors.Forbidden,
+		NotificationNotFound: errors.NotificationNotFound,
+		NotificationNotActionable: errors.NotificationNotActionable,
+	})
+	.responses({
+		200: TaskNotificationActionOutputSchema,
 	});

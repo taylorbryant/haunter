@@ -97,6 +97,15 @@ export const updateTaskUseCase = useCase
 						? { completedAt: input.completed ? now : null }
 						: {}),
 				});
+				if (input.completed === true && !task.completed) {
+					await tx.notificationInbox.resolveTaskNotifications(
+						task.id,
+						"completed",
+						now,
+					);
+				} else if (schedulingChanged) {
+					await tx.notificationInbox.dismissSnoozedForTasks([task.id], now);
+				}
 
 				// Write the change through to the source page so the doc agrees.
 				if (
