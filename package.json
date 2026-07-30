@@ -32,7 +32,7 @@
 	"dependencies": {
 		"@base-ui/react": "1.6.0",
 		"@beignet/agent-auth-better-auth": "0.0.45",
-		"@beignet/core": "0.0.45",
+		"@beignet/core": "0.0.47",
 		"@beignet/devtools": "0.0.45",
 		"@beignet/next": "0.0.45",
 		"@beignet/provider-auth-better-auth": "0.0.45",
