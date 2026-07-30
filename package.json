@@ -40,7 +40,7 @@
 		"@beignet/provider-logger-pino": "0.0.45",
 		"@beignet/provider-mail-resend": "0.0.45",
 		"@beignet/provider-rate-limit-upstash": "0.0.45",
-		"@beignet/provider-storage-local": "0.0.45",
+		"@beignet/provider-storage-local": "0.0.47",
 		"@beignet/provider-storage-vercel-blob": "0.0.45",
 		"@beignet/react-hook-form": "0.0.45",
 		"@beignet/react-query": "0.0.45",
