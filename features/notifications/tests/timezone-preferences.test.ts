@@ -440,7 +440,15 @@ describe("task reminder persistence", () => {
 		const completed = await repository.listByUser("user_snooze", {
 			limit: 10,
 		});
-		expect(completed.items[0]).toMatchObject({
+		expect(completed.items).toEqual([]);
+		const [storedCompleted] = await database.db
+			.select({
+				actionState: notifications.actionState,
+				readAt: notifications.readAt,
+			})
+			.from(notifications)
+			.where(eq(notifications.id, notification.id));
+		expect(storedCompleted).toMatchObject({
 			actionState: "completed",
 			readAt: "2026-07-28T15:01:00.000Z",
 		});
@@ -499,6 +507,7 @@ describe("task reminder persistence", () => {
 			now.toISOString(),
 		);
 		expect(created).not.toBeNull();
+		if (!created) throw new Error("Expected an overdue notification");
 		expect(
 			(await repository.listByUser("user_rescheduled", { limit: 10 })).items,
 		).toHaveLength(1);
@@ -506,6 +515,27 @@ describe("task reminder persistence", () => {
 		await database.db
 			.update(tasks)
 			.set({
+				completed: true,
+				completedAt: "2026-07-28T14:00:30.000Z",
+				updatedAt: "2026-07-28T14:00:30.000Z",
+			})
+			.where(eq(tasks.id, taskId));
+
+		expect(
+			(await repository.listByUser("user_rescheduled", { limit: 10 })).items,
+		).toEqual([]);
+		expect(await repository.countUnread("user_rescheduled")).toBe(0);
+		const [preserved] = await database.db
+			.select({ actionState: notifications.actionState })
+			.from(notifications)
+			.where(eq(notifications.id, created.id));
+		expect(preserved?.actionState).toBeNull();
+
+		await database.db
+			.update(tasks)
+			.set({
+				completed: false,
+				completedAt: null,
 				dueDate: "2026-08-01",
 				dueTime: "12:00",
 				updatedAt: "2026-07-28T14:01:00.000Z",

@@ -119,6 +119,9 @@ export const ListNotificationsOutputSchema = z.object({
 	unreadCount: z.number().int().min(0),
 	nextCursor: z.string().nullable(),
 });
+export type ListNotificationsOutput = z.infer<
+	typeof ListNotificationsOutputSchema
+>;
 
 export const NotificationIdInputSchema = z.object({
 	id: z.string().uuid(),

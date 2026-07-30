@@ -209,14 +209,11 @@ export function createDrizzleNotificationRepository(
 					and(
 						eq(schema.notifications.userId, userId),
 						isNotNull(schema.tasks.id),
+						eq(schema.tasks.completed, false),
+						eq(schema.tasks.assigneeId, schema.notifications.userId),
 						or(isNull(schema.tasks.pageId), isNull(schema.pages.deletedAt)),
-						or(
-							eq(schema.notifications.actionState, "completed"),
-							and(
-								isNull(schema.notifications.actionState),
-								currentScheduleVersionCondition(),
-							),
-						),
+						isNull(schema.notifications.actionState),
+						currentScheduleVersionCondition(),
 						cursorCondition,
 					),
 				)

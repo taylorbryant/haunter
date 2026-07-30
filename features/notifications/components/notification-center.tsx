@@ -40,11 +40,15 @@ import {
 	useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/toast";
+import type { NotificationsCacheSnapshot } from "@/features/notifications/client/queries";
 import {
 	invalidateNotifications,
 	listNotificationsQueryOptions,
 	markAllNotificationsReadMutationOptions,
 	markNotificationReadMutationOptions,
+	removeNotificationFromCache,
+	restoreNotificationsCache,
 } from "@/features/notifications/client/queries";
 import type { Notification } from "@/features/notifications/schemas";
 import { invalidatePage } from "@/features/pages/client/queries";
@@ -222,12 +226,7 @@ function NotificationPanel({
 												)}
 											</span>
 										</button>
-										{item.actionState === "completed" || item.taskCompleted ? (
-											<span className="mt-2 inline-flex items-center gap-1 font-medium text-muted-foreground text-xs">
-												<CheckIcon className="size-3" />
-												Completed
-											</span>
-										) : canComplete || canSnooze ? (
+										{canComplete || canSnooze ? (
 											<div className="mt-2 flex items-center gap-1">
 												{canComplete ? (
 													<Button
@@ -398,17 +397,17 @@ export function NotificationCenter() {
 							preset: request.preset,
 						},
 					};
+		let cacheSnapshot: NotificationsCacheSnapshot | null = null;
+		let result: Awaited<ReturnType<typeof action.mutateAsync>>;
 		try {
-			const result = await action.mutateAsync(variables);
-			await Promise.all([
-				invalidateNotifications(queryClient),
-				invalidateTasks(queryClient),
-				result.pageId
-					? invalidatePage(queryClient, result.pageId)
-					: Promise.resolve(),
-			]);
+			cacheSnapshot = await removeNotificationFromCache(queryClient, item);
+			result = await action.mutateAsync(variables);
 		} catch (error) {
+			if (cacheSnapshot) {
+				restoreNotificationsCache(queryClient, cacheSnapshot);
+			}
 			reportUserError(error, "The notification could not be updated.");
+			return;
 		} finally {
 			pendingActionIdsRef.current.delete(item.id);
 			setPendingActionIds((current) => {
@@ -417,6 +416,19 @@ export function NotificationCenter() {
 				return next;
 			});
 		}
+
+		toast.add({
+			title:
+				request.action === "complete" ? "Task completed" : "Reminder snoozed",
+			type: "success",
+		});
+		await Promise.allSettled([
+			invalidateNotifications(queryClient),
+			invalidateTasks(queryClient),
+			result.pageId
+				? invalidatePage(queryClient, result.pageId)
+				: Promise.resolve(),
+		]);
 	}
 
 	const triggerLabel =
