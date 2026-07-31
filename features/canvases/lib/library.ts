@@ -1,0 +1,1895 @@
+import {
+	createShapeId,
+	type Editor,
+	type JsonObject,
+	type TLBindingCreate,
+	type TLShapeId,
+	type TLShapePartial,
+	toRichText,
+} from "tldraw";
+
+export const CANVAS_LIBRARY_PANEL_WIDTH = 320;
+const LIBRARY_ITEM_VERSION = 7;
+
+export type CanvasLibraryKind = "component" | "template";
+export type CanvasLibraryCategory = "architecture" | "wireframes";
+
+type LibraryGeo =
+	| "rectangle"
+	| "ellipse"
+	| "diamond"
+	| "hexagon"
+	| "oval"
+	| "cloud";
+type LibraryFill = "none" | "semi" | "solid";
+type LibraryDash = "solid" | "dashed" | "dotted";
+type LibrarySize = "s" | "m" | "l" | "xl";
+type LibraryColor = "black" | "grey";
+
+type LibraryElementBase = {
+	key: string;
+	role: string;
+	x: number;
+	y: number;
+};
+
+export type CanvasLibraryElement =
+	| (LibraryElementBase & {
+			kind: "geo";
+			width: number;
+			height: number;
+			label?: string;
+			geo?: LibraryGeo;
+			fill?: LibraryFill;
+			dash?: LibraryDash;
+			color?: LibraryColor;
+			size?: LibrarySize;
+	  })
+	| (LibraryElementBase & {
+			kind: "text";
+			text: string;
+			width: number;
+			size?: LibrarySize;
+			color?: LibraryColor;
+			align?: "start" | "middle" | "end";
+	  })
+	| (LibraryElementBase & {
+			kind: "arrow";
+			from: string;
+			to: string;
+			label?: string;
+			bend?: number;
+			size?: LibrarySize;
+	  });
+
+export type CanvasLibraryItem = {
+	id: string;
+	version: number;
+	name: string;
+	kind: CanvasLibraryKind;
+	category: CanvasLibraryCategory;
+	keywords: string[];
+	width: number;
+	height: number;
+	preview: string;
+	elements: CanvasLibraryElement[];
+};
+
+type ArchitectureNodeOptions = {
+	id: string;
+	name: string;
+	subtitle: string;
+	keywords: string[];
+	geo?: LibraryGeo;
+	dash?: LibraryDash;
+	width?: number;
+	height?: number;
+	labelInset?: number;
+	titleY?: number;
+	subtitleY?: number;
+};
+
+function architectureNode({
+	id,
+	name,
+	subtitle,
+	keywords,
+	geo = "rectangle",
+	dash = "solid",
+	width = 224,
+	height = 112,
+	labelInset = 20,
+	titleY = 28,
+	subtitleY = 66,
+}: ArchitectureNodeOptions): CanvasLibraryItem {
+	return {
+		id,
+		version: LIBRARY_ITEM_VERSION,
+		name,
+		kind: "component",
+		category: "architecture",
+		keywords,
+		width,
+		height,
+		preview: id,
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: id,
+				x: 0,
+				y: 0,
+				width,
+				height,
+				geo,
+				fill: "none",
+				dash,
+			},
+			{
+				key: "title",
+				kind: "text",
+				role: "label",
+				x: labelInset,
+				y: titleY,
+				width: width - labelInset * 2,
+				text: name,
+				size: "m",
+				align: "middle",
+			},
+			{
+				key: "subtitle",
+				kind: "text",
+				role: "description",
+				x: labelInset,
+				y: subtitleY,
+				width: width - labelInset * 2,
+				text: subtitle,
+				size: "s",
+				color: "grey",
+				align: "middle",
+			},
+		],
+	};
+}
+
+function item(
+	definition: Omit<CanvasLibraryItem, "version">,
+): CanvasLibraryItem {
+	return { ...definition, version: LIBRARY_ITEM_VERSION };
+}
+
+const architectureComponents: CanvasLibraryItem[] = [
+	architectureNode({
+		id: "client",
+		name: "Client",
+		subtitle: "Browser or mobile app",
+		keywords: ["browser", "mobile", "frontend", "consumer"],
+	}),
+	architectureNode({
+		id: "api-endpoint",
+		name: "API endpoint",
+		subtitle: "Request boundary",
+		keywords: ["route", "request", "http", "rest", "graphql"],
+		geo: "oval",
+	}),
+	architectureNode({
+		id: "service",
+		name: "Service",
+		subtitle: "Business logic",
+		keywords: ["function", "server", "backend", "use case"],
+	}),
+	architectureNode({
+		id: "database",
+		name: "Database",
+		subtitle: "Persistent state",
+		keywords: ["db", "sql", "storage", "turso", "postgres"],
+		geo: "ellipse",
+	}),
+	architectureNode({
+		id: "data-store",
+		name: "Data store",
+		subtitle: "Table or collection",
+		keywords: ["table", "record", "document", "cache"],
+	}),
+	architectureNode({
+		id: "queue",
+		name: "Queue",
+		subtitle: "Topic or event stream",
+		keywords: ["topic", "event", "message", "pubsub"],
+		geo: "hexagon",
+	}),
+	architectureNode({
+		id: "worker",
+		name: "Worker",
+		subtitle: "Background job",
+		keywords: ["job", "cron", "async", "consumer"],
+		geo: "oval",
+	}),
+	architectureNode({
+		id: "external-system",
+		name: "External system",
+		subtitle: "Third-party dependency",
+		keywords: ["vendor", "integration", "provider", "third party"],
+		geo: "cloud",
+		width: 340,
+		height: 220,
+		labelInset: 44,
+		titleY: 56,
+		subtitleY: 116,
+	}),
+	architectureNode({
+		id: "decision",
+		name: "Decision",
+		subtitle: "Branch or condition",
+		keywords: ["branch", "condition", "choice", "gateway"],
+		geo: "diamond",
+		width: 300,
+		height: 240,
+		labelInset: 68,
+		titleY: 66,
+		subtitleY: 128,
+	}),
+	architectureNode({
+		id: "system-boundary",
+		name: "System boundary",
+		subtitle: "Group related services",
+		keywords: ["container", "group", "scope", "boundary"],
+		dash: "dashed",
+		width: 380,
+		height: 240,
+		labelInset: 44,
+		titleY: 68,
+		subtitleY: 128,
+	}),
+];
+
+const wireframeComponents: CanvasLibraryItem[] = [
+	item({
+		id: "browser-frame",
+		name: "Browser frame",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["desktop", "window", "web", "page"],
+		width: 420,
+		height: 280,
+		preview: "browser-frame",
+		elements: [
+			{
+				key: "shell",
+				kind: "geo",
+				role: "frame",
+				x: 0,
+				y: 0,
+				width: 420,
+				height: 280,
+				fill: "none",
+			},
+			{
+				key: "chrome",
+				kind: "geo",
+				role: "browser-chrome",
+				x: 0,
+				y: 0,
+				width: 420,
+				height: 40,
+				fill: "semi",
+			},
+			{
+				key: "dot-1",
+				kind: "geo",
+				role: "window-control",
+				x: 14,
+				y: 15,
+				width: 10,
+				height: 10,
+				geo: "ellipse",
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "dot-2",
+				kind: "geo",
+				role: "window-control",
+				x: 32,
+				y: 15,
+				width: 10,
+				height: 10,
+				geo: "ellipse",
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "address",
+				kind: "geo",
+				role: "address-bar",
+				x: 74,
+				y: 10,
+				width: 318,
+				height: 20,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+		],
+	}),
+	item({
+		id: "phone-frame",
+		name: "Phone frame",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["mobile", "device", "screen", "app"],
+		width: 200,
+		height: 380,
+		preview: "phone-frame",
+		elements: [
+			{
+				key: "shell",
+				kind: "geo",
+				role: "frame",
+				x: 0,
+				y: 0,
+				width: 200,
+				height: 380,
+				fill: "none",
+			},
+			{
+				key: "status",
+				kind: "geo",
+				role: "status-bar",
+				x: 16,
+				y: 18,
+				width: 168,
+				height: 22,
+				fill: "semi",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "home",
+				kind: "geo",
+				role: "home-indicator",
+				x: 64,
+				y: 354,
+				width: 72,
+				height: 6,
+				geo: "oval",
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+		],
+	}),
+	item({
+		id: "top-navigation",
+		name: "Top navigation",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["header", "navbar", "menu", "links"],
+		width: 420,
+		height: 64,
+		preview: "top-navigation",
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: "navigation",
+				x: 0,
+				y: 0,
+				width: 420,
+				height: 64,
+				fill: "none",
+			},
+			{
+				key: "brand",
+				kind: "geo",
+				role: "brand",
+				x: 16,
+				y: 20,
+				width: 84,
+				height: 24,
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "link-1",
+				kind: "geo",
+				role: "navigation-item",
+				x: 184,
+				y: 26,
+				width: 48,
+				height: 12,
+				fill: "semi",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "link-2",
+				kind: "geo",
+				role: "navigation-item",
+				x: 248,
+				y: 26,
+				width: 48,
+				height: 12,
+				fill: "semi",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "action",
+				kind: "geo",
+				role: "action",
+				x: 324,
+				y: 16,
+				width: 80,
+				height: 32,
+				fill: "semi",
+				size: "s",
+			},
+			{
+				key: "action-label",
+				kind: "text",
+				role: "action-label",
+				x: 332,
+				y: 22,
+				width: 64,
+				text: "Action",
+				size: "s",
+				align: "middle",
+			},
+		],
+	}),
+	item({
+		id: "sidebar-navigation",
+		name: "Sidebar navigation",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["sidebar", "menu", "navigation", "rail"],
+		width: 180,
+		height: 300,
+		preview: "sidebar-navigation",
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: "sidebar",
+				x: 0,
+				y: 0,
+				width: 180,
+				height: 300,
+				fill: "none",
+			},
+			{
+				key: "brand",
+				kind: "geo",
+				role: "brand",
+				x: 16,
+				y: 18,
+				width: 96,
+				height: 22,
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "active",
+				kind: "geo",
+				role: "navigation-item",
+				x: 12,
+				y: 66,
+				width: 156,
+				height: 34,
+				fill: "semi",
+				size: "s",
+			},
+			{
+				key: "active-label",
+				kind: "text",
+				role: "navigation-item-label",
+				x: 24,
+				y: 73,
+				width: 132,
+				text: "Active item",
+				size: "s",
+			},
+			{
+				key: "item-2",
+				kind: "text",
+				role: "navigation-item",
+				x: 24,
+				y: 122,
+				width: 132,
+				text: "Navigation item",
+				size: "s",
+				color: "grey",
+			},
+			{
+				key: "item-3",
+				kind: "text",
+				role: "navigation-item",
+				x: 24,
+				y: 164,
+				width: 132,
+				text: "Navigation item",
+				size: "s",
+				color: "grey",
+			},
+		],
+	}),
+	item({
+		id: "tabs",
+		name: "Tabs",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["navigation", "sections", "switcher"],
+		width: 480,
+		height: 64,
+		preview: "tabs",
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: "tab-list",
+				x: 0,
+				y: 0,
+				width: 480,
+				height: 64,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "tab-1",
+				kind: "text",
+				role: "tab",
+				x: 10,
+				y: 18,
+				width: 140,
+				text: "Overview",
+				size: "s",
+				align: "middle",
+			},
+			{
+				key: "tab-2",
+				kind: "text",
+				role: "tab",
+				x: 170,
+				y: 18,
+				width: 140,
+				text: "Details",
+				size: "s",
+				color: "grey",
+				align: "middle",
+			},
+			{
+				key: "tab-3",
+				kind: "text",
+				role: "tab",
+				x: 330,
+				y: 18,
+				width: 140,
+				text: "Activity",
+				size: "s",
+				color: "grey",
+				align: "middle",
+			},
+			{
+				key: "indicator",
+				kind: "geo",
+				role: "active-indicator",
+				x: 30,
+				y: 58,
+				width: 100,
+				height: 4,
+				fill: "solid",
+				size: "s",
+			},
+		],
+	}),
+	item({
+		id: "button",
+		name: "Button",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["action", "cta", "submit"],
+		width: 120,
+		height: 40,
+		preview: "button",
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: "button",
+				x: 0,
+				y: 0,
+				width: 120,
+				height: 40,
+				fill: "semi",
+			},
+			{
+				key: "label",
+				kind: "text",
+				role: "label",
+				x: 12,
+				y: 10,
+				width: 96,
+				text: "Button",
+				size: "s",
+				align: "middle",
+			},
+		],
+	}),
+	item({
+		id: "input-field",
+		name: "Input field",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["form", "text", "field", "label"],
+		width: 300,
+		height: 76,
+		preview: "input-field",
+		elements: [
+			{
+				key: "label",
+				kind: "text",
+				role: "label",
+				x: 0,
+				y: 0,
+				width: 300,
+				text: "Field label",
+				size: "s",
+			},
+			{
+				key: "input",
+				kind: "geo",
+				role: "input",
+				x: 0,
+				y: 30,
+				width: 300,
+				height: 46,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "placeholder",
+				kind: "text",
+				role: "placeholder",
+				x: 14,
+				y: 43,
+				width: 270,
+				text: "Enter a value…",
+				size: "s",
+				color: "grey",
+			},
+		],
+	}),
+	item({
+		id: "select-field",
+		name: "Select field",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["form", "dropdown", "picker", "option"],
+		width: 300,
+		height: 76,
+		preview: "select-field",
+		elements: [
+			{
+				key: "label",
+				kind: "text",
+				role: "label",
+				x: 0,
+				y: 0,
+				width: 300,
+				text: "Field label",
+				size: "s",
+			},
+			{
+				key: "select",
+				kind: "geo",
+				role: "select",
+				x: 0,
+				y: 30,
+				width: 300,
+				height: 46,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "value",
+				kind: "text",
+				role: "value",
+				x: 14,
+				y: 43,
+				width: 244,
+				text: "Choose an option",
+				size: "s",
+				color: "grey",
+			},
+			{
+				key: "chevron",
+				kind: "text",
+				role: "indicator",
+				x: 266,
+				y: 43,
+				width: 20,
+				text: "⌄",
+				size: "s",
+				color: "grey",
+				align: "middle",
+			},
+		],
+	}),
+	item({
+		id: "card",
+		name: "Card",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["panel", "content", "summary"],
+		width: 280,
+		height: 180,
+		preview: "card",
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: "card",
+				x: 0,
+				y: 0,
+				width: 280,
+				height: 180,
+				fill: "none",
+			},
+			{
+				key: "title",
+				kind: "text",
+				role: "title",
+				x: 20,
+				y: 22,
+				width: 240,
+				text: "Card title",
+				size: "m",
+			},
+			{
+				key: "line-1",
+				kind: "geo",
+				role: "content",
+				x: 20,
+				y: 70,
+				width: 220,
+				height: 10,
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "line-2",
+				kind: "geo",
+				role: "content",
+				x: 20,
+				y: 94,
+				width: 190,
+				height: 10,
+				fill: "semi",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "action",
+				kind: "geo",
+				role: "action",
+				x: 180,
+				y: 130,
+				width: 80,
+				height: 30,
+				fill: "semi",
+				size: "s",
+			},
+			{
+				key: "action-label",
+				kind: "text",
+				role: "action-label",
+				x: 188,
+				y: 136,
+				width: 64,
+				text: "Action",
+				size: "s",
+				align: "middle",
+			},
+		],
+	}),
+	item({
+		id: "table",
+		name: "Table or list",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["rows", "data", "list", "grid"],
+		width: 420,
+		height: 230,
+		preview: "table",
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: "table",
+				x: 0,
+				y: 0,
+				width: 420,
+				height: 230,
+				fill: "none",
+			},
+			{
+				key: "header",
+				kind: "geo",
+				role: "header",
+				x: 0,
+				y: 0,
+				width: 420,
+				height: 42,
+				fill: "semi",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "h1",
+				kind: "text",
+				role: "column-header",
+				x: 16,
+				y: 12,
+				width: 140,
+				text: "Name",
+				size: "s",
+			},
+			{
+				key: "h2",
+				kind: "text",
+				role: "column-header",
+				x: 224,
+				y: 12,
+				width: 120,
+				text: "Status",
+				size: "s",
+			},
+			{
+				key: "row-1",
+				kind: "geo",
+				role: "row",
+				x: 12,
+				y: 62,
+				width: 396,
+				height: 42,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "row-2",
+				kind: "geo",
+				role: "row",
+				x: 12,
+				y: 114,
+				width: 396,
+				height: 42,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "row-3",
+				kind: "geo",
+				role: "row",
+				x: 12,
+				y: 166,
+				width: 396,
+				height: 42,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+		],
+	}),
+	item({
+		id: "dialog",
+		name: "Dialog",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["modal", "overlay", "confirmation"],
+		width: 380,
+		height: 250,
+		preview: "dialog",
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: "dialog",
+				x: 0,
+				y: 0,
+				width: 380,
+				height: 250,
+				fill: "semi",
+			},
+			{
+				key: "title",
+				kind: "text",
+				role: "title",
+				x: 24,
+				y: 24,
+				width: 300,
+				text: "Dialog title",
+				size: "m",
+			},
+			{
+				key: "close",
+				kind: "text",
+				role: "close",
+				x: 336,
+				y: 22,
+				width: 20,
+				text: "×",
+				size: "m",
+				color: "grey",
+				align: "middle",
+			},
+			{
+				key: "line-1",
+				kind: "geo",
+				role: "content",
+				x: 24,
+				y: 82,
+				width: 310,
+				height: 10,
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "line-2",
+				kind: "geo",
+				role: "content",
+				x: 24,
+				y: 108,
+				width: 260,
+				height: 10,
+				fill: "semi",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "cancel",
+				kind: "geo",
+				role: "secondary-action",
+				x: 190,
+				y: 192,
+				width: 72,
+				height: 34,
+				fill: "none",
+				size: "s",
+			},
+			{
+				key: "confirm",
+				kind: "geo",
+				role: "primary-action",
+				x: 274,
+				y: 192,
+				width: 82,
+				height: 34,
+				fill: "semi",
+				size: "s",
+			},
+			{
+				key: "cancel-label",
+				kind: "text",
+				role: "secondary-action-label",
+				x: 198,
+				y: 199,
+				width: 56,
+				text: "Cancel",
+				size: "s",
+				align: "middle",
+			},
+			{
+				key: "confirm-label",
+				kind: "text",
+				role: "primary-action-label",
+				x: 282,
+				y: 199,
+				width: 66,
+				text: "Confirm",
+				size: "s",
+				align: "middle",
+			},
+		],
+	}),
+	item({
+		id: "bottom-sheet",
+		name: "Bottom sheet",
+		kind: "component",
+		category: "wireframes",
+		keywords: ["drawer", "mobile", "panel", "sheet"],
+		width: 360,
+		height: 230,
+		preview: "bottom-sheet",
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: "sheet",
+				x: 0,
+				y: 0,
+				width: 360,
+				height: 230,
+				fill: "semi",
+			},
+			{
+				key: "handle",
+				kind: "geo",
+				role: "drag-handle",
+				x: 140,
+				y: 14,
+				width: 80,
+				height: 6,
+				geo: "oval",
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "title",
+				kind: "text",
+				role: "title",
+				x: 24,
+				y: 44,
+				width: 312,
+				text: "Sheet title",
+				size: "m",
+				align: "middle",
+			},
+			{
+				key: "line-1",
+				kind: "geo",
+				role: "content",
+				x: 24,
+				y: 98,
+				width: 286,
+				height: 10,
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "line-2",
+				kind: "geo",
+				role: "content",
+				x: 24,
+				y: 124,
+				width: 236,
+				height: 10,
+				fill: "semi",
+				color: "grey",
+				size: "s",
+			},
+		],
+	}),
+];
+
+type TemplateNode = {
+	key: string;
+	label: string;
+	x: number;
+	y: number;
+	width?: number;
+};
+type TemplateEdge = {
+	key: string;
+	from: string;
+	to: string;
+	label?: string;
+	bend?: number;
+	size?: LibrarySize;
+};
+
+function architectureTemplate({
+	id,
+	name,
+	keywords,
+	width,
+	height,
+	nodes,
+	edges,
+}: {
+	id: string;
+	name: string;
+	keywords: string[];
+	width: number;
+	height: number;
+	nodes: TemplateNode[];
+	edges: TemplateEdge[];
+}): CanvasLibraryItem {
+	return item({
+		id,
+		name,
+		kind: "template",
+		category: "architecture",
+		keywords,
+		width,
+		height,
+		preview: id,
+		elements: [
+			...nodes.map<CanvasLibraryElement>((node) => ({
+				key: node.key,
+				kind: "geo",
+				role: node.key,
+				x: node.x,
+				y: node.y,
+				width: node.width ?? 170,
+				height: 82,
+				label: node.label,
+				fill: "none",
+				size: "m",
+			})),
+			...edges.map<CanvasLibraryElement>((edge) => ({
+				key: edge.key,
+				kind: "arrow",
+				role: "flow",
+				x: 0,
+				y: 0,
+				from: edge.from,
+				to: edge.to,
+				label: edge.label,
+				bend: edge.bend,
+				size: edge.size ?? "s",
+			})),
+		],
+	});
+}
+
+const templates: CanvasLibraryItem[] = [
+	architectureTemplate({
+		id: "request-flow",
+		name: "Request and response",
+		keywords: ["client", "api", "service", "database", "sync"],
+		width: 1320,
+		height: 180,
+		nodes: [
+			{ key: "client", label: "Client", x: 0, y: 48, width: 180 },
+			{ key: "endpoint", label: "API endpoint", x: 380, y: 48, width: 180 },
+			{ key: "service", label: "Service", x: 760, y: 48, width: 180 },
+			{ key: "database", label: "Database", x: 1140, y: 48, width: 180 },
+		],
+		edges: [
+			{
+				key: "request",
+				from: "client",
+				to: "endpoint",
+				label: "Request",
+			},
+			{ key: "handle", from: "endpoint", to: "service" },
+			{
+				key: "write",
+				from: "service",
+				to: "database",
+				label: "Query",
+			},
+		],
+	}),
+	architectureTemplate({
+		id: "async-worker-flow",
+		name: "Queue and worker",
+		keywords: ["async", "event", "queue", "job", "worker"],
+		width: 1320,
+		height: 180,
+		nodes: [
+			{ key: "endpoint", label: "API endpoint", x: 0, y: 48, width: 180 },
+			{ key: "queue", label: "Queue", x: 380, y: 48, width: 180 },
+			{ key: "worker", label: "Worker", x: 760, y: 48, width: 180 },
+			{ key: "database", label: "Database", x: 1140, y: 48, width: 180 },
+		],
+		edges: [
+			{
+				key: "publish",
+				from: "endpoint",
+				to: "queue",
+				label: "Publish",
+			},
+			{
+				key: "consume",
+				from: "queue",
+				to: "worker",
+				label: "Consume",
+			},
+			{
+				key: "persist",
+				from: "worker",
+				to: "database",
+				label: "Persist",
+			},
+		],
+	}),
+	architectureTemplate({
+		id: "state-change-map",
+		name: "State change map",
+		keywords: ["endpoint", "tables", "mutation", "database", "state"],
+		width: 1480,
+		height: 500,
+		nodes: [
+			{ key: "client", label: "Client", x: 0, y: 202, width: 180 },
+			{ key: "endpoint", label: "Endpoint", x: 380, y: 202, width: 180 },
+			{ key: "service", label: "Service", x: 760, y: 202, width: 180 },
+			{ key: "table-a", label: "Table A", x: 1280, y: 20, width: 180 },
+			{ key: "table-b", label: "Table B", x: 1280, y: 202, width: 180 },
+			{ key: "event", label: "Event", x: 1280, y: 384, width: 180 },
+		],
+		edges: [
+			{
+				key: "request",
+				from: "client",
+				to: "endpoint",
+				label: "POST",
+			},
+			{ key: "invoke", from: "endpoint", to: "service" },
+			{
+				key: "read",
+				from: "service",
+				to: "table-a",
+				label: "Read",
+				bend: -24,
+			},
+			{
+				key: "write",
+				from: "service",
+				to: "table-b",
+				label: "Write",
+			},
+			{
+				key: "publish",
+				from: "service",
+				to: "event",
+				label: "Publish",
+				bend: 24,
+			},
+		],
+	}),
+	item({
+		id: "desktop-app-shell",
+		name: "Desktop app shell",
+		kind: "template",
+		category: "wireframes",
+		keywords: ["desktop", "dashboard", "sidebar", "header", "layout"],
+		width: 760,
+		height: 460,
+		preview: "desktop-app-shell",
+		elements: [
+			{
+				key: "shell",
+				kind: "geo",
+				role: "application",
+				x: 0,
+				y: 0,
+				width: 760,
+				height: 460,
+				fill: "none",
+			},
+			{
+				key: "sidebar",
+				kind: "geo",
+				role: "sidebar",
+				x: 0,
+				y: 0,
+				width: 180,
+				height: 460,
+				fill: "semi",
+				color: "grey",
+			},
+			{
+				key: "header",
+				kind: "geo",
+				role: "header",
+				x: 180,
+				y: 0,
+				width: 580,
+				height: 64,
+				fill: "none",
+				color: "grey",
+			},
+			{
+				key: "brand",
+				kind: "geo",
+				role: "brand",
+				x: 20,
+				y: 22,
+				width: 92,
+				height: 20,
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "nav-1",
+				kind: "geo",
+				role: "navigation-item",
+				x: 14,
+				y: 84,
+				width: 152,
+				height: 34,
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "nav-2",
+				kind: "geo",
+				role: "navigation-item",
+				x: 24,
+				y: 136,
+				width: 112,
+				height: 12,
+				fill: "semi",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "title",
+				kind: "text",
+				role: "page-title",
+				x: 216,
+				y: 92,
+				width: 300,
+				text: "Page title",
+				size: "l",
+			},
+			{
+				key: "card-1",
+				kind: "geo",
+				role: "card",
+				x: 216,
+				y: 154,
+				width: 230,
+				height: 128,
+				fill: "none",
+				color: "grey",
+			},
+			{
+				key: "card-2",
+				kind: "geo",
+				role: "card",
+				x: 472,
+				y: 154,
+				width: 230,
+				height: 128,
+				fill: "none",
+				color: "grey",
+			},
+			{
+				key: "content",
+				kind: "geo",
+				role: "content",
+				x: 216,
+				y: 312,
+				width: 486,
+				height: 108,
+				fill: "none",
+				color: "grey",
+			},
+		],
+	}),
+	item({
+		id: "mobile-app-screen",
+		name: "Mobile app screen",
+		kind: "template",
+		category: "wireframes",
+		keywords: ["mobile", "phone", "screen", "navigation"],
+		width: 260,
+		height: 500,
+		preview: "mobile-app-screen",
+		elements: [
+			{
+				key: "shell",
+				kind: "geo",
+				role: "application",
+				x: 0,
+				y: 0,
+				width: 260,
+				height: 500,
+				fill: "none",
+			},
+			{
+				key: "status",
+				kind: "geo",
+				role: "status-bar",
+				x: 18,
+				y: 18,
+				width: 224,
+				height: 20,
+				fill: "semi",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "header",
+				kind: "geo",
+				role: "header",
+				x: 0,
+				y: 54,
+				width: 260,
+				height: 54,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "title",
+				kind: "text",
+				role: "title",
+				x: 24,
+				y: 132,
+				width: 212,
+				text: "Screen title",
+				size: "l",
+			},
+			{
+				key: "card",
+				kind: "geo",
+				role: "card",
+				x: 20,
+				y: 188,
+				width: 220,
+				height: 138,
+				fill: "none",
+				color: "grey",
+			},
+			{
+				key: "row-1",
+				kind: "geo",
+				role: "list-item",
+				x: 20,
+				y: 348,
+				width: 220,
+				height: 42,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "row-2",
+				kind: "geo",
+				role: "list-item",
+				x: 20,
+				y: 402,
+				width: 220,
+				height: 42,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "home",
+				kind: "geo",
+				role: "home-indicator",
+				x: 94,
+				y: 476,
+				width: 72,
+				height: 6,
+				geo: "oval",
+				fill: "solid",
+				color: "grey",
+				size: "s",
+			},
+		],
+	}),
+	item({
+		id: "form-dialog-flow",
+		name: "Form dialog",
+		kind: "template",
+		category: "wireframes",
+		keywords: ["modal", "form", "input", "submit", "confirmation"],
+		width: 560,
+		height: 500,
+		preview: "form-dialog-flow",
+		elements: [
+			{
+				key: "surface",
+				kind: "geo",
+				role: "dialog",
+				x: 0,
+				y: 0,
+				width: 560,
+				height: 500,
+				fill: "semi",
+			},
+			{
+				key: "title",
+				kind: "text",
+				role: "title",
+				x: 28,
+				y: 26,
+				width: 440,
+				text: "Create item",
+				size: "m",
+			},
+			{
+				key: "close",
+				kind: "text",
+				role: "close",
+				x: 510,
+				y: 24,
+				width: 20,
+				text: "×",
+				size: "m",
+				color: "grey",
+				align: "middle",
+			},
+			{
+				key: "label-1",
+				kind: "text",
+				role: "label",
+				x: 28,
+				y: 94,
+				width: 504,
+				text: "Name",
+				size: "s",
+			},
+			{
+				key: "input-1",
+				kind: "geo",
+				role: "input",
+				x: 28,
+				y: 124,
+				width: 504,
+				height: 48,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "label-2",
+				kind: "text",
+				role: "label",
+				x: 28,
+				y: 198,
+				width: 504,
+				text: "Description",
+				size: "s",
+			},
+			{
+				key: "input-2",
+				kind: "geo",
+				role: "textarea",
+				x: 28,
+				y: 228,
+				width: 504,
+				height: 112,
+				fill: "none",
+				color: "grey",
+				size: "s",
+			},
+			{
+				key: "cancel",
+				kind: "geo",
+				role: "secondary-action",
+				x: 300,
+				y: 424,
+				width: 112,
+				height: 44,
+				fill: "none",
+				size: "s",
+			},
+			{
+				key: "submit",
+				kind: "geo",
+				role: "primary-action",
+				x: 424,
+				y: 424,
+				width: 112,
+				height: 44,
+				fill: "semi",
+				size: "s",
+			},
+			{
+				key: "cancel-label",
+				kind: "text",
+				role: "secondary-action-label",
+				x: 312,
+				y: 435,
+				width: 88,
+				text: "Cancel",
+				size: "s",
+				align: "middle",
+			},
+			{
+				key: "submit-label",
+				kind: "text",
+				role: "primary-action-label",
+				x: 436,
+				y: 435,
+				width: 88,
+				text: "Create",
+				size: "s",
+				align: "middle",
+			},
+		],
+	}),
+];
+
+export const CANVAS_LIBRARY_ITEMS = [
+	...architectureComponents,
+	...wireframeComponents,
+	...templates,
+] as const;
+
+export function searchCanvasLibraryItems(
+	query: string,
+	kind: CanvasLibraryKind,
+): CanvasLibraryItem[] {
+	const normalized = query.trim().toLocaleLowerCase();
+	return CANVAS_LIBRARY_ITEMS.filter((entry) => {
+		if (entry.kind !== kind) return false;
+		if (normalized === "") return true;
+		return [entry.name, entry.category, ...entry.keywords]
+			.join(" ")
+			.toLocaleLowerCase()
+			.includes(normalized);
+	});
+}
+
+function elementCenter(element: CanvasLibraryElement) {
+	if (element.kind !== "geo") {
+		throw new Error(`Arrows can only bind to geo elements: ${element.key}`);
+	}
+	return {
+		x: element.x + element.width / 2,
+		y: element.y + element.height / 2,
+	};
+}
+
+export type MaterializedCanvasLibraryItem = {
+	shapes: TLShapePartial[];
+	bindings: TLBindingCreate[];
+	shapeIds: TLShapeId[];
+	groupId: TLShapeId;
+	rootMeta: JsonObject;
+};
+
+export function materializeCanvasLibraryItem(
+	entry: CanvasLibraryItem,
+	options: { x: number; y: number; scale?: number },
+): MaterializedCanvasLibraryItem {
+	const scale = options.scale ?? 1;
+	const ids = new Map(
+		entry.elements.map((element) => [element.key, createShapeId()]),
+	);
+	const byKey = new Map(
+		entry.elements.map((element) => [element.key, element]),
+	);
+	const bindings: TLBindingCreate[] = [];
+
+	const shapes = entry.elements.map<TLShapePartial>((element) => {
+		const id = ids.get(element.key);
+		if (!id) throw new Error(`Missing shape id for ${element.key}`);
+		const meta = {
+			haunterLibraryItemId: entry.id,
+			haunterLibraryItemVersion: entry.version,
+			haunterLibraryKind: entry.kind,
+			haunterLibraryRole: element.role,
+		};
+
+		if (element.kind === "geo") {
+			return {
+				id,
+				type: "geo",
+				x: options.x + element.x * scale,
+				y: options.y + element.y * scale,
+				meta,
+				props: {
+					geo: element.geo ?? "rectangle",
+					w: element.width * scale,
+					h: element.height * scale,
+					color: element.color ?? "black",
+					labelColor: element.color ?? "black",
+					fill: element.fill ?? "none",
+					dash: element.dash ?? "solid",
+					size: element.size ?? "m",
+					font: "sans",
+					align: "middle",
+					verticalAlign: "middle",
+					richText: toRichText(element.label ?? ""),
+					growY: 0,
+					scale,
+				},
+			} as TLShapePartial;
+		}
+
+		if (element.kind === "text") {
+			return {
+				id,
+				type: "text",
+				x: options.x + element.x * scale,
+				y: options.y + element.y * scale,
+				meta,
+				props: {
+					w: element.width,
+					color: element.color ?? "black",
+					size: element.size ?? "m",
+					font: "sans",
+					textAlign: element.align ?? "start",
+					richText: toRichText(element.text),
+					autoSize: false,
+					scale,
+				},
+			} as TLShapePartial;
+		}
+
+		const fromElement = byKey.get(element.from);
+		const toElement = byKey.get(element.to);
+		if (!fromElement || !toElement) {
+			throw new Error(`Invalid arrow references in ${entry.id}:${element.key}`);
+		}
+		const from = elementCenter(fromElement);
+		const to = elementCenter(toElement);
+		const fromId = ids.get(element.from);
+		const toId = ids.get(element.to);
+		if (!fromId || !toId) throw new Error("Missing arrow binding target");
+		bindings.push(
+			{
+				type: "arrow",
+				fromId: id,
+				toId: fromId,
+				props: {
+					terminal: "start",
+					normalizedAnchor: { x: 0.5, y: 0.5 },
+					isExact: false,
+					isPrecise: false,
+					snap: "none",
+				},
+			},
+			{
+				type: "arrow",
+				fromId: id,
+				toId,
+				props: {
+					terminal: "end",
+					normalizedAnchor: { x: 0.5, y: 0.5 },
+					isExact: false,
+					isPrecise: false,
+					snap: "none",
+				},
+			},
+		);
+		return {
+			id,
+			type: "arrow",
+			x: options.x + from.x * scale,
+			y: options.y + from.y * scale,
+			meta,
+			props: {
+				kind: "arc",
+				color: "black",
+				labelColor: "black",
+				fill: "none",
+				dash: "solid",
+				size: element.size ?? "s",
+				font: "sans",
+				arrowheadStart: "none",
+				arrowheadEnd: "arrow",
+				start: { x: 0, y: 0 },
+				end: { x: to.x - from.x, y: to.y - from.y },
+				bend: element.bend ?? 0,
+				richText: toRichText(element.label ?? ""),
+				labelPosition: 0.5,
+				scale,
+				elbowMidPoint: 0.5,
+			},
+		} as TLShapePartial;
+	});
+
+	return {
+		shapes,
+		bindings,
+		shapeIds: [...ids.values()],
+		groupId: createShapeId(),
+		rootMeta: {
+			haunterLibraryItemId: entry.id,
+			haunterLibraryItemVersion: entry.version,
+			haunterLibraryKind: entry.kind,
+		},
+	};
+}
+
+export type CanvasLibraryInsertionLayout = {
+	scale: number;
+	center: { x: number; y: number };
+};
+
+export function getCanvasLibraryInsertionLayout({
+	viewport,
+	itemWidth,
+	itemHeight,
+	panelWidth = 0,
+	cascadeOffset = 0,
+}: {
+	viewport: { x: number; y: number; width: number; height: number };
+	itemWidth: number;
+	itemHeight: number;
+	panelWidth?: number;
+	cascadeOffset?: number;
+}): CanvasLibraryInsertionLayout {
+	const inset = 24;
+	const usableLeft = viewport.x + Math.min(panelWidth, viewport.width / 2);
+	const usableWidth = Math.max(1, viewport.width - (usableLeft - viewport.x));
+	const scale = Math.min(
+		1,
+		(usableWidth * 0.8) / itemWidth,
+		(viewport.height * 0.8) / itemHeight,
+	);
+	const maximumCascade = Math.max(
+		0,
+		Math.min(usableWidth, viewport.height) / 8,
+	);
+	const cascade = Math.min(cascadeOffset, maximumCascade);
+	return {
+		scale,
+		center: {
+			x: Math.min(
+				viewport.x + viewport.width - inset,
+				usableLeft + usableWidth / 2 + cascade,
+			),
+			y: Math.min(
+				viewport.y + viewport.height - inset,
+				viewport.y + viewport.height / 2 + cascade,
+			),
+		},
+	};
+}
+
+export function insertCanvasLibraryItem(
+	editor: Editor,
+	entry: CanvasLibraryItem,
+	options: { panelWidth?: number; cascadeOffset?: number } = {},
+): TLShapeId {
+	const viewport = editor.getViewportScreenBounds();
+	const layout = getCanvasLibraryInsertionLayout({
+		viewport,
+		itemWidth: entry.width,
+		itemHeight: entry.height,
+		panelWidth: options.panelWidth,
+		cascadeOffset: options.cascadeOffset,
+	});
+	const center = editor.screenToPage(layout.center);
+	const materialized = materializeCanvasLibraryItem(entry, {
+		x: center.x - (entry.width * layout.scale) / 2,
+		y: center.y - (entry.height * layout.scale) / 2,
+		scale: layout.scale,
+	});
+
+	editor.markHistoryStoppingPoint(`insert:${entry.id}`);
+	editor.createShapes(materialized.shapes);
+	if (materialized.bindings.length > 0) {
+		editor.createBindings(materialized.bindings);
+	}
+
+	let rootId: TLShapeId;
+	if (materialized.shapeIds.length > 1) {
+		editor.groupShapes(materialized.shapeIds, {
+			groupId: materialized.groupId,
+			select: true,
+		});
+		rootId = materialized.groupId;
+		editor.updateShape({
+			id: rootId,
+			type: "group",
+			meta: materialized.rootMeta,
+		});
+	} else {
+		rootId = materialized.shapeIds[0];
+		editor.updateShape({
+			id: rootId,
+			type: materialized.shapes[0].type,
+			meta: materialized.rootMeta,
+		});
+		editor.select(rootId);
+	}
+	editor.setCurrentTool("select");
+	return rootId;
+}

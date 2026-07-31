@@ -20,6 +20,12 @@ export type ChangelogRelease = Omit<ChangelogReleaseManifestItem, "file"> & {
  */
 export const CHANGELOG_RELEASES = [
 	{
+		version: "0.7.0",
+		date: "2026-07-31",
+		title: "Build diagrams faster",
+		file: "0.7.0.md",
+	},
+	{
 		version: "0.6.1",
 		date: "2026-07-30",
 		title: "A better fullscreen workspace",

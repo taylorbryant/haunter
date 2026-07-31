@@ -24,6 +24,7 @@ import {
 	registerCanvasSaveFlusher,
 	rememberPendingCanvasSave,
 } from "@/features/canvases/client/save-state";
+import { CANVAS_LIBRARY_COMPONENTS } from "@/features/canvases/components/canvas-library";
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
 import { TldrawWithFonts } from "@/features/canvases/components/tldraw-with-fonts";
 import { useCanvasTheme } from "@/features/canvases/components/use-canvas-theme";
@@ -361,8 +362,12 @@ function MemberCanvasSurface({
 	}
 
 	return (
-		<div className="haunter-canvas relative h-full w-full">
+		<div
+			className="haunter-canvas relative h-full w-full"
+			data-canvas-layout={layoutKey}
+		>
 			<TldrawWithFonts
+				components={canEdit ? CANVAS_LIBRARY_COMPONENTS : undefined}
 				documentSnapshot={snapshot}
 				layoutKey={layoutKey}
 				licenseKey={TLDRAW_LICENSE_KEY}
@@ -551,8 +556,12 @@ function CollabCanvasSurface({
 	}
 
 	return (
-		<div className="haunter-canvas relative h-full w-full">
+		<div
+			className="haunter-canvas relative h-full w-full"
+			data-canvas-layout={layoutKey}
+		>
 			<TldrawWithFonts
+				components={canEdit ? CANVAS_LIBRARY_COMPONENTS : undefined}
 				documentSnapshot={synchronizedSnapshot}
 				layoutKey={layoutKey}
 				licenseKey={TLDRAW_LICENSE_KEY}
