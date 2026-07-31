@@ -47,8 +47,26 @@ export function TldrawWithFonts({
 	onMountRef.current = onMount;
 	const handleMount = useCallback((editor: Editor) => {
 		editorRef.current = editor;
+		const container = editor.getContainer();
+		const ownerDocument = container.ownerDocument;
+		const handleDocumentPointerDown = (event: PointerEvent) => {
+			const target = event.target;
+			if (!(target instanceof Node)) return;
+			if (container.contains(target)) editor.focus();
+			else editor.blur();
+		};
+		ownerDocument.addEventListener(
+			"pointerdown",
+			handleDocumentPointerDown,
+			true,
+		);
 		const teardown = onMountRef.current?.(editor);
 		return () => {
+			ownerDocument.removeEventListener(
+				"pointerdown",
+				handleDocumentPointerDown,
+				true,
+			);
 			if (editorRef.current === editor) editorRef.current = null;
 			teardown?.();
 		};
@@ -101,5 +119,5 @@ export function TldrawWithFonts({
 		);
 	}
 
-	return <Tldraw {...props} onMount={handleMount} />;
+	return <Tldraw autoFocus={false} {...props} onMount={handleMount} />;
 }

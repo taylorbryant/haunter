@@ -26,15 +26,24 @@ describe("fullscreen canvas chrome", () => {
 		expect(source).toContain('{saveState === "saving" ? "Saving…" : null}');
 		expect(source).toContain('<XIcon className="size-4" />');
 		expect(source).toContain("onClick={(event) => event.stopPropagation()}");
+		expect(source).not.toContain(
+			"onKeyDown={(event) => event.stopPropagation()}",
+		);
+		expect(source).toContain("if (event.defaultPrevented) return;");
 		expect(source).not.toContain('expanded && "md:hidden"');
 		expect(source).not.toContain('expanded ? "hidden md:flex" : "hidden"');
 		expect(source).not.toContain('<XIcon className="size-5" />');
 		expect(source).not.toContain(".inert = true");
-		expect(source).toContain(
-			'layoutKey={expanded ? "fullscreen" : "inline"}',
-		);
+		expect(source).toContain('layoutKey={expanded ? "fullscreen" : "inline"}');
 		expect(tldrawWrapperSource).toContain(
 			"editor.updateViewportScreenBounds(container)",
+		);
+		expect(tldrawWrapperSource).toContain("autoFocus={false}");
+		expect(tldrawWrapperSource).toContain(
+			'ownerDocument.addEventListener(\n\t\t\t"pointerdown",\n\t\t\thandleDocumentPointerDown,\n\t\t\ttrue',
+		);
+		expect(tldrawWrapperSource).toContain(
+			"if (container.contains(target)) editor.focus();",
 		);
 		expect(canvasSurfaceSource).not.toContain("Saving…");
 	});

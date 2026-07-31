@@ -101,6 +101,10 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 
 		function handleKeyDown(event: KeyboardEvent) {
 			if (event.key === "Escape") {
+				// tldraw prevents Escape while it is cancelling an interaction,
+				// editing text, or clearing a selection. Close fullscreen only when
+				// the canvas had nothing left to handle.
+				if (event.defaultPrevented) return;
 				event.preventDefault();
 				setExpanded(false);
 				return;
@@ -185,12 +189,7 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 						)}
 					</button>
 				</div>
-					<div
-						className={cn(
-							"min-h-0 flex-1",
-							expanded && "overflow-hidden",
-						)}
-					>
+				<div className={cn("min-h-0 flex-1", expanded && "overflow-hidden")}>
 					<StableCanvasSurface
 						canvasId={canvasId}
 						onSaveStateChange={handleSaveStateChange}
@@ -224,8 +223,10 @@ export const canvasBlockSpec = createReactBlockSpec(
 				// dragstart here so drawing strokes never drag the whole block.
 				// The pointer/mouse/touch handlers stop the events from bubbling to
 				// ProseMirror, so tapping the canvas doesn't focus the editor or
-				// place a caret (which on iOS pops the keyboard). tldraw, a
-				// descendant, still receives them.
+				// place a caret (which on iOS pops the keyboard). Keyboard events
+				// intentionally keep bubbling because tldraw registers its action
+				// shortcuts (delete, undo, tools, and so on) on document.body.
+				// biome-ignore lint/a11y/useKeyWithClickEvents: click only shields ProseMirror; keyboard events must reach tldraw's body-level shortcuts
 				// biome-ignore lint/a11y/noStaticElementInteractions: handlers only shield ProseMirror; all interaction lives in the embedded tldraw canvas
 				<div
 					className="my-2 h-[480px] w-full overflow-visible rounded-lg border"
@@ -239,7 +240,6 @@ export const canvasBlockSpec = createReactBlockSpec(
 					onMouseDown={(event) => event.stopPropagation()}
 					onTouchStart={(event) => event.stopPropagation()}
 					onClick={(event) => event.stopPropagation()}
-					onKeyDown={(event) => event.stopPropagation()}
 				>
 					{canvasId === "" ? (
 						<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
