@@ -98,7 +98,7 @@ export function CodeEditDialog({
 		<Dialog open onOpenChange={(open) => !open && commitAndClose()}>
 			<DialogContent
 				showCloseButton={false}
-				className="block h-[85vh] overflow-visible p-0 sm:max-w-[90vw]"
+				className="top-0 left-0 block h-dvh w-screen max-w-none translate-x-0 translate-y-0 overflow-hidden rounded-none p-0 ring-0 sm:max-w-none md:top-1/2 md:left-1/2 md:h-[85dvh] md:w-[90vw] md:max-w-[90vw] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:ring-1"
 			>
 				<DialogTitle className="sr-only">
 					{editable ? "Edit code" : "Code"}
@@ -106,7 +106,7 @@ export function CodeEditDialog({
 				<div className="bn-shadcn code-edit-dialog size-full">
 					<div
 						data-content-type="codeBlock"
-						className="bn-block-content code-edit-focus-ring relative flex h-full w-full flex-col overflow-hidden rounded-lg border"
+						className="bn-block-content code-edit-focus-ring relative flex h-full w-full flex-col overflow-hidden rounded-none border-0 md:rounded-lg md:border"
 						style={{ backgroundColor: theme.background }}
 					>
 						<div className="haunter-code-block-header">
@@ -127,10 +127,14 @@ export function CodeEditDialog({
 									<button
 										type="button"
 										aria-label="Close code editor"
-										className="haunter-code-block-expand keyboard-focus-ring"
+										className="haunter-code-block-expand keyboard-focus-ring relative"
 									/>
 								}
 							>
+								<span
+									aria-hidden="true"
+									className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2"
+								/>
 								<XIcon aria-hidden="true" className="size-4" />
 							</DialogClose>
 						</div>
