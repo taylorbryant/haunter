@@ -9,17 +9,21 @@ import {
 	filterSuggestionItems,
 	insertOrUpdateBlockForSlashMenu,
 } from "@blocknote/core";
+import { SideMenuExtension } from "@blocknote/core/extensions";
 import {
 	DragHandleMenu,
 	FormattingToolbar,
 	FormattingToolbarController,
 	getDefaultReactSlashMenuItems,
 	getFormattingToolbarItems,
-	RemoveBlockItem,
 	SideMenu,
 	SideMenuController,
 	SuggestionMenuController,
+	useBlockNoteEditor,
+	useComponentsContext,
 	useCreateBlockNote,
+	useExtension,
+	useExtensionState,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -91,6 +95,7 @@ import {
 } from "./code-block-dialog-event";
 import { CodeEditDialog } from "./code-edit-dialog";
 import { useSyncEditorCodeTheme } from "./code-theme";
+import { removeBlockFromSideMenu } from "./remove-block-from-side-menu";
 import { editorSchema } from "./schema";
 import { TaskBlockCurrentUserContext } from "./task-block";
 
@@ -101,6 +106,34 @@ type HaunterBlockNoteEditor = BlockNoteEditor<
 	(typeof editorSchema)["inlineContentSchema"],
 	(typeof editorSchema)["styleSchema"]
 >;
+
+function RemoveBlockMenuItem() {
+	const Components = useComponentsContext();
+	const editor = useBlockNoteEditor(editorSchema);
+	const sideMenu = useExtension(SideMenuExtension, { editor });
+	const hoveredBlock = useExtensionState(SideMenuExtension, {
+		editor,
+		selector: (state) => state?.block,
+	});
+
+	if (!Components || !hoveredBlock) return null;
+
+	return (
+		<Components.Generic.Menu.Item
+			className="bn-menu-item"
+			onClick={() => {
+				removeBlockFromSideMenu({
+					hoveredBlock,
+					selectedBlocks: editor.getSelection()?.blocks,
+					unfreezeMenu: sideMenu.unfreezeMenu,
+					removeBlocks: (blocks) => editor.removeBlocks(blocks),
+				});
+			}}
+		>
+			Delete
+		</Components.Generic.Menu.Item>
+	);
+}
 
 function FormattingToolbarWithoutColors() {
 	return (
@@ -872,7 +905,7 @@ export default function HaunterEditor({
 									{...props}
 									dragHandleMenu={() => (
 										<DragHandleMenu>
-											<RemoveBlockItem>Delete</RemoveBlockItem>
+											<RemoveBlockMenuItem />
 										</DragHandleMenu>
 									)}
 								/>
