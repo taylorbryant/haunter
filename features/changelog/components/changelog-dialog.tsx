@@ -47,7 +47,7 @@ function ReleaseList({
 				<button
 					key={release.version}
 					type="button"
-					className="flex w-full flex-col gap-3 p-4 text-left outline-none hover:bg-muted/40 focus-visible:bg-muted/50 sm:p-5"
+					className="group flex w-full flex-col gap-3 p-4 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground sm:p-5"
 					onClick={() => onSelect(release.version)}
 				>
 					<div className="flex w-full min-w-0 items-start justify-between gap-3">
@@ -55,7 +55,7 @@ function ReleaseList({
 							<h2 className="text-pretty font-semibold text-lg sm:text-base">
 								{release.title}
 							</h2>
-							<p className="text-base text-muted-foreground tabular-nums sm:text-sm">
+							<p className="text-base text-muted-foreground tabular-nums group-hover:text-accent-foreground group-focus-visible:text-accent-foreground sm:text-sm">
 								{formatReleaseDate(release.date)}
 							</p>
 						</div>
@@ -66,7 +66,7 @@ function ReleaseList({
 							{index === 0 ? <Badge>Latest</Badge> : null}
 						</div>
 					</div>
-					<p className="line-clamp-2 text-pretty text-base text-muted-foreground sm:text-sm">
+					<p className="line-clamp-2 text-pretty text-base text-muted-foreground group-hover:text-accent-foreground group-focus-visible:text-accent-foreground sm:text-sm">
 						{release.sections[0]?.items[0]}
 					</p>
 				</button>

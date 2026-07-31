@@ -12,10 +12,6 @@ import {
 	ListIcon,
 	type LucideIcon,
 	MonitorIcon,
-	PanelBottomIcon,
-	PanelLeftIcon,
-	PanelTopIcon,
-	RectangleHorizontalIcon,
 	SearchIcon,
 	ServerIcon,
 	SettingsIcon,
@@ -55,6 +51,127 @@ const ARCHITECTURE_ICONS: Record<string, LucideIcon> = {
 	decision: GitBranchIcon,
 	"system-boundary": BoxIcon,
 };
+
+const DETAILED_WIREFRAME_PREVIEW_IDS = new Set([
+	"browser-frame",
+	"top-navigation",
+	"sidebar-navigation",
+	"card",
+	"dialog",
+	"bottom-sheet",
+]);
+
+function DetailedWireframePreview({ id }: { id: string }) {
+	if (id === "browser-frame") {
+		return (
+			<div
+				className="relative h-16 w-24 overflow-hidden rounded-sm border border-current/45 bg-background/55"
+				aria-hidden="true"
+			>
+				<div className="flex h-3.5 items-center gap-1 border-current/30 border-b bg-current/8 px-1.5">
+					<div className="size-1 rounded-full bg-current/35" />
+					<div className="size-1 rounded-full bg-current/25" />
+					<div className="h-1.5 flex-1 rounded-full border border-current/25 bg-background/70" />
+				</div>
+				<div className="grid grid-cols-[1.5rem_1fr] gap-1.5 p-1.5">
+					<div className="h-10 rounded-sm bg-current/8" />
+					<div className="flex flex-col gap-1.5 pt-0.5">
+						<div className="h-1.5 w-8 rounded-full bg-current/35" />
+						<div className="h-4 rounded-sm border border-current/25" />
+						<div className="h-1 w-9 rounded-full bg-current/15" />
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (id === "top-navigation") {
+		return (
+			<div
+				className="flex h-7 w-28 items-center gap-2 rounded-sm border border-current/45 bg-background/55 px-1.5"
+				aria-hidden="true"
+			>
+				<div className="h-2 w-5 rounded-sm bg-current/40" />
+				<div className="flex min-w-0 flex-1 justify-end gap-1.5">
+					<div className="h-1 w-3 rounded-full bg-current/20" />
+					<div className="h-1 w-3 rounded-full bg-current/20" />
+				</div>
+				<div className="h-3.5 w-6 rounded-sm border border-current/35 bg-current/10" />
+			</div>
+		);
+	}
+
+	if (id === "sidebar-navigation") {
+		return (
+			<div
+				className="grid h-16 w-12 grid-rows-[0.375rem_0.75rem_0.25rem_0.25rem_1fr] gap-1.5 rounded-sm border border-current/45 bg-background/55 p-1.5"
+				aria-hidden="true"
+			>
+				<div className="h-1.5 w-6 rounded-full bg-current/40" />
+				<div className="h-3 rounded-sm border border-current/20 bg-current/12" />
+				<div className="flex items-center gap-1 px-0.5">
+					<div className="size-1 rounded-sm bg-current/25" />
+					<div className="h-1 flex-1 rounded-full bg-current/20" />
+				</div>
+				<div className="flex items-center gap-1 px-0.5">
+					<div className="size-1 rounded-sm bg-current/20" />
+					<div className="h-1 w-5 rounded-full bg-current/15" />
+				</div>
+				<div className="h-1 w-5 self-end rounded-full bg-current/15" />
+			</div>
+		);
+	}
+
+	if (id === "card") {
+		return (
+			<div
+				className="relative h-16 w-24 rounded-md border border-current/45 bg-background/55 p-2"
+				aria-hidden="true"
+			>
+				<div className="h-1.5 w-9 rounded-full bg-current/40" />
+				<div className="mt-2 h-1 w-16 rounded-full bg-current/20" />
+				<div className="mt-1.5 h-1 w-12 rounded-full bg-current/15" />
+				<div className="absolute right-2 bottom-2 h-3.5 w-7 rounded-sm border border-current/35 bg-current/10" />
+			</div>
+		);
+	}
+
+	if (id === "dialog") {
+		return (
+			<div
+				className="relative h-16 w-24 rounded-md border border-current/45 bg-current/8 p-2"
+				aria-hidden="true"
+			>
+				<div className="h-1.5 w-10 rounded-full bg-current/40" />
+				<div className="absolute top-2 right-2 size-1.5 rounded-full border border-current/40" />
+				<div className="mt-2.5 h-1 w-16 rounded-full bg-current/20" />
+				<div className="mt-1.5 h-1 w-12 rounded-full bg-current/15" />
+				<div className="absolute right-2 bottom-2 flex gap-1">
+					<div className="h-3 w-6 rounded-sm border border-current/30 bg-background/45" />
+					<div className="h-3 w-7 rounded-sm border border-current/35 bg-current/15" />
+				</div>
+			</div>
+		);
+	}
+
+	if (id === "bottom-sheet") {
+		return (
+			<div
+				className="relative h-16 w-20 overflow-hidden rounded-sm border border-current/35 bg-background/40"
+				aria-hidden="true"
+			>
+				<div className="absolute inset-x-0 bottom-0 h-12 rounded-t-lg border-current/45 border-t bg-background/85 px-2 pt-2.5">
+					<div className="absolute top-1 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-current/30" />
+					<div className="mx-auto h-1.5 w-8 rounded-full bg-current/40" />
+					<div className="mt-2 h-1 w-full rounded-full bg-current/20" />
+					<div className="mt-1.5 h-1 w-3/4 rounded-full bg-current/15" />
+				</div>
+			</div>
+		);
+	}
+
+	return null;
+}
 
 function LibraryPreview({ entry }: { entry: CanvasLibraryItem }) {
 	if (entry.kind === "template") {
@@ -155,20 +272,12 @@ function LibraryPreview({ entry }: { entry: CanvasLibraryItem }) {
 		);
 	}
 
-	const PreviewIcon =
-		entry.id === "browser-frame"
-			? MonitorIcon
-			: entry.id === "top-navigation"
-				? PanelTopIcon
-				: entry.id === "sidebar-navigation"
-					? PanelLeftIcon
-					: entry.id === "bottom-sheet"
-						? PanelBottomIcon
-						: entry.id === "dialog"
-							? RectangleHorizontalIcon
-							: Columns3Icon;
+	if (DETAILED_WIREFRAME_PREVIEW_IDS.has(entry.id)) {
+		return <DetailedWireframePreview id={entry.id} />;
+	}
+
 	return (
-		<PreviewIcon
+		<Columns3Icon
 			className="size-4 shrink-0 stroke-current"
 			aria-hidden="true"
 		/>

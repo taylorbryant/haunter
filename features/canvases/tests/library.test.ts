@@ -271,4 +271,22 @@ describe("canvas library", () => {
 			"md:in-data-[canvas-layout=fullscreen]:left-80",
 		);
 	});
+
+	test("renders detailed previews for common wireframe components", async () => {
+		const source = await Bun.file(
+			new URL("../components/canvas-library.tsx", import.meta.url),
+		).text();
+
+		for (const id of [
+			"card",
+			"dialog",
+			"bottom-sheet",
+			"browser-frame",
+			"top-navigation",
+			"sidebar-navigation",
+		]) {
+			expect(source).toContain(`id === "${id}"`);
+		}
+		expect(source).toContain("function DetailedWireframePreview");
+	});
 });
