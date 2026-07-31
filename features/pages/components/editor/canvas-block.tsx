@@ -25,12 +25,18 @@ const CanvasSurface = dynamic(
 const StableCanvasSurface = memo(function StableCanvasSurface({
 	canvasId,
 	onSaveStateChange,
+	layoutKey,
 }: {
 	canvasId: string;
 	onSaveStateChange: (state: CanvasSaveState) => void;
+	layoutKey: string;
 }) {
 	return (
-		<CanvasSurface canvasId={canvasId} onSaveStateChange={onSaveStateChange} />
+		<CanvasSurface
+			canvasId={canvasId}
+			onSaveStateChange={onSaveStateChange}
+			layoutKey={layoutKey}
+		/>
 	);
 });
 
@@ -153,7 +159,7 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 						"h-dvh w-screen overflow-hidden rounded-none border-0 bg-background shadow-none md:h-[85dvh] md:w-[90vw] md:rounded-lg md:border md:shadow-lg",
 				)}
 			>
-				<div className="flex h-9 shrink-0 items-center justify-between border-b bg-background/95 px-2">
+				<div className="flex h-9 shrink-0 items-center justify-between border-b bg-[var(--code-block-header-background)] px-2">
 					<span
 						aria-atomic="true"
 						aria-live="polite"
@@ -179,15 +185,16 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 						)}
 					</button>
 				</div>
-				<div
-					className={cn(
-						"min-h-0 flex-1",
-						expanded && "overflow-hidden rounded-lg",
-					)}
-				>
+					<div
+						className={cn(
+							"min-h-0 flex-1",
+							expanded && "overflow-hidden",
+						)}
+					>
 					<StableCanvasSurface
 						canvasId={canvasId}
 						onSaveStateChange={handleSaveStateChange}
+						layoutKey={expanded ? "fullscreen" : "inline"}
 					/>
 				</div>
 			</div>

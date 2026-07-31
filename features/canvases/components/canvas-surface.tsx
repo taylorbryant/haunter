@@ -6,12 +6,7 @@ import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-	createTLStore,
-	defaultBindingUtils,
-	type Editor,
-	getSnapshot,
-} from "tldraw";
+import { createTLStore, defaultBindingUtils, type Editor } from "tldraw";
 import { userErrorMessage } from "@/client/error-feedback";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
@@ -56,20 +51,29 @@ export type CanvasSaveState = "saved" | "saving" | "error";
 export default function CanvasSurface({
 	canvasId,
 	onSaveStateChange,
+	layoutKey,
 }: {
 	canvasId: string;
 	onSaveStateChange?: (state: CanvasSaveState) => void;
+	layoutKey?: string;
 }) {
 	// Inside a public share view, swap to the read-only token-scoped surface.
 	const shareToken = useSharedPageToken();
 	if (shareToken) {
-		return <SharedCanvasSurface token={shareToken} canvasId={canvasId} />;
+		return (
+			<SharedCanvasSurface
+				token={shareToken}
+				canvasId={canvasId}
+				layoutKey={layoutKey}
+			/>
+		);
 	}
 
 	return (
 		<MemberCanvasSurface
 			canvasId={canvasId}
 			onSaveStateChange={onSaveStateChange}
+			layoutKey={layoutKey}
 		/>
 	);
 }
@@ -77,9 +81,11 @@ export default function CanvasSurface({
 function MemberCanvasSurface({
 	canvasId,
 	onSaveStateChange,
+	layoutKey,
 }: {
 	canvasId: string;
 	onSaveStateChange?: (state: CanvasSaveState) => void;
+	layoutKey?: string;
 }) {
 	const { resolvedTheme } = useTheme();
 	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
@@ -157,6 +163,7 @@ function MemberCanvasSurface({
 				snapshot={canvasQuery.data.snapshot}
 				canEdit={canEdit}
 				onSaveStateChange={onSaveStateChange}
+				layoutKey={layoutKey}
 			/>
 		);
 	}
@@ -205,7 +212,7 @@ function MemberCanvasSurface({
 			const savingRevision = revision;
 			setSaveError(null);
 			setSaveState("saving");
-			const snapshot = getSnapshot(editor.store).document as unknown as Record<
+			const snapshot = editor.store.getStoreSnapshot() as unknown as Record<
 				string,
 				unknown
 			>;
@@ -237,8 +244,11 @@ function MemberCanvasSurface({
 						result.updatedAt,
 					);
 					if (pendingSave && savedRevision < revision) {
-						const latestSnapshot = getSnapshot(editor.store)
-							.document as unknown as Record<string, unknown>;
+						const latestSnapshot =
+							editor.store.getStoreSnapshot() as unknown as Record<
+								string,
+								unknown
+							>;
 						pendingSave = rememberPendingCanvasSave(canvasId, {
 							snapshot: latestSnapshot,
 							baseUpdatedAt: result.updatedAt,
@@ -249,8 +259,11 @@ function MemberCanvasSurface({
 				} catch (error) {
 					if (error instanceof ContractError && error.status === 409) {
 						conflictPending = true;
-						const localSnapshot = getSnapshot(editor.store)
-							.document as unknown as Record<string, unknown>;
+						const localSnapshot =
+							editor.store.getStoreSnapshot() as unknown as Record<
+								string,
+								unknown
+							>;
 						pendingSave = rememberPendingCanvasSave(canvasId, {
 							snapshot: localSnapshot,
 							baseUpdatedAt:
@@ -323,8 +336,11 @@ function MemberCanvasSurface({
 			() => {
 				revision += 1;
 				if (pendingSave) {
-					const latestSnapshot = getSnapshot(editor.store)
-						.document as unknown as Record<string, unknown>;
+					const latestSnapshot =
+						editor.store.getStoreSnapshot() as unknown as Record<
+							string,
+							unknown
+						>;
 					pendingSave = rememberPendingCanvasSave(canvasId, {
 						snapshot: latestSnapshot,
 						baseUpdatedAt:
@@ -348,6 +364,7 @@ function MemberCanvasSurface({
 		<div className="haunter-canvas relative h-full w-full">
 			<TldrawWithFonts
 				documentSnapshot={snapshot}
+				layoutKey={layoutKey}
 				licenseKey={TLDRAW_LICENSE_KEY}
 				shapeUtils={haunterShapeUtils}
 				store={localStore}
@@ -386,12 +403,14 @@ function CollabCanvasSurface({
 	snapshot,
 	canEdit,
 	onSaveStateChange,
+	layoutKey,
 }: {
 	canvasId: string;
 	room: CollabRoom;
 	snapshot: Record<string, unknown>;
 	canEdit: boolean;
 	onSaveStateChange?: (state: CanvasSaveState) => void;
+	layoutKey?: string;
 }) {
 	const { resolvedTheme } = useTheme();
 	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
@@ -412,7 +431,7 @@ function CollabCanvasSurface({
 	const storeWithStatus = useCollabCanvasStore(room, snapshot, collabUser);
 	const synchronizedSnapshot = useMemo(() => {
 		if (storeWithStatus.status !== "synced-remote") return null;
-		return getSnapshot(storeWithStatus.store).document as unknown as Record<
+		return storeWithStatus.store.getStoreSnapshot() as unknown as Record<
 			string,
 			unknown
 		>;
@@ -448,7 +467,7 @@ function CollabCanvasSurface({
 			const savingRevision = revision;
 			setSaveError(null);
 			setSaveState("saving");
-			const document = getSnapshot(editor.store).document as unknown as Record<
+			const document = editor.store.getStoreSnapshot() as unknown as Record<
 				string,
 				unknown
 			>;
@@ -535,6 +554,7 @@ function CollabCanvasSurface({
 		<div className="haunter-canvas relative h-full w-full">
 			<TldrawWithFonts
 				documentSnapshot={synchronizedSnapshot}
+				layoutKey={layoutKey}
 				licenseKey={TLDRAW_LICENSE_KEY}
 				shapeUtils={haunterShapeUtils}
 				store={storeWithStatus}

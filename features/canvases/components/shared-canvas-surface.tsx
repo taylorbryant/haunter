@@ -21,9 +21,11 @@ import { useCanvasTheme } from "./use-canvas-theme";
 export default function SharedCanvasSurface({
 	token,
 	canvasId,
+	layoutKey,
 }: {
 	token: string;
 	canvasId: string;
+	layoutKey?: string;
 }) {
 	const { resolvedTheme } = useTheme();
 	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
@@ -67,6 +69,7 @@ export default function SharedCanvasSurface({
 		<div className="haunter-canvas relative h-full w-full">
 			<TldrawWithFonts
 				documentSnapshot={snapshot}
+				layoutKey={layoutKey}
 				licenseKey={TLDRAW_LICENSE_KEY}
 				shapeUtils={haunterShapeUtils}
 				snapshot={snapshot}

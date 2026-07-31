@@ -106,7 +106,7 @@ export function CodeEditDialog({
 				<div className="bn-shadcn code-edit-dialog size-full">
 					<div
 						data-content-type="codeBlock"
-						className="bn-block-content code-edit-focus-ring relative flex h-full w-full flex-col overflow-hidden rounded-none border-0 md:rounded-lg md:border"
+						className="bn-block-content code-edit-focus-ring relative flex h-full w-full flex-col overflow-hidden rounded-none! border-0 md:rounded-lg! md:border"
 						style={{ backgroundColor: theme.background }}
 					>
 						<div className="haunter-code-block-header">

@@ -6,7 +6,6 @@ import {
 	createPresenceStateDerivation,
 	createTLStore,
 	defaultBindingUtils,
-	getSnapshot,
 	InstancePresenceRecordType,
 	loadSnapshot,
 	react,
@@ -78,18 +77,24 @@ export function useCollabCanvasStore(
 			if (isLoadableSnapshot(seed)) {
 				loadSnapshot(store, { document: seed });
 			}
-			if (meta.get("canvasSeeded") !== true) {
-				room.doc.transact(() => {
-					meta.set("canvasSeeded", true);
-					// Document scope only: allRecords() would also leak this
-					// client's session records (instance, camera, user) into the
-					// shared map and, via saves, into everyone's DB snapshot.
-					const seeded = getSnapshot(store).document.store;
-					for (const record of Object.values(seeded)) {
-						yRecords.set(record.id, record as TLRecord);
-					}
-				});
-			}
+			// Build the complete seed before opening the Yjs transaction. tldraw's
+			// editor session does not exist yet, so getSnapshot(store) can throw
+			// here; the document-only Store API is safe before mount. Keeping every
+			// potentially-throwing operation outside the transaction also prevents
+			// a room from retaining canvasSeeded=true with an empty record map.
+			//
+			// A valid tldraw document always has document and page records. If an
+			// older failed seed left only the marker behind, an empty map is
+			// therefore safe to repair from the database snapshot.
+			const seeded = store.getStoreSnapshot().store;
+			room.doc.transact(() => {
+				// Document scope only: session records (instance, camera, user)
+				// must never enter the shared map or persisted DB snapshot.
+				for (const record of Object.values(seeded)) {
+					yRecords.set(record.id, record as TLRecord);
+				}
+				meta.set("canvasSeeded", true);
+			});
 		}
 
 		// Local document edits → shared map. mergeRemoteChanges applies with

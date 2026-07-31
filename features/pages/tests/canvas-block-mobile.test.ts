@@ -8,10 +8,17 @@ describe("fullscreen canvas chrome", () => {
 		const canvasSurfaceSource = await Bun.file(
 			new URL("../../canvases/components/canvas-surface.tsx", import.meta.url),
 		).text();
+		const tldrawWrapperSource = await Bun.file(
+			new URL(
+				"../../canvases/components/tldraw-with-fonts.tsx",
+				import.meta.url,
+			),
+		).text();
 
 		expect(source).toContain(
 			"h-dvh w-screen overflow-hidden rounded-none border-0 bg-background shadow-none",
 		);
+		expect(source).not.toContain('expanded && "overflow-hidden rounded-lg"');
 		expect(source).toContain(
 			'aria-label={expanded ? "Close canvas" : "Expand canvas"}',
 		);
@@ -23,6 +30,12 @@ describe("fullscreen canvas chrome", () => {
 		expect(source).not.toContain('expanded ? "hidden md:flex" : "hidden"');
 		expect(source).not.toContain('<XIcon className="size-5" />');
 		expect(source).not.toContain(".inert = true");
+		expect(source).toContain(
+			'layoutKey={expanded ? "fullscreen" : "inline"}',
+		);
+		expect(tldrawWrapperSource).toContain(
+			"editor.updateViewportScreenBounds(container)",
+		);
 		expect(canvasSurfaceSource).not.toContain("Saving…");
 	});
 });

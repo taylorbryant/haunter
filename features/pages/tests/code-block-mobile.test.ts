@@ -31,7 +31,7 @@ describe("fullscreen code block mobile typography", () => {
 		expect(source).toContain(
 			"md:top-1/2 md:left-1/2 md:h-[85dvh] md:w-[90vw] md:max-w-[90vw]",
 		);
-		expect(source).toContain("rounded-none border-0 md:rounded-lg md:border");
+		expect(source).toContain("rounded-none! border-0 md:rounded-lg! md:border");
 		expect(source).toContain(
 			"pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2",
 		);
