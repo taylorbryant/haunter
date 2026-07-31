@@ -1,10 +1,10 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
 import {
+	type BlockJson,
 	MAX_INITIAL_PAGE_CONTENT_BLOCKS,
 	PAGE_TITLE_MAX_LENGTH,
 	PAGE_TITLE_TOO_LONG_MESSAGE,
-	type BlockJson,
 } from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
@@ -109,15 +109,23 @@ export const readPageCapability = defineAgentCapability("read_page", {
 
 export const createPageCapability = defineAgentCapability("create_page", {
 	description:
-		"Create a page in a workspace, optionally nested under another page and initialized from markdown. Call list_workspaces first to get a workspaceId.",
+		"Create a page in a workspace, optionally nested under another page and initialized from markdown. The page title is rendered separately above the body, so the markdown must contain body content only and must not repeat the page title as an opening heading. Call list_workspaces first to get a workspaceId.",
 	input: WorkspaceInput.extend({
 		title: z
 			.string()
 			.trim()
 			.min(1)
-			.max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE),
+			.max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE)
+			.describe("The page title, displayed separately above the page body."),
 		parentPageId: z.string().uuid().optional(),
-		markdown: z.string().min(1).max(100_000).optional(),
+		markdown: z
+			.string()
+			.min(1)
+			.max(100_000)
+			.optional()
+			.describe(
+				"The page body in Markdown. Do not repeat the page title as the first heading.",
+			),
 	}),
 	output: z.object({
 		pageId: z.string().uuid(),

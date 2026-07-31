@@ -166,6 +166,27 @@ describe("Haunter agent capabilities", () => {
 				capability.name === "list_workspaces" ? undefined : ["workspaceId"],
 			);
 		}
+
+		const createPage = adapter.capabilities.find(
+			(capability) => capability.name === "create_page",
+		);
+		if (!createPage) throw new Error("Expected create_page capability.");
+		if (!createPage.input) {
+			throw new Error("Expected create_page input schema.");
+		}
+		const properties = createPage.input.properties as Record<
+			string,
+			{ description?: string }
+		>;
+		expect(createPage.description).toContain(
+			"markdown must contain body content only",
+		);
+		expect(properties.title?.description).toContain(
+			"displayed separately above the page body",
+		);
+		expect(properties.markdown?.description).toContain(
+			"Do not repeat the page title",
+		);
 	});
 
 	it("preserves grant authorization with activity lifecycle hooks", async () => {
