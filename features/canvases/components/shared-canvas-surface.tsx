@@ -64,7 +64,7 @@ export default function SharedCanvasSurface({
 	}
 
 	return (
-		<div className="relative h-full w-full">
+		<div className="haunter-canvas relative h-full w-full">
 			<TldrawWithFonts
 				documentSnapshot={snapshot}
 				licenseKey={TLDRAW_LICENSE_KEY}

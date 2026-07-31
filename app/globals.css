@@ -97,6 +97,48 @@
 	--radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* tldraw owns a separate set of UI variables from the rest of the app.
+   Bridge its canvas chrome to Haunter's active named palette while the
+   document theme supplies concrete colors for shapes and image exports. */
+.haunter-canvas .tl-container {
+	--tl-color-background: var(--background);
+	--tl-color-selection-fill: color-mix(
+		in srgb,
+		var(--primary) 24%,
+		transparent
+	);
+	--tl-color-selection-stroke: var(--primary);
+	--tl-color-grid: color-mix(in srgb, var(--muted-foreground) 38%, transparent);
+	--tl-color-low: var(--background);
+	--tl-color-low-border: var(--border);
+	--tl-color-muted-0: color-mix(in srgb, var(--foreground) 2%, transparent);
+	--tl-color-muted-1: color-mix(in srgb, var(--foreground) 10%, transparent);
+	--tl-color-muted-2: color-mix(in srgb, var(--foreground) 5%, transparent);
+	--tl-color-hint: color-mix(in srgb, var(--foreground) 7%, transparent);
+	--tl-color-divider: var(--border);
+	--tl-color-panel: var(--popover);
+	--tl-color-panel-contrast: var(--border);
+	--tl-color-panel-overlay: color-mix(in srgb, var(--popover) 86%, transparent);
+	--tl-color-selected: var(--primary);
+	--tl-color-selected-contrast: var(--primary-foreground);
+	--tl-color-focus: var(--ring);
+	--tl-color-text: var(--foreground);
+	--tl-color-text-0: var(--foreground);
+	--tl-color-text-1: var(--foreground);
+	--tl-color-text-3: var(--muted-foreground);
+	--tl-color-text-disabled: color-mix(
+		in srgb,
+		var(--muted-foreground) 68%,
+		transparent
+	);
+	--tl-color-text-shadow: var(--background);
+	--tl-color-primary: var(--primary);
+	--tl-color-success: var(--chart-3);
+	--tl-color-info: var(--chart-4);
+	--tl-color-warning: var(--chart-2);
+	--tl-color-danger: var(--destructive);
+}
+
 :root.dark {
 	--background: oklch(0.145 0 0);
 	--foreground: oklch(0.985 0 0);
