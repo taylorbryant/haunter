@@ -1,11 +1,6 @@
 "use client";
 
-import {
-	HouseIcon,
-	ListTodoIcon,
-	ShieldCheckIcon,
-	Trash2Icon,
-} from "lucide-react";
+import { HouseIcon, ListTodoIcon, Trash2Icon } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCommand } from "@/components/command-palette/registry";
 
@@ -14,7 +9,7 @@ import { useCommand } from "@/components/command-palette/registry";
  * switching — that have no natural home in another component. Renders nothing.
  * Mounted once inside the CommandRegistryProvider.
  */
-export function AppCommands({ isAdmin }: { isAdmin: boolean }) {
+export function AppCommands() {
 	const router = useRouter();
 	const pathname = usePathname();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
@@ -53,17 +48,6 @@ export function AppCommands({ isAdmin }: { isAdmin: boolean }) {
 					run: () => router.push(`/w/${workspaceId}/trash`),
 				}
 			: null,
-	);
-
-	useCommand(
-		isAdmin && {
-			id: "nav.waitlist",
-			title: "Go to Waitlist",
-			group: "Go to",
-			keywords: "admin approve",
-			icon: ShieldCheckIcon,
-			run: () => router.push("/admin"),
-		},
 	);
 
 	return null;

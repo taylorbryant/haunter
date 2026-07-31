@@ -1,11 +1,6 @@
 "use client";
 
-import {
-	HouseIcon,
-	ListTodoIcon,
-	ShieldCheckIcon,
-	Trash2Icon,
-} from "lucide-react";
+import { HouseIcon, ListTodoIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NavUser } from "@/components/nav-user";
@@ -23,6 +18,7 @@ import {
 	SidebarRail,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { WaitlistDialogTrigger } from "@/features/admin/components/waitlist-dialog";
 import type { ChangelogRelease } from "@/features/changelog/releases";
 import { NotificationCenter } from "@/features/notifications/components/notification-center";
 import { FavoritePages } from "@/features/pages/components/favorite-pages";
@@ -113,20 +109,7 @@ export function AppSidebar({
 					<SidebarGroup className="mt-auto">
 						<SidebarGroupContent>
 							<SidebarMenu>
-								{isAdmin ? (
-									<SidebarMenuItem>
-										<SidebarMenuButton
-											render={
-												<Link href="/admin" onClick={closeSheetOnMobile} />
-											}
-											isActive={pathname === "/admin"}
-											tooltip="Waitlist"
-										>
-											<ShieldCheckIcon />
-											<span>Waitlist</span>
-										</SidebarMenuButton>
-									</SidebarMenuItem>
-								) : null}
+								{isAdmin ? <WaitlistDialogTrigger /> : null}
 								{activeWorkspaceId ? (
 									<SidebarMenuItem>
 										<SidebarMenuButton

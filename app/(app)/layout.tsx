@@ -17,6 +17,7 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { WaitlistDialogProvider } from "@/features/admin/components/waitlist-dialog";
 import { loadChangelogReleases } from "@/features/changelog/content";
 import { NotificationTimezoneInitializer } from "@/features/notifications/components/notification-timezone-initializer";
 import { hasAppAccessSession } from "@/lib/auth";
@@ -84,30 +85,32 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 					<NotificationTimezoneInitializer />
 					<CommandRegistryProvider>
 						<SidebarProvider defaultOpen={defaultOpen}>
-							<AppCommands isAdmin={isAdmin} />
-							<AppSidebar
-								user={{
-									name: session.user.name ?? "",
-									email: session.user.email ?? "",
-									image: session.user.image ?? null,
-								}}
-								changelogReleases={changelogReleases}
-								isAdmin={isAdmin}
-							/>
-							<SidebarInset>
-								<header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-3 backdrop-blur-sm">
-									<SidebarTrigger />
-									<Separator
-										orientation="vertical"
-										className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-									/>
-									<HeaderBreadcrumbs />
-									<HeaderSaveIndicator />
-									<HeaderPresence />
-									<HeaderPageActions />
-								</header>
-								<div className="min-w-0 flex-1">{children}</div>
-							</SidebarInset>
+							<WaitlistDialogProvider enabled={isAdmin}>
+								<AppCommands />
+								<AppSidebar
+									user={{
+										name: session.user.name ?? "",
+										email: session.user.email ?? "",
+										image: session.user.image ?? null,
+									}}
+									changelogReleases={changelogReleases}
+									isAdmin={isAdmin}
+								/>
+								<SidebarInset>
+									<header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-3 backdrop-blur-sm">
+										<SidebarTrigger />
+										<Separator
+											orientation="vertical"
+											className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+										/>
+										<HeaderBreadcrumbs />
+										<HeaderSaveIndicator />
+										<HeaderPresence />
+										<HeaderPageActions />
+									</header>
+									<div className="min-w-0 flex-1">{children}</div>
+								</SidebarInset>
+							</WaitlistDialogProvider>
 						</SidebarProvider>
 					</CommandRegistryProvider>
 				</ActiveWorkspaceHintProvider>
