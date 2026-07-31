@@ -5,7 +5,7 @@ import "tldraw/tldraw.css";
 import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	createTLStore,
 	defaultBindingUtils,
@@ -51,17 +51,36 @@ const SNAPSHOT_SAVE_DELAY_MS = 1500;
 const CANVAS_CONFLICT_MESSAGE =
 	"Canvas changed elsewhere. Your drawing is still here. Retry to keep this version.";
 
-export default function CanvasSurface({ canvasId }: { canvasId: string }) {
+export type CanvasSaveState = "saved" | "saving" | "error";
+
+export default function CanvasSurface({
+	canvasId,
+	onSaveStateChange,
+}: {
+	canvasId: string;
+	onSaveStateChange?: (state: CanvasSaveState) => void;
+}) {
 	// Inside a public share view, swap to the read-only token-scoped surface.
 	const shareToken = useSharedPageToken();
 	if (shareToken) {
 		return <SharedCanvasSurface token={shareToken} canvasId={canvasId} />;
 	}
 
-	return <MemberCanvasSurface canvasId={canvasId} />;
+	return (
+		<MemberCanvasSurface
+			canvasId={canvasId}
+			onSaveStateChange={onSaveStateChange}
+		/>
+	);
 }
 
-function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
+function MemberCanvasSurface({
+	canvasId,
+	onSaveStateChange,
+}: {
+	canvasId: string;
+	onSaveStateChange?: (state: CanvasSaveState) => void;
+}) {
 	const { resolvedTheme } = useTheme();
 	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
 	const queryClient = useQueryClient();
@@ -74,7 +93,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 	const canEdit = useCanEditWorkspace();
 	const pendingSaveAtRender = getPendingCanvasSave(canvasId);
 
-	const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(
+	const [saveState, setSaveState] = useState<CanvasSaveState>(
 		pendingSaveAtRender ? "error" : "saved",
 	);
 	const [saveError, setSaveError] = useState<string | null>(
@@ -91,6 +110,13 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 		canvasId: string;
 		store: ReturnType<typeof createTLStore>;
 	} | null>(null);
+
+	useEffect(() => {
+		if (collabSession.status !== "ready") {
+			onSaveStateChange?.(saveState);
+		}
+	}, [collabSession.status, onSaveStateChange, saveState]);
+
 	if (canvasQuery.data && baseVersionRef.current?.canvasId !== canvasId) {
 		baseVersionRef.current = {
 			canvasId,
@@ -130,6 +156,7 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 				room={collabSession.room}
 				snapshot={canvasQuery.data.snapshot}
 				canEdit={canEdit}
+				onSaveStateChange={onSaveStateChange}
 			/>
 		);
 	}
@@ -326,11 +353,6 @@ function MemberCanvasSurface({ canvasId }: { canvasId: string }) {
 				store={localStore}
 				onMount={handleMount}
 			/>
-			{saveState === "saving" ? (
-				<span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-background/80 px-1.5 py-0.5 text-muted-foreground text-xs">
-					Saving…
-				</span>
-			) : null}
 			{saveState === "error" && saveError ? (
 				<div
 					role="alert"
@@ -363,11 +385,13 @@ function CollabCanvasSurface({
 	room,
 	snapshot,
 	canEdit,
+	onSaveStateChange,
 }: {
 	canvasId: string;
 	room: CollabRoom;
 	snapshot: Record<string, unknown>;
 	canEdit: boolean;
+	onSaveStateChange?: (state: CanvasSaveState) => void;
 }) {
 	const { resolvedTheme } = useTheme();
 	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
@@ -394,11 +418,13 @@ function CollabCanvasSurface({
 		>;
 	}, [storeWithStatus]);
 
-	const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(
-		"saved",
-	);
+	const [saveState, setSaveState] = useState<CanvasSaveState>("saved");
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const flushRef = useRef<() => Promise<boolean>>(async () => true);
+
+	useEffect(() => {
+		onSaveStateChange?.(saveState);
+	}, [onSaveStateChange, saveState]);
 
 	function handleMount(editor: Editor) {
 		syncCanvasTheme(editor);
@@ -514,11 +540,6 @@ function CollabCanvasSurface({
 				store={storeWithStatus}
 				onMount={handleMount}
 			/>
-			{saveState === "saving" ? (
-				<span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-background/80 px-1.5 py-0.5 text-muted-foreground text-xs">
-					Saving…
-				</span>
-			) : null}
 			{saveState === "error" && saveError ? (
 				<div
 					role="alert"

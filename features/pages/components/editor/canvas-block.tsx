@@ -3,7 +3,8 @@
 import { createReactBlockSpec } from "@blocknote/react";
 import { Maximize2Icon, XIcon } from "lucide-react";
 import dynamic from "next/dynamic";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import type { CanvasSaveState } from "@/features/canvases/components/canvas-surface";
 import { cn } from "@/lib/utils";
 
 // tldraw is a ~MB chunk: load it only when a canvas block actually renders.
@@ -23,10 +24,14 @@ const CanvasSurface = dynamic(
 // tldraw's onMount lifecycle while the container changes size.
 const StableCanvasSurface = memo(function StableCanvasSurface({
 	canvasId,
+	onSaveStateChange,
 }: {
 	canvasId: string;
+	onSaveStateChange: (state: CanvasSaveState) => void;
 }) {
-	return <CanvasSurface canvasId={canvasId} />;
+	return (
+		<CanvasSurface canvasId={canvasId} onSaveStateChange={onSaveStateChange} />
+	);
 });
 
 const FOCUSABLE_SELECTOR = [
@@ -49,11 +54,20 @@ function visibleFocusableElements(container: HTMLElement): HTMLElement[] {
 	);
 }
 
+function focusVisibleCloseButton(container: HTMLElement) {
+	[...container.querySelectorAll<HTMLElement>('[aria-label="Close canvas"]')]
+		.find((element) => element.getClientRects().length > 0)
+		?.focus();
+}
+
 function CanvasBlockView({ canvasId }: { canvasId: string }) {
 	const [expanded, setExpanded] = useState(false);
+	const [saveState, setSaveState] = useState<CanvasSaveState>("saved");
 	const overlayRef = useRef<HTMLDivElement>(null);
-	const expandButtonRef = useRef<HTMLButtonElement>(null);
-	const closeButtonRef = useRef<HTMLButtonElement>(null);
+	const headerButtonRef = useRef<HTMLButtonElement>(null);
+	const handleSaveStateChange = useCallback((state: CanvasSaveState) => {
+		setSaveState(state);
+	}, []);
 	const dialogProps = expanded
 		? ({
 				role: "dialog",
@@ -73,30 +87,11 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 		const bodyOverflow = document.body.style.overflow;
 		const appMain = modalOverlay.closest("main");
 		const mainZIndex = appMain?.style.zIndex ?? "";
-		const inertElements: Array<{ element: HTMLElement; inert: boolean }> = [];
 
 		// The app's <main> is an isolation boundary. Raise that boundary above
 		// the sidebar while its descendant is acting as the modal overlay.
 		if (appMain instanceof HTMLElement) appMain.style.zIndex = "50";
 		document.body.style.overflow = "hidden";
-
-		// Portaling would remount tldraw, so reproduce modal inertness in place
-		// by disabling siblings along the canvas-to-body ancestor path.
-		let current: HTMLElement = modalOverlay;
-		while (current.parentElement && current.parentElement !== document.body) {
-			const parent = current.parentElement;
-			for (const sibling of parent.children) {
-				if (sibling === current || !(sibling instanceof HTMLElement)) continue;
-				inertElements.push({ element: sibling, inert: sibling.inert });
-				sibling.inert = true;
-			}
-			current = parent;
-		}
-		for (const sibling of document.body.children) {
-			if (sibling === current || !(sibling instanceof HTMLElement)) continue;
-			inertElements.push({ element: sibling, inert: sibling.inert });
-			sibling.inert = true;
-		}
 
 		function handleKeyDown(event: KeyboardEvent) {
 			if (event.key === "Escape") {
@@ -109,7 +104,7 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 			const focusable = visibleFocusableElements(modalOverlay);
 			if (focusable.length === 0) {
 				event.preventDefault();
-				closeButtonRef.current?.focus();
+				focusVisibleCloseButton(modalOverlay);
 				return;
 			}
 
@@ -127,14 +122,12 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 		}
 
 		document.addEventListener("keydown", handleKeyDown);
-		closeButtonRef.current?.focus();
 
 		return () => {
 			document.removeEventListener("keydown", handleKeyDown);
 			document.body.style.overflow = bodyOverflow;
 			if (appMain instanceof HTMLElement) appMain.style.zIndex = mainZIndex;
-			for (const { element, inert } of inertElements) element.inert = inert;
-			expandButtonRef.current?.focus();
+			headerButtonRef.current?.focus();
 		};
 	}, [expanded]);
 
@@ -145,7 +138,7 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 			className={cn(
 				"isolate flex h-full w-full flex-col overflow-hidden rounded-lg bg-background text-foreground",
 				expanded &&
-					"fixed inset-0 z-50 items-center justify-center overflow-visible rounded-none bg-black/80",
+					"fixed inset-0 z-50 items-center justify-center overflow-hidden rounded-none bg-background md:bg-black/80",
 			)}
 			onPointerDown={(event) => {
 				if (expanded && event.target === event.currentTarget) {
@@ -157,23 +150,33 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 				className={cn(
 					"relative flex h-full w-full flex-col",
 					expanded &&
-						"h-[85dvh] w-[90vw] overflow-visible rounded-lg border bg-background shadow-lg",
+						"h-dvh w-screen overflow-hidden rounded-none border-0 bg-background shadow-none md:h-[85dvh] md:w-[90vw] md:rounded-lg md:border md:shadow-lg",
 				)}
 			>
-				<div
-					className={cn(
-						"flex h-9 shrink-0 items-center justify-end border-b bg-background/95 px-2",
-						expanded && "hidden",
-					)}
-				>
-					<button
-						ref={expandButtonRef}
-						type="button"
-						aria-label="Expand canvas"
-						className="keyboard-focus-ring flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-						onClick={() => setExpanded(true)}
+				<div className="flex h-9 shrink-0 items-center justify-between border-b bg-background/95 px-2">
+					<span
+						aria-atomic="true"
+						aria-live="polite"
+						className="min-w-0 truncate px-1 text-muted-foreground text-xs"
 					>
-						<Maximize2Icon className="size-4" />
+						{saveState === "saving" ? "Saving…" : null}
+					</span>
+					<button
+						ref={headerButtonRef}
+						type="button"
+						aria-label={expanded ? "Close canvas" : "Expand canvas"}
+						className="keyboard-focus-ring relative flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						onClick={() => setExpanded((current) => !current)}
+					>
+						<span
+							aria-hidden="true"
+							className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2"
+						/>
+						{expanded ? (
+							<XIcon className="size-4" />
+						) : (
+							<Maximize2Icon className="size-4" />
+						)}
 					</button>
 				</div>
 				<div
@@ -182,20 +185,11 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 						expanded && "overflow-hidden rounded-lg",
 					)}
 				>
-					<StableCanvasSurface canvasId={canvasId} />
+					<StableCanvasSurface
+						canvasId={canvasId}
+						onSaveStateChange={handleSaveStateChange}
+					/>
 				</div>
-				<button
-					ref={closeButtonRef}
-					type="button"
-					aria-label="Close canvas"
-					className={cn(
-						"-top-3 -right-3 absolute z-10 flex size-9 items-center justify-center rounded-full bg-background/70 text-muted-foreground ring-1 ring-border/60 backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground",
-						!expanded && "hidden",
-					)}
-					onClick={() => setExpanded(false)}
-				>
-					<XIcon className="size-5" />
-				</button>
 			</div>
 		</div>
 	);
@@ -237,6 +231,8 @@ export const canvasBlockSpec = createReactBlockSpec(
 					onPointerDown={(event) => event.stopPropagation()}
 					onMouseDown={(event) => event.stopPropagation()}
 					onTouchStart={(event) => event.stopPropagation()}
+					onClick={(event) => event.stopPropagation()}
+					onKeyDown={(event) => event.stopPropagation()}
 				>
 					{canvasId === "" ? (
 						<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
