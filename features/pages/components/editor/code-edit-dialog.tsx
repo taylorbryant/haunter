@@ -103,7 +103,7 @@ export function CodeEditDialog({
 				<DialogTitle className="sr-only">
 					{editable ? "Edit code" : "Code"}
 				</DialogTitle>
-				<div className="bn-shadcn size-full">
+				<div className="bn-shadcn code-edit-dialog size-full">
 					<div
 						data-content-type="codeBlock"
 						className="bn-block-content code-edit-focus-ring relative flex h-full w-full flex-col overflow-hidden rounded-lg border"
@@ -138,7 +138,7 @@ export function CodeEditDialog({
 							<div
 								ref={overlayRef}
 								aria-hidden
-								className="pointer-events-none absolute inset-0 overflow-hidden p-3 font-mono text-sm leading-relaxed [&_pre]:m-0 [&_pre]:whitespace-pre [&_pre]:bg-transparent!"
+								className="code-edit-overlay pointer-events-none absolute inset-0 overflow-hidden p-3 font-mono text-sm leading-relaxed [&_pre]:m-0 [&_pre]:whitespace-pre [&_pre]:bg-transparent!"
 								// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output over user-authored code, no external input
 								dangerouslySetInnerHTML={{ __html: highlightedHtml }}
 							/>
@@ -150,7 +150,7 @@ export function CodeEditDialog({
 								autoCapitalize="none"
 								autoCorrect="off"
 								readOnly={!editable}
-								className="relative size-full resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-sm text-transparent leading-relaxed outline-none"
+								className="code-edit-textarea relative size-full resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-sm text-transparent leading-relaxed outline-none"
 								style={{ caretColor: theme.foreground }}
 								onChange={(event) => setText(event.target.value)}
 								onScroll={(event) => {

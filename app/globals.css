@@ -1128,7 +1128,7 @@
 }
 
 .bn-shadcn .bn-block-content[data-content-type="codeBlock"] code {
-	font-size: 14px;
+	font-size: var(--code-edit-font-size, 14px);
 	line-height: 1.6;
 }
 
@@ -1147,7 +1147,7 @@
 	box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 16%, transparent);
 	color: inherit;
 	cursor: pointer;
-	font-size: 14px;
+	font-size: var(--code-edit-font-size, 14px);
 	padding: 2px 20px 2px 6px;
 	text-overflow: ellipsis;
 	transition:
@@ -1241,6 +1241,20 @@ html[data-keyboard-nav="true"]
 html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
 	border-color: var(--ring);
 	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+/* iOS zooms the page when a focused form control renders below 16px. Keep
+   the fullscreen textarea, its highlighted mirror, and language picker at
+   the same zoom-safe size on touch devices. */
+.code-edit-dialog .code-edit-textarea,
+.code-edit-dialog .code-edit-overlay {
+	font-size: var(--code-edit-font-size, 14px);
+}
+
+@media (hover: none) and (pointer: coarse) {
+	.code-edit-dialog {
+		--code-edit-font-size: 16px;
+	}
 }
 
 /* The editor should sit on the page background: BlockNote's own
