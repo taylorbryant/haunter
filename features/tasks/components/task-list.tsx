@@ -33,11 +33,13 @@ import {
 	listTasksQueryOptions,
 	optimisticallyAddTask,
 	optimisticallySetTaskCompletion,
+	optimisticallySetTaskSchedule,
 	replaceOptimisticTask,
 	restoreTaskCreationCache,
 	restoreTasksCache,
 	type TaskCompletionCacheSnapshot,
 	type TaskCreationCacheSnapshot,
+	type TaskScheduleCacheSnapshot,
 	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
 import {
@@ -143,6 +145,10 @@ export function TaskList({
 	const [pendingCompletionIds, setPendingCompletionIds] = useState<Set<string>>(
 		() => new Set(),
 	);
+	const [scheduleLock] = useState(createTaskCompletionLock);
+	const [pendingScheduleIds, setPendingScheduleIds] = useState<Set<string>>(
+		() => new Set(),
+	);
 
 	const tasksQuery = useQuery({
 		...listTasksQueryOptions(
@@ -166,6 +172,10 @@ export function TaskList({
 		meta: { errorMode: "inline" },
 	});
 	const completionMutation = useMutation({
+		...updateTaskMutationOptions(),
+		meta: { errorMode: "silent" },
+	});
+	const scheduleMutation = useMutation({
 		...updateTaskMutationOptions(),
 		meta: { errorMode: "silent" },
 	});
@@ -238,6 +248,50 @@ export function TaskList({
 				reportUserError(error, "Task could not be updated. Try again.");
 			} finally {
 				setPendingCompletionIds((current) => {
+					const next = new Set(current);
+					next.delete(task.id);
+					return next;
+				});
+			}
+		});
+		if (!result.started) return;
+		await Promise.allSettled([
+			invalidateTasks(queryClient),
+			invalidateNotifications(queryClient),
+			task.pageId
+				? invalidatePage(queryClient, task.pageId)
+				: Promise.resolve(),
+		]);
+	}
+
+	async function setTaskSchedule(
+		task: TaskWithPage,
+		schedule: Pick<
+			TaskWithPage,
+			"dueDate" | "dueTime" | "reminderOffsetMinutes"
+		>,
+	) {
+		const result = await scheduleLock.run(task.id, async () => {
+			setPendingScheduleIds((current) => new Set(current).add(task.id));
+			let snapshot: TaskScheduleCacheSnapshot | null = null;
+			try {
+				snapshot = await optimisticallySetTaskSchedule(
+					queryClient,
+					task.id,
+					schedule,
+				);
+				await scheduleMutation.mutateAsync({
+					path: { id: task.id },
+					body: schedule,
+				});
+			} catch (error) {
+				if (snapshot) restoreTasksCache(queryClient, snapshot);
+				reportUserError(
+					error,
+					"Task schedule could not be updated. Try again.",
+				);
+			} finally {
+				setPendingScheduleIds((current) => {
 					const next = new Set(current);
 					next.delete(task.id);
 					return next;
@@ -540,19 +594,16 @@ export function TaskList({
 										value={task.dueDate}
 										time={task.dueTime}
 										reminderOffsetMinutes={task.reminderOffsetMinutes}
-										disabled={isOptimisticTaskId(task.id)}
+										disabled={
+											isOptimisticTaskId(task.id) ||
+											pendingScheduleIds.has(task.id)
+										}
 										onChange={(next) =>
-											updateMutation.mutate(
-												{
-													path: { id: task.id },
-													body: {
-														dueDate: next.date,
-														dueTime: next.time,
-														reminderOffsetMinutes: next.reminderOffsetMinutes,
-													},
-												},
-												{ onSuccess: () => refresh(task) },
-											)
+											void setTaskSchedule(task, {
+												dueDate: next.date,
+												dueTime: next.time,
+												reminderOffsetMinutes: next.reminderOffsetMinutes,
+											})
 										}
 										className={cn(
 											"flex shrink-0 cursor-pointer items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs",

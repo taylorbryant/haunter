@@ -20,6 +20,8 @@ export type TaskCompletionCacheSnapshot = Array<{
 	previousTask: TaskWithPage;
 }>;
 
+export type TaskScheduleCacheSnapshot = TaskCompletionCacheSnapshot;
+
 export type TaskCreationCacheSnapshot = Array<{
 	queryKey: QueryKey;
 	previousHasMore: boolean;
@@ -298,6 +300,59 @@ export async function optimisticallySetTaskCompletion(
 	return snapshot;
 }
 
+export async function optimisticallySetTaskSchedule(
+	queryClient: QueryClient,
+	taskId: string,
+	schedule: Pick<TaskWithPage, "dueDate" | "dueTime" | "reminderOffsetMinutes">,
+): Promise<TaskScheduleCacheSnapshot> {
+	const queryFilter = rq(listTasks).filter();
+	await queryClient.cancelQueries(queryFilter, {
+		revert: false,
+		silent: true,
+	});
+	const cachedQueries =
+		queryClient.getQueriesData<ListTasksOutput>(queryFilter);
+	const snapshot: TaskScheduleCacheSnapshot = [];
+
+	for (const [queryKey, current] of cachedQueries) {
+		const previousIndex = current?.items.findIndex(
+			(task) => task.id === taskId,
+		);
+		if (
+			current === undefined ||
+			previousIndex === undefined ||
+			previousIndex < 0
+		) {
+			continue;
+		}
+		const previousTask = current.items[previousIndex];
+		if (!previousTask) continue;
+		snapshot.push({ queryKey, previousIndex, previousTask });
+
+		const nextTask = { ...previousTask, ...schedule };
+		const params = listTasksParamsFromQueryKey(queryKey);
+		const movesOutsideDueRange =
+			params !== null &&
+			((params.dueOnOrAfter !== undefined &&
+				(nextTask.dueDate === null ||
+					nextTask.dueDate < params.dueOnOrAfter)) ||
+				(params.dueOnOrBefore !== undefined &&
+					(nextTask.dueDate === null ||
+						nextTask.dueDate > params.dueOnOrBefore)));
+		const items = movesOutsideDueRange
+			? current.items.filter((task) => task.id !== taskId)
+			: current.items
+					.map((task) => (task.id === taskId ? nextTask : task))
+					.sort(compareListedTasks);
+		queryClient.setQueryData<ListTasksOutput>(queryKey, {
+			...current,
+			items,
+		});
+	}
+
+	return snapshot;
+}
+
 export function restoreTasksCache(
 	queryClient: QueryClient,
 	snapshot: TaskCompletionCacheSnapshot,
@@ -305,15 +360,9 @@ export function restoreTasksCache(
 	for (const { queryKey, previousIndex, previousTask } of snapshot) {
 		queryClient.setQueryData<ListTasksOutput>(queryKey, (current) => {
 			if (!current) return current;
-			const items = [...current.items];
-			const currentIndex = items.findIndex(
-				(task) => task.id === previousTask.id,
-			);
-			if (currentIndex >= 0) {
-				items[currentIndex] = previousTask;
-			} else {
-				items.splice(Math.min(previousIndex, items.length), 0, previousTask);
-			}
+			const items = current.items.filter((task) => task.id !== previousTask.id);
+			items.splice(Math.min(previousIndex, items.length), 0, previousTask);
+			items.sort(compareListedTasks);
 			return { ...current, items };
 		});
 	}

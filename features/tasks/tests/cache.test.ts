@@ -6,6 +6,7 @@ import {
 	listTasksQueryOptions,
 	optimisticallyAddTask,
 	optimisticallySetTaskCompletion,
+	optimisticallySetTaskSchedule,
 	replaceOptimisticTask,
 	restoreTaskCreationCache,
 	restoreTasksCache,
@@ -126,6 +127,56 @@ test("rolling back one task preserves another optimistic completion", async () =
 	expect(queryClient.getQueryData<ListTasksOutput>(openKey)?.items).toEqual([
 		task,
 	]);
+});
+
+test("task schedule updates cached dates immediately and can roll back", async () => {
+	const queryClient = new QueryClient();
+	const todayKey = listTasksQueryOptions("workspace_1", "open", "mine", 200, {
+		dueOnOrBefore: "2026-07-31",
+	}).queryKey;
+	const allKey = listTasksQueryOptions("workspace_1", "all", "mine").queryKey;
+	const laterTask = {
+		...otherTask,
+		dueDate: "2026-08-02",
+		createdAt: "2026-07-30T15:00:00.000Z",
+	};
+	const previousToday: ListTasksOutput = {
+		items: [task],
+		hasMore: false,
+	};
+	const previousAll: ListTasksOutput = {
+		items: [task, laterTask],
+		hasMore: false,
+	};
+	queryClient.setQueryData(todayKey, previousToday);
+	queryClient.setQueryData(allKey, previousAll);
+
+	const snapshot = await optimisticallySetTaskSchedule(queryClient, task.id, {
+		dueDate: "2026-08-03",
+		dueTime: "09:00",
+		reminderOffsetMinutes: 15,
+	});
+
+	expect(queryClient.getQueryData<ListTasksOutput>(todayKey)?.items).toEqual(
+		[],
+	);
+	expect(queryClient.getQueryData<ListTasksOutput>(allKey)?.items).toEqual([
+		laterTask,
+		{
+			...task,
+			dueDate: "2026-08-03",
+			dueTime: "09:00",
+			reminderOffsetMinutes: 15,
+		},
+	]);
+
+	restoreTasksCache(queryClient, snapshot);
+	expect(queryClient.getQueryData<ListTasksOutput>(todayKey)).toEqual(
+		previousToday,
+	);
+	expect(queryClient.getQueryData<ListTasksOutput>(allKey)).toEqual(
+		previousAll,
+	);
 });
 
 test("optimistic task creation targets matching lists and reconciles the id", async () => {
