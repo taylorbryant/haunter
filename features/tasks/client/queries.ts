@@ -20,6 +20,22 @@ export type TaskCompletionCacheSnapshot = Array<{
 	previousTask: TaskWithPage;
 }>;
 
+export type TaskCreationCacheSnapshot = Array<{
+	queryKey: QueryKey;
+	previousHasMore: boolean;
+	displacedTask: TaskWithPage | null;
+}>;
+
+const OPTIMISTIC_TASK_ID_PREFIX = "optimistic:";
+
+export function createOptimisticTaskId() {
+	return `${OPTIMISTIC_TASK_ID_PREFIX}${crypto.randomUUID()}`;
+}
+
+export function isOptimisticTaskId(taskId: string) {
+	return taskId.startsWith(OPTIMISTIC_TASK_ID_PREFIX);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
@@ -31,6 +47,77 @@ function taskFilterFromQueryKey(queryKey: QueryKey): TaskFilter | null {
 	return filter === "open" || filter === "completed" || filter === "all"
 		? filter
 		: null;
+}
+
+function listTasksParamsFromQueryKey(queryKey: QueryKey) {
+	const params = queryKey.at(-1);
+	if (!isRecord(params) || !isRecord(params.path) || !isRecord(params.query)) {
+		return null;
+	}
+	const workspaceId = params.path.workspaceId;
+	const filter = params.query.filter;
+	const scope = params.query.scope;
+	const limit = params.query.limit;
+	if (
+		typeof workspaceId !== "string" ||
+		(filter !== "open" && filter !== "completed" && filter !== "all") ||
+		(scope !== "mine" && scope !== "everyone") ||
+		typeof limit !== "number"
+	) {
+		return null;
+	}
+	return {
+		workspaceId,
+		filter,
+		scope,
+		limit,
+		dueOnOrAfter:
+			typeof params.query.dueOnOrAfter === "string"
+				? params.query.dueOnOrAfter
+				: undefined,
+		dueOnOrBefore:
+			typeof params.query.dueOnOrBefore === "string"
+				? params.query.dueOnOrBefore
+				: undefined,
+	};
+}
+
+function compareListedTasks(left: TaskWithPage, right: TaskWithPage) {
+	if (left.dueDate === null && right.dueDate !== null) return 1;
+	if (left.dueDate !== null && right.dueDate === null) return -1;
+	const dateOrder = (left.dueDate ?? "").localeCompare(right.dueDate ?? "");
+	if (dateOrder !== 0) return dateOrder;
+	if (left.dueTime === null && right.dueTime !== null) return 1;
+	if (left.dueTime !== null && right.dueTime === null) return -1;
+	const timeOrder = (left.dueTime ?? "").localeCompare(right.dueTime ?? "");
+	return timeOrder !== 0
+		? timeOrder
+		: left.createdAt.localeCompare(right.createdAt);
+}
+
+function taskMatchesListQuery(
+	task: TaskWithPage,
+	currentUserId: string,
+	params: NonNullable<ReturnType<typeof listTasksParamsFromQueryKey>>,
+) {
+	if (task.workspaceId !== params.workspaceId) return false;
+	if (params.filter === "open" && task.completed) return false;
+	if (params.filter === "completed" && !task.completed) return false;
+	if (params.scope === "mine" && task.assigneeId !== currentUserId)
+		return false;
+	if (
+		params.dueOnOrAfter &&
+		(task.dueDate === null || task.dueDate < params.dueOnOrAfter)
+	) {
+		return false;
+	}
+	if (
+		params.dueOnOrBefore &&
+		(task.dueDate === null || task.dueDate > params.dueOnOrBefore)
+	) {
+		return false;
+	}
+	return true;
 }
 
 export function listTasksQueryOptions(
@@ -69,6 +156,100 @@ export function deleteTaskMutationOptions() {
 
 export function invalidateTasks(queryClient: QueryClient) {
 	return rq(listTasks).invalidate(queryClient);
+}
+
+export async function optimisticallyAddTask(
+	queryClient: QueryClient,
+	task: TaskWithPage,
+	currentUserId: string,
+): Promise<TaskCreationCacheSnapshot> {
+	const queryFilter = rq(listTasks).filter();
+	await queryClient.cancelQueries(queryFilter, {
+		revert: false,
+		silent: true,
+	});
+	const cachedQueries =
+		queryClient.getQueriesData<ListTasksOutput>(queryFilter);
+	const snapshot: TaskCreationCacheSnapshot = [];
+
+	for (const [queryKey, current] of cachedQueries) {
+		const params = listTasksParamsFromQueryKey(queryKey);
+		if (
+			!current ||
+			!params ||
+			!taskMatchesListQuery(task, currentUserId, params) ||
+			current.items.some((item) => item.id === task.id)
+		) {
+			continue;
+		}
+		const sorted = [...current.items, task].sort(compareListedTasks);
+		const items = sorted.slice(0, params.limit);
+		const displacedTask =
+			current.items.find(
+				(item) => !items.some((visible) => visible.id === item.id),
+			) ?? null;
+		const hasMore = current.hasMore || sorted.length > params.limit;
+		snapshot.push({
+			queryKey,
+			previousHasMore: current.hasMore,
+			displacedTask,
+		});
+		queryClient.setQueryData<ListTasksOutput>(queryKey, {
+			...current,
+			items,
+			hasMore,
+		});
+	}
+
+	return snapshot;
+}
+
+export function replaceOptimisticTask(
+	queryClient: QueryClient,
+	temporaryTaskId: string,
+	createdTask: TaskWithPage,
+) {
+	queryClient.setQueriesData<ListTasksOutput>(
+		rq(listTasks).filter(),
+		(current) => {
+			if (!current?.items.some((task) => task.id === temporaryTaskId)) {
+				return current;
+			}
+			return {
+				...current,
+				items: current.items
+					.map((task) => (task.id === temporaryTaskId ? createdTask : task))
+					.sort(compareListedTasks),
+			};
+		},
+	);
+}
+
+export function restoreTaskCreationCache(
+	queryClient: QueryClient,
+	temporaryTaskId: string,
+	snapshot: TaskCreationCacheSnapshot,
+) {
+	for (const { queryKey, previousHasMore, displacedTask } of snapshot) {
+		queryClient.setQueryData<ListTasksOutput>(queryKey, (current) => {
+			if (!current) return current;
+			const params = listTasksParamsFromQueryKey(queryKey);
+			if (!params) return current;
+			const items = current.items.filter((task) => task.id !== temporaryTaskId);
+			if (
+				displacedTask &&
+				!items.some((task) => task.id === displacedTask.id)
+			) {
+				items.push(displacedTask);
+				items.sort(compareListedTasks);
+			}
+			return {
+				...current,
+				items: items.slice(0, params.limit),
+				hasMore: previousHasMore || items.length > params.limit,
+			};
+		});
+	}
 }
 
 export async function optimisticallySetTaskCompletion(

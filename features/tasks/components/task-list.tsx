@@ -25,13 +25,19 @@ import { invalidateNotifications } from "@/features/notifications/client/queries
 import { invalidatePage } from "@/features/pages/client/queries";
 import { createTaskCompletionLock } from "@/features/tasks/client/completion-lock";
 import {
+	createOptimisticTaskId,
 	createTaskMutationOptions,
 	deleteTaskMutationOptions,
 	invalidateTasks,
+	isOptimisticTaskId,
 	listTasksQueryOptions,
+	optimisticallyAddTask,
 	optimisticallySetTaskCompletion,
+	replaceOptimisticTask,
+	restoreTaskCreationCache,
 	restoreTasksCache,
 	type TaskCompletionCacheSnapshot,
+	type TaskCreationCacheSnapshot,
 	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
 import {
@@ -288,45 +294,84 @@ export function TaskList({
 		);
 	}
 
-	function createTask(input: {
+	async function createTask(input: {
 		title: string;
 		dueDate: string | null;
 		dueTime: string | null;
 		reminderOffsetMinutes: TaskReminderOffsetMinutes;
 		assigneeId?: string | null;
 	}): Promise<TaskSubmissionResult> {
-		return new Promise<TaskSubmissionResult>((resolve) => {
-			createMutation.mutate(
-				{
-					body: {
-						workspaceId,
-						title: input.title,
-						...(input.dueDate ? { dueDate: input.dueDate } : {}),
-						...(input.dueTime ? { dueTime: input.dueTime } : {}),
-						...(input.reminderOffsetMinutes !== null
-							? { reminderOffsetMinutes: input.reminderOffsetMinutes }
-							: {}),
-						...(input.assigneeId !== undefined
-							? { assigneeId: input.assigneeId }
-							: {}),
-					},
+		const now = new Date().toISOString();
+		const temporaryTask = currentUser
+			? ({
+					id: createOptimisticTaskId(),
+					userId: currentUser.id,
+					workspaceId,
+					pageId: null,
+					sourceBlockId: null,
+					title: input.title,
+					completed: false,
+					dueDate: input.dueDate,
+					dueTime: input.dueTime,
+					reminderOffsetMinutes: input.reminderOffsetMinutes,
+					assigneeId:
+						input.assigneeId === undefined ? currentUser.id : input.assigneeId,
+					completedAt: null,
+					createdAt: now,
+					updatedAt: now,
+					pageTitle: null,
+					assigneeName:
+						input.assigneeId === undefined ||
+						input.assigneeId === currentUser.id
+							? currentUser.name || currentUser.email
+							: null,
+				} satisfies TaskWithPage)
+			: null;
+		let cacheSnapshot: TaskCreationCacheSnapshot | null = null;
+		try {
+			if (temporaryTask && currentUser) {
+				cacheSnapshot = await optimisticallyAddTask(
+					queryClient,
+					temporaryTask,
+					currentUser.id,
+				);
+			}
+			const created = await createMutation.mutateAsync({
+				body: {
+					workspaceId,
+					title: input.title,
+					...(input.dueDate ? { dueDate: input.dueDate } : {}),
+					...(input.dueTime ? { dueTime: input.dueTime } : {}),
+					...(input.reminderOffsetMinutes !== null
+						? { reminderOffsetMinutes: input.reminderOffsetMinutes }
+						: {}),
+					...(input.assigneeId !== undefined
+						? { assigneeId: input.assigneeId }
+						: {}),
 				},
-				{
-					onSuccess: async () => {
-						await refresh();
-						resolve({ ok: true });
-					},
-					onError: (error) =>
-						resolve({
-							ok: false,
-							error: contractErrorMessage(
-								error,
-								"Task could not be added. Try again.",
-							),
-						}),
-				},
-			);
-		});
+			});
+			if (temporaryTask) {
+				replaceOptimisticTask(queryClient, temporaryTask.id, {
+					...created,
+					pageTitle: null,
+					assigneeName: temporaryTask.assigneeName,
+				});
+			}
+			return { ok: true };
+		} catch (error) {
+			if (temporaryTask && cacheSnapshot) {
+				restoreTaskCreationCache(queryClient, temporaryTask.id, cacheSnapshot);
+			}
+			return {
+				ok: false,
+				error: contractErrorMessage(
+					error,
+					"Task could not be added. Try again.",
+				),
+			};
+		} finally {
+			void refresh().catch(() => undefined);
+		}
 	}
 
 	function confirmDeleteTask() {
@@ -385,10 +430,15 @@ export function TaskList({
 						<input
 							type="checkbox"
 							checked={task.completed}
-							disabled={!canEdit || pendingCompletionIds.has(task.id)}
+							disabled={
+								!canEdit ||
+								isOptimisticTaskId(task.id) ||
+								pendingCompletionIds.has(task.id)
+							}
 							className={cn(
 								"mt-0.5 size-4 shrink-0 accent-primary",
 								canEdit &&
+									!isOptimisticTaskId(task.id) &&
 									!pendingCompletionIds.has(task.id) &&
 									"cursor-pointer",
 							)}
@@ -429,7 +479,9 @@ export function TaskList({
 											</p>
 										) : null}
 									</>
-								) : task.sourceBlockId === null && canEdit ? (
+								) : task.sourceBlockId === null &&
+									canEdit &&
+									!isOptimisticTaskId(task.id) ? (
 									<button
 										type="button"
 										className={cn(
@@ -471,7 +523,7 @@ export function TaskList({
 										label={
 											task.assigneeName ?? (task.assigneeId ? "Assigned" : null)
 										}
-										disabled={!canEdit}
+										disabled={!canEdit || isOptimisticTaskId(task.id)}
 										onChange={(next) =>
 											updateMutation.mutate(
 												{
@@ -488,6 +540,7 @@ export function TaskList({
 										value={task.dueDate}
 										time={task.dueTime}
 										reminderOffsetMinutes={task.reminderOffsetMinutes}
+										disabled={isOptimisticTaskId(task.id)}
 										onChange={(next) =>
 											updateMutation.mutate(
 												{
@@ -544,7 +597,9 @@ export function TaskList({
 										size="icon"
 										className="size-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
 										aria-label="Delete task"
-										disabled={deleteMutation.isPending}
+										disabled={
+											deleteMutation.isPending || isOptimisticTaskId(task.id)
+										}
 										onClick={() => setTaskToDelete(task)}
 									>
 										<Trash2Icon className="size-3.5" />

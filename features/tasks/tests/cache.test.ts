@@ -1,8 +1,13 @@
 import { expect, test } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import {
+	createOptimisticTaskId,
+	isOptimisticTaskId,
 	listTasksQueryOptions,
+	optimisticallyAddTask,
 	optimisticallySetTaskCompletion,
+	replaceOptimisticTask,
+	restoreTaskCreationCache,
 	restoreTasksCache,
 } from "@/features/tasks/client/queries";
 import type { ListTasksOutput, TaskWithPage } from "@/features/tasks/schemas";
@@ -121,4 +126,143 @@ test("rolling back one task preserves another optimistic completion", async () =
 	expect(queryClient.getQueryData<ListTasksOutput>(openKey)?.items).toEqual([
 		task,
 	]);
+});
+
+test("optimistic task creation targets matching lists and reconciles the id", async () => {
+	const queryClient = new QueryClient();
+	const todayKey = listTasksQueryOptions("workspace_1", "open", "mine", 200, {
+		dueOnOrBefore: "2026-07-31",
+	}).queryKey;
+	const upcomingKey = listTasksQueryOptions(
+		"workspace_1",
+		"open",
+		"mine",
+		200,
+		{ dueOnOrAfter: "2026-08-01" },
+	).queryKey;
+	const completedKey = listTasksQueryOptions(
+		"workspace_1",
+		"completed",
+		"mine",
+	).queryKey;
+	const empty: ListTasksOutput = { items: [], hasMore: false };
+	queryClient.setQueryData(todayKey, empty);
+	queryClient.setQueryData(upcomingKey, empty);
+	queryClient.setQueryData(completedKey, empty);
+	const temporaryTask = {
+		...task,
+		id: createOptimisticTaskId(),
+	};
+
+	await optimisticallyAddTask(queryClient, temporaryTask, "user_1");
+
+	expect(isOptimisticTaskId(temporaryTask.id)).toBe(true);
+	expect(queryClient.getQueryData<ListTasksOutput>(todayKey)?.items).toEqual([
+		temporaryTask,
+	]);
+	expect(queryClient.getQueryData<ListTasksOutput>(upcomingKey)?.items).toEqual(
+		[],
+	);
+	expect(
+		queryClient.getQueryData<ListTasksOutput>(completedKey)?.items,
+	).toEqual([]);
+
+	const createdTask = {
+		...temporaryTask,
+		id: "bd14f9a5-bc0a-4bef-8d43-864cd4456670",
+	};
+	replaceOptimisticTask(queryClient, temporaryTask.id, createdTask);
+	expect(queryClient.getQueryData<ListTasksOutput>(todayKey)?.items).toEqual([
+		createdTask,
+	]);
+});
+
+test("failed task creation restores a row displaced by pagination", async () => {
+	const queryClient = new QueryClient();
+	const openKey = listTasksQueryOptions(
+		"workspace_1",
+		"open",
+		"mine",
+		1,
+	).queryKey;
+	const displacedTask = { ...task, dueDate: "2026-08-01" };
+	queryClient.setQueryData<ListTasksOutput>(openKey, {
+		items: [displacedTask],
+		hasMore: false,
+	});
+	const temporaryTask = {
+		...task,
+		id: createOptimisticTaskId(),
+		dueDate: "2026-07-31",
+	};
+
+	const snapshot = await optimisticallyAddTask(
+		queryClient,
+		temporaryTask,
+		"user_1",
+	);
+	expect(queryClient.getQueryData<ListTasksOutput>(openKey)).toEqual({
+		items: [temporaryTask],
+		hasMore: true,
+	});
+
+	restoreTaskCreationCache(queryClient, temporaryTask.id, snapshot);
+	expect(queryClient.getQueryData<ListTasksOutput>(openKey)).toEqual({
+		items: [displacedTask],
+		hasMore: false,
+	});
+});
+
+test("rolling back one creation preserves another optimistic task", async () => {
+	const queryClient = new QueryClient();
+	const openKey = listTasksQueryOptions(
+		"workspace_1",
+		"open",
+		"mine",
+		1,
+	).queryKey;
+	const originalTask = { ...task, dueDate: "2026-08-02" };
+	queryClient.setQueryData<ListTasksOutput>(openKey, {
+		items: [originalTask],
+		hasMore: false,
+	});
+	const firstTask = {
+		...task,
+		id: createOptimisticTaskId(),
+		dueDate: "2026-08-01",
+	};
+	const secondTask = {
+		...task,
+		id: createOptimisticTaskId(),
+		dueDate: "2026-07-31",
+	};
+
+	const firstSnapshot = await optimisticallyAddTask(
+		queryClient,
+		firstTask,
+		"user_1",
+	);
+	await optimisticallyAddTask(queryClient, secondTask, "user_1");
+	// The first request fails while the second request is still pending.
+	restoreTaskCreationCache(queryClient, firstTask.id, firstSnapshot);
+
+	expect(queryClient.getQueryData<ListTasksOutput>(openKey)).toEqual({
+		items: [secondTask],
+		hasMore: true,
+	});
+});
+
+test("compact task composer clears before submission and restores failures", async () => {
+	const source = await Bun.file(
+		new URL("../components/task-composer.tsx", import.meta.url),
+	).text();
+	const optimisticClear = source.indexOf(
+		'const clearsOptimistically = mode === "compact";',
+	);
+	const submission = source.indexOf("result = await onSubmit({");
+
+	expect(optimisticClear).toBeGreaterThan(-1);
+	expect(optimisticClear).toBeLessThan(submission);
+	expect(source).toContain("setText(submittedDraft.text)");
+	expect(source).toContain("setManualDue(submittedDraft.manualDue)");
 });
