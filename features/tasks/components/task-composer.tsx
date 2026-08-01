@@ -98,6 +98,21 @@ export function TaskComposer({
 		onPendingChange?.(true);
 		const submitAssigneeId =
 			assigneeTouched || assigneeId !== null ? assigneeId : undefined;
+		const submittedDraft = {
+			text,
+			manualDue,
+			ignoredMatchText,
+			assigneeId,
+			assigneeTouched,
+		};
+		const clearsOptimistically = mode === "compact";
+		if (clearsOptimistically) {
+			setText("");
+			setManualDue(undefined);
+			setIgnoredMatchText(null);
+			setAssigneeId(currentUserId);
+			setAssigneeTouched(false);
+		}
 		let result: TaskSubmissionResult;
 		try {
 			result = await onSubmit({
@@ -119,14 +134,23 @@ export function TaskComposer({
 			onPendingChange?.(false);
 		}
 		if (result.ok) {
-			setText("");
-			setManualDue(undefined);
-			setIgnoredMatchText(null);
-			setAssigneeId(currentUserId);
-			setAssigneeTouched(false);
+			if (!clearsOptimistically) {
+				setText("");
+				setManualDue(undefined);
+				setIgnoredMatchText(null);
+				setAssigneeId(currentUserId);
+				setAssigneeTouched(false);
+			}
 			if (onSuccess) onSuccess();
 			else inputRef.current?.focus();
 		} else {
+			if (clearsOptimistically) {
+				setText(submittedDraft.text);
+				setManualDue(submittedDraft.manualDue);
+				setIgnoredMatchText(submittedDraft.ignoredMatchText);
+				setAssigneeId(submittedDraft.assigneeId);
+				setAssigneeTouched(submittedDraft.assigneeTouched);
+			}
 			setError(result.error);
 		}
 	}

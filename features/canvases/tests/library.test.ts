@@ -323,6 +323,22 @@ describe("canvas library", () => {
 		);
 	});
 
+	test("keeps mobile library touches out of the tldraw canvas", async () => {
+		const source = await Bun.file(
+			new URL("../components/canvas-library.tsx", import.meta.url),
+		).text();
+
+		for (const handler of [
+			"onPointerDown",
+			"onPointerMove",
+			"onPointerUp",
+			"onTouchStart",
+			"onTouchEnd",
+		]) {
+			expect(source).toContain(`${handler}={editor.markEventAsHandled}`);
+		}
+	});
+
 	test("renders detailed previews for common wireframe components", async () => {
 		const [source, additionalPreviewSource] = await Promise.all([
 			Bun.file(
