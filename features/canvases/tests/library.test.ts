@@ -277,6 +277,27 @@ describe("canvas library", () => {
 		}
 	});
 
+	test("keeps the task row status label inside a comfortably sized pill", () => {
+		const entry = CANVAS_LIBRARY_ITEMS.find((item) => item.id === "task-row");
+		expect(entry).toBeDefined();
+		if (!entry) return;
+
+		expect(entry.width).toBe(480);
+		expect(entry.height).toBe(88);
+		const status = entry.elements.find((element) => element.key === "status");
+		const label = entry.elements.find(
+			(element) => element.key === "status-label",
+		);
+		expect(status?.kind).toBe("geo");
+		expect(label?.kind).toBe("text");
+		if (status?.kind !== "geo" || label?.kind !== "text") return;
+
+		expect(status.width).toBeGreaterThanOrEqual(136);
+		expect(label.width).toBeGreaterThanOrEqual(112);
+		expect(label.x).toBeGreaterThan(status.x);
+		expect(label.x + label.width).toBeLessThan(status.x + status.width);
+	});
+
 	test("centers insertions in the visible canvas beside the desktop panel", () => {
 		const layout = getCanvasLibraryInsertionLayout({
 			viewport: { x: 0, y: 0, width: 1000, height: 600 },
