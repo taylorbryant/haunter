@@ -479,7 +479,19 @@ function CanvasLibraryOverlay() {
 	);
 
 	return (
-		<div className="pointer-events-none absolute inset-0">
+		<div
+			className="pointer-events-none absolute inset-0"
+			// tldraw prevents unclaimed canvas touch events by default, which also
+			// suppresses the synthetic click that iOS sends to the Library button.
+			// Mark every library interaction as handled without stopping normal DOM
+			// propagation so the button and portaled mobile drawer remain interactive.
+			onPointerDown={editor.markEventAsHandled}
+			onPointerMove={editor.markEventAsHandled}
+			onPointerUp={editor.markEventAsHandled}
+			onTouchStart={editor.markEventAsHandled}
+			onTouchEnd={editor.markEventAsHandled}
+			onWheel={(event) => event.stopPropagation()}
+		>
 			<Button
 				type="button"
 				variant="secondary"
@@ -487,11 +499,7 @@ function CanvasLibraryOverlay() {
 				aria-expanded={open}
 				aria-label="Open canvas library"
 				className="pointer-events-auto absolute top-2 left-36 z-20 bg-popover text-popover-foreground shadow-sm dark:shadow-none md:in-data-[canvas-layout=fullscreen]:left-80"
-				onPointerDown={(event) => event.stopPropagation()}
-				onClick={(event) => {
-					event.stopPropagation();
-					changeOpen(!open);
-				}}
+				onClick={() => changeOpen(!open)}
 			>
 				<LayoutGridIcon
 					data-icon="inline-start"
@@ -519,8 +527,6 @@ function CanvasLibraryOverlay() {
 				<aside
 					aria-label="Canvas library"
 					className="pointer-events-auto absolute top-12 bottom-20 left-2 z-20 flex w-80 flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10 dark:shadow-none"
-					onPointerDown={(event) => event.stopPropagation()}
-					onWheel={(event) => event.stopPropagation()}
 				>
 					<header className="flex shrink-0 items-start justify-between gap-3 border-border/70 border-b px-4 py-3">
 						<div className="min-w-0">

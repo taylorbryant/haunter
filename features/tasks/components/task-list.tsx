@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { reportUserError } from "@/client/error-feedback";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { useCreateDialog } from "@/components/create-dialog-provider";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
@@ -22,11 +23,15 @@ import { useCanEditWorkspace } from "@/features/members/client/use-workspace-rol
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import { invalidateNotifications } from "@/features/notifications/client/queries";
 import { invalidatePage } from "@/features/pages/client/queries";
+import { createTaskCompletionLock } from "@/features/tasks/client/completion-lock";
 import {
 	createTaskMutationOptions,
 	deleteTaskMutationOptions,
 	invalidateTasks,
 	listTasksQueryOptions,
+	optimisticallySetTaskCompletion,
+	restoreTasksCache,
+	type TaskCompletionCacheSnapshot,
 	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
 import {
@@ -128,6 +133,10 @@ export function TaskList({
 	} | null>(null);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [taskToDelete, setTaskToDelete] = useState<TaskWithPage | null>(null);
+	const [completionLock] = useState(createTaskCompletionLock);
+	const [pendingCompletionIds, setPendingCompletionIds] = useState<Set<string>>(
+		() => new Set(),
+	);
 
 	const tasksQuery = useQuery({
 		...listTasksQueryOptions(
@@ -149,6 +158,10 @@ export function TaskList({
 	const createMutation = useMutation({
 		...createTaskMutationOptions(),
 		meta: { errorMode: "inline" },
+	});
+	const completionMutation = useMutation({
+		...updateTaskMutationOptions(),
+		meta: { errorMode: "silent" },
 	});
 	const updateMutation = useMutation(updateTaskMutationOptions());
 	const renameMutation = useMutation({
@@ -198,6 +211,41 @@ export function TaskList({
 		if (task?.pageId) {
 			await invalidatePage(queryClient, task.pageId);
 		}
+	}
+
+	async function setTaskCompletion(task: TaskWithPage, completed: boolean) {
+		const result = await completionLock.run(task.id, async () => {
+			setPendingCompletionIds((current) => new Set(current).add(task.id));
+			let snapshot: TaskCompletionCacheSnapshot | null = null;
+			try {
+				snapshot = await optimisticallySetTaskCompletion(
+					queryClient,
+					task.id,
+					completed,
+				);
+				await completionMutation.mutateAsync({
+					path: { id: task.id },
+					body: { completed },
+				});
+			} catch (error) {
+				if (snapshot) restoreTasksCache(queryClient, snapshot);
+				reportUserError(error, "Task could not be updated. Try again.");
+			} finally {
+				setPendingCompletionIds((current) => {
+					const next = new Set(current);
+					next.delete(task.id);
+					return next;
+				});
+			}
+		});
+		if (!result.started) return;
+		await Promise.allSettled([
+			invalidateTasks(queryClient),
+			invalidateNotifications(queryClient),
+			task.pageId
+				? invalidatePage(queryClient, task.pageId)
+				: Promise.resolve(),
+		]);
 	}
 
 	// Standalone tasks are renamed here; page-sourced titles live in the page
@@ -337,20 +385,16 @@ export function TaskList({
 						<input
 							type="checkbox"
 							checked={task.completed}
-							disabled={!canEdit}
+							disabled={!canEdit || pendingCompletionIds.has(task.id)}
 							className={cn(
 								"mt-0.5 size-4 shrink-0 accent-primary",
-								canEdit && "cursor-pointer",
+								canEdit &&
+									!pendingCompletionIds.has(task.id) &&
+									"cursor-pointer",
 							)}
 							aria-label={task.completed ? "Mark task open" : "Mark task done"}
 							onChange={(event) =>
-								updateMutation.mutate(
-									{
-										path: { id: task.id },
-										body: { completed: event.target.checked },
-									},
-									{ onSuccess: () => refresh(task) },
-								)
+								void setTaskCompletion(task, event.target.checked)
 							}
 						/>
 						{/* Stacks title over the chips on mobile; sm+ lays them out

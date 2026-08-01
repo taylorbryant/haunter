@@ -158,6 +158,7 @@ export const TaskNotificationActionOutputSchema = z.object({
 
 export type Task = z.infer<typeof TaskSchema>;
 export type TaskWithPage = z.infer<typeof TaskWithPageSchema>;
+export type ListTasksOutput = z.infer<typeof ListTasksOutputSchema>;
 export type TaskFilter = z.infer<typeof TaskFilterSchema>;
 export type TaskScope = z.infer<typeof TaskScopeSchema>;
 export type CreateTaskInput = z.infer<typeof CreateTaskInputSchema>;
