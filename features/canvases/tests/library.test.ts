@@ -14,7 +14,7 @@ describe("canvas library", () => {
 		expect(new Set(ids).size).toBe(ids.length);
 		expect(
 			CANVAS_LIBRARY_ITEMS.filter((entry) => entry.kind === "component"),
-		).toHaveLength(22);
+		).toHaveLength(39);
 		expect(
 			CANVAS_LIBRARY_ITEMS.filter((entry) => entry.kind === "template"),
 		).toHaveLength(6);
@@ -42,7 +42,58 @@ describe("canvas library", () => {
 				(entry) => entry.id,
 			),
 		).toEqual(["request-flow", "async-worker-flow", "state-change-map"]);
-		expect(searchCanvasLibraryItems("", "component")).toHaveLength(22);
+		expect(searchCanvasLibraryItems("", "component")).toHaveLength(39);
+		expect(
+			searchCanvasLibraryItems("form", "component").map((entry) => entry.id),
+		).toEqual(
+			expect.arrayContaining([
+				"input-field",
+				"select-field",
+				"checkbox",
+				"radio-group",
+				"toggle-switch",
+				"textarea",
+				"search-field",
+			]),
+		);
+	});
+
+	test("includes the complete wireframe primitive set", () => {
+		const ids = CANVAS_LIBRARY_ITEMS.filter(
+			(entry) => entry.kind === "component" && entry.category === "wireframes",
+		).map((entry) => entry.id);
+
+		expect(ids).toEqual([
+			"browser-frame",
+			"phone-frame",
+			"top-navigation",
+			"sidebar-navigation",
+			"tabs",
+			"button",
+			"input-field",
+			"select-field",
+			"card",
+			"table",
+			"dialog",
+			"bottom-sheet",
+			"checkbox",
+			"radio-group",
+			"toggle-switch",
+			"textarea",
+			"search-field",
+			"dropdown-menu",
+			"alert-banner",
+			"toast",
+			"badge",
+			"avatar",
+			"task-row",
+			"breadcrumbs",
+			"toolbar",
+			"side-sheet",
+			"mobile-bottom-navigation",
+			"empty-state",
+			"loading-skeleton",
+		]);
 	});
 
 	test("materializes standard tldraw records with semantic metadata", () => {
@@ -273,9 +324,17 @@ describe("canvas library", () => {
 	});
 
 	test("renders detailed previews for common wireframe components", async () => {
-		const source = await Bun.file(
-			new URL("../components/canvas-library.tsx", import.meta.url),
-		).text();
+		const [source, additionalPreviewSource] = await Promise.all([
+			Bun.file(
+				new URL("../components/canvas-library.tsx", import.meta.url),
+			).text(),
+			Bun.file(
+				new URL(
+					"../components/canvas-library-wireframe-previews.tsx",
+					import.meta.url,
+				),
+			).text(),
+		]);
 
 		for (const id of [
 			"card",
@@ -288,5 +347,29 @@ describe("canvas library", () => {
 			expect(source).toContain(`id === "${id}"`);
 		}
 		expect(source).toContain("function DetailedWireframePreview");
+
+		for (const id of [
+			"checkbox",
+			"radio-group",
+			"toggle-switch",
+			"textarea",
+			"search-field",
+			"dropdown-menu",
+			"alert-banner",
+			"toast",
+			"badge",
+			"avatar",
+			"task-row",
+			"breadcrumbs",
+			"toolbar",
+			"side-sheet",
+			"mobile-bottom-navigation",
+			"empty-state",
+			"loading-skeleton",
+		]) {
+			expect(additionalPreviewSource).toContain(`id === "${id}"`);
+		}
+		expect(source).toContain("AdditionalWireframePreview");
+		expect(source).toContain("panelRef.current.scrollTop = 0");
 	});
 });

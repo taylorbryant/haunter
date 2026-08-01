@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { parseChangelogRelease } from "@/features/changelog/content";
+import {
+	loadChangelogReleases,
+	parseChangelogRelease,
+} from "@/features/changelog/content";
 
 const manifest = {
 	version: "1.2.0",
@@ -9,6 +12,12 @@ const manifest = {
 };
 
 describe("changelog content", () => {
+	it("parses every checked-in release", async () => {
+		const releases = await loadChangelogReleases();
+
+		expect(releases.length).toBeGreaterThan(0);
+	});
+
 	it("parses matching release frontmatter and sections", () => {
 		const release = parseChangelogRelease(
 			`---

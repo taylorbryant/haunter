@@ -38,6 +38,10 @@ import {
 } from "@/features/canvases/lib/library";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import {
+	ADDITIONAL_WIREFRAME_PREVIEW_IDS,
+	AdditionalWireframePreview,
+} from "./canvas-library-wireframe-previews";
 
 const ARCHITECTURE_ICONS: Record<string, LucideIcon> = {
 	client: MonitorIcon,
@@ -276,6 +280,10 @@ function LibraryPreview({ entry }: { entry: CanvasLibraryItem }) {
 		return <DetailedWireframePreview id={entry.id} />;
 	}
 
+	if (ADDITIONAL_WIREFRAME_PREVIEW_IDS.has(entry.id)) {
+		return <AdditionalWireframePreview id={entry.id} />;
+	}
+
 	return (
 		<Columns3Icon
 			className="size-4 shrink-0 stroke-current"
@@ -364,15 +372,23 @@ function LibraryBody({
 	onKindChange: (kind: CanvasLibraryKind) => void;
 	onInsert: (entry: CanvasLibraryItem) => void;
 }) {
+	const panelRef = useRef<HTMLDivElement>(null);
 	const items = useMemo(
 		() => searchCanvasLibraryItems(query, kind),
 		[kind, query],
 	);
 
+	function resetPanelScroll() {
+		if (panelRef.current) panelRef.current.scrollTop = 0;
+	}
+
 	return (
 		<Tabs.Root
 			value={kind}
-			onValueChange={(value) => onKindChange(value as CanvasLibraryKind)}
+			onValueChange={(value) => {
+				resetPanelScroll();
+				onKindChange(value as CanvasLibraryKind);
+			}}
 			className="flex min-h-0 flex-1 flex-col gap-3"
 		>
 			<div className="relative shrink-0">
@@ -386,7 +402,10 @@ function LibraryBody({
 					aria-label="Search canvas library"
 					placeholder="Search components and templates…"
 					value={query}
-					onChange={(event) => onQueryChange(event.currentTarget.value)}
+					onChange={(event) => {
+						resetPanelScroll();
+						onQueryChange(event.currentTarget.value);
+					}}
 					className="pl-8"
 				/>
 			</div>
@@ -405,6 +424,7 @@ function LibraryBody({
 				))}
 			</Tabs.List>
 			<Tabs.Panel
+				ref={panelRef}
 				value={kind}
 				className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none"
 			>
