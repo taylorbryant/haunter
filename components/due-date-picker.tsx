@@ -6,6 +6,14 @@ import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
+	Drawer,
+	DrawerContent,
+	DrawerDescription,
+	DrawerHeader,
+	DrawerTitle,
+	DrawerTrigger,
+} from "@/components/ui/drawer";
+import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
@@ -25,6 +33,7 @@ import {
 	TASK_REMINDER_OPTIONS,
 	type TaskReminderOffsetMinutes,
 } from "@/features/tasks/lib/reminder-options";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
 	formatDueDateLabel,
 	formatDueDateTimeLabel,
@@ -56,6 +65,10 @@ const DATE_PRESETS: { label: string; date: (today: Date) => Date }[] = [
 		label: "Next week",
 		date: (today) => addDays(today, (1 - today.getDay() + 7) % 7 || 7),
 	},
+	{
+		label: "Next weekend",
+		date: (today) => addDays(today, ((6 - today.getDay() + 7) % 7) + 7),
+	},
 ];
 
 const TIME_PRESETS = [
@@ -84,6 +97,7 @@ export function DueDatePicker({
 	disabled?: boolean;
 }) {
 	const deviceTime = useDeviceTime();
+	const isMobile = useIsMobile();
 	const [open, setOpen] = useState(false);
 	const [draft, setDraft] = useState<DueDateValue>({
 		date: value,
@@ -172,194 +186,228 @@ export function DueDatePicker({
 		);
 	}
 
-	return (
-		<Popover open={open} onOpenChange={changeOpen}>
-			<PopoverTrigger
-				render={
-					<button
-						type="button"
-						disabled={disabled}
-						className={cn(
-							"outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-							className,
-						)}
-						aria-label={accessibleName}
-					/>
-				}
-			>
-				<CalendarIcon className="size-4 shrink-0" aria-hidden="true" />
-				{value ? formatDueDateTimeLabel(value, time, today) : "Due"}
-				{value && reminderOffsetMinutes !== null ? (
-					<BellIcon className="size-3 shrink-0" aria-hidden="true" />
-				) : null}
-			</PopoverTrigger>
-			<PopoverContent
-				className="w-auto max-w-[calc(100vw-1rem)] p-0"
-				align="end"
-			>
-				<div className="flex min-w-0 flex-col sm:flex-row">
-					<Calendar
-						mode="single"
-						selected={selected}
-						month={visibleMonth}
-						onMonthChange={setVisibleMonth}
-						onSelect={changeDate}
-						className="w-full sm:w-fit"
-					/>
-					<div className="flex min-w-36 flex-col gap-0.5 border-t p-2 sm:border-t-0 sm:border-l">
-						{DATE_PRESETS.map((preset) => {
-							const date = preset.date(today);
-							const iso = toIsoDate(date);
-							return (
-								<Button
-									key={preset.label}
-									type="button"
-									variant={draft.date === iso ? "secondary" : "ghost"}
-									size="sm"
-									className="justify-between gap-3 font-normal"
-									onClick={() => changeDate(date)}
-								>
-									{preset.label}
-									<span className="text-muted-foreground text-xs">
-										{formatDueDateLabel(iso, today) === preset.label
-											? date.toLocaleDateString(undefined, {
-													weekday: "short",
-												})
-											: formatDueDateLabel(iso, today)}
-									</span>
-								</Button>
-							);
-						})}
-					</div>
-				</div>
-				<Separator />
-				<div className="flex flex-col gap-2 p-2">
-					<div className="flex min-w-0 items-center gap-2">
-						<ClockIcon
-							className="size-4 shrink-0 stroke-muted-foreground"
-							aria-hidden="true"
-						/>
-						<input
-							type="time"
-							name="dueTime"
-							value={draft.time ?? ""}
-							disabled={!draft.date}
-							aria-label="Due time"
-							className="min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1.5 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
-							onChange={(event) =>
-								changeDraft({
-									date: draft.date,
-									time: event.target.value || null,
-									reminderOffsetMinutes: draft.reminderOffsetMinutes,
-								})
-							}
-						/>
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							disabled={!draft.date || draft.time === null}
-							onClick={() =>
-								changeDraft({
-									date: draft.date,
-									time: null,
-									reminderOffsetMinutes: draft.reminderOffsetMinutes,
-								})
-							}
-						>
-							No time
-						</Button>
-					</div>
-					<div className="flex flex-wrap gap-1 pl-6">
-						{TIME_PRESETS.map((preset) => (
+	const trigger = (
+		<button
+			type="button"
+			disabled={disabled}
+			className={cn(
+				"outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+				className,
+			)}
+			aria-label={accessibleName}
+		>
+			<CalendarIcon className="size-4 shrink-0" aria-hidden="true" />
+			{value ? formatDueDateTimeLabel(value, time, today) : "Due"}
+			{value && reminderOffsetMinutes !== null ? (
+				<BellIcon className="size-3 shrink-0" aria-hidden="true" />
+			) : null}
+		</button>
+	);
+
+	const pickerFields = (
+		<>
+			<div className="flex min-w-0 flex-col sm:flex-row">
+				<Calendar
+					mode="single"
+					selected={selected}
+					month={visibleMonth}
+					onMonthChange={setVisibleMonth}
+					onSelect={changeDate}
+					className="w-full sm:w-fit"
+				/>
+				<div className="flex min-w-36 flex-col gap-0.5 border-t p-2 sm:border-t-0 sm:border-l">
+					{DATE_PRESETS.map((preset) => {
+						const date = preset.date(today);
+						const iso = toIsoDate(date);
+						return (
 							<Button
-								key={preset.value}
+								key={preset.label}
 								type="button"
-								variant={draft.time === preset.value ? "secondary" : "ghost"}
+								variant={draft.date === iso ? "secondary" : "ghost"}
 								size="sm"
-								disabled={!draft.date}
-								onClick={() =>
-									changeDraft({
-										date: draft.date,
-										time: preset.value,
-										reminderOffsetMinutes: draft.reminderOffsetMinutes,
-									})
-								}
+								className="justify-between gap-3 font-normal"
+								onClick={() => changeDate(date)}
 							>
 								{preset.label}
+								<span className="text-muted-foreground text-xs">
+									{formatDueDateLabel(iso, today) === preset.label
+										? date.toLocaleDateString(undefined, {
+												weekday: "short",
+											})
+										: formatDueDateLabel(iso, today)}
+								</span>
 							</Button>
-						))}
-					</div>
+						);
+					})}
 				</div>
-				<div className="flex items-center gap-2 border-t p-2">
-					<BellIcon
+			</div>
+			<Separator />
+			<div className="flex flex-col gap-2 p-2">
+				<div className="flex min-w-0 items-center gap-2">
+					<ClockIcon
 						className="size-4 shrink-0 stroke-muted-foreground"
 						aria-hidden="true"
 					/>
-					<Select
-						items={TASK_REMINDER_OPTIONS.map((option) => ({
-							label:
-								option.value === "0" && draft.time === null
-									? formatTaskReminderLabel(0, null)
-									: option.label,
-							value: option.value,
-						}))}
-						value={
-							draft.reminderOffsetMinutes === null
-								? "none"
-								: String(draft.reminderOffsetMinutes)
-						}
+					<input
+						type="time"
+						name="dueTime"
+						value={draft.time ?? ""}
 						disabled={!draft.date}
-						onValueChange={(next) =>
+						aria-label="Due time"
+						className="min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1.5 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+						onChange={(event) =>
 							changeDraft({
-								...draft,
-								reminderOffsetMinutes:
-									next === null ? null : parseTaskReminderOffset(next),
+								date: draft.date,
+								time: event.target.value || null,
+								reminderOffsetMinutes: draft.reminderOffsetMinutes,
 							})
 						}
-					>
-						<SelectTrigger
-							size="sm"
-							className="w-full border-0 bg-transparent shadow-none"
-							aria-label="Task reminder"
-						>
-							<SelectValue placeholder="No reminder" />
-						</SelectTrigger>
-						<SelectContent align="start" alignItemWithTrigger={false}>
-							{TASK_REMINDER_OPTIONS.map((option) => (
-								<SelectItem key={option.value} value={option.value}>
-									{option.value === "0" && draft.time === null
-										? formatTaskReminderLabel(0, null)
-										: option.label}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
-				<div className="flex items-center justify-between border-t p-2">
+					/>
 					<Button
 						type="button"
 						variant="ghost"
 						size="sm"
-						disabled={!draft.date}
+						disabled={!draft.date || draft.time === null}
 						onClick={() =>
 							changeDraft({
-								date: null,
+								date: draft.date,
 								time: null,
-								reminderOffsetMinutes: null,
+								reminderOffsetMinutes: draft.reminderOffsetMinutes,
 							})
 						}
 					>
-						Clear
+						No time
 					</Button>
-					<Button
-						type="button"
-						variant="secondary"
+				</div>
+				<div className="flex flex-wrap gap-1 pl-6">
+					{TIME_PRESETS.map((preset) => (
+						<Button
+							key={preset.value}
+							type="button"
+							variant={draft.time === preset.value ? "secondary" : "ghost"}
+							size="sm"
+							disabled={!draft.date}
+							onClick={() =>
+								changeDraft({
+									date: draft.date,
+									time: preset.value,
+									reminderOffsetMinutes: draft.reminderOffsetMinutes,
+								})
+							}
+						>
+							{preset.label}
+						</Button>
+					))}
+				</div>
+			</div>
+			<div className="flex items-center gap-2 border-t p-2">
+				<BellIcon
+					className="size-4 shrink-0 stroke-muted-foreground"
+					aria-hidden="true"
+				/>
+				<Select
+					items={TASK_REMINDER_OPTIONS.map((option) => ({
+						label:
+							option.value === "0" && draft.time === null
+								? formatTaskReminderLabel(0, null)
+								: option.label,
+						value: option.value,
+					}))}
+					value={
+						draft.reminderOffsetMinutes === null
+							? "none"
+							: String(draft.reminderOffsetMinutes)
+					}
+					disabled={!draft.date}
+					onValueChange={(next) =>
+						changeDraft({
+							...draft,
+							reminderOffsetMinutes:
+								next === null ? null : parseTaskReminderOffset(next),
+						})
+					}
+				>
+					<SelectTrigger
 						size="sm"
-						onClick={() => changeOpen(false)}
+						className="w-full border-0 bg-transparent shadow-none"
+						aria-label="Task reminder"
 					>
-						Done
-					</Button>
+						<SelectValue placeholder="No reminder" />
+					</SelectTrigger>
+					<SelectContent align="start" alignItemWithTrigger={false}>
+						{TASK_REMINDER_OPTIONS.map((option) => (
+							<SelectItem key={option.value} value={option.value}>
+								{option.value === "0" && draft.time === null
+									? formatTaskReminderLabel(0, null)
+									: option.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+		</>
+	);
+
+	const pickerActions = (
+		<>
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				disabled={!draft.date}
+				onClick={() =>
+					changeDraft({
+						date: null,
+						time: null,
+						reminderOffsetMinutes: null,
+					})
+				}
+			>
+				Clear
+			</Button>
+			<Button
+				type="button"
+				variant="secondary"
+				size="sm"
+				onClick={() => changeOpen(false)}
+			>
+				Done
+			</Button>
+		</>
+	);
+
+	if (isMobile) {
+		return (
+			<Drawer showSwipeHandle open={open} onOpenChange={changeOpen}>
+				<DrawerTrigger render={trigger} />
+				<DrawerContent className="h-[90dvh] max-h-[90dvh]">
+					<DrawerHeader className="border-b px-4 pb-3 text-left">
+						<DrawerTitle>Schedule task</DrawerTitle>
+						<DrawerDescription className="sr-only">
+							Choose a due date, time, and reminder
+						</DrawerDescription>
+					</DrawerHeader>
+					<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+						{pickerFields}
+					</div>
+					<div className="flex shrink-0 items-center justify-between border-t p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+						{pickerActions}
+					</div>
+				</DrawerContent>
+			</Drawer>
+		);
+	}
+
+	return (
+		<Popover open={open} onOpenChange={changeOpen}>
+			<PopoverTrigger render={trigger} />
+			<PopoverContent
+				className="w-auto max-w-[calc(100vw-1rem)] p-0"
+				align="end"
+			>
+				{pickerFields}
+				<div className="flex items-center justify-between border-t p-2">
+					{pickerActions}
 				</div>
 			</PopoverContent>
 		</Popover>
