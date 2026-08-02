@@ -19,6 +19,7 @@ import {
 	consumeTitleFocus,
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
+import { registerOpenPageTitleWriter } from "@/features/pages/client/open-page-title";
 import {
 	getPageQueryOptions,
 	invalidatePage,
@@ -117,10 +118,8 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const collabSession = useCollabSession(pageRoomId(pageId));
 	const collabRoom =
 		collabSession.status === "ready" ? collabSession.room : null;
-	const { sharedTitle, pushTitle } = useSharedTitle(
-		collabRoom,
-		pageQuery.data?.title ?? null,
-	);
+	const { sharedTitle, pushTitle, replaceTitle, replaceTitleIfCurrent } =
+		useSharedTitle(collabRoom, pageQuery.data?.title ?? null);
 
 	const [title, setTitle] = useState<string | null>(null);
 	const [titleError, setTitleError] = useState<string | null>(null);
@@ -211,6 +210,19 @@ export function PageEditor({ pageId }: { pageId: string }) {
 			void flush().finally(() => titleSaveQueues.evictIfIdle(titleQueue));
 		};
 	}, [pageId, readOnly]);
+
+	useEffect(() => {
+		if (readOnly || !collabRoom) return;
+		return registerOpenPageTitleWriter(pageId, {
+			replace(nextTitle) {
+				const previousTitle = replaceTitle(nextTitle);
+				if (previousTitle === null)
+					throw new Error("Shared title is unavailable");
+				return previousTitle;
+			},
+			replaceIfCurrent: replaceTitleIfCurrent,
+		});
+	}, [pageId, readOnly, collabRoom, replaceTitle, replaceTitleIfCurrent]);
 
 	// A collaborator renamed the page: refresh the sidebar/breadcrumb lists
 	// (their PATCH already persisted it). Debounced — remote keystrokes

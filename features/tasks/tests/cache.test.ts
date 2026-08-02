@@ -5,6 +5,8 @@ import {
 	isOptimisticTaskId,
 	listTasksQueryOptions,
 	optimisticallyAddTask,
+	optimisticallyPatchTask,
+	optimisticallyRemoveTask,
 	optimisticallySetTaskCompletion,
 	optimisticallySetTaskSchedule,
 	replaceOptimisticTask,
@@ -177,6 +179,123 @@ test("task schedule updates cached dates immediately and can roll back", async (
 	expect(queryClient.getQueryData<ListTasksOutput>(allKey)).toEqual(
 		previousAll,
 	);
+});
+
+test("task metadata updates immediately and removes reassigned tasks from Mine", async () => {
+	const queryClient = new QueryClient();
+	const mineKey = listTasksQueryOptions("workspace_1", "open", "mine").queryKey;
+	const everyoneKey = listTasksQueryOptions(
+		"workspace_1",
+		"open",
+		"everyone",
+	).queryKey;
+	const previous: ListTasksOutput = { items: [task], hasMore: false };
+	queryClient.setQueryData(mineKey, previous);
+	queryClient.setQueryData(everyoneKey, previous);
+
+	const snapshot = await optimisticallyPatchTask(
+		queryClient,
+		task.id,
+		{ assigneeId: "user_2", assigneeName: "Morgan" },
+		"user_1",
+	);
+
+	expect(queryClient.getQueryData<ListTasksOutput>(mineKey)?.items).toEqual([]);
+	expect(
+		queryClient.getQueryData<ListTasksOutput>(everyoneKey)?.items[0],
+	).toMatchObject({ assigneeId: "user_2", assigneeName: "Morgan" });
+
+	restoreTasksCache(queryClient, snapshot);
+	expect(queryClient.getQueryData<ListTasksOutput>(mineKey)).toEqual(previous);
+	expect(queryClient.getQueryData<ListTasksOutput>(everyoneKey)).toEqual(
+		previous,
+	);
+});
+
+test("rolling back one field preserves a concurrent optimistic task field", async () => {
+	const queryClient = new QueryClient();
+	const allKey = listTasksQueryOptions(
+		"workspace_1",
+		"all",
+		"everyone",
+	).queryKey;
+	queryClient.setQueryData<ListTasksOutput>(allKey, {
+		items: [task],
+		hasMore: false,
+	});
+
+	const scheduleSnapshot = await optimisticallySetTaskSchedule(
+		queryClient,
+		task.id,
+		{
+			dueDate: "2026-08-03",
+			dueTime: "09:00",
+			reminderOffsetMinutes: 15,
+		},
+	);
+	await optimisticallyPatchTask(queryClient, task.id, { title: "New title" });
+	restoreTasksCache(queryClient, scheduleSnapshot);
+
+	expect(queryClient.getQueryData<ListTasksOutput>(allKey)?.items[0]).toEqual({
+		...task,
+		title: "New title",
+	});
+});
+
+test("a failed metadata write does not resurrect a task removed afterward", async () => {
+	const queryClient = new QueryClient();
+	const allKey = listTasksQueryOptions(
+		"workspace_1",
+		"all",
+		"everyone",
+	).queryKey;
+	queryClient.setQueryData<ListTasksOutput>(allKey, {
+		items: [task],
+		hasMore: false,
+	});
+
+	const scheduleSnapshot = await optimisticallySetTaskSchedule(
+		queryClient,
+		task.id,
+		{
+			dueDate: "2026-08-03",
+			dueTime: "09:00",
+			reminderOffsetMinutes: 15,
+		},
+	);
+	await optimisticallyRemoveTask(queryClient, task.id);
+	restoreTasksCache(queryClient, scheduleSnapshot);
+
+	expect(queryClient.getQueryData<ListTasksOutput>(allKey)?.items).toEqual([]);
+});
+
+test("task deletion removes rows immediately and scoped rollback preserves other changes", async () => {
+	const queryClient = new QueryClient();
+	const allKey = listTasksQueryOptions(
+		"workspace_1",
+		"all",
+		"everyone",
+	).queryKey;
+	queryClient.setQueryData<ListTasksOutput>(allKey, {
+		items: [task, otherTask],
+		hasMore: false,
+	});
+
+	const snapshot = await optimisticallyRemoveTask(queryClient, task.id);
+	await optimisticallyPatchTask(queryClient, otherTask.id, {
+		title: "Updated other task",
+	});
+	expect(
+		queryClient
+			.getQueryData<ListTasksOutput>(allKey)
+			?.items.map((item) => item.id),
+	).toEqual([otherTask.id]);
+
+	restoreTasksCache(queryClient, snapshot);
+	expect(queryClient.getQueryData<ListTasksOutput>(allKey)?.items).toEqual([
+		task,
+		{ ...otherTask, title: "Updated other task" },
+	]);
 });
 
 test("optimistic task creation targets matching lists and reconciles the id", async () => {

@@ -25,7 +25,7 @@ import {
 	createPageMutationOptions,
 	invalidatePages,
 } from "@/features/pages/client/queries";
-import { invalidateTasks } from "@/features/tasks/client/queries";
+import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 
 function formatFileSize(bytes: number): string {
 	if (bytes < 1_000) return `${bytes} B`;
@@ -105,7 +105,7 @@ export function MarkdownImportDialog({
 
 			await Promise.all([
 				invalidatePages(queryClient),
-				invalidateTasks(queryClient),
+				invalidateTasksWhenIdle(queryClient),
 			]);
 			onOpenChange(false);
 			if (lastPageId) {
@@ -120,7 +120,7 @@ export function MarkdownImportDialog({
 				setFiles((current) => current.slice(imported));
 				await Promise.all([
 					invalidatePages(queryClient),
-					invalidateTasks(queryClient),
+					invalidateTasksWhenIdle(queryClient),
 				]);
 			}
 			const message =

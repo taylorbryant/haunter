@@ -16,7 +16,7 @@ import {
 	purgePageMutationOptions,
 	restorePageMutationOptions,
 } from "@/features/pages/client/queries";
-import { invalidateTasks } from "@/features/tasks/client/queries";
+import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 
 export function TrashList({ workspaceId }: { workspaceId: string }) {
 	const router = useRouter();
@@ -42,7 +42,7 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 			invalidateTrash(queryClient),
 			invalidatePages(queryClient),
 			invalidatePageNavigation(queryClient, workspaceId),
-			invalidateTasks(queryClient),
+			invalidateTasksWhenIdle(queryClient),
 		]);
 	}
 

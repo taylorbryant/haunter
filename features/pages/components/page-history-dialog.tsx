@@ -30,7 +30,7 @@ import {
 	listPageVersionsQueryOptions,
 	restorePageVersionMutationOptions,
 } from "@/features/pages/client/queries";
-import { invalidateTasks } from "@/features/tasks/client/queries";
+import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +93,7 @@ export function PageHistoryDialog({
 						invalidatePageVersions(queryClient, pageId),
 					];
 					if (result.tasksChanged) {
-						invalidations.push(invalidateTasks(queryClient));
+						invalidations.push(invalidateTasksWhenIdle(queryClient));
 					}
 					if (result.linksChanged) {
 						invalidations.push(invalidateBacklinks(queryClient));

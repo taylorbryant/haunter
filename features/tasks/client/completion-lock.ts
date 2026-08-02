@@ -1,20 +1,43 @@
-export function createTaskCompletionLock() {
-	const pendingTaskIds = new Set<string>();
+export function createTaskWriteLock() {
+	const taskTails = new Map<string, Promise<void>>();
+	let pendingWriteCount = 0;
+	const idleWaiters = new Set<() => void>();
+
+	function notifyIdle() {
+		if (pendingWriteCount !== 0) return;
+		for (const resolve of idleWaiters) resolve();
+		idleWaiters.clear();
+	}
 
 	return {
+		hasPendingWrites() {
+			return pendingWriteCount > 0;
+		},
 		isPending(taskId: string) {
-			return pendingTaskIds.has(taskId);
+			return taskTails.has(taskId);
+		},
+		whenIdle() {
+			if (pendingWriteCount === 0) return Promise.resolve();
+			return new Promise<void>((resolve) => idleWaiters.add(resolve));
 		},
 		async run<T>(taskId: string, action: () => Promise<T>) {
-			if (pendingTaskIds.has(taskId)) {
-				return { started: false as const };
-			}
-			pendingTaskIds.add(taskId);
+			const previous = taskTails.get(taskId) ?? Promise.resolve();
+			pendingWriteCount += 1;
+			const result = previous.catch(() => undefined).then(action);
+			const tail = result.then(
+				() => undefined,
+				() => undefined,
+			);
+			taskTails.set(taskId, tail);
 			try {
-				return { started: true as const, value: await action() };
+				return await result;
 			} finally {
-				pendingTaskIds.delete(taskId);
+				pendingWriteCount -= 1;
+				if (taskTails.get(taskId) === tail) taskTails.delete(taskId);
+				notifyIdle();
 			}
 		},
 	};
 }
+
+export const taskWriteLock = createTaskWriteLock();

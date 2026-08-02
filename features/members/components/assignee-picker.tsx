@@ -77,7 +77,7 @@ function AssigneePickerContent({
 	onClose,
 }: {
 	value: string | null;
-	onChange: (next: string | null) => void;
+	onChange: (next: string | null, label: string | null) => void;
 	onClose: () => void;
 }) {
 	const orgQuery = authClient.useActiveOrganization();
@@ -96,7 +96,7 @@ function AssigneePickerContent({
 					<DropdownMenuItem
 						key={member.id}
 						onClick={() => {
-							onChange(member.userId);
+							onChange(member.userId, name);
 							onClose();
 						}}
 					>
@@ -116,7 +116,7 @@ function AssigneePickerContent({
 					<DropdownMenuItem
 						className="text-muted-foreground"
 						onClick={() => {
-							onChange(null);
+							onChange(null, null);
 							onClose();
 						}}
 					>
@@ -142,7 +142,7 @@ export function AssigneePicker({
 }: {
 	value: string | null;
 	label?: string | null;
-	onChange: (next: string | null) => void;
+	onChange: (next: string | null, label?: string | null) => void;
 	disabled?: boolean;
 	className?: string;
 }) {

@@ -75,6 +75,11 @@ import {
 } from "@/features/pages/client/new-page-focus";
 import { appendSubpageLinkToOpenPage } from "@/features/pages/client/open-page-content";
 import {
+	type OpenPageTitleSnapshot,
+	optimisticallySetOpenPageTitle,
+	restoreOpenPageTitle,
+} from "@/features/pages/client/open-page-title";
+import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
 	getPageNavigationQueryOptions,
@@ -84,6 +89,10 @@ import {
 	invalidatePages,
 	invalidateTrash,
 	listPagesQueryOptions,
+	optimisticallySetPagePlacement,
+	optimisticallySetPageTitle,
+	restorePagePlacementInCache,
+	restorePageTitleInCache,
 	setFavoriteInNavigationCache,
 	setPageFavoriteMutationOptions,
 	setPageTitleInCache,
@@ -95,7 +104,7 @@ import {
 	PAGE_TITLE_TOO_LONG_MESSAGE,
 	type PageMeta,
 } from "@/features/pages/schemas";
-import { invalidateTasks } from "@/features/tasks/client/queries";
+import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { cn } from "@/lib/utils";
 
@@ -219,7 +228,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		...createPageMutationOptions(),
 		meta: { errorMode: "inline" },
 	});
-	const updateMutation = useMutation(updatePageMutationOptions());
+	const updateMutation = useMutation({
+		...updatePageMutationOptions(),
+		meta: { errorMode: "silent" },
+	});
 	const renameMutation = useMutation({
 		...updatePageMutationOptions(),
 		meta: { errorMode: "inline" },
@@ -251,6 +263,8 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		zone: "before" | "after" | "inside";
 	} | null>(null);
 	const menuFocusTransferPageId = useRef<string | null>(null);
+	const pendingMovePageIds = useRef(new Set<string>());
+	const pendingRenamePageIds = useRef(new Set<string>());
 
 	useCommand(
 		canEdit && synced
@@ -342,8 +356,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		);
 	}
 
-	function commitRename(pageId: string) {
-		if (renameMutation.isPending) return;
+	async function commitRename(pageId: string) {
+		if (renameMutation.isPending || pendingRenamePageIds.current.has(pageId)) {
+			return;
+		}
+		const node = nodesById.get(pageId);
+		if (!node) return;
 		const title = renameValue.trim();
 		if (!title) {
 			setRenamingId((current) => (current === pageId ? null : current));
@@ -354,28 +372,71 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			setRenameError({ pageId, message: PAGE_TITLE_TOO_LONG_MESSAGE });
 			return;
 		}
+		pendingRenamePageIds.current.add(pageId);
 		setRenameError(null);
-		renameMutation.mutate(
-			{ path: { id: pageId }, body: { title } },
-			{
-				onSuccess: (page) => {
-					setRenamingId((current) => (current === pageId ? null : current));
-					setRenameError((current) =>
-						current?.pageId === pageId ? null : current,
-					);
-					setPageTitleInCache(queryClient, page.id, page.title, page.updatedAt);
-					void invalidatePages(queryClient);
+		let snapshot: Awaited<
+			ReturnType<typeof optimisticallySetPageTitle>
+		> | null = null;
+		let sharedTitleSnapshot: OpenPageTitleSnapshot | null = null;
+		try {
+			if (!(await flushPendingPageSave(pageId))) {
+				setRenameError({
+					pageId,
+					message: "Save the current page before renaming it.",
+				});
+				return;
+			}
+			snapshot = await optimisticallySetPageTitle(
+				queryClient,
+				workspaceId,
+				pageId,
+				title,
+				{
+					previousTitle: node.title,
+					previousUpdatedAt: node.updatedAt,
 				},
-				onError: (error) =>
-					setRenameError({
-						pageId,
-						message: userErrorMessage(error, "The page could not be renamed."),
-					}),
-			},
-		);
+			);
+			sharedTitleSnapshot = optimisticallySetOpenPageTitle(pageId, title);
+			setRenamingId((current) => (current === pageId ? null : current));
+			const page = await renameMutation.mutateAsync({
+				path: { id: pageId },
+				body: { title },
+			});
+			setRenameError((current) =>
+				current?.pageId === pageId ? null : current,
+			);
+			setPageTitleInCache(queryClient, page.id, page.title, page.updatedAt);
+		} catch (error) {
+			if (snapshot) {
+				restorePageTitleInCache(
+					queryClient,
+					pageId,
+					title,
+					snapshot.previousTitle,
+					snapshot.previousUpdatedAt,
+				);
+			}
+			if (sharedTitleSnapshot) {
+				restoreOpenPageTitle(pageId, title, sharedTitleSnapshot);
+			}
+			setRenamingId(pageId);
+			setRenameError({
+				pageId,
+				message: userErrorMessage(
+					error,
+					snapshot
+						? "The page could not be renamed."
+						: "The current page could not be saved before renaming.",
+				),
+			});
+		} finally {
+			pendingRenamePageIds.current.delete(pageId);
+			if (snapshot) void invalidatePages(queryClient);
+		}
 	}
 
 	function startRename(node: TreeNode) {
+		if (renameMutation.isPending) return;
 		setRenameError(null);
 		setRenamingId(node.id);
 		setRenameValue(node.title);
@@ -452,7 +513,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						invalidateTrash(queryClient),
 						// Tasks on trashed pages are filtered out server-side, so the
 						// subtree's tasks just left the My Tasks list.
-						invalidateTasks(queryClient),
+						invalidateTasksWhenIdle(queryClient),
 					]);
 					if (activePageId && subtree.has(activePageId)) {
 						router.push(`/w/${workspaceId}`);
@@ -488,11 +549,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		);
 	}
 
-	function performDrop(
+	async function performDrop(
 		draggedId: string,
 		targetId: string,
 		zone: "before" | "after" | "inside",
 	) {
+		if (pendingMovePageIds.current.has(draggedId)) return;
 		const dragged = nodesById.get(draggedId);
 		const target = nodesById.get(targetId);
 		if (!dragged || !target || !canDropOn(targetId)) return;
@@ -533,11 +595,32 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			return;
 		}
 
-		updateMutation.mutate(
-			{ path: { id: draggedId }, body: { parentPageId, position } },
-			{ onSuccess: () => invalidatePages(queryClient) },
-		);
 		if (zone === "inside" && !expanded[target.id]) toggle(target.id);
+		setActionError(null);
+		pendingMovePageIds.current.add(draggedId);
+		let snapshot: Awaited<
+			ReturnType<typeof optimisticallySetPagePlacement>
+		> | null = null;
+		try {
+			snapshot = await optimisticallySetPagePlacement(
+				queryClient,
+				draggedId,
+				parentPageId,
+				position,
+			);
+			await updateMutation.mutateAsync({
+				path: { id: draggedId },
+				body: { parentPageId, position },
+			});
+		} catch (error) {
+			if (snapshot) {
+				restorePagePlacementInCache(queryClient, draggedId, snapshot);
+			}
+			setActionError(userErrorMessage(error, "The page could not be moved."));
+		} finally {
+			pendingMovePageIds.current.delete(draggedId);
+			void invalidatePages(queryClient);
+		}
 	}
 
 	function zoneFromPointer(
@@ -612,7 +695,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						const draggedId =
 							event.dataTransfer.getData("text/plain") || dragId;
 						if (draggedId) {
-							performDrop(draggedId, node.id, zoneFromPointer(event));
+							void performDrop(draggedId, node.id, zoneFromPointer(event));
 						}
 						setDragId(null);
 						setDropTarget(null);
@@ -630,10 +713,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 								setRenameError(null);
 							}}
 							onKeyDown={(event) => {
-								if (event.key === "Enter") commitRename(node.id);
+								if (event.key === "Enter") void commitRename(node.id);
 								if (event.key === "Escape") setRenamingId(null);
 							}}
-							onBlur={() => commitRename(node.id)}
+							onBlur={() => void commitRename(node.id)}
 						/>
 					) : (
 						<SidebarMenuButton
@@ -965,7 +1048,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						className="flex flex-col gap-4"
 						onSubmit={(event) => {
 							event.preventDefault();
-							if (renamingId) commitRename(renamingId);
+							if (renamingId) void commitRename(renamingId);
 						}}
 					>
 						<Input

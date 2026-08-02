@@ -16,6 +16,7 @@ import {
 import {
 	invalidateNotificationSettings,
 	notificationSettingsQueryOptions,
+	optimisticallyUpdateNotificationSettings,
 	subscribePushMutationOptions,
 	testPushMutationOptions,
 	unsubscribePushMutationOptions,
@@ -31,6 +32,17 @@ export function NotificationSettingsPanel() {
 	const updateSettings = useMutation({
 		...updateNotificationSettingsMutationOptions(),
 		meta: { errorMode: "inline" },
+		onMutate: (variables) =>
+			optimisticallyUpdateNotificationSettings(queryClient, variables.body),
+		onError: (_error, _variables, context) => {
+			if (context?.previous) {
+				queryClient.setQueryData(context.queryKey, context.previous);
+			}
+		},
+		onSuccess: (result, _variables, context) => {
+			if (context) queryClient.setQueryData(context.queryKey, result);
+		},
+		onSettled: () => void invalidateNotificationSettings(queryClient),
 	});
 	const subscribe = useMutation({
 		...subscribePushMutationOptions(),
@@ -86,7 +98,6 @@ export function NotificationSettingsPanel() {
 		updateSettings.mutate(
 			{ body: { overdueTasksEnabled: checked } },
 			{
-				onSuccess: () => void invalidateNotificationSettings(queryClient),
 				onError: (updateError) =>
 					setError(
 						userErrorMessage(
@@ -104,7 +115,6 @@ export function NotificationSettingsPanel() {
 		updateSettings.mutate(
 			{ body: { taskAssignmentsEnabled: checked } },
 			{
-				onSuccess: () => void invalidateNotificationSettings(queryClient),
 				onError: (updateError) =>
 					setError(
 						userErrorMessage(
@@ -122,7 +132,6 @@ export function NotificationSettingsPanel() {
 		updateSettings.mutate(
 			{ body: { taskRemindersEnabled: checked } },
 			{
-				onSuccess: () => void invalidateNotificationSettings(queryClient),
 				onError: (updateError) =>
 					setError(
 						userErrorMessage(

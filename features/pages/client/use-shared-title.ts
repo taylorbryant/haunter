@@ -50,17 +50,38 @@ export function useSharedTitle(
 		}
 	}, [room, dbTitleLoaded]);
 
-	const pushTitle = useCallback(
+	const replaceTitle = useCallback(
 		(next: string) => {
-			if (!room) return;
+			if (!room) return null;
 			const yTitle = room.doc.getText("title");
+			const previous = yTitle.toString();
 			room.doc.transact(() => {
 				yTitle.delete(0, yTitle.length);
 				yTitle.insert(0, next);
 			});
+			return previous;
 		},
 		[room],
 	);
+	const replaceTitleIfCurrent = useCallback(
+		(expected: string, next: string) => {
+			if (!room) return false;
+			const yTitle = room.doc.getText("title");
+			if (yTitle.toString() !== expected) return false;
+			room.doc.transact(() => {
+				yTitle.delete(0, yTitle.length);
+				yTitle.insert(0, next);
+			});
+			return true;
+		},
+		[room],
+	);
+	const pushTitle = useCallback(
+		(next: string) => {
+			replaceTitle(next);
+		},
+		[replaceTitle],
+	);
 
-	return { sharedTitle, pushTitle };
+	return { sharedTitle, pushTitle, replaceTitle, replaceTitleIfCurrent };
 }

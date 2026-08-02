@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
 	createPage,
@@ -290,6 +290,18 @@ export function setPageTitleInCache(
 		rq(getPage).key({ path: { id } }),
 		(current) => (current ? { ...current, title, updatedAt } : current),
 	);
+	queryClient.setQueriesData<{ items: PageMeta[] }>(
+		rq(listPages).filter(),
+		(current) =>
+			current
+				? {
+						...current,
+						items: current.items.map((page) =>
+							page.id === id ? { ...page, title, updatedAt } : page,
+						),
+					}
+				: current,
+	);
 	queryClient.setQueriesData<PageNavigationOutput>(
 		rq(getPageNavigation).filter(),
 		(current) =>
@@ -304,6 +316,202 @@ export function setPageTitleInCache(
 					}
 				: current,
 	);
+}
+
+export type PageTitleCacheSnapshot = {
+	previousTitle: string;
+	previousUpdatedAt: string;
+};
+
+/**
+ * Cancel every request that can project a page title before applying an
+ * optimistic rename. The snapshot is read after cancellation so a completed
+ * editor flush becomes the rollback base and an older in-flight response
+ * cannot replace the optimistic title.
+ */
+export async function optimisticallySetPageTitle(
+	queryClient: QueryClient,
+	workspaceId: string,
+	id: string,
+	title: string,
+	fallback: PageTitleCacheSnapshot,
+): Promise<PageTitleCacheSnapshot> {
+	await Promise.all([
+		queryClient.cancelQueries(
+			{ queryKey: rq(getPage).key({ path: { id } }), exact: true },
+			{ revert: false, silent: true },
+		),
+		queryClient.cancelQueries(
+			{
+				queryKey: rq(listPages).key({ path: { workspaceId } }),
+				exact: true,
+			},
+			{ revert: false, silent: true },
+		),
+		queryClient.cancelQueries(
+			{
+				queryKey: rq(getPageNavigation).key({ path: { workspaceId } }),
+				exact: true,
+			},
+			{ revert: false, silent: true },
+		),
+	]);
+
+	const candidates: PageTitleCacheSnapshot[] = [fallback];
+	const fullPage = queryClient.getQueryData<Page>(
+		rq(getPage).key({ path: { id } }),
+	);
+	if (fullPage) {
+		candidates.push({
+			previousTitle: fullPage.title,
+			previousUpdatedAt: fullPage.updatedAt,
+		});
+	}
+	const listedPage = queryClient
+		.getQueryData<{ items: PageMeta[] }>(
+			rq(listPages).key({ path: { workspaceId } }),
+		)
+		?.items.find((item) => item.id === id);
+	if (listedPage) {
+		candidates.push({
+			previousTitle: listedPage.title,
+			previousUpdatedAt: listedPage.updatedAt,
+		});
+	}
+	const snapshot = candidates.reduce((latest, candidate) =>
+		candidate.previousUpdatedAt > latest.previousUpdatedAt ? candidate : latest,
+	);
+
+	setPageTitleInCache(queryClient, id, title, snapshot.previousUpdatedAt);
+	return snapshot;
+}
+
+export function restorePageTitleInCache(
+	queryClient: QueryClient,
+	id: string,
+	optimisticTitle: string,
+	previousTitle: string,
+	previousUpdatedAt: string,
+) {
+	queryClient.setQueryData<Page>(
+		rq(getPage).key({ path: { id } }),
+		(current) =>
+			current?.title === optimisticTitle
+				? { ...current, title: previousTitle, updatedAt: previousUpdatedAt }
+				: current,
+	);
+	queryClient.setQueriesData<{ items: PageMeta[] }>(
+		rq(listPages).filter(),
+		(current) =>
+			current
+				? {
+						...current,
+						items: current.items.map((page) =>
+							page.id === id && page.title === optimisticTitle
+								? {
+										...page,
+										title: previousTitle,
+										updatedAt: previousUpdatedAt,
+									}
+								: page,
+						),
+					}
+				: current,
+	);
+	queryClient.setQueriesData<PageNavigationOutput>(
+		rq(getPageNavigation).filter(),
+		(current) =>
+			current
+				? {
+						favorites: current.favorites.map((page) =>
+							page.id === id && page.title === optimisticTitle
+								? {
+										...page,
+										title: previousTitle,
+										updatedAt: previousUpdatedAt,
+									}
+								: page,
+						),
+						recents: current.recents.map((page) =>
+							page.id === id && page.title === optimisticTitle
+								? {
+										...page,
+										title: previousTitle,
+										updatedAt: previousUpdatedAt,
+									}
+								: page,
+						),
+					}
+				: current,
+	);
+}
+
+export type PagePlacementCacheSnapshot = Array<{
+	queryKey: QueryKey;
+	previousParentPageId: string | null;
+	previousPosition: number;
+	optimisticParentPageId: string | null;
+	optimisticPosition: number;
+}>;
+
+export async function optimisticallySetPagePlacement(
+	queryClient: QueryClient,
+	id: string,
+	parentPageId: string | null,
+	position: number,
+): Promise<PagePlacementCacheSnapshot> {
+	const filter = rq(listPages).filter();
+	await queryClient.cancelQueries(filter, { revert: false, silent: true });
+	const snapshot: PagePlacementCacheSnapshot = [];
+	for (const [queryKey, current] of queryClient.getQueriesData<{
+		items: PageMeta[];
+	}>(filter)) {
+		const page = current?.items.find((item) => item.id === id);
+		if (!current || !page) continue;
+		snapshot.push({
+			queryKey,
+			previousParentPageId: page.parentPageId,
+			previousPosition: page.position,
+			optimisticParentPageId: parentPageId,
+			optimisticPosition: position,
+		});
+		queryClient.setQueryData<{ items: PageMeta[] }>(queryKey, {
+			...current,
+			items: current.items.map((item) =>
+				item.id === id ? { ...item, parentPageId, position } : item,
+			),
+		});
+	}
+	return snapshot;
+}
+
+export function restorePagePlacementInCache(
+	queryClient: QueryClient,
+	id: string,
+	snapshot: PagePlacementCacheSnapshot,
+) {
+	for (const entry of snapshot) {
+		queryClient.setQueryData<{ items: PageMeta[] }>(
+			entry.queryKey,
+			(current) =>
+				current
+					? {
+							...current,
+							items: current.items.map((page) =>
+								page.id === id &&
+								page.parentPageId === entry.optimisticParentPageId &&
+								page.position === entry.optimisticPosition
+									? {
+											...page,
+											parentPageId: entry.previousParentPageId,
+											position: entry.previousPosition,
+										}
+									: page,
+							),
+						}
+					: current,
+		);
+	}
 }
 
 /**

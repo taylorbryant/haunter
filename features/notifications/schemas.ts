@@ -142,6 +142,7 @@ export const NotificationSettingsSchema = NotificationPreferencesSchema.extend({
 	pushSupported: z.boolean(),
 	vapidPublicKey: z.string().nullable(),
 });
+export type NotificationSettings = z.infer<typeof NotificationSettingsSchema>;
 
 export const UpdateNotificationPreferencesSchema = z
 	.object({
@@ -153,6 +154,9 @@ export const UpdateNotificationPreferencesSchema = z
 	.refine((value) => Object.keys(value).length > 0, {
 		message: "At least one notification preference is required.",
 	});
+export type UpdateNotificationPreferences = z.infer<
+	typeof UpdateNotificationPreferencesSchema
+>;
 
 export const InitializeNotificationTimezoneSchema = z.object({
 	timezone: z.string().min(1).max(100),

@@ -43,18 +43,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toast";
 import type { NotificationsCacheSnapshot } from "@/features/notifications/client/queries";
 import {
+	commitNotificationReadCache,
 	invalidateNotifications,
 	listNotificationsQueryOptions,
+	markAllNotificationsReadInCache,
 	markAllNotificationsReadMutationOptions,
+	markNotificationReadInCache,
 	markNotificationReadMutationOptions,
 	removeNotificationFromCache,
+	restoreNotificationReadCache,
 	restoreNotificationsCache,
 } from "@/features/notifications/client/queries";
 import type { Notification } from "@/features/notifications/schemas";
 import { invalidatePage } from "@/features/pages/client/queries";
+import { taskWriteLock } from "@/features/tasks/client/completion-lock";
 import {
 	actOnTaskNotificationMutationOptions,
-	invalidateTasks,
+	invalidateTasksWhenIdle,
 } from "@/features/tasks/client/queries";
 import { formatDueDateTimeLabel, parseIsoDate } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
@@ -326,8 +331,35 @@ export function NotificationCenter() {
 	const markRead = useMutation({
 		...markNotificationReadMutationOptions(),
 		meta: { errorMode: "silent" },
+		onMutate: (variables) => {
+			const item = query.data?.items.find(
+				(notification) => notification.id === variables.path.id,
+			);
+			return item
+				? markNotificationReadInCache(queryClient, item)
+				: Promise.resolve([]);
+		},
+		onError: (_error, _variables, snapshot) => {
+			if (snapshot) restoreNotificationReadCache(queryClient, snapshot);
+		},
+		onSuccess: (_data, _variables, snapshot) => {
+			if (snapshot) commitNotificationReadCache(queryClient, snapshot);
+		},
+		onSettled: () => void invalidateNotifications(queryClient),
 	});
-	const markAll = useMutation(markAllNotificationsReadMutationOptions());
+	const markAll = useMutation({
+		...markAllNotificationsReadMutationOptions(),
+		meta: { errorMode: "silent" },
+		onMutate: () => markAllNotificationsReadInCache(queryClient),
+		onError: (error, _variables, snapshot) => {
+			if (snapshot) restoreNotificationReadCache(queryClient, snapshot);
+			reportUserError(error, "Notifications could not be marked as read.");
+		},
+		onSuccess: (_data, _variables, snapshot) => {
+			if (snapshot) commitNotificationReadCache(queryClient, snapshot);
+		},
+		onSettled: () => void invalidateNotifications(queryClient),
+	});
 	const action = useMutation({
 		...actOnTaskNotificationMutationOptions(),
 		meta: { errorMode: "silent" },
@@ -360,19 +392,13 @@ export function NotificationCenter() {
 		setOpen(false);
 		if (isMobile) setOpenMobile(false);
 		if (item.readAt === null) {
-			markRead.mutate(
-				{ path: { id: item.id } },
-				{ onSettled: () => invalidateNotifications(queryClient) },
-			);
+			markRead.mutate({ path: { id: item.id } });
 		}
 		router.push(notificationUrl(item));
 	}
 
 	function markAllRead() {
-		markAll.mutate(
-			{ body: {} },
-			{ onSuccess: () => invalidateNotifications(queryClient) },
-		);
+		markAll.mutate({ body: {} });
 	}
 
 	async function actOnNotification(
@@ -387,27 +413,31 @@ export function NotificationCenter() {
 		if (pendingActionIdsRef.current.has(item.id)) return;
 		pendingActionIdsRef.current.add(item.id);
 		setPendingActionIds((current) => new Set(current).add(item.id));
-		const variables =
-			request.action === "complete"
-				? { path: { id: item.id }, body: { action: "complete" as const } }
-				: {
-						path: { id: item.id },
-						body: {
-							action: "snooze" as const,
-							preset: request.preset,
-						},
-					};
-		let cacheSnapshot: NotificationsCacheSnapshot | null = null;
-		let result: Awaited<ReturnType<typeof action.mutateAsync>>;
+		let result: Awaited<ReturnType<typeof action.mutateAsync>> | null = null;
 		try {
-			cacheSnapshot = await removeNotificationFromCache(queryClient, item);
-			result = await action.mutateAsync(variables);
-		} catch (error) {
-			if (cacheSnapshot) {
-				restoreNotificationsCache(queryClient, cacheSnapshot);
-			}
-			reportUserError(error, "The notification could not be updated.");
-			return;
+			result = await taskWriteLock.run(item.payload.taskId, async () => {
+				const variables =
+					request.action === "complete"
+						? { path: { id: item.id }, body: { action: "complete" as const } }
+						: {
+								path: { id: item.id },
+								body: {
+									action: "snooze" as const,
+									preset: request.preset,
+								},
+							};
+				let cacheSnapshot: NotificationsCacheSnapshot | null = null;
+				try {
+					cacheSnapshot = await removeNotificationFromCache(queryClient, item);
+					return await action.mutateAsync(variables);
+				} catch (error) {
+					if (cacheSnapshot) {
+						restoreNotificationsCache(queryClient, cacheSnapshot);
+					}
+					reportUserError(error, "The notification could not be updated.");
+					return null;
+				}
+			});
 		} finally {
 			pendingActionIdsRef.current.delete(item.id);
 			setPendingActionIds((current) => {
@@ -416,6 +446,7 @@ export function NotificationCenter() {
 				return next;
 			});
 		}
+		if (!result) return;
 
 		toast.add({
 			title:
@@ -424,7 +455,7 @@ export function NotificationCenter() {
 		});
 		await Promise.allSettled([
 			invalidateNotifications(queryClient),
-			invalidateTasks(queryClient),
+			invalidateTasksWhenIdle(queryClient),
 			result.pageId
 				? invalidatePage(queryClient, result.pageId)
 				: Promise.resolve(),

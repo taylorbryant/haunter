@@ -84,7 +84,7 @@ import {
 } from "@/features/pages/lib/reconcile-page-link-blocks";
 import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
-import { invalidateTasks } from "@/features/tasks/client/queries";
+import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 import { reconcileTaskBlockProps } from "@/features/tasks/lib/reconcile-task-block-props";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
@@ -697,7 +697,7 @@ export default function HaunterEditor({
 						invalidateBacklinks(queryClient);
 					}
 					if (result.tasksChanged) {
-						invalidateTasks(queryClient);
+						invalidateTasksWhenIdle(queryClient);
 						invalidateNotifications(queryClient);
 					}
 					return {
