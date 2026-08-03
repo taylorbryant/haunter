@@ -1,9 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
-import {
-	createTestTenant,
-	createTestUserActor,
-} from "@beignet/core/testing";
+import { createTestTenant, createTestUserActor } from "@beignet/core/testing";
 import {
 	createTestContextFactory,
 	createTestPorts,

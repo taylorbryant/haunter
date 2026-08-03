@@ -10,6 +10,10 @@ import { createInMemoryDevtools } from "@beignet/devtools";
 import { createTestApp, createTestRequester } from "@beignet/web/testing";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import {
+	createTestDocumentRegistryRepository,
+	createTestDocumentStore,
+} from "@/features/documents/tests/helpers";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
@@ -33,7 +37,6 @@ import {
 } from "../contracts";
 import { pageRoutes } from "../routes";
 import {
-	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageNavigationRepository,
 	createTestPageRepository,
@@ -63,7 +66,8 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageNavigation = createTestPageNavigationRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
-	const pageCollaboration = createTestPageCollaborationPort();
+	const documents = createTestDocumentRegistryRepository();
+	const documentStore = createTestDocumentStore();
 	// Every signed-in test user is an owner of their active workspace.
 	const members = {
 		async findRole() {
@@ -79,11 +83,12 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
+			documents,
+			documentStore,
 			gate: appPorts.gate,
 			members,
 			pageLinks,
 			pageNavigation,
-			pageCollaboration,
 			pages,
 			pageVersions,
 			tasks,
@@ -220,7 +225,7 @@ describe("pageRoutes", () => {
 
 		await app.stop();
 
-		expect(fetched.content).toEqual(initialContent);
+		expect(fetched.content).toMatchObject(initialContent);
 		expect(created.contentUpdatedAt).toBe(fetched.contentUpdatedAt);
 	});
 
@@ -306,7 +311,7 @@ describe("pageRoutes", () => {
 			body: { title: "7/2 - Meeting with Josh" },
 		});
 
-		expect(fetched.content).toEqual(content);
+		expect(fetched.content).toMatchObject(content);
 		expect(listed.items).toHaveLength(2);
 		expect(renamed.title).toBe("7/2 - Meeting with Josh");
 

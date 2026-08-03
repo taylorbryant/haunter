@@ -1,11 +1,13 @@
 import { createTenant, createTenantScope } from "@beignet/core/ports";
-import { getServer } from "@/server";
+import { isDocumentStoreUnavailable } from "@/features/documents/errors";
+import { readCollaborativePageProjection } from "@/features/documents/service";
 import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
-import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
 import {
 	enforceSharedFileRateLimit,
 	enforceSharedFileTokenRateLimit,
 } from "@/features/shares/lib/shared-file-rate-limit";
+import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
+import { getServer } from "@/server";
 
 /**
  * Serve files embedded in a shared page to anonymous visitors. The share
@@ -44,7 +46,23 @@ export async function GET(
 	if (!key.startsWith(`pages/${share.workspaceId}/${share.pageId}/`)) {
 		return new Response(null, { status: 404 });
 	}
-	if (!contentReferencesFileKey(page.content, key)) {
+	let content = page.content;
+	try {
+		content = (
+			await readCollaborativePageProjection({
+				scope,
+				entityId: page.id,
+				ports: server.ports,
+			})
+		).content;
+	} catch (error) {
+		if (!isDocumentStoreUnavailable(error)) throw error;
+		server.ports.logger.warn(
+			"Serving a file from a stale page projection while the document store is unavailable",
+			{ error, pageId: page.id },
+		);
+	}
+	if (!contentReferencesFileKey(content, key)) {
 		return new Response(null, { status: 404 });
 	}
 

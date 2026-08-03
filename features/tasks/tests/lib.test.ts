@@ -110,6 +110,7 @@ describe("extractTaskBlocks", () => {
 				reminderOffsetMinutes: null,
 				assignee: null,
 				useDefaultAssignee: false,
+				rawAssignee: "",
 			},
 			{
 				blockId: "t2",
@@ -120,6 +121,7 @@ describe("extractTaskBlocks", () => {
 				reminderOffsetMinutes: null,
 				assignee: null,
 				useDefaultAssignee: false,
+				rawAssignee: "",
 			},
 		]);
 	});

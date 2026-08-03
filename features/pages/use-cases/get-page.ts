@@ -1,4 +1,6 @@
 import "@beignet/core/server-only";
+import { isDocumentStoreUnavailable } from "@/features/documents/errors";
+import { readCollaborativePageProjection } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -17,6 +19,24 @@ export const getPageUseCase = useCase
 		}
 
 		await ctx.gate.authorize("pages.read", page);
+		try {
+			const projection = await readCollaborativePageProjection({
+				scope,
+				entityId: page.id,
+				ports: ctx.ports,
+			});
+			return {
+				...page,
+				title: projection.title,
+				content: projection.content,
+			};
+		} catch (error) {
+			if (!isDocumentStoreUnavailable(error)) throw error;
+			ctx.ports.logger.warn(
+				"Serving a stale read-only page projection while the document store is unavailable",
+				{ error, pageId: page.id },
+			);
+		}
 
 		return page;
 	});

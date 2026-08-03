@@ -10,6 +10,11 @@ import {
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import type { WorkspacePageEvent } from "@/features/collab/workspace-events";
+import { DocumentStoreUnavailableError } from "@/features/documents/errors";
+import type { DocumentStorePort } from "@/features/documents/ports";
+import { createTestDocumentRegistryRepository } from "@/features/documents/tests/helpers";
+import { createTestDocumentStore } from "@/features/documents/tests/helpers";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import type {
 	PageNavigationRepository,
@@ -39,7 +44,6 @@ import {
 	updatePageUseCase,
 } from "../use-cases";
 import {
-	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageNavigationRepository,
 	createTestPageRepository,
@@ -51,9 +55,13 @@ function createTester(
 	pages: PageRepository,
 	workspaceId: string,
 	tasks = createTestTaskRepository(),
-	role = "owner",
-	pageCollaboration = createTestPageCollaborationPort(),
+	role: "owner" | "viewer" = "owner",
 	pageNavigation = createTestPageNavigationRepository({ pages }),
+	documentStore: DocumentStorePort = createTestDocumentStore(),
+	eventHooks?: {
+		scheduled: Array<() => Promise<void>>;
+		published: WorkspacePageEvent[];
+	},
 ) {
 	const auth = {
 		user: {
@@ -67,6 +75,25 @@ function createTester(
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
+	const documents = createTestDocumentRegistryRepository();
+	const members = {
+		async findRole() {
+			return role;
+		},
+		async listForUser() {
+			return [];
+		},
+		async listByWorkspace() {
+			return [
+				{
+					userId,
+					name: "Test User",
+					email: `${userId}@example.com`,
+					role,
+				},
+			];
+		},
+	};
 	const notificationInbox = {
 		async resolveTaskNotifications() {},
 		async dismissScheduledForTasks() {},
@@ -77,19 +104,37 @@ function createTester(
 			overrides: {
 				gate: appPorts.gate,
 				canvases,
+				documents,
+				members,
 				notificationInbox,
 				pageLinks,
 				pageNavigation,
-				pageCollaboration,
 				pages,
 				pageVersions,
 				tasks,
 				devtools: createInMemoryDevtools(),
+				...(eventHooks
+					? {
+							afterResponse: {
+								schedule(work: () => Promise<void>) {
+									eventHooks.scheduled.push(work);
+								},
+							},
+							workspaceEvents: {
+								async publish(event: WorkspacePageEvent) {
+									eventHooks.published.push(event);
+								},
+							},
+						}
+					: {}),
+				...(documentStore ? { documentStore } : {}),
 			},
 			transaction: {
 				ports: (ports) => ({
 					...ports,
 					canvases,
+					documents,
+					members,
 					notificationInbox,
 					pageLinks,
 					pageNavigation,
@@ -121,13 +166,9 @@ function createTester(
 async function createFixture(userId = "user_test") {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository({ pages });
-	const publishedSubpageLinks: Parameters<
-		ReturnType<typeof createTestPageCollaborationPort>["publishSubpageLink"]
-	>[0][] = [];
-	const pageCollaboration = createTestPageCollaborationPort(
-		publishedSubpageLinks,
-	);
 	const pageNavigation = createTestPageNavigationRepository({ pages });
+	const scheduled: Array<() => Promise<void>> = [];
+	const publishedWorkspaceEvents: WorkspacePageEvent[] = [];
 	// Better Auth org ids are nanoid-style, not UUIDs — use a matching shape so
 	// schema validation is exercised realistically.
 	const workspace = {
@@ -140,8 +181,9 @@ async function createFixture(userId = "user_test") {
 		workspace.id,
 		tasks,
 		"owner",
-		pageCollaboration,
 		pageNavigation,
+		createTestDocumentStore(),
+		{ scheduled, published: publishedWorkspaceEvents },
 	);
 	const ctx = await tester.ctx();
 	const scope = createTenantScope(createTestTenant(workspace.id));
@@ -153,15 +195,105 @@ async function createFixture(userId = "user_test") {
 		scope,
 		tester,
 		ctx,
-		publishedSubpageLinks,
 		pageNavigation,
+		publishedWorkspaceEvents,
+		async flushAfterResponse() {
+			while (scheduled.length > 0) {
+				const work = scheduled.shift();
+				if (work) await work();
+			}
+		},
 	};
 }
 
 describe("pages use cases", () => {
+	it("broadcasts page-tree events only after mutations commit", async () => {
+		const {
+			workspace,
+			tester,
+			ctx,
+			publishedWorkspaceEvents,
+			flushAfterResponse,
+		} = await createFixture();
+		const page = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Draft" },
+			{ ctx },
+		);
+		expect(publishedWorkspaceEvents).toEqual([]);
+
+		await flushAfterResponse();
+		expect(publishedWorkspaceEvents.map((event) => event.type)).toEqual([
+			"page.created",
+		]);
+		await tester.run(
+			updatePageUseCase,
+			{ id: page.id, title: "Renamed", icon: "👻", position: 2 },
+			{ ctx },
+		);
+		await flushAfterResponse();
+		expect(publishedWorkspaceEvents.map((event) => event.type)).toEqual([
+			"page.created",
+			"page.renamed",
+			"page.iconChanged",
+			"page.moved",
+		]);
+
+		await tester.run(deletePageUseCase, { id: page.id }, { ctx });
+		await flushAfterResponse();
+		await tester.run(restorePageUseCase, { id: page.id }, { ctx });
+		await flushAfterResponse();
+		expect(
+			publishedWorkspaceEvents.slice(-2).map((event) => event.type),
+		).toEqual(["page.trashed", "page.restored"]);
+		expect(
+			publishedWorkspaceEvents.every(
+				(event) =>
+					event.workspaceId === workspace.id && event.pageId === page.id,
+			),
+		).toBe(true);
+	});
+
+	it("falls back to the last SQLite page projection during a document-store outage", async () => {
+		const pages = createTestPageRepository();
+		const workspaceId = crypto.randomUUID().replaceAll("-", "");
+		const documentStore: DocumentStorePort = {
+			provider: "liveblocks",
+			async ensureDocument() {
+				throw new DocumentStoreUnavailableError();
+			},
+			async readBinaryUpdate() {
+				throw new DocumentStoreUnavailableError();
+			},
+			async applyBinaryUpdate() {
+				throw new DocumentStoreUnavailableError();
+			},
+			async deleteDocument() {
+				throw new DocumentStoreUnavailableError();
+			},
+		};
+		const tester = createTester(
+			"fallback_user",
+			pages,
+			workspaceId,
+			createTestTaskRepository({ pages }),
+			"owner",
+			createTestPageNavigationRepository({ pages }),
+			documentStore,
+		);
+		const ctx = await tester.ctx();
+		const page = await tester.run(
+			createPageUseCase,
+			{ workspaceId, title: "Last projected title" },
+			{ ctx },
+		);
+		const result = await tester.run(getPageUseCase, { id: page.id }, { ctx });
+		expect(result.title).toBe("Last projected title");
+		expect(result.content).toEqual([]);
+	});
+
 	it("creates nested pages and lists workspace pages as meta only", async () => {
-		const { workspace, tester, ctx, publishedSubpageLinks } =
-			await createFixture();
+		const { workspace, tester, ctx } = await createFixture();
 
 		const root = await tester.run(
 			createPageUseCase,
@@ -208,23 +340,13 @@ describe("pages use cases", () => {
 			throw new Error("Expected the parent content version");
 		}
 		expect(parent.content).toHaveLength(2);
-		expect(parent.content[0]).toEqual(intro);
+		expect(parent.content[0]).toMatchObject(intro);
 		expect(parent.content[1]).toMatchObject({
 			id: child.id,
 			type: "pageLink",
 			props: { pageId: child.id, workspaceId: workspace.id },
 		});
 		expect(backlinks.items.map((page) => page.id)).toEqual([root.id]);
-		expect(publishedSubpageLinks).toEqual([
-			{
-				parentPageId: root.id,
-				parentContentUpdatedAt: child.parentContentUpdatedAt,
-				child: expect.objectContaining({
-					id: child.id,
-					workspaceId: workspace.id,
-				}),
-			},
-		]);
 		expect(listed.items).toHaveLength(2);
 		expect(listed.items.every((item) => !("content" in item))).toBe(true);
 	});
@@ -307,7 +429,7 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 
-		expect(fetched.content).toEqual(initialContent);
+		expect(fetched.content).toMatchObject(initialContent);
 		expect(created.contentUpdatedAt).toBe(fetched.contentUpdatedAt);
 		expect(importedTasks).toHaveLength(1);
 		expect(importedTasks[0]).toMatchObject({
@@ -320,80 +442,32 @@ describe("pages use cases", () => {
 		expect(search.items.map((page) => page.id)).toContain(created.id);
 	});
 
-	it("preserves a concurrent parent edit while appending a subpage", async () => {
-		const { pages, workspace, tester, ctx } = await createFixture();
-		const parent = await tester.run(
-			createPageUseCase,
-			{ workspaceId: workspace.id, title: "Parent" },
-			{ ctx },
-		);
-		const originalSaveContentIf = pages.saveContentIf.bind(pages);
-		let attempts = 0;
-		pages.saveContentIf = async (...args) => {
-			attempts += 1;
-			if (attempts === 1) {
-				const [scope, pageId] = args;
-				const current = await pages.findById(scope, pageId);
-				if (!current) throw new Error("Expected parent page");
-				const concurrentContent = [
-					...current.content,
-					{
-						id: "concurrent-edit",
-						type: "paragraph",
-						props: {},
-						content: [{ type: "text", text: "Concurrent edit", styles: {} }],
-						children: [],
-					},
-				];
-				await pages.saveContent(
-					scope,
-					pageId,
-					JSON.stringify(concurrentContent),
-					"Concurrent edit",
-				);
-				return null;
-			}
-			return originalSaveContentIf(...args);
-		};
-
-		const child = await tester.run(
-			createPageUseCase,
-			{
-				workspaceId: workspace.id,
-				parentPageId: parent.id,
-				title: "Child",
-			},
-			{ ctx },
-		);
-		const fetched = await tester.run(
-			getPageUseCase,
-			{ id: parent.id },
-			{ ctx },
-		);
-
-		expect(attempts).toBe(2);
-		expect(fetched.content.map((block) => block.type)).toEqual([
-			"paragraph",
-			"pageLink",
-		]);
-		expect(fetched.content[1]?.props.pageId).toBe(child.id);
-	});
-
-	it("keeps a committed nested page when collaboration propagation fails", async () => {
+	it("keeps a committed nested page when the document store is unavailable", async () => {
 		const pages = createTestPageRepository();
 		const workspaceId = crypto.randomUUID().replaceAll("-", "");
+		const unavailableStore: DocumentStorePort = {
+			provider: "liveblocks",
+			async ensureDocument() {
+				throw new DocumentStoreUnavailableError();
+			},
+			async readBinaryUpdate() {
+				throw new DocumentStoreUnavailableError();
+			},
+			async applyBinaryUpdate() {
+				throw new DocumentStoreUnavailableError();
+			},
+			async deleteDocument() {
+				throw new DocumentStoreUnavailableError();
+			},
+		};
 		const tester = createTester(
 			"user_test",
 			pages,
 			workspaceId,
 			createTestTaskRepository({ pages }),
 			"owner",
-			{
-				async publishSubpageLink() {
-					throw new Error("Liveblocks unavailable");
-				},
-				async publishTaskBlockPatch() {},
-			},
+			createTestPageNavigationRepository({ pages }),
+			unavailableStore,
 		);
 		const ctx = await tester.ctx();
 		const parent = await tester.run(
@@ -414,7 +488,7 @@ describe("pages use cases", () => {
 		);
 
 		expect(child.parentPageId).toBe(parent.id);
-		expect(fetched.content.at(-1)?.props.pageId).toBe(child.id);
+		expect(fetched.content).toEqual([]);
 	});
 
 	it("round-trips page content and bumps updatedAt", async () => {
@@ -443,65 +517,7 @@ describe("pages use cases", () => {
 		const fetched = await tester.run(getPageUseCase, { id: page.id }, { ctx });
 
 		expect(saved.updatedAt >= page.updatedAt).toBe(true);
-		expect(fetched.content).toEqual(content);
-	});
-
-	it("rejects a stale save and accepts one based on the current version", async () => {
-		const { workspace, tester, ctx } = await createFixture();
-
-		const page = await tester.run(
-			createPageUseCase,
-			{ workspaceId: workspace.id, title: "Contested" },
-			{ ctx },
-		);
-		const block = (text: string) => [
-			{
-				id: "block-1",
-				type: "paragraph",
-				props: {},
-				content: [{ type: "text", text, styles: {} }],
-				children: [],
-			},
-		];
-
-		// Writer A saves on top of the created version.
-		const first = await tester.run(
-			savePageContentUseCase,
-			{
-				id: page.id,
-				content: block("A"),
-				baseUpdatedAt: page.contentUpdatedAt,
-			},
-			{ ctx },
-		);
-
-		// Writer B still holds the created version: their save must not clobber A.
-		await expect(
-			tester.run(
-				savePageContentUseCase,
-				{
-					id: page.id,
-					content: block("B"),
-					baseUpdatedAt: page.contentUpdatedAt,
-				},
-				{ ctx },
-			),
-		).rejects.toThrow(/changed since/);
-
-		// After rebasing on A's version, B's save lands.
-		const rebased = await tester.run(
-			savePageContentUseCase,
-			{
-				id: page.id,
-				content: block("B2"),
-				baseUpdatedAt: first.contentUpdatedAt,
-			},
-			{ ctx },
-		);
-		expect(rebased.updatedAt >= first.updatedAt).toBe(true);
-
-		const fetched = await tester.run(getPageUseCase, { id: page.id }, { ctx });
-		expect(fetched.content).toEqual(block("B2"));
+		expect(fetched.content).toMatchObject(content);
 	});
 
 	it("does not invalidate the content token when only metadata changes", async () => {
@@ -509,11 +525,6 @@ describe("pages use cases", () => {
 		const created = await tester.run(
 			createPageUseCase,
 			{ workspaceId: workspace.id, title: "Before" },
-			{ ctx },
-		);
-		const initial = await tester.run(
-			getPageUseCase,
-			{ id: created.id },
 			{ ctx },
 		);
 		const content = [
@@ -536,7 +547,6 @@ describe("pages use cases", () => {
 			{
 				id: created.id,
 				content,
-				baseUpdatedAt: initial.contentUpdatedAt,
 			},
 			{ ctx },
 		);
@@ -547,7 +557,7 @@ describe("pages use cases", () => {
 		);
 
 		expect(fetched.title).toBe("After");
-		expect(fetched.content).toEqual(content);
+		expect(fetched.content).toMatchObject(content);
 		expect(fetched.contentUpdatedAt).toBe(saved.contentUpdatedAt);
 	});
 
@@ -605,7 +615,13 @@ describe("pages use cases", () => {
 	});
 
 	it("soft-deletes a subtree into the trash and restores it", async () => {
-		const { workspace, tester, ctx } = await createFixture();
+		const {
+			workspace,
+			tester,
+			ctx,
+			publishedWorkspaceEvents,
+			flushAfterResponse,
+		} = await createFixture();
 
 		const root = await tester.run(
 			createPageUseCase,
@@ -619,6 +635,11 @@ describe("pages use cases", () => {
 		);
 
 		await tester.run(deletePageUseCase, { id: root.id }, { ctx });
+		await flushAfterResponse();
+		expect(
+			publishedWorkspaceEvents.find((event) => event.type === "page.trashed")
+				?.affectedPageIds,
+		).toEqual([root.id, child.id]);
 
 		const listed = await tester.run(
 			listPagesUseCase,
@@ -1242,7 +1263,7 @@ describe("page versioning", () => {
 			{ id: page.id, versionId: versions.items[0]?.id ?? "" },
 			{ ctx },
 		);
-		expect(stored.content).toEqual([block("b1", "v1")]);
+		expect(stored.content).toMatchObject([block("b1", "v1")]);
 	});
 
 	it("restore snapshots the current state, applies the version, and reconciles tasks", async () => {
@@ -1282,7 +1303,7 @@ describe("page versioning", () => {
 
 		// The doc is back on v1 and its task row is reconciled back into being.
 		const restored = await tester.run(getPageUseCase, { id: page.id }, { ctx });
-		expect(restored.content).toEqual([taskBlock("t1", "Old task")]);
+		expect(restored.content).toMatchObject([taskBlock("t1", "Old task")]);
 		expect(await tasks.listByPage(scope, page.id)).toHaveLength(1);
 
 		// The pre-restore state was preserved as a "restore" version.
@@ -1385,7 +1406,6 @@ describe("page versioning", () => {
 			workspace.id,
 			createTestTaskRepository({ pages }),
 			"viewer",
-			createTestPageCollaborationPort(),
 			pageNavigation,
 		);
 		const viewerCtx = await viewer.ctx();

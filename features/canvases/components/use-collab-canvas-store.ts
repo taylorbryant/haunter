@@ -18,6 +18,7 @@ import type { Transaction, YMapEvent } from "yjs";
 import { haunterShapeUtils } from "@/features/canvases/lib/shape-utils";
 import { isLoadableSnapshot } from "@/features/canvases/lib/snapshot";
 import type { CollabRoom } from "@/features/collab/client/session";
+import { CANVAS_META_NAME } from "@/features/documents/model";
 
 export type CanvasCollabUser = { id: string; name: string; color: string };
 
@@ -45,6 +46,7 @@ export function useCollabCanvasStore(
 	room: CollabRoom,
 	snapshot: Record<string, unknown>,
 	user?: CanvasCollabUser,
+	canEdit = true,
 ): TLStoreWithStatus {
 	const [storeWithStatus, setStoreWithStatus] = useState<TLStoreWithStatus>({
 		status: "loading",
@@ -65,7 +67,7 @@ export function useCollabCanvasStore(
 			bindingUtils: defaultBindingUtils,
 		});
 		const yRecords = room.doc.getMap<TLRecord>("tldraw");
-		const meta = room.doc.getMap<boolean>("haunter-meta");
+		const meta = room.doc.getMap<unknown>(CANVAS_META_NAME);
 
 		if (yRecords.size > 0) {
 			// The shared doc already has the drawing — it wins over the DB copy.
@@ -77,44 +79,58 @@ export function useCollabCanvasStore(
 			if (isLoadableSnapshot(seed)) {
 				loadSnapshot(store, { document: seed });
 			}
-			// Build the complete seed before opening the Yjs transaction. tldraw's
-			// editor session does not exist yet, so getSnapshot(store) can throw
-			// here; the document-only Store API is safe before mount. Keeping every
-			// potentially-throwing operation outside the transaction also prevents
-			// a room from retaining canvasSeeded=true with an empty record map.
-			//
-			// A valid tldraw document always has document and page records. If an
-			// older failed seed left only the marker behind, an empty map is
-			// therefore safe to repair from the database snapshot.
-			const seeded = store.getStoreSnapshot().store;
+			if (canEdit) {
+				// Build the complete seed before opening the Yjs transaction. tldraw's
+				// editor session does not exist yet, so getSnapshot(store) can throw
+				// here; the document-only Store API is safe before mount. Keeping every
+				// potentially-throwing operation outside the transaction also prevents
+				// a room from retaining canvasSeeded=true with an empty record map.
+				//
+				// A valid tldraw document always has document and page records. If an
+				// older failed seed left only the marker behind, an empty map is
+				// therefore safe to repair from the database snapshot.
+				const seeded = store.getStoreSnapshot().store;
+				room.doc.transact(() => {
+					// Document scope only: session records (instance, camera, user)
+					// must never enter the shared map or persisted DB snapshot.
+					for (const record of Object.values(seeded)) {
+						yRecords.set(record.id, record as TLRecord);
+					}
+					meta.set("canvasSeeded", true);
+				});
+			}
+		}
+		// Persist the schema understood by the current tldraw store, not the
+		// possibly older schema from the SQLite seed. Public shares and rollback
+		// projections need this to decode records created after a tldraw upgrade.
+		const normalizedSchema = store.getStoreSnapshot().schema;
+		if (canEdit) {
 			room.doc.transact(() => {
-				// Document scope only: session records (instance, camera, user)
-				// must never enter the shared map or persisted DB snapshot.
-				for (const record of Object.values(seeded)) {
-					yRecords.set(record.id, record as TLRecord);
-				}
+				meta.set("schema", normalizedSchema);
 				meta.set("canvasSeeded", true);
 			});
 		}
 
 		// Local document edits → shared map. mergeRemoteChanges applies with
 		// source "remote", so remote-applied records never loop back here.
-		const unsubscribe = store.listen(
-			({ changes }) => {
-				room.doc.transact(() => {
-					for (const record of Object.values(changes.added)) {
-						yRecords.set(record.id, record);
-					}
-					for (const [, record] of Object.values(changes.updated)) {
-						yRecords.set(record.id, record);
-					}
-					for (const record of Object.values(changes.removed)) {
-						yRecords.delete(record.id);
-					}
-				});
-			},
-			{ source: "user", scope: "document" },
-		);
+		const unsubscribe = canEdit
+			? store.listen(
+					({ changes }) => {
+						room.doc.transact(() => {
+							for (const record of Object.values(changes.added)) {
+								yRecords.set(record.id, record);
+							}
+							for (const [, record] of Object.values(changes.updated)) {
+								yRecords.set(record.id, record);
+							}
+							for (const record of Object.values(changes.removed)) {
+								yRecords.delete(record.id);
+							}
+						});
+					},
+					{ source: "user", scope: "document" },
+				)
+			: null;
 
 		// Shared map changes from peers → local store.
 		const observer = (event: YMapEvent<TLRecord>, transaction: Transaction) => {
@@ -204,10 +220,10 @@ export function useCollabCanvasStore(
 			awareness.off("update", applyPeerPresence);
 			awareness.setLocalStateField("tldraw", null);
 			yRecords.unobserve(observer);
-			unsubscribe();
+			unsubscribe?.();
 			setStoreWithStatus({ status: "loading" });
 		};
-	}, [room]);
+	}, [room, canEdit]);
 
 	return storeWithStatus;
 }

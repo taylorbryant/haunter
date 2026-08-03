@@ -2,6 +2,8 @@ import "@beignet/core/server-only";
 import { createProvider } from "@beignet/core/providers";
 import {
 	createDrizzleSqliteIdempotencyPort,
+	createDrizzleSqliteOutboxAdminPort,
+	createDrizzleSqliteOutboxPort,
 	createDrizzleSqliteUnitOfWork,
 	type DbPort,
 } from "@beignet/provider-db-drizzle/sqlite";
@@ -25,15 +27,20 @@ export const starterDatabaseProvider = createProvider<{
 
 		const repositories = createRepositories(dbPort.drizzle);
 		const idempotency = createDrizzleSqliteIdempotencyPort(dbPort.drizzle);
+		const outbox = createDrizzleSqliteOutboxPort(dbPort.drizzle);
+		const outboxAdmin = createDrizzleSqliteOutboxAdminPort(dbPort.drizzle);
 
 		const providedPorts: Pick<
 			AppPorts,
 			| "canvases"
 			| "changelogState"
+			| "documents"
 			| "idempotency"
 			| "members"
 			| "mcpOAuthClients"
 			| "notificationInbox"
+			| "outbox"
+			| "outboxAdmin"
 			| "pageLinks"
 			| "pages"
 			| "pageVersions"
@@ -43,11 +50,14 @@ export const starterDatabaseProvider = createProvider<{
 		> = {
 			...repositories,
 			idempotency,
+			outbox,
+			outboxAdmin,
 			uow: createDrizzleSqliteUnitOfWork({
 				db: dbPort.drizzle,
 				createTransactionPorts: (tx) => ({
 					...createRepositories(tx),
 					idempotency: createDrizzleSqliteIdempotencyPort(tx),
+					outbox: createDrizzleSqliteOutboxPort(tx),
 				}),
 			}),
 		};

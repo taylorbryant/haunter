@@ -45,6 +45,21 @@ const BetterAuthSecret = z
 		}
 	});
 
+function requiredProductionSecret(name: string) {
+	return z
+		.string()
+		.min(1)
+		.optional()
+		.superRefine((value, ctx) => {
+			if (isProductionRuntime && !value) {
+				ctx.addIssue({
+					code: "custom",
+					message: `${name} is required in production.`,
+				});
+			}
+		});
+}
+
 export const env = createEnv({
 	server: {
 		NODE_ENV: z
@@ -102,11 +117,12 @@ export const env = createEnv({
 		// Key prefix shared with @beignet/provider-rate-limit-upstash (which
 		// reads it directly); the default mirrors that provider's default.
 		UPSTASH_PREFIX: z.string().default("beignet:ratelimit"),
-		// Liveblocks room auth (permissioned collaboration). When set (together
-		// with NEXT_PUBLIC_LIVEBLOCKS_AUTH=true on the client), room access is
-		// granted per workspace membership via /api/liveblocks-auth. Without it
-		// the client can still run in public-key prototyping mode.
-		LIVEBLOCKS_SECRET_KEY: z.string().optional(),
+		// Liveblocks is the authoritative Yjs document store. Room access is
+		// granted per workspace membership via /api/liveblocks-auth.
+		LIVEBLOCKS_SECRET_KEY: requiredProductionSecret("LIVEBLOCKS_SECRET_KEY"),
+		LIVEBLOCKS_WEBHOOK_SECRET: requiredProductionSecret(
+			"LIVEBLOCKS_WEBHOOK_SECRET",
+		),
 		LOG_LEVEL: z
 			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 			.default("info"),

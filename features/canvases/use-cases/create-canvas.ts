@@ -1,4 +1,7 @@
 import "@beignet/core/server-only";
+import { enqueueJob } from "@beignet/core/outbox";
+import { EnsureDocumentJob } from "@/features/documents/jobs";
+import { ensureCollaborativeDocument } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -13,7 +16,7 @@ export const createCanvasUseCase = useCase
 		await ctx.gate.authorize("canvases.create");
 		const scope = requireActiveWorkspaceScope(ctx, input.workspaceId);
 
-		return ctx.ports.uow.transaction(async (tx) => {
+		const canvas = await ctx.ports.uow.transaction(async (tx) => {
 			const page = await tx.pages.findMetaById(scope, input.pageId);
 			if (!page || page.deletedAt !== null) {
 				throw appError("PageNotFound", { details: { id: input.pageId } });
@@ -22,9 +25,32 @@ export const createCanvasUseCase = useCase
 			// The canvas belongs to the page's owner; creating one is a page edit.
 			await ctx.gate.authorize("pages.update", page);
 
-			return tx.canvases.create(scope, {
+			const created = await tx.canvases.create(scope, {
 				userId: user.id,
 				pageId: input.pageId,
 			});
+			await enqueueJob(tx.outbox, EnsureDocumentJob, {
+				kind: "canvas",
+				entityId: created.id,
+				workspaceId: created.workspaceId,
+			});
+			return created;
 		});
+		try {
+			await ensureCollaborativeDocument({
+				scope,
+				kind: "canvas",
+				entityId: canvas.id,
+				ports: ctx.ports,
+			});
+		} catch (error) {
+			ctx.ports.logger.warn(
+				"Canvas created; durable document seeding will retry",
+				{
+					canvasId: canvas.id,
+					error,
+				},
+			);
+		}
+		return canvas;
 	});

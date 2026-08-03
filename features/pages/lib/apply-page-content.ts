@@ -57,6 +57,14 @@ export async function reconcilePageDerivations(
 	options: {
 		assignmentActor?: TaskAssignmentActor;
 		defaultTaskAssigneeId?: string | null;
+		requireTaskAssignmentAttribution?: boolean;
+		attributionByBlockId?: ReadonlyMap<
+			string,
+			{
+				assignmentActor?: TaskAssignmentActor;
+				defaultAssigneeId?: string | null;
+			}
+		>;
 	} = {},
 ): Promise<{
 	tasksChanged: boolean;
@@ -75,6 +83,8 @@ export async function reconcilePageDerivations(
 		{
 			assignmentActor: options.assignmentActor,
 			defaultAssigneeId: options.defaultTaskAssigneeId,
+			requireAssignmentAttribution: options.requireTaskAssignmentAttribution,
+			attributionByBlockId: options.attributionByBlockId,
 		},
 	);
 

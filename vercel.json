@@ -7,6 +7,10 @@
 		{
 			"path": "/api/cron/agents/cleanup-oauth-clients",
 			"schedule": "0 3 * * *"
+		},
+		{
+			"path": "/api/cron/outbox",
+			"schedule": "* * * * *"
 		}
 	]
 }

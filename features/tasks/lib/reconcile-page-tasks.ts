@@ -1,3 +1,4 @@
+import { type TenantScope, tenantScopeId } from "@beignet/core/ports";
 import type { MemberRepository } from "@/features/members/ports";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import type { Notification } from "@/features/notifications/schemas";
@@ -24,7 +25,99 @@ type TaskReconciliationPorts = {
 type ReconcilePageTasksOptions = {
 	assignmentActor?: TaskAssignmentActor;
 	defaultAssigneeId?: string | null;
+	/** Authoritative Yjs projections may contain changes from several users.
+	 * In that mode, only an authenticated, block-specific operation may change
+	 * an assignee. Unattributed assignments retain the materialized value until
+	 * their exact operation is processed. */
+	requireAssignmentAttribution?: boolean;
+	attributionByBlockId?: ReadonlyMap<
+		string,
+		{
+			assignmentActor?: TaskAssignmentActor;
+			defaultAssigneeId?: string | null;
+		}
+	>;
 };
+
+async function resolvedTaskBlocks(
+	ports: Pick<TaskReconciliationPorts, "members" | "tasks">,
+	scope: TenantScope,
+	pageId: string,
+	content: BlockJson[],
+	options: ReconcilePageTasksOptions,
+) {
+	const found = extractTaskBlocks(content);
+	const existing = await ports.tasks.listByPage(scope, pageId);
+	const existingByBlockId = new Map(
+		existing
+			.filter((task) => task.sourceBlockId !== null)
+			.map((task) => [task.sourceBlockId as string, task]),
+	);
+	const resolved = found.map((block) => {
+		const current = existingByBlockId.get(block.blockId);
+		const attribution = options.attributionByBlockId?.get(block.blockId);
+		let resolvedAssigneeId: string | null;
+		if (block.rawAssignee.length === 0) {
+			// Clearing an assignment is safe without actor attribution because it
+			// cannot grant access or generate an assignment notification.
+			resolvedAssigneeId = null;
+		} else if (options.requireAssignmentAttribution && !attribution) {
+			resolvedAssigneeId = current?.assigneeId ?? null;
+		} else if (block.useDefaultAssignee) {
+			resolvedAssigneeId =
+				attribution?.defaultAssigneeId ??
+				current?.assigneeId ??
+				options.defaultAssigneeId ??
+				null;
+		} else {
+			resolvedAssigneeId = block.assignee;
+		}
+
+		return {
+			...block,
+			resolvedAssigneeId,
+			assignmentActor: attribution?.assignmentActor ?? options.assignmentActor,
+		};
+	});
+	const assigneeIds = Array.from(
+		new Set(
+			resolved
+				.map((block) => block.resolvedAssigneeId)
+				.filter((assignee): assignee is string => assignee !== null),
+		),
+	);
+	const validAssignees = new Set(
+		(
+			await Promise.all(
+				assigneeIds.map(async (assigneeId) => {
+					const role = await ports.members.findRole(
+						tenantScopeId(scope),
+						assigneeId,
+					);
+					return role === null ? null : assigneeId;
+				}),
+			)
+		).filter((assigneeId): assigneeId is string => assigneeId !== null),
+	);
+	for (const block of resolved) {
+		await validateTaskBlock(block, validAssignees);
+	}
+	return { existing, existingByBlockId, found, resolved };
+}
+
+/** Validate semantic task properties before a server-side Yjs update is sent
+ * to the authoritative provider. Browser collaboration can still converge on
+ * an invalid intermediate state, but server and MCP commands fail before they
+ * publish one. */
+export async function validatePageTaskBlocks(
+	ports: Pick<TaskReconciliationPorts, "members" | "tasks">,
+	scope: TenantScope,
+	pageId: string,
+	content: BlockJson[],
+	options: ReconcilePageTasksOptions = {},
+): Promise<void> {
+	await resolvedTaskBlocks(ports, scope, pageId, content, options);
+}
 
 async function validateTaskBlock(
 	block: ReturnType<typeof extractTaskBlocks>[number] & {
@@ -92,46 +185,8 @@ export async function reconcilePageTasks(
 	options: ReconcilePageTasksOptions = {},
 ): Promise<{ changed: boolean; assignmentNotifications: Notification[] }> {
 	const now = new Date().toISOString();
-	const found = extractTaskBlocks(content);
-	const existing = await ports.tasks.listByPage(scope, page.id);
-	const existingByBlockId = new Map(
-		existing
-			.filter((task) => task.sourceBlockId !== null)
-			.map((task) => [task.sourceBlockId as string, task]),
-	);
-	const resolved = found.map((block) => {
-		const current = existingByBlockId.get(block.blockId);
-		const resolvedAssigneeId =
-			block.assignee ??
-			(block.useDefaultAssignee
-				? (current?.assigneeId ?? options.defaultAssigneeId ?? null)
-				: null);
-
-		return { ...block, resolvedAssigneeId };
-	});
-	const assigneeIds = Array.from(
-		new Set(
-			resolved
-				.map((block) => block.resolvedAssigneeId)
-				.filter((assignee): assignee is string => assignee !== null),
-		),
-	);
-	const validAssignees = new Set(
-		(
-			await Promise.all(
-				assigneeIds.map(async (assigneeId) => {
-					const role = await ports.members.findRole(
-						tenantScopeId(scope),
-						assigneeId,
-					);
-					return role === null ? null : assigneeId;
-				}),
-			)
-		).filter((assigneeId): assigneeId is string => assigneeId !== null),
-	);
-	for (const block of resolved) {
-		await validateTaskBlock(block, validAssignees);
-	}
+	const { existing, existingByBlockId, found, resolved } =
+		await resolvedTaskBlocks(ports, scope, page.id, content, options);
 
 	let changed = false;
 	const assignmentNotifications: Notification[] = [];
@@ -159,7 +214,7 @@ export async function reconcilePageTasks(
 				ports.notificationInbox,
 				created,
 				null,
-				options.assignmentActor,
+				block.assignmentActor,
 			);
 			if (notification) assignmentNotifications.push(notification);
 			continue;
@@ -215,7 +270,7 @@ export async function reconcilePageTasks(
 				ports.notificationInbox,
 				updated,
 				current.assigneeId,
-				options.assignmentActor,
+				block.assignmentActor,
 			);
 			if (notification) assignmentNotifications.push(notification);
 		}
@@ -237,5 +292,3 @@ export async function reconcilePageTasks(
 
 	return { changed, assignmentNotifications };
 }
-
-import { type TenantScope, tenantScopeId } from "@beignet/core/ports";

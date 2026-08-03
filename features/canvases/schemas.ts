@@ -27,8 +27,6 @@ export const CreateCanvasInputSchema = z.object({
 
 export const SaveCanvasSnapshotBodySchema = z.object({
 	snapshot: CanvasSnapshotSchema,
-	// Optimistic-concurrency precondition, as on page content saves.
-	baseUpdatedAt: z.string().datetime().optional(),
 });
 
 export const SaveCanvasSnapshotInputSchema = CanvasIdInputSchema.merge(

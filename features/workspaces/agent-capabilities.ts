@@ -22,8 +22,7 @@ export const listWorkspacesCapability = defineAgentCapability(
 					await ctx.ports.members.listForUser(principal.userId)
 				).filter(
 					(workspace) =>
-						!authorizedWorkspaceIds ||
-						authorizedWorkspaceIds.has(workspace.id),
+						!authorizedWorkspaceIds || authorizedWorkspaceIds.has(workspace.id),
 				),
 			};
 		},

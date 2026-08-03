@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
 import { createTenant, createTenantScope } from "@beignet/core/ports";
-import type { PublishTaskBlockPatchInput } from "@/features/pages/ports";
+import { patchPageTaskBlock } from "@/features/documents/codec";
+import { mutateCollaborativeDocument } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import { zonedDateTimeToUtc } from "@/features/tasks/lib/reminder-time";
 import { requireUser } from "@/lib/auth";
@@ -11,7 +12,6 @@ import {
 	TaskNotificationActionInputSchema,
 	TaskNotificationActionOutputSchema,
 } from "../schemas";
-import { savePageTaskBlockPatch } from "./save-page-task-block-patch";
 
 const MINUTE_MS = 60_000;
 
@@ -126,8 +126,32 @@ export const actOnTaskNotificationUseCase = useCase
 		if (notification.actionState !== null) {
 			throw appError("NotificationNotActionable");
 		}
+		if (task.pageId !== null && task.sourceBlockId !== null) {
+			let found = false;
+			await mutateCollaborativeDocument({
+				scope,
+				kind: "page",
+				entityId: task.pageId,
+				ports: ctx.ports,
+				apply(doc) {
+					found = patchPageTaskBlock(doc, task.sourceBlockId ?? "", {
+						checked: true,
+					});
+				},
+			});
+			if (!found) throw appError("NotificationNotActionable");
+			return {
+				action: "complete",
+				notificationId: notification.id,
+				taskId: task.id,
+				workspaceId: task.workspaceId,
+				pageId: task.pageId,
+				snoozedUntil: null,
+				unreadCount: await ctx.ports.notificationInbox.countUnread(user.id),
+			};
+		}
 
-		const collaborationPatch = await ctx.ports.uow.transaction(async (tx) => {
+		await ctx.ports.uow.transaction(async (tx) => {
 			const currentRole = await tx.members.findRole(
 				notification.workspaceId,
 				user.id,
@@ -168,39 +192,13 @@ export const actOnTaskNotificationUseCase = useCase
 				completed: true,
 				completedAt: actionAt,
 			});
-			let collaborationPatch: PublishTaskBlockPatchInput | null = null;
-			if (currentTask.pageId && currentTask.sourceBlockId) {
-				collaborationPatch = await savePageTaskBlockPatch(tx.pages, scope, {
-					pageId: currentTask.pageId,
-					blockId: currentTask.sourceBlockId,
-					patch: { checked: true },
-				});
-			}
 			await tx.notificationInbox.resolveTaskNotifications(
 				currentTask.id,
 				"completed",
 				actionAt,
 			);
-			return collaborationPatch;
+			return null;
 		});
-
-		if (collaborationPatch) {
-			try {
-				await ctx.ports.pageCollaboration.publishTaskBlockPatch(
-					collaborationPatch,
-				);
-			} catch (error) {
-				ctx.ports.logger.warn(
-					"Failed to propagate a completed task block to collaboration",
-					{
-						error,
-						notificationId: notification.id,
-						pageId: collaborationPatch.pageId,
-						taskId: task.id,
-					},
-				);
-			}
-		}
 
 		return {
 			action: "complete",

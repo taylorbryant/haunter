@@ -761,6 +761,79 @@ export const canvases = sqliteTable(
 	}),
 );
 
+// Provider-neutral registry for authoritative collaborative documents. The
+// existing page/canvas JSON columns remain readable projections during the
+// rollout and provide a rollback path; this row says when a remote Yjs
+// document has been seeded and can safely become authoritative.
+export const collabDocuments = sqliteTable(
+	"collab_documents",
+	{
+		documentId: text("document_id").primaryKey(),
+		provider: text("provider").notNull(),
+		kind: text("kind").notNull(),
+		entityId: text("entity_id").notNull(),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		schemaVersion: integer("schema_version").notNull().default(1),
+		state: text("state").notNull().default("pending"),
+		revision: integer("revision").notNull().default(0),
+		lastStateVector: text("last_state_vector"),
+		seededAt: text("seeded_at"),
+		lastProjectedAt: text("last_projected_at"),
+		lastError: text("last_error"),
+		createdAt: text("created_at").notNull(),
+		updatedAt: text("updated_at").notNull(),
+	},
+	(table) => ({
+		entityIdx: uniqueIndex("collab_documents_entity_idx").on(
+			table.kind,
+			table.entityId,
+		),
+		workspaceStateIdx: index("collab_documents_workspace_state_idx").on(
+			table.workspaceId,
+			table.state,
+			table.updatedAt,
+		),
+	}),
+);
+
+// Browser task assignments can reach the materializer before their Yjs update
+// reaches the provider. Keep the actor attribution durable until a projection
+// observes the exact block/assignee pair and consumes it.
+export const collabTaskAttributions = sqliteTable(
+	"collab_task_attributions",
+	{
+		id: text("id").primaryKey(),
+		documentId: text("document_id")
+			.notNull()
+			.references(() => collabDocuments.documentId, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		blockId: text("block_id").notNull(),
+		assignee: text("assignee").notNull(),
+		actorUserId: text("actor_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		actorName: text("actor_name").notNull(),
+		createdAt: text("created_at").notNull(),
+		updatedAt: text("updated_at").notNull(),
+	},
+	(table) => ({
+		documentIdx: index("collab_task_attributions_document_idx").on(
+			table.documentId,
+			table.updatedAt,
+		),
+		operationIdx: uniqueIndex("collab_task_attributions_operation_idx").on(
+			table.documentId,
+			table.blockId,
+			table.assignee,
+			table.actorUserId,
+		),
+	}),
+);
+
 // Page-to-page references (pageLink blocks and inline mentions), reconciled
 // from the document on every content save. Backlinks are read from target.
 export const pageLinks = sqliteTable(
@@ -836,3 +909,4 @@ export const pageVersions = sqliteTable(
 		),
 	}),
 );
+export * from "./beignet";

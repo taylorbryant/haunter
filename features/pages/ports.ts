@@ -7,33 +7,6 @@ import type {
 	PageVersionMeta,
 } from "@/features/pages/schemas";
 
-export type PublishSubpageLinkInput = {
-	parentPageId: string;
-	parentContentUpdatedAt: string;
-	child: Pick<PageMeta, "id" | "workspaceId">;
-};
-
-export type CollaborativeTaskBlockProps = {
-	checked?: boolean;
-	due?: string;
-	dueTime?: string;
-	reminder?: string;
-	assignee?: string;
-};
-
-export type PublishTaskBlockPatchInput = {
-	pageId: string;
-	pageContentUpdatedAt: string;
-	blockId: string;
-	props: CollaborativeTaskBlockProps;
-};
-
-/** Post-commit propagation from application writes into an open collab room. */
-export interface PageCollaborationPort {
-	publishSubpageLink(input: PublishSubpageLinkInput): Promise<void>;
-	publishTaskBlockPatch(input: PublishTaskBlockPatchInput): Promise<void>;
-}
-
 export type NewPage = {
 	userId: string;
 	parentPageId: string | null;
@@ -111,17 +84,6 @@ export interface PageRepository {
 		contentJson: string,
 		searchText: string,
 	): Promise<{ updatedAt: string; contentUpdatedAt: string }>;
-	/**
-	 * Compare-and-set variant: persist only if the row's contentUpdatedAt still
-	 * equals `baseUpdatedAt`. Returns null when the row moved on (stale write).
-	 */
-	saveContentIf(
-		scope: TenantScope,
-		id: string,
-		contentJson: string,
-		searchText: string,
-		baseUpdatedAt: string,
-	): Promise<{ updatedAt: string; contentUpdatedAt: string } | null>;
 	/** Set or clear deletedAt for the given pages. */
 	setDeletedByIds(
 		scope: TenantScope,

@@ -232,6 +232,20 @@
       "when": 1785296161000,
       "tag": "0032_chief_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1785647333215,
+      "tag": "0033_aspiring_sharon_ventura",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1785697049077,
+      "tag": "0034_nasty_morlocks",
+      "breakpoints": true
     }
   ]
 }

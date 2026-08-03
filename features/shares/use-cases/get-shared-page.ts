@@ -1,5 +1,7 @@
 import "@beignet/core/server-only";
 import { createTenant, createTenantScope } from "@beignet/core/ports";
+import { isDocumentStoreUnavailable } from "@/features/documents/errors";
+import { readCollaborativePageProjection } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import { useCase } from "@/lib/use-case";
 import { rewriteFileUrls } from "../lib/rewrite-file-urls";
@@ -28,14 +30,28 @@ export const getSharedPageUseCase = useCase
 		if (!page || page.deletedAt !== null) {
 			throw appError("ShareNotFound");
 		}
+		let source: Pick<typeof page, "title" | "content"> = page;
+		try {
+			source = await readCollaborativePageProjection({
+				scope,
+				entityId: page.id,
+				ports: ctx.ports,
+			});
+		} catch (error) {
+			if (!isDocumentStoreUnavailable(error)) throw error;
+			ctx.ports.logger.warn(
+				"Serving a stale shared-page projection while the document store is unavailable",
+				{ error, pageId: page.id },
+			);
+		}
 
 		return {
-			title: page.title,
+			title: source.title,
 			icon: page.icon,
 			// Point embedded files at the share-scoped read route so anonymous
 			// visitors can load them.
 			content: rewriteFileUrls(
-				stripPrivateTaskProps(page.content),
+				stripPrivateTaskProps(source.content),
 				input.token,
 			),
 			updatedAt: page.updatedAt,

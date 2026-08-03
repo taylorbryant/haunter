@@ -1286,7 +1286,8 @@ html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
 
 /* BlockNote draws vertical nested-block guide lines. Haunter uses indentation
    alone, so hide the guide without affecting list bullets or task controls. */
-.haunter-editor .bn-shadcn
+.haunter-editor
+	.bn-shadcn
 	.bn-block-group
 	.bn-block-group
 	> .bn-block-outer::before,
@@ -1316,7 +1317,8 @@ html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
 /* Page-link blocks are selectable nodes, but BlockNote's default selected-node
    style is a heavy blue 4px outline. Keep the state visible without making the
    block feel like a primary action. */
-.bn-shadcn .bn-block-content[data-content-type="pageLink"].ProseMirror-selectednode
+.bn-shadcn
+	.bn-block-content[data-content-type="pageLink"].ProseMirror-selectednode
 	> *,
 .bn-shadcn
 	.ProseMirror-selectednode
@@ -1359,7 +1361,7 @@ html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
    while a dropdown is open so background content cannot move behind the menu.
    The portaled dropdown content remains independently scrollable. */
 html:has([data-slot="dropdown-menu-content"][data-open])
-	[data-app-scroll-root] {
+[data-app-scroll-root] {
 	overflow: hidden;
 	overscroll-behavior: none;
 	touch-action: none;

@@ -1,4 +1,6 @@
 import "@beignet/core/server-only";
+import { replaceCanvasSnapshot } from "@/features/documents/codec";
+import { mutateCollaborativeDocument } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -13,34 +15,27 @@ export const saveCanvasSnapshotUseCase = useCase
 	.output(SaveCanvasSnapshotOutputSchema)
 	.run(async ({ ctx, input }) => {
 		const scope = requireActiveWorkspaceScope(ctx);
+		const canvas = await ctx.ports.canvases.findById(scope, input.id);
+		if (!canvas) {
+			throw appError("CanvasNotFound", { details: { id: input.id } });
+		}
+		await ctx.gate.authorize("canvases.update", canvas);
+		const page = await ctx.ports.pages.findMetaById(scope, canvas.pageId);
+		if (!page || page.deletedAt !== null) {
+			throw appError("CanvasNotFound", { details: { id: input.id } });
+		}
 
-		return ctx.ports.uow.transaction(async (tx) => {
-			const canvas = await tx.canvases.findById(scope, input.id);
-			if (!canvas) {
-				throw appError("CanvasNotFound", { details: { id: input.id } });
-			}
-
-			await ctx.gate.authorize("canvases.update", canvas);
-			const page = await tx.pages.findMetaById(scope, canvas.pageId);
-			if (!page || page.deletedAt !== null) {
-				throw appError("CanvasNotFound", { details: { id: input.id } });
-			}
-
-			// Refuse to clobber a newer snapshot when the client provides its
-			// last-seen updatedAt (another member or tab drew since).
-			const snapshotJson = JSON.stringify(input.snapshot);
-			const result = input.baseUpdatedAt
-				? await tx.canvases.saveSnapshotIf(
-						scope,
-						input.id,
-						snapshotJson,
-						input.baseUpdatedAt,
-					)
-				: await tx.canvases.saveSnapshot(scope, input.id, snapshotJson);
-			if (result === null) {
-				throw appError("StaleWrite", { details: { id: input.id } });
-			}
-
-			return result;
+		const result = await mutateCollaborativeDocument({
+			scope,
+			kind: "canvas",
+			entityId: canvas.id,
+			ports: ctx.ports,
+			apply(doc) {
+				replaceCanvasSnapshot(doc, input.snapshot);
+			},
 		});
+		if (result.kind !== "canvas") {
+			throw new Error(`Expected a canvas projection for ${canvas.id}`);
+		}
+		return { updatedAt: result.updatedAt };
 	});

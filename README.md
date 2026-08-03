@@ -24,8 +24,8 @@ what matters from a focused Home dashboard.
 - **Tasks** can live inside a page or stand alone. Assign them to workspace
   members, use natural-language due dates, add due times, and manage them from
   the workspace task list.
-- **Collaboration** includes workspace roles, task assignment, optional
-  real-time editing, and read-only public page links.
+- **Collaboration** includes workspace roles, task assignment, real-time
+  editing, and read-only public page links.
 - **Import and export** move pages in and out as Markdown or create standalone
   HTML files that preserve the selected Haunter theme.
 - **Themes and installation** provide coordinated light and dark app and code
@@ -164,6 +164,8 @@ bun run start
   `BETTER_AUTH_SECRET`.
 - Point `SQLITE_DB_URL` and, when required, `SQLITE_DB_AUTH_TOKEN` at a
   persistent libSQL database such as Turso.
+- Set `LIVEBLOCKS_SECRET_KEY`, configure a Liveblocks `ydocUpdated` webhook at
+  `/api/webhooks/liveblocks`, and set `LIVEBLOCKS_WEBHOOK_SECRET`.
 - Set `RESEND_API_KEY` and `RESEND_FROM` to a verified sender for passwordless
   sign-in and workspace invitations.
 - Remove `DEVTOOLS_ENABLED=true` unless the production devtools route is
@@ -186,12 +188,43 @@ first signs in. Leave it unset on established installations.
 - **Scheduled notifications:** Set `CRON_SECRET` before enabling the
   notification workflow described below.
 
-Real-time collaboration is optional and disabled by default. Enable it with
-`NEXT_PUBLIC_ENABLE_COLLABORATION=true`; add
-`NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY`, `LIVEBLOCKS_SECRET_KEY`, and
-`NEXT_PUBLIC_LIVEBLOCKS_AUTH=true` for workspace-authorized rooms. Because
-`NEXT_PUBLIC_` values are embedded at build time, changing them requires a new
-deployment.
+#### Collaborative documents
+
+Liveblocks-hosted Yjs documents are authoritative for page titles, BlockNote
+blocks, and tldraw records. SQLite remains the query, search, share, task, and
+recovery projection. If Liveblocks cannot be reached, read paths serve the last
+successfully materialized SQLite projection read-only; editing fails closed
+rather than overwriting newer shared data.
+
+Existing SQLite documents are backwards-compatible with this model. Before
+the first deployment that enables it:
+
+1. Apply the checked-in database migrations and configure the Liveblocks
+   secret and webhook.
+2. Pause page and canvas edits.
+3. Dry-run each workspace with
+   `bun beignet task run documents.backfill --tenant <workspace-id>`.
+4. Seed each workspace with the same command plus
+   `--input '{"dryRun":false,"replaceExisting":"replace-liveblocks-from-sqlite"}'`.
+5. Deploy the new application, verify a representative page and canvas, then
+   resume edits.
+
+Pages or canvases missed by the backfill are seeded lazily from SQLite on first
+access. The explicit `replaceExisting` confirmation is only for this paused
+cutover; running it later would overwrite newer collaborative content.
+
+The document-store port is intentionally provider-neutral so a Hocuspocus
+adapter can replace Liveblocks without changing page, canvas, or MCP use cases.
+Workspace page-tree metadata remains authoritative in SQLite. A separate,
+storage-free `workspace:<id>` Liveblocks room broadcasts post-commit
+invalidation hints so collaborators see creates, renames, moves, icon changes,
+and trash/restore actions immediately. Reconnects and the existing polling
+refresh repair any ephemeral events missed while a client was offline.
+
+For an emergency rollback, first stop document edits and drain the outbox so
+the latest Yjs state reaches SQLite, then roll back the deployment. The
+additive document registry tables and Liveblocks rooms can remain in place;
+the previous release continues reading the SQLite projection.
 
 ### Authentication origins
 

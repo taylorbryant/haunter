@@ -78,31 +78,18 @@ export function createDrizzleCanvasRepository(
 
 			return { updatedAt };
 		},
-		async saveSnapshotIf(
-			scope,
-			id: string,
-			snapshotJson: string,
-			baseUpdatedAt: string,
-		) {
-			// Strictly after the base version; see saveContentIf on pages.
-			const updatedAt = new Date(
-				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
-			).toISOString();
-			// The WHERE clause is the compare-and-set: no row updates when
-			// another writer already bumped updatedAt.
-			const [row] = await db
-				.update(schema.canvases)
-				.set({ snapshot: snapshotJson, updatedAt })
+		async listIdsByPageIds(scope, pageIds) {
+			if (pageIds.length === 0) return [];
+			const rows = await db
+				.select({ id: schema.canvases.id })
+				.from(schema.canvases)
 				.where(
 					and(
-						eq(schema.canvases.id, id),
+						inArray(schema.canvases.pageId, pageIds),
 						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
-						eq(schema.canvases.updatedAt, baseUpdatedAt),
 					),
-				)
-				.returning({ id: schema.canvases.id });
-
-			return row ? { updatedAt } : null;
+				);
+			return rows.map((row) => row.id);
 		},
 		async deleteByPageIds(scope, pageIds: string[]) {
 			if (pageIds.length === 0) return;

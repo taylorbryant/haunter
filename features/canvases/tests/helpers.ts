@@ -1,3 +1,4 @@
+import { tenantScopeId } from "@beignet/core/ports";
 import type { CanvasRepository, NewCanvas } from "@/features/canvases/ports";
 import type { Canvas } from "@/features/canvases/schemas";
 
@@ -37,30 +38,14 @@ export function createTestCanvasRepository(): CanvasRepository {
 			});
 			return { updatedAt };
 		},
-		async saveSnapshotIf(
-			scope,
-			id: string,
-			snapshotJson: string,
-			baseUpdatedAt: string,
-		) {
-			const canvas = canvases.get(id);
-			if (!canvas || canvas.workspaceId !== tenantScopeId(scope)) {
-				throw new Error(`Canvas not found: ${id}`);
-			}
-			if (canvas.updatedAt !== baseUpdatedAt) {
-				return null;
-			}
-
-			// Strictly after the base version, mirroring the drizzle repo.
-			const updatedAt = new Date(
-				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
-			).toISOString();
-			canvases.set(id, {
-				...canvas,
-				snapshot: JSON.parse(snapshotJson),
-				updatedAt,
-			});
-			return { updatedAt };
+		async listIdsByPageIds(scope, pageIds) {
+			return Array.from(canvases.values())
+				.filter(
+					(canvas) =>
+						canvas.workspaceId === tenantScopeId(scope) &&
+						pageIds.includes(canvas.pageId),
+				)
+				.map((canvas) => canvas.id);
 		},
 		async deleteByPageIds(scope, pageIds: string[]) {
 			for (const canvas of Array.from(canvases.values())) {
@@ -74,4 +59,3 @@ export function createTestCanvasRepository(): CanvasRepository {
 		},
 	};
 }
-import { tenantScopeId } from "@beignet/core/ports";

@@ -73,7 +73,6 @@ import {
 	primeTitleKeyboard,
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
-import { appendSubpageLinkToOpenPage } from "@/features/pages/client/open-page-content";
 import {
 	type OpenPageTitleSnapshot,
 	optimisticallySetOpenPageTitle,
@@ -313,26 +312,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			{
 				onSuccess: async (page) => {
 					if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
-					const parentContentUpdatedAt = page.parentContentUpdatedAt;
-					const appendedToOpenPage =
-						parentPageId && parentContentUpdatedAt
-							? appendSubpageLinkToOpenPage(
-									parentPageId,
-									page,
-									parentContentUpdatedAt,
-								)
-							: false;
-					if (parentPageId && parentContentUpdatedAt && !appendedToOpenPage) {
-						void import("./editor/sync-subpage-link")
-							.then(({ syncSubpageLinkToCollabRoom }) =>
-								syncSubpageLinkToCollabRoom(
-									parentPageId,
-									page,
-									parentContentUpdatedAt,
-								),
-							)
-							.catch(() => undefined);
-					}
 					await Promise.all([
 						invalidatePages(queryClient),
 						parentPageId

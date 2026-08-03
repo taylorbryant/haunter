@@ -16,6 +16,10 @@ import { createInMemoryDevtools } from "@beignet/devtools";
 import { createTestApp, createTestRequester } from "@beignet/web/testing";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import {
+	createTestDocumentRegistryRepository,
+	createTestDocumentStore,
+} from "@/features/documents/tests/helpers";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
@@ -41,6 +45,8 @@ async function createShareRouteTestApp(
 	const auth = createAuth(workspaceId);
 	const pages = createTestPageRepository();
 	const shares = createTestShareRepository();
+	const documents = createTestDocumentRegistryRepository();
+	const documentStore = createTestDocumentStore();
 	const scope = createTenantScope(createTenant(workspaceId));
 	const page = await pages.create(scope, {
 		userId: "user_test",
@@ -65,6 +71,8 @@ async function createShareRouteTestApp(
 		overrides: {
 			gate: appPorts.gate,
 			auth,
+			documents,
+			documentStore,
 			members,
 			pages,
 			shares,
@@ -73,7 +81,13 @@ async function createShareRouteTestApp(
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, members, pages, shares }),
+			ports: (ports) => ({
+				...ports,
+				documents,
+				members,
+				pages,
+				shares,
+			}),
 		},
 	});
 

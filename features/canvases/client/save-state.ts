@@ -1,15 +1,6 @@
 "use client";
 
-import type { CanvasSnapshot } from "@/features/canvases/schemas";
-
 const flushers = new Map<string, () => Promise<boolean>>();
-const pendingSaves = new Map<string, PendingCanvasSave>();
-
-export type PendingCanvasSave = {
-	snapshot: CanvasSnapshot;
-	baseUpdatedAt: string;
-	requiresConfirmation: true;
-};
 
 type DrainCanvasSaveQueueOptions = {
 	clearPendingTimer: () => void;
@@ -39,33 +30,6 @@ export async function flushPendingCanvasSave(
 ): Promise<boolean> {
 	const flush = flushers.get(canvasId);
 	return flush ? flush() : true;
-}
-
-/**
- * Keep a conflict-protected local snapshot outside the React surface so an
- * inline/fullscreen or route remount cannot silently reclassify it as saved.
- */
-export function rememberPendingCanvasSave(
-	canvasId: string,
-	input: Omit<PendingCanvasSave, "requiresConfirmation">,
-): PendingCanvasSave {
-	const pending = { ...input, requiresConfirmation: true } as const;
-	pendingSaves.set(canvasId, pending);
-	return pending;
-}
-
-export function getPendingCanvasSave(canvasId: string) {
-	return pendingSaves.get(canvasId) ?? null;
-}
-
-/** A stale surface must not clear a newer pending snapshot for the same id. */
-export function clearPendingCanvasSave(
-	canvasId: string,
-	expected: PendingCanvasSave,
-) {
-	if (pendingSaves.get(canvasId) === expected) {
-		pendingSaves.delete(canvasId);
-	}
 }
 
 /**

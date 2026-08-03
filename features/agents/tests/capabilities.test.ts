@@ -12,9 +12,12 @@ import type { AppContext } from "@/app-context";
 import type { AgentActivityWrite } from "@/features/agents/ports";
 import { createTestAgentAdminRepository } from "@/features/agents/tests/helpers";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import {
+	createTestDocumentRegistryRepository,
+	createTestDocumentStore,
+} from "@/features/documents/tests/helpers";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import {
-	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
@@ -38,7 +41,8 @@ async function createFixture() {
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
-	const pageCollaboration = createTestPageCollaborationPort();
+	const documents = createTestDocumentRegistryRepository();
+	const documentStore = createTestDocumentStore();
 	const activities: AgentActivityWrite[] = [];
 	const agents = createTestAgentAdminRepository([], activities);
 	const members = {
@@ -75,12 +79,13 @@ async function createFixture() {
 		base: appPorts,
 		overrides: {
 			agents,
+			documents,
+			documentStore,
 			gate: appPorts.gate,
 			canvases,
 			members,
 			notificationInbox,
 			pageLinks,
-			pageCollaboration,
 			pages,
 			pageVersions,
 			tasks,

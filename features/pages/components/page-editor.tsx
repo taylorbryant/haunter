@@ -4,16 +4,27 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import {
 	type KeyboardEvent,
+	useCallback,
 	useEffect,
 	useLayoutEffect,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
 import { userErrorMessage } from "@/client/error-feedback";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
-import { useCollabSession } from "@/features/collab/client/session";
-import { cursorColorFor, pageRoomId } from "@/features/collab/lib/room";
+import {
+	type CollabRoom,
+	useCollabSession,
+	waitForCollabPersistence,
+} from "@/features/collab/client/session";
+import { cursorColorFor, documentRoomId } from "@/features/collab/lib/room";
+import { queueMaterialization } from "@/features/documents/client/materialization";
+import {
+	activePageGeneration,
+	PAGE_META_NAME,
+} from "@/features/documents/model";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	consumeTitleFocus,
@@ -22,7 +33,6 @@ import {
 import { registerOpenPageTitleWriter } from "@/features/pages/client/open-page-title";
 import {
 	getPageQueryOptions,
-	invalidatePage,
 	invalidatePages,
 	recordPageViewMutationOptions,
 	setPageTitleInCache,
@@ -78,6 +88,23 @@ type TitleSaveQueue = LatestSaveQueue<TitleDraft, string | null>;
 
 const titleSaveQueues = createLatestSaveQueueStore<TitleDraft, string | null>();
 
+function useDocumentGeneration(room: CollabRoom | null): string | null {
+	const subscribe = useCallback(
+		(onStoreChange: () => void) => {
+			if (!room) return () => {};
+			const meta = room.doc.getMap<unknown>(PAGE_META_NAME);
+			meta.observe(onStoreChange);
+			return () => meta.unobserve(onStoreChange);
+		},
+		[room],
+	);
+	const getSnapshot = useCallback(
+		() => (room ? activePageGeneration(room.doc) : null),
+		[room],
+	);
+	return useSyncExternalStore(subscribe, getSnapshot, () => null);
+}
+
 function serverTitleSaveQueue(pageId: string): TitleSaveQueue {
 	return { key: pageId, pending: null, timeout: null, inFlight: null };
 }
@@ -105,8 +132,8 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	});
 	// Viewers get a read-only surface; the server denies their writes anyway,
 	// but the UI must not pretend edits will stick.
-	const readOnly = !useCanEditWorkspace();
-	// Cursor identity shown to collaborators when Liveblocks is configured.
+	const workspaceReadOnly = !useCanEditWorkspace();
+	// Cursor identity shown to collaborators in the authoritative Liveblocks room.
 	const currentUser = useCurrentUser();
 	const collabUser = currentUser
 		? {
@@ -115,11 +142,13 @@ export function PageEditor({ pageId }: { pageId: string }) {
 			}
 		: undefined;
 	// One shared room per page carries both the document and the title.
-	const collabSession = useCollabSession(pageRoomId(pageId));
+	const collabSession = useCollabSession(documentRoomId("page", pageId));
+	const readOnly = workspaceReadOnly || collabSession.status === "unavailable";
 	const collabRoom =
 		collabSession.status === "ready" ? collabSession.room : null;
+	const documentGeneration = useDocumentGeneration(collabRoom);
 	const { sharedTitle, pushTitle, replaceTitle, replaceTitleIfCurrent } =
-		useSharedTitle(collabRoom, pageQuery.data?.title ?? null);
+		useSharedTitle(collabRoom, documentGeneration);
 
 	const [title, setTitle] = useState<string | null>(null);
 	const [titleError, setTitleError] = useState<string | null>(null);
@@ -134,12 +163,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 			: titleSaveQueues.get(pageId);
 	const activePageIdRef = useRef(pageId);
 	activePageIdRef.current = pageId;
-	// Bumped when a save is rejected as stale: refetches the doc and remounts
-	// the editor on the newer version instead of clobbering it.
-	const [reloadCount, setReloadCount] = useState(0);
 	const [editorFocusRequest, setEditorFocusRequest] = useState(0);
-	const [conflictNotice, setConflictNotice] = useState(false);
-	const conflictTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const recordedViewPageIdRef = useRef<string | null>(null);
 
 	// Reset local title state when navigating between pages.
@@ -248,18 +272,6 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		resizeTitleTextarea(titleInputRef.current);
 	});
 
-	async function handleConflict() {
-		// Refetch first so the remounted editor initializes from the newer doc.
-		await invalidatePage(queryClient, pageId);
-		setReloadCount((count) => count + 1);
-		setConflictNotice(true);
-		if (conflictTimeoutRef.current) clearTimeout(conflictTimeoutRef.current);
-		conflictTimeoutRef.current = setTimeout(
-			() => setConflictNotice(false),
-			5000,
-		);
-	}
-
 	if (pageQuery.isPending) {
 		return <PageEditorSkeleton />;
 	}
@@ -318,6 +330,48 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		// newer title in both the database and client cache.
 		const savedPageId = titleQueue.key;
 		const previousSave = titleQueue.inFlight;
+		if (collabRoom) {
+			const request = async () => {
+				if (!(await waitForCollabPersistence(collabRoom))) {
+					throw new Error("The shared title did not finish synchronizing.");
+				}
+				await queueMaterialization("page", savedPageId);
+				return new Date().toISOString();
+			};
+			let promise: Promise<string | null>;
+			promise = (previousSave ? previousSave.then(request) : request())
+				.then((savedAt) => {
+					const isLatestDraft = titleQueue.pending === draft;
+					const isActiveDraft =
+						activePageIdRef.current === savedPageId && isLatestDraft;
+					if (isLatestDraft) {
+						titleQueue.pending = null;
+						setPageTitleInCache(queryClient, savedPageId, next, savedAt);
+					}
+					if (isActiveDraft) {
+						setTitleError(null);
+						setTitle((current) => (current === next ? null : current));
+					}
+					return savedAt;
+				})
+				.catch((error) => {
+					if (
+						activePageIdRef.current === savedPageId &&
+						titleQueue.pending === draft
+					) {
+						setTitleError(
+							userErrorMessage(error, "The page title could not be saved."),
+						);
+					}
+					return null;
+				})
+				.finally(() => {
+					if (titleQueue.inFlight === promise) titleQueue.inFlight = null;
+					titleSaveQueues.evictIfIdle(titleQueue);
+				});
+			titleQueue.inFlight = promise;
+			return promise;
+		}
 		const request = () =>
 			updatePageMutation.mutateAsync({
 				path: { id: savedPageId },
@@ -460,31 +514,30 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					) : null}
 				</div>
 			</div>
-			{conflictNotice ? (
-				<p className="mb-2 px-0 text-muted-foreground text-xs md:px-[54px]">
-					This page was updated elsewhere — reloaded with the latest version.
-				</p>
-			) : null}
-			{collabSession.status === "connecting" ? (
+			{collabSession.status !== "ready" ? (
 				<div className="py-2" aria-busy>
 					<ReadOnlyEditor content={page.content} />
 				</div>
 			) : (
 				<HaunterEditor
-					key={`${pageId}:${reloadCount}`}
+					key={`${pageId}:${documentGeneration ?? "pending"}`}
 					pageId={pageId}
 					workspaceId={page.workspaceId}
-					initialContent={page.content}
-					contentUpdatedAt={page.contentUpdatedAt}
 					editable={!readOnly}
-					collab={collabRoom}
+					collab={collabSession.room}
+					collabGeneration={documentGeneration}
 					collabUser={collabUser}
 					focusRequest={editorFocusRequest}
 					currentUserId={currentUser?.id ?? null}
 					onSaveStateChange={setPageSaveState}
-					onConflict={handleConflict}
 				/>
 			)}
+			{collabSession.status === "unavailable" ? (
+				<p className="mt-2 px-0 text-muted-foreground text-xs md:px-[54px]">
+					Live editing is temporarily unavailable. This page is read-only so a
+					stale projection cannot overwrite the shared document.
+				</p>
+			) : null}
 			{/* Same 54px inset as the editor content column. */}
 			<div className="px-0 md:px-[54px]">
 				<Backlinks pageId={pageId} />

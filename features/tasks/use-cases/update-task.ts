@@ -1,6 +1,11 @@
 import "@beignet/core/server-only";
-import type { PublishTaskBlockPatchInput } from "@/features/pages/ports";
+import {
+	pageProjectionFromYDoc,
+	patchPageTaskBlock,
+} from "@/features/documents/codec";
+import { mutateCollaborativeDocument } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
+import { extractTaskBlocks } from "@/features/tasks/lib/extract-task-blocks";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import {
@@ -9,7 +14,6 @@ import {
 	scheduleTaskAssignmentDelivery,
 } from "../notifications/assigned";
 import { TaskSchema, UpdateTaskInputSchema } from "../schemas";
-import { savePageTaskBlockPatch } from "./save-page-task-block-patch";
 
 export const updateTaskUseCase = useCase
 	.command("tasks.update")
@@ -19,8 +23,99 @@ export const updateTaskUseCase = useCase
 		const user = requireUser(ctx);
 		const scope = requireActiveWorkspaceScope(ctx);
 
-		const { updated, assignmentNotification, collaborationPatch } =
-			await ctx.ports.uow.transaction(async (tx) => {
+		const currentTask = await ctx.ports.tasks.findById(scope, input.id);
+		if (!currentTask) {
+			throw appError("TaskNotFound", { details: { id: input.id } });
+		}
+		if (currentTask.pageId !== null && currentTask.sourceBlockId !== null) {
+			await ctx.gate.authorize("tasks.update", currentTask);
+			if (input.title !== undefined) {
+				throw appError("TaskNotEditable", { details: { id: input.id } });
+			}
+			if (input.assigneeId !== undefined && input.assigneeId !== null) {
+				const role = await ctx.ports.members.findRole(
+					currentTask.workspaceId,
+					input.assigneeId,
+				);
+				if (role === null) {
+					throw appError("Forbidden", {
+						message: "The assignee is not a member of this workspace.",
+						details: { assigneeId: input.assigneeId },
+					});
+				}
+			}
+			const assignmentActor =
+				input.assigneeId !== undefined
+					? await resolveTaskAssignmentActor(ctx.ports.members, scope, user)
+					: undefined;
+			let found = false;
+			const result = await mutateCollaborativeDocument({
+				scope,
+				kind: "page",
+				entityId: currentTask.pageId,
+				ports: ctx.ports,
+				assignmentActor,
+				apply(doc) {
+					const authoritativeTask = extractTaskBlocks(
+						pageProjectionFromYDoc(doc).content,
+					).find((block) => block.blockId === currentTask.sourceBlockId);
+					if (!authoritativeTask) return;
+					const dueDate =
+						input.dueDate !== undefined ? input.dueDate : authoritativeTask.due;
+					const dueTime =
+						input.dueDate === null
+							? null
+							: input.dueTime !== undefined
+								? input.dueTime
+								: authoritativeTask.dueTime;
+					const reminderOffsetMinutes =
+						input.dueDate === null
+							? null
+							: input.reminderOffsetMinutes !== undefined
+								? input.reminderOffsetMinutes
+								: authoritativeTask.reminderOffsetMinutes;
+					if (
+						dueDate === null &&
+						(dueTime !== null || reminderOffsetMinutes !== null)
+					) {
+						throw appError("InvalidTaskDue");
+					}
+					found = patchPageTaskBlock(doc, currentTask.sourceBlockId ?? "", {
+						...(input.completed !== undefined
+							? { checked: input.completed }
+							: {}),
+						...(input.dueDate !== undefined ? { due: input.dueDate } : {}),
+						...(input.dueDate === null
+							? { dueTime: null, reminderOffsetMinutes: null }
+							: {
+									...(input.dueTime !== undefined
+										? { dueTime: input.dueTime }
+										: {}),
+									...(input.reminderOffsetMinutes !== undefined
+										? {
+												reminderOffsetMinutes: input.reminderOffsetMinutes,
+											}
+										: {}),
+								}),
+						...(input.assigneeId !== undefined
+							? { assignee: input.assigneeId }
+							: {}),
+					});
+				},
+			});
+			if (!found || result.kind !== "page") {
+				throw appError("TaskNotFound", { details: { id: input.id } });
+			}
+			scheduleTaskAssignmentDelivery(ctx, result.assignmentNotifications);
+			const updated = await ctx.ports.tasks.findById(scope, input.id);
+			if (!updated) {
+				throw appError("TaskNotFound", { details: { id: input.id } });
+			}
+			return updated;
+		}
+
+		const { updated, assignmentNotification } = await ctx.ports.uow.transaction(
+			async (tx) => {
 				const task = await tx.tasks.findById(scope, input.id);
 				if (!task) {
 					throw appError("TaskNotFound", { details: { id: input.id } });
@@ -107,39 +202,6 @@ export const updateTaskUseCase = useCase
 					await tx.notificationInbox.dismissScheduledForTasks([task.id], now);
 				}
 
-				// Write the change through to the source page so the doc agrees.
-				let collaborationPatch: PublishTaskBlockPatchInput | null = null;
-				if (
-					task.pageId !== null &&
-					task.sourceBlockId !== null &&
-					(input.completed !== undefined ||
-						input.dueDate !== undefined ||
-						input.dueTime !== undefined ||
-						input.reminderOffsetMinutes !== undefined ||
-						input.assigneeId !== undefined)
-				) {
-					collaborationPatch = await savePageTaskBlockPatch(tx.pages, scope, {
-						pageId: task.pageId,
-						blockId: task.sourceBlockId,
-						patch: {
-							...(input.completed !== undefined
-								? { checked: input.completed }
-								: {}),
-							...(input.dueDate !== undefined ? { due: input.dueDate } : {}),
-							...(input.dueDate !== undefined || input.dueTime !== undefined
-								? { dueTime }
-								: {}),
-							...(input.dueDate === null ||
-							input.reminderOffsetMinutes !== undefined
-								? { reminderOffsetMinutes }
-								: {}),
-							...(input.assigneeId !== undefined
-								? { assignee: input.assigneeId }
-								: {}),
-						},
-					});
-				}
-
 				const actor =
 					input.assigneeId !== undefined
 						? await resolveTaskAssignmentActor(tx.members, scope, user)
@@ -154,27 +216,12 @@ export const updateTaskUseCase = useCase
 							)
 						: null;
 
-				return { updated, assignmentNotification, collaborationPatch };
-			});
+				return { updated, assignmentNotification };
+			},
+		);
 		scheduleTaskAssignmentDelivery(
 			ctx,
 			assignmentNotification ? [assignmentNotification] : [],
 		);
-		if (collaborationPatch) {
-			try {
-				await ctx.ports.pageCollaboration.publishTaskBlockPatch(
-					collaborationPatch,
-				);
-			} catch (error) {
-				ctx.ports.logger.warn(
-					"Failed to propagate task properties to collaboration",
-					{
-						error,
-						pageId: collaborationPatch.pageId,
-						taskId: updated.id,
-					},
-				);
-			}
-		}
 		return updated;
 	});

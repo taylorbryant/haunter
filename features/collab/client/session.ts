@@ -4,36 +4,9 @@ import type { LiveblocksYjsProvider } from "@liveblocks/yjs";
 import { useEffect, useState } from "react";
 import type * as Y from "yjs";
 
-/**
- * How this client connects to Liveblocks:
- * - "auth": through POST /api/liveblocks-auth, which checks workspace
- *   membership per room and hands viewers read-only tokens. Requires
- *   LIVEBLOCKS_SECRET_KEY on the server plus NEXT_PUBLIC_LIVEBLOCKS_AUTH=true.
- * - "public": directly with the public key — Liveblocks' prototyping mode.
- *   Anyone holding the (bundled) public key can join any room, so this is
- *   only as private as the room ids; switch to "auth" before inviting
- *   anyone you don't trust.
- * - null: collaboration off; editors, titles, and canvases run the original
- *   local paths (CAS-protected saves, no rooms, no presence).
- *
- * Collaboration is opt-in: NEXT_PUBLIC_ENABLE_COLLABORATION must be "true"
- * (in addition to the Liveblocks keys) or everything runs local-only.
- * NEXT_PUBLIC_ vars are inlined at build time, so flipping the switch takes
- * a rebuild/redeploy.
- *
- * This module is intentionally light: only types, the mode gate, and the
- * session hook. The Liveblocks/Yjs runtime lives in ./liveblocks and is
- * loaded via dynamic import only when a mode is configured, so those
- * libraries stay out of the route bundles when collaboration is off.
- */
-export type CollabMode = "auth" | "public";
-
-export function getCollabMode(): CollabMode | null {
-	if (process.env.NEXT_PUBLIC_ENABLE_COLLABORATION !== "true") return null;
-	if (process.env.NEXT_PUBLIC_LIVEBLOCKS_AUTH === "true") return "auth";
-	if (process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY) return "public";
-	return null;
-}
+/** The browser always joins private Liveblocks rooms through the authenticated
+ * endpoint. If room setup or synchronization fails, consumers fail closed and
+ * render the last SQLite projection read-only. */
 
 export type CollabRoom = {
 	doc: Y.Doc;
@@ -43,56 +16,117 @@ export type CollabRoom = {
 };
 
 const COLLAB_CONNECT_TIMEOUT_MS = 8000;
+const COLLAB_PERSIST_TIMEOUT_MS = 8000;
+// Liveblocks hashes local snapshots after a 200ms debounce. Waiting for a
+// slightly longer quiet period prevents an old "synchronized" status from
+// being mistaken for acknowledgement of the edit that just happened.
+const COLLAB_LOCAL_QUIET_MS = 225;
+
+/** Wait until all local Yjs updates through this room are acknowledged by the
+ * provider. SQLite projection is deliberately separate: callers that need
+ * fresh content must read the authoritative document rather than assuming an
+ * asynchronous materialization job has completed. */
+export function waitForCollabPersistence(
+	room: CollabRoom,
+	timeoutMs = COLLAB_PERSIST_TIMEOUT_MS,
+): Promise<boolean> {
+	return new Promise((resolve) => {
+		let settled = false;
+		let quiet = false;
+		let quietTimer: ReturnType<typeof setTimeout> | null = null;
+		let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+		const finish = (persisted: boolean) => {
+			if (settled) return;
+			settled = true;
+			if (quietTimer) clearTimeout(quietTimer);
+			if (timeoutTimer) clearTimeout(timeoutTimer);
+			room.doc.off("update", handleDocumentUpdate);
+			room.provider.off("status", handleStatus);
+			resolve(persisted);
+		};
+		const maybeFinish = () => {
+			if (quiet && room.provider.getStatus() === "synchronized") finish(true);
+		};
+		const scheduleQuietCheck = () => {
+			quiet = false;
+			if (quietTimer) clearTimeout(quietTimer);
+			quietTimer = setTimeout(() => {
+				quiet = true;
+				maybeFinish();
+			}, COLLAB_LOCAL_QUIET_MS);
+		};
+		function handleDocumentUpdate(
+			_update: Uint8Array,
+			origin: unknown,
+		) {
+			// Liveblocks applies server and collaborator updates with its backend
+			// origin. They do not represent new local work and must not keep a local
+			// save pending while another person continues editing the room.
+			if (origin === "backend") return;
+			scheduleQuietCheck();
+		}
+		function handleStatus() {
+			maybeFinish();
+		}
+
+		room.doc.on("update", handleDocumentUpdate);
+		room.provider.on("status", handleStatus);
+		timeoutTimer = setTimeout(() => finish(false), timeoutMs);
+		scheduleQuietCheck();
+	});
+}
 
 export type CollabSession =
-	/** Collaboration is not configured; run the local-only path. */
-	| { status: "off" }
 	/** Room joined, waiting for the initial server doc. */
 	| { status: "connecting" }
 	/** Shared doc loaded; safe to bind editors to it. */
 	| { status: "ready"; room: CollabRoom }
-	/** Liveblocks didn't sync in time; run local so writing is never blocked. */
-	| { status: "fallback" };
+	/** The authoritative document is unavailable; projections stay read-only. */
+	| { status: "unavailable" };
 
 /**
  * The full collaboration lifecycle for one room, including the connect
- * timeout. Consumers render a loading state during "connecting" and treat
- * "off" and "fallback" identically (local, non-collaborative behavior).
+ * timeout. Consumers render a loading state during "connecting" and the last
+ * materialized projection read-only when the authoritative room is unavailable.
  */
 export function useCollabSession(roomId: string): CollabSession {
-	const mode = getCollabMode();
 	const [room, setRoom] = useState<CollabRoom | null>(null);
-	const [fallback, setFallback] = useState(false);
+	const [unavailable, setUnavailable] = useState(false);
 	const synced = room?.synced === true;
 
 	useEffect(() => {
 		setRoom(null);
-		setFallback(false);
-		if (!mode) return;
+		setUnavailable(false);
 		let disposed = false;
 		let unbind: (() => void) | null = null;
 		void import("./liveblocks").then(({ bindRoom }) => {
 			if (disposed) return;
-			unbind = bindRoom(mode, roomId, setRoom);
+			unbind = bindRoom(roomId, setRoom);
 		});
 		return () => {
 			disposed = true;
 			unbind?.();
 			setRoom(null);
 		};
-	}, [roomId, mode]);
+	}, [roomId]);
 
 	useEffect(() => {
-		if (!mode || synced || fallback) return;
+		if (synced) {
+			// A slow initial websocket/auth handshake can outlive the bounded
+			// read-only fallback. Recover automatically when that same room finally
+			// synchronizes instead of requiring a page reload.
+			setUnavailable(false);
+			return;
+		}
 		const timer = setTimeout(
-			() => setFallback(true),
+			() => setUnavailable(true),
 			COLLAB_CONNECT_TIMEOUT_MS,
 		);
 		return () => clearTimeout(timer);
-	}, [mode, synced, fallback]);
+	}, [synced]);
 
-	if (!mode) return { status: "off" };
-	if (fallback) return { status: "fallback" };
+	if (unavailable) return { status: "unavailable" };
 	if (room && synced) return { status: "ready", room };
 	return { status: "connecting" };
 }

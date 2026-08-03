@@ -328,43 +328,6 @@ export function createDrizzlePageRepository(
 
 			return row;
 		},
-		async saveContentIf(
-			scope,
-			id: string,
-			contentJson: string,
-			searchText: string,
-			baseUpdatedAt: string,
-		) {
-			// Strictly after the base version: two writes inside the same
-			// millisecond must still produce distinct versions, or the next
-			// stale write would slip past the compare-and-set.
-			const contentUpdatedAt = new Date(
-				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
-			).toISOString();
-			// The WHERE clause is the compare-and-set: metadata writes do not
-			// invalidate the document token, while another content writer does.
-			const [row] = await db
-				.update(schema.pages)
-				.set({
-					content: contentJson,
-					searchText,
-					contentUpdatedAt,
-					updatedAt: sql<string>`max(${schema.pages.updatedAt}, ${contentUpdatedAt})`,
-				})
-				.where(
-					and(
-						eq(schema.pages.id, id),
-						eq(schema.pages.workspaceId, tenantScopeId(scope)),
-						eq(schema.pages.contentUpdatedAt, baseUpdatedAt),
-					),
-				)
-				.returning({
-					updatedAt: schema.pages.updatedAt,
-					contentUpdatedAt: schema.pages.contentUpdatedAt,
-				});
-
-			return row ?? null;
-		},
 		async setDeletedByIds(scope, ids: string[], deletedAt: string | null) {
 			if (ids.length === 0) return;
 			await db

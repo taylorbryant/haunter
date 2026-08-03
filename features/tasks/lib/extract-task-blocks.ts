@@ -12,6 +12,8 @@ export type ExtractedTaskBlock = {
 	assignee: string | null;
 	/** New editor task blocks can request assignment to the current saver. */
 	useDefaultAssignee: boolean;
+	/** Exact serialized prop used to bind mutation attribution to this state. */
+	rawAssignee: string;
 };
 
 type InlineNode = {
@@ -70,6 +72,7 @@ export function extractTaskBlocks(blocks: BlockJson[]): ExtractedTaskBlock[] {
 							? assignee
 							: null,
 					useDefaultAssignee,
+					rawAssignee: typeof assignee === "string" ? assignee : "",
 				});
 			}
 			if (block.children.length > 0) {

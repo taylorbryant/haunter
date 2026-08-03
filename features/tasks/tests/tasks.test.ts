@@ -8,7 +8,14 @@ import {
 	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
+import * as Y from "yjs";
 import type { AppContext } from "@/app-context";
+import { patchPageTaskBlock } from "@/features/documents/codec";
+import { documentId } from "@/features/documents/model";
+import {
+	createTestDocumentRegistryRepository,
+	createTestDocumentStore,
+} from "@/features/documents/tests/helpers";
 import type {
 	NotificationRepository,
 	TaskAssignmentCandidate,
@@ -17,7 +24,6 @@ import type { Notification } from "@/features/notifications/schemas";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { BlockJson } from "@/features/pages/schemas";
 import {
-	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
@@ -87,13 +93,8 @@ async function createFixture(
 	};
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
-	const publishedTaskBlockPatches: Parameters<
-		ReturnType<typeof createTestPageCollaborationPort>["publishTaskBlockPatch"]
-	>[0][] = [];
-	const pageCollaboration = createTestPageCollaborationPort(
-		[],
-		publishedTaskBlockPatches,
-	);
+	const documents = createTestDocumentRegistryRepository();
+	const documentStore = createTestDocumentStore();
 	const assignmentNotifications: Notification[] = [];
 	const dismissedScheduledTaskIds: string[] = [];
 	const afterResponseTasks: Array<() => Promise<void>> = [];
@@ -223,11 +224,12 @@ async function createFixture(
 		base: appPorts,
 		overrides: {
 			afterResponse,
+			documents,
+			documentStore,
 			gate: appPorts.gate,
 			members,
 			notificationInbox,
 			notifications,
-			pageCollaboration,
 			pageLinks,
 			pages,
 			pageVersions,
@@ -258,8 +260,8 @@ async function createFixture(
 		notificationInbox,
 		page,
 		pages,
+		documentStore,
 		pushDeliveries,
-		publishedTaskBlockPatches,
 		scope,
 		tasks,
 		tester,
@@ -395,14 +397,14 @@ describe("task reconciliation on page content save", () => {
 		expect(rows.map((row) => row.id)).toEqual([standalone.id]);
 	});
 
-	it("does not modify the saved document", async () => {
+	it("preserves task content while canonicalizing block props", async () => {
 		const { pages, scope, page, tester, ctx } = await createFixture();
 		const content = [taskBlock("b1", "Task")];
 
 		await tester.run(savePageContentUseCase, { id: page.id, content }, { ctx });
 
 		const saved = await pages.findById(scope, page.id);
-		expect(saved?.content).toEqual(content);
+		expect(saved?.content).toMatchObject(content);
 	});
 
 	it("rejects invalid page-derived task props", async () => {
@@ -548,13 +550,12 @@ describe("tasks use cases", () => {
 		expect(notification.actionState).toBe("completed");
 	});
 
-	it("merges notification completion with a concurrent page edit", async () => {
+	it("writes notification completion through the source page document", async () => {
 		const {
 			assignmentNotifications,
 			notificationInbox,
 			page,
 			pages,
-			publishedTaskBlockPatches,
 			scope,
 			tasks,
 			tester,
@@ -591,52 +592,12 @@ describe("tasks use cases", () => {
 		const notification = assignmentNotifications.at(-1);
 		if (!notification) throw new Error("Expected an assignment notification");
 
-		const concurrentParagraph: BlockJson = {
-			id: "concurrent-note",
-			type: "paragraph",
-			props: {},
-			content: [
-				{
-					type: "text",
-					text: "A concurrent edit that must be preserved",
-					styles: {},
-				},
-			],
-			children: [],
-		};
-		const originalSaveContentIf = pages.saveContentIf.bind(pages);
-		let injectedConflict = false;
-		pages.saveContentIf = async (...args) => {
-			if (!injectedConflict) {
-				injectedConflict = true;
-				const current = await pages.findById(scope, page.id);
-				if (!current) throw new Error("Expected the source page");
-				const concurrentContent = [...current.content, concurrentParagraph];
-				await pages.saveContent(
-					scope,
-					page.id,
-					JSON.stringify(concurrentContent),
-					extractPageSearchText(concurrentContent),
-				);
-				return null;
-			}
-			return originalSaveContentIf(...args);
-		};
-
 		await tester.run(
 			actOnTaskNotificationUseCase,
 			{ id: notification.id, action: "complete" },
 			{ ctx },
 		);
 
-		expect(publishedTaskBlockPatches).toEqual([
-			{
-				pageId: page.id,
-				pageContentUpdatedAt: expect.any(String),
-				blockId: "page-task",
-				props: { checked: true },
-			},
-		]);
 		expect((await tasks.findById(scope, task.id))?.completed).toBe(true);
 		const savedPage = await pages.findById(scope, page.id);
 		expect(savedPage?.content).toEqual([
@@ -644,20 +605,11 @@ describe("tasks use cases", () => {
 				id: "page-task",
 				props: expect.objectContaining({ checked: true }),
 			}),
-			concurrentParagraph,
 		]);
 	});
 
 	it("writes My Tasks toggles through to the source page document", async () => {
-		const {
-			page,
-			pages,
-			publishedTaskBlockPatches,
-			scope,
-			tasks,
-			tester,
-			ctx,
-		} = await createFixture();
+		const { page, pages, scope, tasks, tester, ctx } = await createFixture();
 
 		await tester.run(
 			savePageContentUseCase,
@@ -677,60 +629,55 @@ describe("tasks use cases", () => {
 		expect(updated.completedAt).not.toBeNull();
 
 		const saved = await pages.findById(scope, page.id);
-		expect(saved?.content[0]?.props).toEqual({
+		expect(saved?.content[0]?.props).toMatchObject({
 			checked: true,
 			due: "2026-07-04",
 			dueTime: "",
 		});
-		expect(publishedTaskBlockPatches).toEqual([
-			{
-				pageId: page.id,
-				pageContentUpdatedAt: expect.any(String),
-				blockId: "b1",
-				props: {
-					checked: true,
-					due: "2026-07-04",
-					dueTime: "",
-				},
-			},
-		]);
 	});
 
-	it("does not let a stale page save revert task-list write-through changes", async () => {
-		const { pages, tasks, scope, page, tester, ctx } = await createFixture();
-		const staleEditorContent = [taskBlock("b1", "Toggle me")];
+	it("preserves newer authoritative task fields when the SQLite projection lags", async () => {
+		const { documentStore, page, tasks, scope, tester, ctx } =
+			await createFixture();
 
-		const firstSave = await tester.run(
+		await tester.run(
 			savePageContentUseCase,
-			{ id: page.id, content: staleEditorContent },
+			{
+				id: page.id,
+				content: [
+					taskBlock("b1", "Keep the live time", {
+						due: "2026-07-04",
+						dueTime: "09:00",
+					}),
+				],
+			},
 			{ ctx },
 		);
 		const [row] = await tasks.listByWorkspace(scope, "all");
 		if (!row) throw new Error("Expected a task row.");
 
-		await tester.run(
+		const roomId = documentId("page", page.id);
+		const update = await documentStore.readBinaryUpdate(roomId);
+		if (!update) throw new Error("Expected an authoritative page document.");
+		const doc = new Y.Doc();
+		Y.applyUpdate(doc, update);
+		const before = Y.encodeStateVector(doc);
+		expect(patchPageTaskBlock(doc, "b1", { dueTime: "14:00" })).toBe(true);
+		await documentStore.applyBinaryUpdate(
+			roomId,
+			Y.encodeStateAsUpdate(doc, before),
+		);
+		doc.destroy();
+
+		const updated = await tester.run(
 			updateTaskUseCase,
-			{ id: row.id, completed: true, dueDate: "2026-07-04" },
+			{ id: row.id, dueDate: "2026-07-05" },
 			{ ctx },
 		);
 
-		await expect(
-			tester.run(
-				savePageContentUseCase,
-				{
-					id: page.id,
-					content: staleEditorContent,
-					baseUpdatedAt: firstSave.contentUpdatedAt,
-				},
-				{ ctx },
-			),
-		).rejects.toThrow(/changed since/);
-
-		const saved = await pages.findById(scope, page.id);
-		expect(saved?.content[0]?.props).toEqual({
-			checked: true,
-			due: "2026-07-04",
-			dueTime: "",
+		expect(updated).toMatchObject({
+			dueDate: "2026-07-05",
+			dueTime: "14:00",
 		});
 	});
 
@@ -1199,7 +1146,10 @@ describe("task assignment", () => {
 
 		await tester.run(
 			savePageContentUseCase,
-			{ id: page.id, content: [taskBlock("b-assign", "Shared work")] },
+			{
+				id: page.id,
+				content: [taskBlock("b-assign", "Shared work", { assignee: "" })],
+			},
 			{ ctx },
 		);
 		const [row] = await tasks.listByPage(scope, page.id);
@@ -1246,7 +1196,10 @@ describe("task assignment", () => {
 		// Clearing the prop unassigns the row.
 		await tester.run(
 			savePageContentUseCase,
-			{ id: page.id, content: [taskBlock("b-owned", "Theirs")] },
+			{
+				id: page.id,
+				content: [taskBlock("b-owned", "Theirs", { assignee: "" })],
+			},
 			{ ctx },
 		);
 		[row] = await tasks.listByPage(scope, page.id);
@@ -1288,7 +1241,14 @@ describe("task assignment", () => {
 		});
 		await tester.run(
 			savePageContentUseCase,
-			{ id: theirPage.id, content: [taskBlock("b-theirs", "Their task")] },
+			{
+				id: theirPage.id,
+				content: [
+					taskBlock("b-theirs", "Their task", {
+						assignee: "user_teammate",
+					}),
+				],
+			},
 			{ ctx },
 		);
 		await tester.run(

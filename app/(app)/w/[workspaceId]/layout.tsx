@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { use } from "react";
 import { CreateDialogProvider } from "@/components/create-dialog-provider";
 import { Skeleton } from "@/components/ui/skeleton";
+import { WorkspaceEventSubscriber } from "@/features/collab/client/workspace-events";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 
 /**
@@ -33,6 +34,7 @@ export default function WorkspaceLayout({
 
 	return (
 		<CreateDialogProvider workspaceId={workspaceId}>
+			<WorkspaceEventSubscriber workspaceId={workspaceId} />
 			{children}
 		</CreateDialogProvider>
 	);

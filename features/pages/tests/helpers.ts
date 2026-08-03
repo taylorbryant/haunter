@@ -3,7 +3,6 @@ import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type {
 	NewPage,
 	NewPageVersion,
-	PageCollaborationPort,
 	PageLinkRepository,
 	PageNavigationRepository,
 	PageRepository,
@@ -11,22 +10,6 @@ import type {
 	UpdatePageData,
 } from "@/features/pages/ports";
 import type { Page, PageMeta, PageVersion } from "@/features/pages/schemas";
-
-export function createTestPageCollaborationPort(
-	published: Parameters<PageCollaborationPort["publishSubpageLink"]>[0][] = [],
-	publishedTaskPatches: Parameters<
-		PageCollaborationPort["publishTaskBlockPatch"]
-	>[0][] = [],
-): PageCollaborationPort {
-	return {
-		async publishSubpageLink(input) {
-			published.push(input);
-		},
-		async publishTaskBlockPatch(input) {
-			publishedTaskPatches.push(input);
-		},
-	};
-}
 
 export function createTestPageLinkRepository(deps: {
 	pages: PageRepository;
@@ -288,39 +271,6 @@ export function createTestPageRepository(): PageRepository {
 					Date.now(),
 					Date.parse(page.updatedAt) + 1,
 					Date.parse(page.contentUpdatedAt) + 1,
-				),
-			).toISOString();
-			const updatedAt =
-				page.updatedAt >= contentUpdatedAt ? page.updatedAt : contentUpdatedAt;
-			pages.set(id, {
-				...page,
-				content: JSON.parse(contentJson),
-				contentUpdatedAt,
-				updatedAt,
-			});
-			return { updatedAt, contentUpdatedAt };
-		},
-		async saveContentIf(
-			scope,
-			id: string,
-			contentJson: string,
-			_searchText: string,
-			baseUpdatedAt: string,
-		) {
-			const page = pages.get(id);
-			if (!page || page.workspaceId !== tenantScopeId(scope)) {
-				throw new Error(`Page not found: ${id}`);
-			}
-			if (page.contentUpdatedAt !== baseUpdatedAt) {
-				return null;
-			}
-
-			// Strictly after the base version, mirroring the drizzle repo.
-			const contentUpdatedAt = new Date(
-				Math.max(
-					Date.now(),
-					Date.parse(page.updatedAt) + 1,
-					Date.parse(baseUpdatedAt) + 1,
 				),
 			).toISOString();
 			const updatedAt =

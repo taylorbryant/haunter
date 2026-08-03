@@ -1,5 +1,6 @@
 import "@beignet/core/server-only";
-import type { TenantScope } from "@beignet/core/ports";
+import { type TenantScope, tenantScopeId } from "@beignet/core/ports";
+import { scheduleWorkspacePageEvent } from "@/features/collab/server/workspace-events";
 import type { PageRepository } from "@/features/pages/ports";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
@@ -37,7 +38,7 @@ export const deletePageUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const scope = requireActiveWorkspaceScope(ctx);
 
-		await ctx.ports.uow.transaction(async (tx) => {
+		const subtree = await ctx.ports.uow.transaction(async (tx) => {
 			const page = await tx.pages.findMetaById(scope, input.id);
 			if (!page || page.deletedAt !== null) {
 				throw appError("PageNotFound", { details: { id: input.id } });
@@ -47,5 +48,12 @@ export const deletePageUseCase = useCase
 
 			const subtree = await collectSubtreeIds(tx.pages, scope, page.id);
 			await tx.pages.setDeletedByIds(scope, subtree, new Date().toISOString());
+			return subtree;
+		});
+		scheduleWorkspacePageEvent(ctx, {
+			type: "page.trashed",
+			workspaceId: tenantScopeId(scope),
+			pageId: input.id,
+			affectedPageIds: subtree,
 		});
 	});

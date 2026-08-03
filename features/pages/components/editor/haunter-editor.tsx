@@ -3,7 +3,6 @@
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 
-import { ContractError } from "@beignet/core/client";
 import {
 	type BlockNoteEditor,
 	filterSuggestionItems,
@@ -26,7 +25,7 @@ import {
 	useExtensionState,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	CheckSquareIcon,
 	FilePlusIcon,
@@ -36,25 +35,28 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Awareness } from "y-protocols/awareness";
 import { apiClient } from "@/client";
 import { reportUserError, userErrorMessage } from "@/client/error-feedback";
 import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
 import { setCollabPresence } from "@/features/collab/client/presence-state";
-import type { CollabRoom } from "@/features/collab/client/session";
-import { invalidateNotifications } from "@/features/notifications/client/queries";
-import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
-import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-content";
 import {
-	invalidateBacklinks,
-	invalidatePage,
+	type CollabRoom,
+	waitForCollabPersistence,
+} from "@/features/collab/client/session";
+import { queueMaterialization } from "@/features/documents/client/materialization";
+import {
+	recordPendingTaskAttributions,
+	snapshotPendingTaskAttributions,
+} from "@/features/documents/client/task-attribution";
+import { pageFragmentName } from "@/features/documents/model";
+import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
+import {
 	invalidatePages,
 	listPagesQueryOptions,
-	savePageContentMutationOptions,
 	setPageContentInCache,
-	setPageSavedAtInCache,
 } from "@/features/pages/client/queries";
 import {
 	createInFlightSaveQueueStore,
@@ -64,31 +66,16 @@ import {
 } from "@/features/pages/client/save-state";
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
+import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
 import {
-	normalizeCodeBlockLanguage,
-	normalizeCodeBlockLanguages,
-} from "@/features/pages/lib/code-block-language";
-import {
-	COLLAB_CONTENT_VERSION_KEY,
-	COLLAB_SEEDED_KEY,
-	COLLAB_SUBPAGE_LINKS_KEY,
-	COLLAB_TASK_BLOCK_PATCHES_KEY,
-	isSameOrNewerContentVersion,
-	isSubpageLinkedCollabEvent,
-	isTaskBlockPatchedCollabEvent,
-	type SubpageLinkedCollabEvent,
+	type TaskAttributionBlockChange,
+	taskAttributionsForChanges,
 } from "@/features/pages/lib/collab-document";
-import {
-	containsBlockId,
-	reconcilePageLinkBlocks,
-} from "@/features/pages/lib/reconcile-page-link-blocks";
-import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
-import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
-import { reconcileTaskBlockProps } from "@/features/tasks/lib/reconcile-task-block-props";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { withHaunterCollaboration } from "./blocknote-collaboration";
 import {
 	OPEN_CODE_BLOCK_DIALOG_EVENT,
 	type OpenCodeBlockDialogDetail,
@@ -286,8 +273,7 @@ function getSlashMenuItems(
 export type SaveState = "saved" | "pending" | "saving" | "error";
 
 type DocumentSaveOutcome =
-	| { status: "saved"; contentUpdatedAt: string }
-	| { status: "conflict" }
+	| { status: "saved" }
 	| { status: "error"; error: unknown };
 
 const documentSaveQueues = createInFlightSaveQueueStore<DocumentSaveOutcome>();
@@ -295,16 +281,11 @@ const documentSaveQueues = createInFlightSaveQueueStore<DocumentSaveOutcome>();
 type HaunterEditorProps = {
 	pageId: string;
 	workspaceId: string;
-	initialContent: BlockJson[];
-	/** Document-only optimistic-concurrency token. */
-	contentUpdatedAt?: string;
 	editable?: boolean;
-	/**
-	 * The page's synced Liveblocks room, or null for local-only editing.
-	 * PageEditor owns the session lifecycle (and its connecting/fallback
-	 * states) so the title can share the same doc.
-	 */
-	collab?: CollabRoom | null;
+	/** The page's synchronized, authoritative Liveblocks room. */
+	collab: CollabRoom;
+	/** Active immutable document generation; null identifies pre-generation rooms. */
+	collabGeneration?: string | null;
 	/** Cursor identity shown to collaborators when collaboration is on. */
 	collabUser?: { name: string; color: string };
 	/** Incremented by the owner when focus should move from the title to body. */
@@ -312,8 +293,6 @@ type HaunterEditorProps = {
 	/** Current signed-in user, used for same-user authoring defaults. */
 	currentUserId?: string | null;
 	onSaveStateChange?: (state: SaveState) => void;
-	/** The server rejected a save as stale; the owner should reload the doc. */
-	onConflict?: () => void;
 };
 
 /**
@@ -354,15 +333,13 @@ function PresencePublisher({ room }: { room: CollabRoom }) {
 export default function HaunterEditor({
 	pageId,
 	workspaceId,
-	initialContent,
-	contentUpdatedAt,
 	editable = true,
 	collabUser,
-	collab = null,
+	collab,
+	collabGeneration = null,
 	focusRequest = 0,
 	currentUserId = null,
 	onSaveStateChange,
-	onConflict,
 }: HaunterEditorProps) {
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
@@ -373,46 +350,21 @@ export default function HaunterEditor({
 		documentSaveQueues.get(pageId);
 	const [saveState, setSaveState] = useState<SaveState>("saved");
 	const [saveError, setSaveError] = useState<string | null>(null);
-	const onConflictRef = useRef(onConflict);
-	onConflictRef.current = onConflict;
-	const normalizedInitialContent = useMemo(
-		() => normalizeCodeBlockLanguages(initialContent),
-		[initialContent],
-	);
-	// Last document version this editor saw: metadata writes do not affect it.
-	const baseUpdatedAtRef = useRef<string | null>(contentUpdatedAt ?? null);
-
-	const advanceBaseUpdatedAt = useCallback(
-		(next: string | null | undefined) => {
-			if (!next || !isSameOrNewerContentVersion(next, baseUpdatedAtRef.current))
-				return;
-			baseUpdatedAtRef.current = next;
-		},
-		[],
-	);
 
 	useEffect(() => {
-		if (!collab) return;
-		const meta = collab.doc.getMap<unknown>("haunter-meta");
-		const advanceFromRoom = () => {
-			const version = meta.get(COLLAB_CONTENT_VERSION_KEY);
-			if (typeof version === "string") advanceBaseUpdatedAt(version);
-		};
-		meta.observe(advanceFromRoom);
-		advanceFromRoom();
-		return () => meta.unobserve(advanceFromRoom);
-	}, [collab, advanceBaseUpdatedAt]);
+		if (
+			!editable ||
+			!currentUserId ||
+			snapshotPendingTaskAttributions(pageId, currentUserId).length === 0
+		) {
+			return;
+		}
+		void queueMaterialization("page", pageId, currentUserId).catch(() => {
+			// Keep the browser-persisted record. A later mount or save retries it.
+		});
+	}, [currentUserId, editable, pageId]);
 
-	// Only the doc-level marker establishes that the shared document completed
-	// its database seed. Fragment length is not authoritative because BlockNote
-	// materializes an empty paragraph while binding a new document.
-	const [shouldSeed] = useState(() => {
-		if (!collab) return false;
-		const meta = collab.doc.getMap<unknown>("haunter-meta");
-		return meta.get(COLLAB_SEEDED_KEY) !== true;
-	});
-
-	const editor = useCreateBlockNote({
+	const editorOptions = {
 		schema: editorSchema,
 		uploadFile: async (file: File) => {
 			try {
@@ -422,159 +374,17 @@ export default function HaunterEditor({
 				throw error;
 			}
 		},
-		collaboration: collab
-			? {
-					fragment: collab.doc.getXmlFragment("blocknote"),
-					// Liveblocks bundles its own copy of y-protocols, so its
-					// Awareness is a structural twin of the one BlockNote expects.
-					provider: collab.provider as unknown as { awareness: Awareness },
-					user: collabUser ?? { name: "Member", color: "#3b82f6" },
-				}
-			: undefined,
-		// BlockNote rejects an empty initialContent array; with collaboration
-		// the shared doc is the source of truth instead.
-		initialContent:
-			!collab && normalizedInitialContent.length
-				? // The server stores the document verbatim; the editor owns its shape.
-					(normalizedInitialContent as never)
-				: undefined,
-	});
-	useSyncEditorCodeTheme(editor, resolvedTheme);
-
-	const appendSubpageLink = useCallback(
-		(
-			child: SubpageLinkedCollabEvent["child"],
-			parentContentUpdatedAt: string,
-		) => {
-			const meta = collab?.doc.getMap<unknown>("haunter-meta");
-			if (meta && meta.get(COLLAB_SEEDED_KEY) !== true) return false;
-
-			const block = createSubpageLinkBlock(child);
-			const exists = containsBlockId(
-				editor.document as unknown as BlockJson[],
-				block.id,
-			);
-			const lastBlock = editor.document.at(-1);
-			if (!exists && !lastBlock) return false;
-
-			const insert = () => {
-				if (!exists && lastBlock) {
-					editor.insertBlocks([block as never], lastBlock, "after");
-				}
-			};
-			if (collab && meta) {
-				collab.doc.transact(() => {
-					insert();
-					const current = meta.get(COLLAB_CONTENT_VERSION_KEY);
-					if (
-						typeof current !== "string" ||
-						isSameOrNewerContentVersion(parentContentUpdatedAt, current)
-					) {
-						meta.set(COLLAB_CONTENT_VERSION_KEY, parentContentUpdatedAt);
-					}
-				});
-			} else {
-				insert();
-			}
-			advanceBaseUpdatedAt(parentContentUpdatedAt);
-			return true;
-		},
-		[collab, editor, advanceBaseUpdatedAt],
+	};
+	const editor = useCreateBlockNote(
+		withHaunterCollaboration(editorOptions, {
+			fragment: collab.doc.getXmlFragment(pageFragmentName(collabGeneration)),
+			// Liveblocks bundles its own copy of y-protocols, so its Awareness is a
+			// structural twin of the one BlockNote expects.
+			provider: collab.provider as unknown as { awareness: Awareness },
+			user: collabUser ?? { name: "Member", color: "#3b82f6" },
+		}),
 	);
-
-	useEffect(() => {
-		if (!editable) return;
-		return registerSubpageLinkAppender(pageId, appendSubpageLink);
-	}, [editable, pageId, appendSubpageLink]);
-
-	useEffect(() => {
-		if (!collab || !editable) return;
-		const pending = collab.doc.getMap<unknown>(COLLAB_SUBPAGE_LINKS_KEY);
-		const applyPending = () => {
-			for (const event of pending.values()) {
-				if (!isSubpageLinkedCollabEvent(event)) continue;
-				appendSubpageLink(event.child, event.parentContentUpdatedAt);
-			}
-		};
-		pending.observe(applyPending);
-		applyPending();
-		return () => pending.unobserve(applyPending);
-	}, [collab, editable, appendSubpageLink]);
-
-	useEffect(() => {
-		if (!collab) return;
-		const pending = collab.doc.getMap<unknown>(COLLAB_TASK_BLOCK_PATCHES_KEY);
-		const applyPending = () => {
-			for (const candidate of pending.values()) {
-				if (!isTaskBlockPatchedCollabEvent(candidate)) continue;
-				if (
-					contentUpdatedAt &&
-					!isSameOrNewerContentVersion(
-						candidate.pageContentUpdatedAt,
-						contentUpdatedAt,
-					)
-				) {
-					continue;
-				}
-				const block = editor.getBlock(candidate.blockId);
-				if (block?.type !== "task") continue;
-				const currentProps = block.props as Record<string, unknown>;
-				if (
-					Object.entries(candidate.props).every(
-						([key, value]) => currentProps[key] === value,
-					)
-				) {
-					continue;
-				}
-				editor.updateBlock(candidate.blockId, {
-					props: candidate.props,
-				} as never);
-			}
-		};
-		pending.observe(applyPending);
-		applyPending();
-		return () => pending.unobserve(applyPending);
-	}, [collab, contentUpdatedAt, editor]);
-
-	// Seed a brand-new shared doc from the database copy exactly once.
-	const seededRef = useRef(false);
-	useEffect(() => {
-		if (!collab || !shouldSeed || seededRef.current) return;
-		seededRef.current = true;
-		const meta = collab.doc.getMap<unknown>("haunter-meta");
-		if (meta.get(COLLAB_SEEDED_KEY) === true) return;
-		collab.doc.transact(() => {
-			if (normalizedInitialContent.length > 0) {
-				editor.replaceBlocks(
-					editor.document,
-					normalizedInitialContent as never,
-				);
-			}
-			if (contentUpdatedAt) {
-				meta.set(COLLAB_CONTENT_VERSION_KEY, contentUpdatedAt);
-			}
-			meta.set(COLLAB_SEEDED_KEY, true);
-		});
-	}, [collab, shouldSeed, contentUpdatedAt, editor, normalizedInitialContent]);
-
-	const reconciledVersionRef = useRef<string | null>(null);
-	useEffect(() => {
-		if (!collab) return;
-		if (reconciledVersionRef.current === contentUpdatedAt) return;
-		reconciledVersionRef.current = contentUpdatedAt ?? null;
-
-		const taskResult = reconcileTaskBlockProps(
-			editor.document as unknown as BlockJson[],
-			normalizedInitialContent,
-		);
-		const pageLinkResult = reconcilePageLinkBlocks(
-			taskResult.blocks,
-			normalizedInitialContent,
-		);
-		if (taskResult.changed || pageLinkResult.changed) {
-			editor.replaceBlocks(editor.document, pageLinkResult.blocks as never);
-		}
-	}, [collab, contentUpdatedAt, editor, normalizedInitialContent]);
+	useSyncEditorCodeTheme(editor, resolvedTheme);
 
 	useEffect(() => {
 		if (!focusRequest || !editable) return;
@@ -620,10 +430,6 @@ export default function HaunterEditor({
 		};
 	}, [editor, editable, notificationBlockId]);
 
-	const saveMutation = useMutation({
-		...savePageContentMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const dirtyRef = useRef(false);
 	const saveRef = useRef<() => Promise<boolean>>(async () => true);
@@ -641,18 +447,8 @@ export default function HaunterEditor({
 		if (precedingSave) {
 			const outcome = await precedingSave;
 			if (outcome.status === "saved") {
-				advanceBaseUpdatedAt(outcome.contentUpdatedAt);
 				return dirtyRef.current ? saveRef.current() : true;
 			}
-			if (outcome.status === "conflict") {
-				dirtyRef.current = false;
-				setSaveError(null);
-				reportState("saved");
-				onConflict?.();
-				return false;
-			}
-			// A newer local document supersedes the failed snapshot and can retry
-			// from the same content version once the old request has settled.
 			if (dirtyRef.current) return saveRef.current();
 			setSaveError(
 				userErrorMessage(
@@ -670,107 +466,73 @@ export default function HaunterEditor({
 		// Mirror into the cache immediately: a remount between this save and
 		// the next refetch must not initialize the editor from a stale doc.
 		setPageContentInCache(queryClient, pageId, content);
-		let saveAgainAfterSuccess = false;
-		const request = saveMutation
-			.mutateAsync({
-				path: { id: pageId },
-				body: {
-					content,
-					...(baseUpdatedAtRef.current
-						? { baseUpdatedAt: baseUpdatedAtRef.current }
-						: {}),
-				},
-			})
-			.then(
-				(result) => {
-					setSaveError(null);
-					advanceBaseUpdatedAt(result.contentUpdatedAt);
-					saveAgainAfterSuccess = dirtyRef.current;
-					if (!dirtyRef.current) reportState("saved");
-					setPageSavedAtInCache(
-						queryClient,
-						pageId,
-						result.updatedAt,
-						result.contentUpdatedAt,
-					);
-					if (result.linksChanged) {
-						invalidateBacklinks(queryClient);
-					}
-					if (result.tasksChanged) {
-						invalidateTasksWhenIdle(queryClient);
-						invalidateNotifications(queryClient);
-					}
-					return {
-						status: "saved",
-						contentUpdatedAt: result.contentUpdatedAt,
-					} satisfies DocumentSaveOutcome;
-				},
-				(error) => {
-					if (error instanceof ContractError && error.status === 409) {
-						// Someone else saved a newer version. Don't retry over it —
-						// hand off so the owner reloads the doc into a fresh editor.
-						dirtyRef.current = false;
-						setSaveError(null);
-						reportState("saved");
-						onConflict?.();
-						return { status: "conflict" } satisfies DocumentSaveOutcome;
-					}
-					dirtyRef.current = true;
-					setSaveError(
-						userErrorMessage(error, "Your page changes could not be saved."),
-					);
-					reportState("error");
-					return { status: "error", error } satisfies DocumentSaveOutcome;
-				},
-			);
-		const run = documentSaveQueues
-			.track(documentSaveQueue, request)
-			.then((outcome) => {
-				// A debounce can fire while the preceding request is still running.
-				// Hand the newer document to a fresh request once that save succeeds.
-				if (outcome.status === "saved" && saveAgainAfterSuccess) {
-					void saveRef.current();
+		const request = (async (): Promise<DocumentSaveOutcome> => {
+			try {
+				if (!(await waitForCollabPersistence(collab))) {
+					throw new Error("The shared page did not finish synchronizing.");
 				}
-				return outcome.status === "saved";
-			});
-		return run;
+				await queueMaterialization("page", pageId, currentUserId);
+				setSaveError(null);
+				if (!dirtyRef.current) reportState("saved");
+				return { status: "saved" };
+			} catch (error) {
+				dirtyRef.current = true;
+				setSaveError(
+					userErrorMessage(error, "Your page changes could not be saved."),
+				);
+				reportState("error");
+				return { status: "error", error };
+			}
+		})();
+		const outcome = await documentSaveQueues.track(documentSaveQueue, request);
+		if (outcome.status === "saved" && dirtyRef.current) {
+			void saveRef.current();
+		}
+		return outcome.status === "saved";
 	};
 
-	const handleChange = useCallback(() => {
-		// Viewers must never autosave: with collaboration on, remote peers'
-		// edits also fire onChange here, and a viewer's save would just 403.
-		if (!editable) return;
-		normalizeEditorCodeBlockLanguages(editor);
-		dirtyRef.current = true;
-		setSaveError(null);
-		reportState("pending");
-		if (timeoutRef.current) clearTimeout(timeoutRef.current);
-		timeoutRef.current = setTimeout(() => saveRef.current(), AUTOSAVE_DELAY_MS);
-	}, [editor, reportState, editable]);
+	const handleChange = useCallback(
+		(
+			_editor: unknown,
+			context: { getChanges(): TaskAttributionBlockChange[] },
+		) => {
+			// Viewers must never autosave: with collaboration on, remote peers'
+			// edits also fire onChange here, and a viewer's save would just 403.
+			if (!editable) return;
+			if (currentUserId) {
+				const attributions = taskAttributionsForChanges(context.getChanges());
+				recordPendingTaskAttributions(pageId, currentUserId, attributions);
+				if (attributions.some((attribution) => attribution.assignee !== null)) {
+					// The authenticated request durably records the actor and target before
+					// acknowledging the browser queue. If this Yjs update has not reached the
+					// provider yet, a later webhook consumes that pending attribution; browser
+					// persistence covers a crash before the request reaches the server.
+					void queueMaterialization("page", pageId, currentUserId).catch(() => {
+						// The browser-persisted queue is retried on the next mount/save.
+					});
+				}
+			}
+			normalizeEditorCodeBlockLanguages(editor);
+			dirtyRef.current = true;
+			setSaveError(null);
+			reportState("pending");
+			if (timeoutRef.current) clearTimeout(timeoutRef.current);
+			timeoutRef.current = setTimeout(
+				() => saveRef.current(),
+				AUTOSAVE_DELAY_MS,
+			);
+		},
+		[currentUserId, editor, pageId, reportState, editable],
+	);
 
 	// Retain the page-scoped coordinator through cleanup. If this editor is
 	// replaced while its save is running, the replacement adopts that exact
 	// result before it can persist a newer document.
 	useEffect(() => {
 		const releaseQueue = documentSaveQueues.retain(documentSaveQueue);
-		const lastResult = documentSaveQueue.lastResult;
-		if (lastResult?.status === "saved") {
-			advanceBaseUpdatedAt(lastResult.contentUpdatedAt);
-		}
 		const precedingSave = documentSaveQueue.inFlight;
 		if (precedingSave) {
-			let active = true;
-			void precedingSave.then((outcome) => {
-				if (outcome.status === "saved") {
-					advanceBaseUpdatedAt(outcome.contentUpdatedAt);
-				} else if (outcome.status === "conflict" && active) {
-					// The component that started the request may already be gone. The
-					// replacement must reload its own editor, not only invalidate cache.
-					void onConflictRef.current?.();
-				}
-			});
 			return () => {
-				active = false;
 				if (timeoutRef.current) clearTimeout(timeoutRef.current);
 				void saveRef.current().finally(releaseQueue);
 			};
@@ -779,7 +541,7 @@ export default function HaunterEditor({
 			if (timeoutRef.current) clearTimeout(timeoutRef.current);
 			void saveRef.current().finally(releaseQueue);
 		};
-	}, [advanceBaseUpdatedAt, documentSaveQueue]);
+	}, [documentSaveQueue]);
 
 	useEffect(() => {
 		return registerPageSaveFlusher(pageId, async () => {
@@ -829,14 +591,14 @@ export default function HaunterEditor({
 						type="button"
 						variant="outline"
 						size="sm"
-						disabled={saveMutation.isPending}
+						disabled={saveState === "saving"}
 						onClick={() => void saveRef.current()}
 					>
 						Retry
 					</Button>
 				</div>
 			) : null}
-			{collab ? <PresencePublisher room={collab} /> : null}
+			<PresencePublisher room={collab} />
 			<TaskBlockCurrentUserContext.Provider value={currentUserId}>
 				<BlockNoteView
 					editor={editor}

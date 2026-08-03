@@ -3,27 +3,29 @@ import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestAnonymousActor,
-	createTestTenant,
-	createTestUserActor,
-} from "@beignet/core/testing";
-import {
 	createTestContextFactory,
 	createTestPorts,
+	createTestTenant,
+	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import {
+	createTestDocumentRegistryRepository,
+	createTestDocumentStore,
+} from "@/features/documents/tests/helpers";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { PageRepository } from "@/features/pages/ports";
 import type { BlockJson } from "@/features/pages/schemas";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
 import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
-import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
 import {
 	enforceSharedFileRateLimit,
 	enforceSharedFileTokenRateLimit,
 } from "@/features/shares/lib/shared-file-rate-limit";
+import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
 import type { ShareRepository } from "@/features/shares/ports";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
@@ -47,18 +49,28 @@ function createTester(options: {
 }) {
 	const { pages, shares, workspaceId } = options;
 	const canvases = options.canvases ?? createTestCanvasRepository();
+	const documents = createTestDocumentRegistryRepository();
+	const documentStore = createTestDocumentStore();
 	const userId = options.userId === undefined ? "user_test" : options.userId;
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
 			gate: appPorts.gate,
 			canvases,
+			documents,
+			documentStore,
 			pages,
 			shares,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, canvases, pages, shares }),
+			ports: (ports) => ({
+				...ports,
+				canvases,
+				documents,
+				pages,
+				shares,
+			}),
 		},
 	});
 	const createTestContext = createTestContextFactory<
@@ -239,11 +251,13 @@ describe("page shares", () => {
 			{ token: share.token },
 			{ ctx: anonymousCtx },
 		);
-		expect(shared.content[0]?.children[0]?.props).toEqual({
+		const sharedTaskProps = shared.content[0]?.children[0]?.props;
+		expect(sharedTaskProps).toMatchObject({
 			checked: false,
 			due: "2026-08-01",
 			dueTime: "14:00",
 		});
+		expect(sharedTaskProps?.reminder).toBeUndefined();
 	});
 
 	it("revoking the link kills anonymous access", async () => {
@@ -353,10 +367,14 @@ describe("page shares", () => {
 			userId: "user_test",
 			pageId: page.id,
 		});
+		const canvasSnapshot = {
+			store: { "shape:one": { id: "shape:one", typeName: "shape" } },
+			schema: { version: 1 },
+		};
 		await canvases.saveSnapshot(
 			scope,
 			onSharedPage.id,
-			JSON.stringify({ store: { shape: 1 } }),
+			JSON.stringify(canvasSnapshot),
 		);
 		const otherPage = await pages.create(scope, {
 			userId: "user_test",
@@ -380,7 +398,7 @@ describe("page shares", () => {
 			{ token: share.token, id: onSharedPage.id },
 			{ ctx: anonymousCtx },
 		);
-		expect(served.snapshot).toEqual({ store: { shape: 1 } });
+		expect(served.snapshot).toEqual(canvasSnapshot);
 
 		// Same workspace, different page: the token must not reach it.
 		await expect(

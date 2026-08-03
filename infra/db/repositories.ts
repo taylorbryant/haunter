@@ -5,6 +5,7 @@ import { createDrizzleMcpConnectionRepository } from "@/infra/agents/drizzle-mcp
 import { createDrizzleMcpOAuthClientRepository } from "@/infra/agents/drizzle-mcp-oauth-client-repository";
 import { createDrizzleCanvasRepository } from "@/infra/canvases/drizzle-canvas-repository";
 import { createDrizzleChangelogStateRepository } from "@/infra/changelog/drizzle-changelog-state-repository";
+import { createDrizzleDocumentRegistryRepository } from "@/infra/documents/drizzle-document-registry-repository";
 import { createDrizzleMemberRepository } from "@/infra/members/drizzle-member-repository";
 import { createDrizzleNotificationRepository } from "@/infra/notifications/drizzle-notification-repository";
 import { createDrizzlePageLinkRepository } from "@/infra/pages/drizzle-page-link-repository";
@@ -18,7 +19,7 @@ import type * as schema from "./schema";
 
 export function createRepositories(
 	db: DrizzleSqliteDatabase<typeof schema>,
-): Omit<AppTransactionPorts, "idempotency"> {
+): Omit<AppTransactionPorts, "idempotency" | "outbox"> {
 	return {
 		adminUsers: createDrizzleAdminUserRepository(db),
 		agents: createDrizzleAgentAdminRepository(db),
@@ -26,6 +27,7 @@ export function createRepositories(
 		mcpOAuthClients: createDrizzleMcpOAuthClientRepository(db),
 		canvases: createDrizzleCanvasRepository(db),
 		changelogState: createDrizzleChangelogStateRepository(db),
+		documents: createDrizzleDocumentRegistryRepository(db),
 		members: createDrizzleMemberRepository(db),
 		notificationInbox: createDrizzleNotificationRepository(db),
 		pageLinks: createDrizzlePageLinkRepository(db),

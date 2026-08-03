@@ -1,5 +1,7 @@
 import "@beignet/core/server-only";
 import { createTenant, createTenantScope } from "@beignet/core/ports";
+import { isDocumentStoreUnavailable } from "@/features/documents/errors";
+import { readCollaborativeCanvasProjection } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import { useCase } from "@/lib/use-case";
 import { SharedCanvasInputSchema, SharedCanvasSchema } from "../schemas";
@@ -34,5 +36,20 @@ export const getSharedCanvasUseCase = useCase
 			throw appError("ShareNotFound");
 		}
 
-		return { snapshot: canvas.snapshot };
+		let snapshot = canvas.snapshot;
+		try {
+			snapshot = await readCollaborativeCanvasProjection({
+				scope,
+				entityId: canvas.id,
+				ports: ctx.ports,
+			});
+		} catch (error) {
+			if (!isDocumentStoreUnavailable(error)) throw error;
+			ctx.ports.logger.warn(
+				"Serving a stale shared-canvas projection while the document store is unavailable",
+				{ canvasId: canvas.id, error },
+			);
+		}
+
+		return { snapshot };
 	});

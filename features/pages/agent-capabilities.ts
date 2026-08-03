@@ -94,6 +94,8 @@ export const readPageCapability = defineAgentCapability("read_page", {
 			import("@/features/pages/use-cases"),
 			import("@/features/pages/lib/markdown"),
 		]);
+		// getPage resolves title and body from Yjs in authoritative mode, so MCP
+		// reads do not wait for the asynchronous SQLite projection.
 		const page = await getPageUseCase.run({
 			ctx,
 			input: { id: input.pageId },
@@ -171,7 +173,7 @@ export const appendToPageCapability = defineAgentCapability("append_to_page", {
 		updatedAt: z.string(),
 	}),
 	async handle({ ctx, input }) {
-		const { getPageUseCase, savePageContentUseCase } = await import(
+		const { appendPageContentUseCase, getPageUseCase } = await import(
 			"@/features/pages/use-cases"
 		);
 		const page = await getPageUseCase.run({
@@ -183,13 +185,9 @@ export const appendToPageCapability = defineAgentCapability("append_to_page", {
 		if (appended.length === 0) {
 			throw appError("InvalidPageContent");
 		}
-		const saved = await savePageContentUseCase.run({
+		const saved = await appendPageContentUseCase.run({
 			ctx,
-			input: {
-				id: input.pageId,
-				content: [...page.content, ...appended],
-				baseUpdatedAt: page.contentUpdatedAt,
-			},
+			input: { id: input.pageId, content: appended },
 		});
 		return {
 			pageId: page.id,

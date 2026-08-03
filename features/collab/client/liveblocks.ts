@@ -3,25 +3,20 @@
 import { type Client, createClient } from "@liveblocks/client";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
 import * as Y from "yjs";
-import type { CollabMode, CollabRoom } from "./session";
+import type { WorkspacePageEvent } from "@/features/collab/workspace-events";
+import type { CollabRoom } from "./session";
 
 /**
- * The Liveblocks/Yjs runtime. Never import this module statically from app
- * code — ./session reaches it via dynamic import once a collab mode is
- * configured, which keeps @liveblocks/client, @liveblocks/yjs, and yjs out
- * of the route bundles when collaboration is off.
+ * The Liveblocks/Yjs browser runtime. `session.ts` loads it dynamically so
+ * the collaboration libraries are initialized only when a document room is
+ * mounted in the client.
  */
 
 let client: Client | null = null;
 
-function getLiveblocksClient(mode: CollabMode): Client {
+function getLiveblocksClient(): Client {
 	if (!client) {
-		client =
-			mode === "auth"
-				? createClient({ authEndpoint: "/api/liveblocks-auth" })
-				: createClient({
-						publicApiKey: process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY ?? "",
-					});
+		client = createClient({ authEndpoint: "/api/liveblocks-auth" });
 	}
 	return client;
 }
@@ -48,7 +43,7 @@ const roomCache = new Map<string, CachedRoom>();
 const ROOM_LINGER_MS = 5 * 60_000;
 const ROOM_SYNC_TIMEOUT_MS = 8000;
 
-function acquireRoom(mode: CollabMode, roomId: string): CachedRoom {
+function acquireRoom(roomId: string): CachedRoom {
 	const cached = roomCache.get(roomId);
 	if (cached) {
 		if (cached.linger) {
@@ -58,7 +53,7 @@ function acquireRoom(mode: CollabMode, roomId: string): CachedRoom {
 		cached.refs += 1;
 		return cached;
 	}
-	const { room, leave } = getLiveblocksClient(mode).enterRoom(roomId);
+	const { room, leave } = getLiveblocksClient().enterRoom(roomId);
 	const doc = new Y.Doc();
 	const provider = new LiveblocksYjsProvider(room, doc);
 	const entry: CachedRoom = {
@@ -113,11 +108,10 @@ function waitForRoomSync(provider: LiveblocksYjsProvider): Promise<boolean> {
  * any Yjs update after the callback releases its reference.
  */
 export async function withSyncedRoom<T>(
-	mode: CollabMode,
 	roomId: string,
 	run: (room: CollabRoom) => T | Promise<T>,
 ): Promise<T | null> {
-	const { doc, provider } = acquireRoom(mode, roomId);
+	const { doc, provider } = acquireRoom(roomId);
 	try {
 		if (!(await waitForRoomSync(provider))) return null;
 		return await run({ doc, provider, synced: true });
@@ -132,11 +126,10 @@ export async function withSyncedRoom<T>(
  * the cleanup that unsubscribes and releases the reference.
  */
 export function bindRoom(
-	mode: CollabMode,
 	roomId: string,
 	onChange: (room: CollabRoom) => void,
 ): () => void {
-	const { doc, provider } = acquireRoom(mode, roomId);
+	const { doc, provider } = acquireRoom(roomId);
 	const update = () =>
 		onChange({ doc, provider, synced: provider.synced === true });
 	provider.on("synced", update);
@@ -146,5 +139,34 @@ export function bindRoom(
 		provider.off("synced", update);
 		provider.off("sync", update);
 		releaseRoom(roomId);
+	};
+}
+
+/** Join the storage-free room used only for server-originated workspace
+ * invalidation hints. Document rooms remain separately scoped per page/canvas. */
+export function bindWorkspaceEvents(
+	roomId: string,
+	input: {
+		onEvent(event: WorkspacePageEvent): void;
+		onConnected(): void;
+	},
+): () => void {
+	const { room, leave } = getLiveblocksClient().enterRoom<
+		Record<string, never>,
+		Record<string, never>,
+		WorkspacePageEvent
+	>(roomId);
+	const unsubscribeEvent = room.subscribe("event", ({ event }) => {
+		input.onEvent(event);
+	});
+	const unsubscribeStatus = room.subscribe("status", (status) => {
+		if (status === "connected") input.onConnected();
+	});
+	if (room.getStatus() === "connected") input.onConnected();
+
+	return () => {
+		unsubscribeEvent();
+		unsubscribeStatus();
+		leave();
 	};
 }

@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CollabRoom } from "@/features/collab/client/session";
+import { pageTitleName } from "@/features/documents/model";
 
 /**
- * The page title as a shared Y.Text in the page's collaboration doc. The
- * database stays the durable copy (each typing peer still PATCHes it);
- * this only makes the title update live across open sessions.
+ * The page title as a shared Y.Text in the authoritative page document.
+ * SQLite is an asynchronous projection used for navigation and recovery.
  *
  * Concurrent title typing is last-write-wins per keystroke (each local
  * change replaces the whole Y.Text) — good enough for a one-line title,
@@ -14,15 +14,13 @@ import type { CollabRoom } from "@/features/collab/client/session";
  */
 export function useSharedTitle(
 	room: CollabRoom | null,
-	/** Null while the page is still loading — seeding waits for the value. */
-	dbTitle: string | null,
+	generation: string | null,
 ) {
 	const [sharedTitle, setSharedTitle] = useState<string | null>(null);
-	const dbTitleLoaded = dbTitle !== null;
 
 	useEffect(() => {
 		if (!room) return;
-		const yTitle = room.doc.getText("title");
+		const yTitle = room.doc.getText(pageTitleName(generation));
 		const observer = () => setSharedTitle(yTitle.toString());
 		yTitle.observe(observer);
 		observer();
@@ -30,30 +28,12 @@ export function useSharedTitle(
 			yTitle.unobserve(observer);
 			setSharedTitle(null);
 		};
-	}, [room]);
-
-	// Seed a fresh room's title from the database exactly once. An empty
-	// title is a legitimate state, so the flag — not emptiness — is the
-	// guard here.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: dbTitle is only the one-time seed value; reseeding on later PATCH echoes would fight live edits
-	useEffect(() => {
-		if (!room || !dbTitleLoaded) return;
-		const yTitle = room.doc.getText("title");
-		const meta = room.doc.getMap<boolean>("haunter-meta");
-		if (meta.get("titleSeeded") !== true) {
-			room.doc.transact(() => {
-				meta.set("titleSeeded", true);
-				if (yTitle.length === 0 && dbTitle) {
-					yTitle.insert(0, dbTitle);
-				}
-			});
-		}
-	}, [room, dbTitleLoaded]);
+	}, [room, generation]);
 
 	const replaceTitle = useCallback(
 		(next: string) => {
 			if (!room) return null;
-			const yTitle = room.doc.getText("title");
+			const yTitle = room.doc.getText(pageTitleName(generation));
 			const previous = yTitle.toString();
 			room.doc.transact(() => {
 				yTitle.delete(0, yTitle.length);
@@ -61,12 +41,12 @@ export function useSharedTitle(
 			});
 			return previous;
 		},
-		[room],
+		[room, generation],
 	);
 	const replaceTitleIfCurrent = useCallback(
 		(expected: string, next: string) => {
 			if (!room) return false;
-			const yTitle = room.doc.getText("title");
+			const yTitle = room.doc.getText(pageTitleName(generation));
 			if (yTitle.toString() !== expected) return false;
 			room.doc.transact(() => {
 				yTitle.delete(0, yTitle.length);
@@ -74,7 +54,7 @@ export function useSharedTitle(
 			});
 			return true;
 		},
-		[room],
+		[room, generation],
 	);
 	const pushTitle = useCallback(
 		(next: string) => {

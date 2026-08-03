@@ -1,6 +1,7 @@
 import type { ErrorReporterPort } from "@beignet/core/error-reporting";
 import type { IdempotencyPort } from "@beignet/core/idempotency";
 import type { MailerPort } from "@beignet/core/mail";
+import type { OutboxAdminPort, OutboxPort } from "@beignet/core/outbox";
 import type {
 	BoundGate,
 	GatePort,
@@ -21,6 +22,11 @@ import type {
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
+import type { WorkspaceEventPublisherPort } from "@/features/collab/workspace-events";
+import type {
+	DocumentRegistryRepository,
+	DocumentStorePort,
+} from "@/features/documents/ports";
 import type { MemberRepository } from "@/features/members/ports";
 import type {
 	NotificationRepository,
@@ -28,7 +34,6 @@ import type {
 } from "@/features/notifications/ports";
 import type { pagePolicy } from "@/features/pages/policy";
 import type {
-	PageCollaborationPort,
 	PageLinkRepository,
 	PageNavigationRepository,
 	PageRepository,
@@ -53,7 +58,9 @@ export type AppTransactionPorts = {
 	mcpOAuthClients: McpOAuthClientRepository;
 	canvases: CanvasRepository;
 	changelogState: ChangelogStateRepository;
+	documents: DocumentRegistryRepository;
 	idempotency: IdempotencyPort;
+	outbox: OutboxPort;
 	members: MemberRepository;
 	notificationInbox: NotificationRepository;
 	pageLinks: PageLinkRepository;
@@ -81,6 +88,8 @@ export type AppPorts = {
 	auth: AuthPort;
 	canvases: CanvasRepository;
 	changelogState: ChangelogStateRepository;
+	documents: DocumentRegistryRepository;
+	documentStore: DocumentStorePort;
 	errorReporter: ErrorReporterPort;
 	gate: GatePort<AuthorizationContext, AppPolicies>;
 	idempotency: IdempotencyPort;
@@ -88,8 +97,9 @@ export type AppPorts = {
 	members: MemberRepository;
 	notificationInbox: NotificationRepository;
 	notifications: import("@beignet/core/notifications").NotificationPort;
+	outbox: OutboxPort;
+	outboxAdmin: OutboxAdminPort;
 	mailer: MailerPort;
-	pageCollaboration: PageCollaborationPort;
 	pageLinks: PageLinkRepository;
 	pageNavigation: PageNavigationRepository;
 	pages: PageRepository;
@@ -101,4 +111,5 @@ export type AppPorts = {
 	uow: UnitOfWorkPort<AppTransactionPorts>;
 	storage: StoragePort;
 	webPush: WebPushPort;
+	workspaceEvents: WorkspaceEventPublisherPort;
 };

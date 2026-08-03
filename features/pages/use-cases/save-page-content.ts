@@ -1,4 +1,9 @@
 import "@beignet/core/server-only";
+import {
+	pageProjectionFromYDoc,
+	replacePageDocument,
+} from "@/features/documents/codec";
+import { mutateCollaborativeDocument } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import {
 	resolveTaskAssignmentActor,
@@ -6,17 +11,14 @@ import {
 } from "@/features/tasks/notifications/assigned";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
-import { reconcilePageDerivations } from "../lib/apply-page-content";
-import { extractPageSearchText } from "../lib/extract-page-text";
+import {
+	PAGE_CHECKPOINT_INTERVAL_MS,
+	PAGE_VERSION_RETENTION,
+} from "../lib/version-retention";
 import {
 	SavePageContentInputSchema,
 	SavePageContentOutputSchema,
 } from "../schemas";
-
-/** At most one automatic checkpoint per page per interval. */
-const CHECKPOINT_INTERVAL_MS = 10 * 60 * 1000;
-/** Versions kept per page; older ones are pruned. */
-export const VERSION_RETENTION = 50;
 
 export const savePageContentUseCase = useCase
 	.command("pages.saveContent")
@@ -25,89 +27,70 @@ export const savePageContentUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
 		const scope = requireActiveWorkspaceScope(ctx);
+		const page = await ctx.ports.pages.findById(scope, input.id);
+		if (!page || page.deletedAt !== null) {
+			throw appError("PageNotFound", { details: { id: input.id } });
+		}
+		await ctx.gate.authorize("pages.update", page);
 
-		const { result: output, assignmentNotifications } =
-			await ctx.ports.uow.transaction(async (tx) => {
-				const page = await tx.pages.findMetaById(scope, input.id);
-				if (!page || page.deletedAt !== null) {
-					throw appError("PageNotFound", { details: { id: input.id } });
-				}
-
-				await ctx.gate.authorize("pages.update", page);
-
-				// Checkpoint the pre-save state (not the incoming one) at most once
-				// per interval, so history always contains a restore point that
-				// predates the current editing burst.
-				const latestVersionAt = await tx.pageVersions.latestCreatedAt(
-					scope,
-					page.id,
+		let previous: ReturnType<typeof pageProjectionFromYDoc> | null = null;
+		const replacementGeneration = crypto.randomUUID();
+		const result = await mutateCollaborativeDocument({
+			scope,
+			kind: "page",
+			entityId: page.id,
+			ports: ctx.ports,
+			assignmentActor: await resolveTaskAssignmentActor(
+				ctx.ports.members,
+				scope,
+				user,
+			),
+			defaultTaskAssigneeId: user.id,
+			apply(doc) {
+				const snapshot = pageProjectionFromYDoc(doc);
+				previous = snapshot;
+				replacePageDocument(
+					doc,
+					{ title: snapshot.title, content: input.content },
+					replacementGeneration,
 				);
-				const due =
-					latestVersionAt === null ||
-					Date.now() - Date.parse(latestVersionAt) >= CHECKPOINT_INTERVAL_MS;
-				if (due) {
-					const current = await tx.pages.findById(scope, page.id);
-					if (current && current.content.length > 0) {
+			},
+			async beforeWrite() {
+				const snapshot = previous;
+				if (!snapshot) {
+					throw new Error(`Failed to snapshot page ${page.id} before save`);
+				}
+				await ctx.ports.uow.transaction(async (tx) => {
+					const latestVersionAt = await tx.pageVersions.latestCreatedAt(
+						scope,
+						page.id,
+					);
+					const due =
+						latestVersionAt === null ||
+						Date.now() - Date.parse(latestVersionAt) >=
+							PAGE_CHECKPOINT_INTERVAL_MS;
+					if (due && snapshot.content.length > 0) {
 						await tx.pageVersions.create(scope, {
 							pageId: page.id,
-							title: current.title,
-							icon: current.icon,
-							contentJson: JSON.stringify(current.content),
+							title: snapshot.title,
+							icon: page.icon,
+							contentJson: JSON.stringify(snapshot.content),
 							cause: "checkpoint",
 							createdBy: user.id,
 						});
-						await tx.pageVersions.prune(scope, page.id, VERSION_RETENTION);
+						await tx.pageVersions.prune(scope, page.id, PAGE_VERSION_RETENTION);
 					}
-				}
-
-				// With a precondition, refuse to clobber a newer version (another
-				// member or another tab saved since this client loaded the doc);
-				// without one (internal writes like task write-through) fall back
-				// to last-write-wins.
-				const contentJson = JSON.stringify(input.content);
-				const searchText = extractPageSearchText(input.content);
-				const result = input.baseUpdatedAt
-					? await tx.pages.saveContentIf(
-							scope,
-							input.id,
-							contentJson,
-							searchText,
-							input.baseUpdatedAt,
-						)
-					: await tx.pages.saveContent(
-							scope,
-							input.id,
-							contentJson,
-							searchText,
-						);
-				if (result === null) {
-					throw appError("StaleWrite", { details: { id: input.id } });
-				}
-
-				// The saved document is the source of truth for its task blocks and
-				// outgoing page links.
-				const assignmentActor = await resolveTaskAssignmentActor(
-					tx.members,
-					scope,
-					user,
-				);
-				const derivations = await reconcilePageDerivations(
-					tx,
-					scope,
-					page,
-					input.content,
-					{
-						assignmentActor,
-						defaultTaskAssigneeId: user.id,
-					},
-				);
-
-				const { assignmentNotifications, ...publicDerivations } = derivations;
-				return {
-					result: { ...result, ...publicDerivations },
-					assignmentNotifications,
-				};
-			});
-		scheduleTaskAssignmentDelivery(ctx, assignmentNotifications);
-		return output;
+				});
+			},
+		});
+		if (result.kind !== "page") {
+			throw new Error(`Expected a page projection for ${page.id}`);
+		}
+		scheduleTaskAssignmentDelivery(ctx, result.assignmentNotifications);
+		return {
+			updatedAt: result.updatedAt,
+			contentUpdatedAt: result.contentUpdatedAt,
+			tasksChanged: result.tasksChanged,
+			linksChanged: result.linksChanged,
+		};
 	});

@@ -2,16 +2,18 @@ import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
 import {
-	createTestTenant,
-	createTestUserActor,
-} from "@beignet/core/testing";
-import {
 	createTestContextFactory,
 	createTestPorts,
+	createTestTenant,
+	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import type { CanvasRepository } from "@/features/canvases/ports";
+import {
+	createTestDocumentRegistryRepository,
+	createTestDocumentStore,
+} from "@/features/documents/tests/helpers";
 import type { PageRepository } from "@/features/pages/ports";
 import {
 	createTestPageLinkRepository,
@@ -48,17 +50,27 @@ function createTester(
 		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	};
 	const pageLinks = createTestPageLinkRepository({ pages: repos.pages });
+	const documents = createTestDocumentRegistryRepository();
+	const documentStore = createTestDocumentStore();
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
 			gate: appPorts.gate,
 			...repos,
+			documents,
+			documentStore,
 			pageLinks,
 			tasks,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, ...repos, pageLinks, tasks }),
+			ports: (ports) => ({
+				...ports,
+				...repos,
+				documents,
+				pageLinks,
+				tasks,
+			}),
 		},
 	});
 	const createTestContext = createTestContextFactory<
@@ -126,7 +138,7 @@ describe("canvases use cases", () => {
 		expect(fetched.snapshot).toEqual(snapshot);
 	});
 
-	it("rejects a stale snapshot save and accepts a rebased one", async () => {
+	it("applies sequential snapshot replacements to the shared document", async () => {
 		const { workspace, page, tester, ctx } = await createFixture();
 
 		const canvas = await tester.run(
@@ -139,36 +151,22 @@ describe("canvases use cases", () => {
 			saveCanvasSnapshotUseCase,
 			{
 				id: canvas.id,
-				snapshot: { v: 1 },
-				baseUpdatedAt: canvas.updatedAt,
+				snapshot: { store: { first: { v: 1 } }, schema: { version: 1 } },
 			},
 			{ ctx },
 		);
-
-		// A second writer still holding the created version must not clobber.
-		await expect(
-			tester.run(
-				saveCanvasSnapshotUseCase,
-				{
-					id: canvas.id,
-					snapshot: { v: 2 },
-					baseUpdatedAt: canvas.updatedAt,
-				},
-				{ ctx },
-			),
-		).rejects.toThrow(/changed since/);
-
-		// Rebased on the current version, the save lands.
-		const rebased = await tester.run(
+		const second = await tester.run(
 			saveCanvasSnapshotUseCase,
 			{
 				id: canvas.id,
-				snapshot: { v: 3 },
-				baseUpdatedAt: first.updatedAt,
+				snapshot: { store: { second: { v: 2 } }, schema: { version: 2 } },
 			},
 			{ ctx },
 		);
-		expect(rebased.updatedAt > first.updatedAt).toBe(true);
+		expect(second.updatedAt >= first.updatedAt).toBe(true);
+		expect(
+			(await tester.run(getCanvasUseCase, { id: canvas.id }, { ctx })).snapshot,
+		).toEqual({ store: { second: { v: 2 } }, schema: { version: 2 } });
 	});
 
 	it("rejects creating a canvas on a page in another workspace", async () => {

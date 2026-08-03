@@ -1,10 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
-import {
-	createCanvas,
-	getCanvas,
-	saveCanvasSnapshot,
-} from "@/features/canvases/contracts";
+import { createCanvas, getCanvas } from "@/features/canvases/contracts";
 import type { Canvas, CanvasSnapshot } from "@/features/canvases/schemas";
 
 export function getCanvasQueryOptions(id: string) {
@@ -13,10 +9,6 @@ export function getCanvasQueryOptions(id: string) {
 
 export function createCanvasMutationOptions() {
 	return rq(createCanvas).mutationOptions();
-}
-
-export function saveCanvasSnapshotMutationOptions() {
-	return rq(saveCanvasSnapshot).mutationOptions();
 }
 
 function canvasQueryKey(id: string) {
@@ -35,20 +27,10 @@ export function cancelCanvasQuery(queryClient: QueryClient, id: string) {
 	});
 }
 
-/** Fetch and cache the current server snapshot without reusing an older request. */
-export async function refreshCanvasQuery(queryClient: QueryClient, id: string) {
-	await cancelCanvasQuery(queryClient, id);
-	return queryClient.fetchQuery({
-		...getCanvasQueryOptions(id),
-		staleTime: 0,
-	});
-}
-
 /**
  * Mirror the current local snapshot into the cache so remounting the surface
  * (e.g. switching between the inline block and the expanded dialog) never
- * restores a stale drawing. Pass updatedAt after persistence succeeds so the
- * next mount also uses the matching optimistic-concurrency version.
+ * restores a stale drawing while SQLite materialization catches up.
  */
 export async function setCanvasSnapshotInCache(
 	queryClient: QueryClient,

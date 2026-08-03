@@ -14,12 +14,6 @@ export interface CanvasRepository {
 		id: string,
 		snapshotJson: string,
 	): Promise<{ updatedAt: string }>;
-	/** Compare-and-set variant; null when the row moved on (stale write). */
-	saveSnapshotIf(
-		scope: TenantScope,
-		id: string,
-		snapshotJson: string,
-		baseUpdatedAt: string,
-	): Promise<{ updatedAt: string } | null>;
+	listIdsByPageIds(scope: TenantScope, pageIds: string[]): Promise<string[]>;
 	deleteByPageIds(scope: TenantScope, pageIds: string[]): Promise<void>;
 }

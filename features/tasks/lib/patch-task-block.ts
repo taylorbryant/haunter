@@ -1,5 +1,12 @@
-import type { CollaborativeTaskBlockProps } from "@/features/pages/ports";
 import type { BlockJson } from "@/features/pages/schemas";
+
+export type CollaborativeTaskBlockProps = {
+	checked?: boolean;
+	due?: string;
+	dueTime?: string;
+	reminder?: string;
+	assignee?: string;
+};
 
 export type TaskBlockPatch = {
 	checked?: boolean;

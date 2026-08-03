@@ -1,3 +1,4 @@
+export { appendPageContentUseCase } from "./append-page-content";
 export { createPageUseCase } from "./create-page";
 export { deletePageUseCase } from "./delete-page";
 export { getPageUseCase } from "./get-page";

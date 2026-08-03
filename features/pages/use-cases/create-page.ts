@@ -1,12 +1,19 @@
 import "@beignet/core/server-only";
-import type { Notification } from "@/features/notifications/schemas";
+import { enqueueJob } from "@beignet/core/outbox";
+import { scheduleWorkspacePageEvent } from "@/features/collab/server/workspace-events";
+import { appendSubpageLink } from "@/features/documents/codec";
 import {
-	reconcilePageDerivations,
-	reconcilePageLinks,
-} from "@/features/pages/lib/apply-page-content";
+	AppendSubpageLinkJob,
+	EnsureDocumentJob,
+} from "@/features/documents/jobs";
+import {
+	ensureCollaborativeDocument,
+	mutateCollaborativeDocument,
+} from "@/features/documents/service";
+import type { Notification } from "@/features/notifications/schemas";
+import { reconcilePageDerivations } from "@/features/pages/lib/apply-page-content";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
-import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
-import type { BlockJson, Page } from "@/features/pages/schemas";
+import type { Page } from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
 import {
 	resolveTaskAssignmentActor,
@@ -15,8 +22,6 @@ import {
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { CreatePageInputSchema, CreatePageOutputSchema } from "../schemas";
-
-const PARENT_APPEND_ATTEMPTS = 3;
 
 export const createPageUseCase = useCase
 	.command("pages.create")
@@ -27,10 +32,10 @@ export const createPageUseCase = useCase
 		await ctx.gate.authorize("pages.create");
 		const scope = requireActiveWorkspaceScope(ctx, input.workspaceId);
 
-		const { page: result, assignmentNotifications } =
+		const { page: createdPage, assignmentNotifications } =
 			await ctx.ports.uow.transaction(async (tx) => {
 				const parentPageId = input.parentPageId ?? null;
-				let parentContentUpdatedAt: string | null = null;
+				const parentContentUpdatedAt: string | null = null;
 				let assignmentNotifications: Notification[] = [];
 				let parent: Page | null = null;
 				if (parentPageId) {
@@ -77,43 +82,17 @@ export const createPageUseCase = useCase
 					created = { ...created, ...saved };
 				}
 
+				await enqueueJob(tx.outbox, EnsureDocumentJob, {
+					kind: "page",
+					entityId: created.id,
+					workspaceId: created.workspaceId,
+				});
 				if (parent && input.appendToParentContent !== false) {
-					const pageLinkBlock = createSubpageLinkBlock(created);
-					let currentParent = parent;
-					let savedContent: BlockJson[] | null = null;
-
-					for (
-						let attempt = 0;
-						attempt < PARENT_APPEND_ATTEMPTS;
-						attempt += 1
-					) {
-						const content = [...currentParent.content, pageLinkBlock];
-						const saved = await tx.pages.saveContentIf(
-							scope,
-							currentParent.id,
-							JSON.stringify(content),
-							extractPageSearchText(content),
-							currentParent.contentUpdatedAt,
-						);
-						if (saved) {
-							savedContent = content;
-							parentContentUpdatedAt = saved.contentUpdatedAt;
-							break;
-						}
-
-						const refreshed = await tx.pages.findById(scope, currentParent.id);
-						if (!refreshed || refreshed.deletedAt !== null) {
-							throw appError("PageNotFound", {
-								details: { id: currentParent.id },
-							});
-						}
-						currentParent = refreshed;
-					}
-
-					if (!savedContent) {
-						throw appError("StaleWrite", { details: { id: currentParent.id } });
-					}
-					await reconcilePageLinks(tx, scope, currentParent, savedContent);
+					await enqueueJob(tx.outbox, AppendSubpageLinkJob, {
+						parentPageId: parent.id,
+						childPageId: created.id,
+						workspaceId: created.workspaceId,
+					});
 				}
 
 				return {
@@ -123,31 +102,59 @@ export const createPageUseCase = useCase
 			});
 
 		scheduleTaskAssignmentDelivery(ctx, assignmentNotifications);
+		let result: Omit<typeof createdPage, "parentContentUpdatedAt"> & {
+			parentContentUpdatedAt: string | null;
+		} = createdPage;
 
-		if (
-			result.parentPageId &&
-			result.parentContentUpdatedAt &&
-			input.appendToParentContent !== false
-		) {
+		try {
+			await ensureCollaborativeDocument({
+				scope,
+				kind: "page",
+				entityId: result.id,
+				ports: ctx.ports,
+			});
+		} catch (error) {
+			ctx.ports.logger.warn(
+				"Page created; durable document seeding will retry",
+				{
+					pageId: result.id,
+					error,
+				},
+			);
+		}
+		if (result.parentPageId && input.appendToParentContent !== false) {
 			try {
-				await ctx.ports.pageCollaboration.publishSubpageLink({
-					parentPageId: result.parentPageId,
-					parentContentUpdatedAt: result.parentContentUpdatedAt,
-					child: result,
+				const parentProjection = await mutateCollaborativeDocument({
+					scope,
+					kind: "page",
+					entityId: result.parentPageId,
+					ports: ctx.ports,
+					apply(doc) {
+						appendSubpageLink(doc, result);
+					},
 				});
+				if (parentProjection.kind === "page") {
+					result = {
+						...result,
+						parentContentUpdatedAt: parentProjection.contentUpdatedAt,
+					};
+				}
 			} catch (error) {
-				// SQLite already committed. A collaboration transport failure must not
-				// make a successful create look failed and invite a duplicate retry.
 				ctx.ports.logger.warn(
-					"Failed to propagate a subpage link to collaboration",
+					"Page created; durable parent-link propagation will retry",
 					{
-						error,
-						parentPageId: result.parentPageId,
 						pageId: result.id,
+						parentPageId: result.parentPageId,
+						error,
 					},
 				);
 			}
 		}
 
+		scheduleWorkspacePageEvent(ctx, {
+			type: "page.created",
+			workspaceId: result.workspaceId,
+			pageId: result.id,
+		});
 		return result;
 	});

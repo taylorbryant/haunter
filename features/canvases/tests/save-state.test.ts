@@ -5,12 +5,9 @@ import {
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
 import {
-	clearPendingCanvasSave,
 	drainCanvasSaveQueue,
 	flushPendingCanvasSave,
-	getPendingCanvasSave,
 	registerCanvasSaveFlusher,
-	rememberPendingCanvasSave,
 } from "@/features/canvases/client/save-state";
 import type { Canvas } from "@/features/canvases/schemas";
 
@@ -153,26 +150,5 @@ describe("canvas snapshot cache", () => {
 			...canvas,
 			snapshot: { version: 2 },
 		});
-	});
-});
-
-describe("pending canvas saves", () => {
-	it("survives remounts until the exact pending snapshot is saved", () => {
-		const id = "56fc14c1-127a-4a1c-942a-b3e5f445b68f";
-		const first = rememberPendingCanvasSave(id, {
-			snapshot: { version: 1 },
-			baseUpdatedAt: "2026-07-17T10:00:00.000Z",
-		});
-		expect(getPendingCanvasSave(id)).toBe(first);
-
-		const newer = rememberPendingCanvasSave(id, {
-			snapshot: { version: 2 },
-			baseUpdatedAt: "2026-07-17T10:00:01.000Z",
-		});
-		clearPendingCanvasSave(id, first);
-		expect(getPendingCanvasSave(id)).toBe(newer);
-
-		clearPendingCanvasSave(id, newer);
-		expect(getPendingCanvasSave(id)).toBeNull();
 	});
 });

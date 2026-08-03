@@ -14,7 +14,6 @@ import {
 	recordPageView,
 	restorePage,
 	restorePageVersion,
-	savePageContent,
 	searchPages,
 	setPageFavorite,
 	updatePage,
@@ -154,10 +153,6 @@ export function updatePageMutationOptions() {
 	return rq(updatePage).mutationOptions();
 }
 
-export function savePageContentMutationOptions() {
-	return rq(savePageContent).mutationOptions();
-}
-
 export function deletePageMutationOptions() {
 	return rq(deletePage).mutationOptions();
 }
@@ -173,6 +168,10 @@ export function listBacklinksQueryOptions(id: string) {
 /** Saves can change any page's incoming links, so invalidate them all. */
 export function invalidateBacklinks(queryClient: QueryClient) {
 	return rq(listBacklinks).invalidate(queryClient);
+}
+
+export function invalidatePageSearch(queryClient: QueryClient) {
+	return rq(searchPages).invalidate(queryClient);
 }
 
 export function listTrashQueryOptions(workspaceId: string) {
@@ -277,8 +276,8 @@ export function setPageSavedAtInCache(
 /**
  * Fold a title save's response into the getPage cache. The title input hands
  * display back to the cached copy after a save, so without this the
- * just-typed title snaps back to the stale one (always visible with
- * collaboration off — there is no shared live title to paper over it).
+ * just-typed title can snap back to the stale SQLite projection while the
+ * authoritative document is still being materialized.
  */
 export function setPageTitleInCache(
 	queryClient: QueryClient,
