@@ -19,7 +19,11 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { listPagesQueryOptions } from "@/features/pages/client/queries";
+import {
+	getPageQueryOptions,
+	listPagesQueryOptions,
+	projectPageTitleIntoList,
+} from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -48,6 +52,10 @@ export function HeaderBreadcrumbs() {
 		...listPagesQueryOptions(workspaceId ?? ""),
 		enabled: workspaceId !== null && synced,
 	});
+	const activePageQuery = useQuery({
+		...getPageQueryOptions(pageId ?? ""),
+		enabled: pageId !== null && synced,
+	});
 
 	if (!workspaceId || !synced) {
 		return null;
@@ -60,7 +68,15 @@ export function HeaderBreadcrumbs() {
 			: pathname.endsWith("/trash")
 				? "Trash"
 				: null;
-	const trail = pageId ? pageTrail(pagesQuery.data?.items ?? [], pageId) : [];
+	const listedPages = pagesQuery.data?.items ?? [];
+	const pages = activePageQuery.data
+		? projectPageTitleIntoList(
+				listedPages,
+				activePageQuery.data.id,
+				activePageQuery.data.title,
+			)
+		: listedPages;
+	const trail = pageId ? pageTrail(pages, pageId) : [];
 	const leafId = section ?? trail[trail.length - 1]?.id ?? null;
 
 	// Deep trails collapse Notion-style, with the hidden ancestors reachable

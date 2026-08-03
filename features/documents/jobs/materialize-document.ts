@@ -6,6 +6,7 @@ import { publishWorkspacePageEvent } from "@/features/collab/server/workspace-ev
 import { materializeCollaborativeDocument } from "@/features/documents/service";
 import { deliverTaskAssignmentNotifications } from "@/features/tasks/notifications/assigned";
 import { defineJob } from "@/lib/jobs";
+import { pageMaterializationEventType } from "./materialization-event";
 
 export const MaterializeDocumentPayloadSchema = z.object({
 	documentId: z.string().min(1),
@@ -71,11 +72,12 @@ export const MaterializeDocumentJob = defineJob("documents.materialize", {
 				);
 			}
 		}
-		if (result.kind === "page" && result.titleChanged) {
+		if (result.kind === "page") {
+			const eventType = pageMaterializationEventType(result);
 			const target = parseRoomId(payload.documentId);
-			if (target?.kind === "page") {
+			if (eventType && target?.kind === "page") {
 				await publishWorkspacePageEvent(ctx, {
-					type: "page.renamed",
+					type: eventType,
 					workspaceId: payload.workspaceId,
 					pageId: target.id,
 				});

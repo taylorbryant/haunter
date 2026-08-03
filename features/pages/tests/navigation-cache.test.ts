@@ -6,10 +6,12 @@ import {
 	listPagesQueryOptions,
 	optimisticallySetPagePlacement,
 	optimisticallySetPageTitle,
+	projectPageTitleIntoList,
 	restorePagePlacementInCache,
 	restorePageTitleInCache,
 	setFavoriteInNavigationCache,
 	setPageTitleInCache,
+	setSharedPageTitleInCache,
 	setViewedInNavigationCache,
 	syncRecordedPageViewInNavigationCache,
 } from "@/features/pages/client/queries";
@@ -45,6 +47,18 @@ function setup() {
 }
 
 describe("page navigation cache", () => {
+	it("overlays an authoritative title without mutating the page list", () => {
+		const first = page(1);
+		const second = page(2);
+		const pages = [first, second];
+		const projected = projectPageTitleIntoList(pages, first.id, "Shared title");
+
+		expect(projected).not.toBe(pages);
+		expect(projected[0]?.title).toBe("Shared title");
+		expect(projected[1]).toBe(second);
+		expect(first.title).toBe("Page 1");
+	});
+
 	it("adds and removes favorites at the front", () => {
 		const { queryClient, queryKey } = setup();
 		const first = page(1);
@@ -204,6 +218,37 @@ describe("page navigation cache", () => {
 			item.updatedAt,
 		);
 		expect(queryClient.getQueryData<Page>(pageKey)?.title).toBe("Newer title");
+	});
+
+	it("projects shared titles without advancing SQLite timestamps", () => {
+		const { queryClient, queryKey: navigationKey } = setup();
+		const item = page(1);
+		const fullPage: Page = {
+			...item,
+			content: [],
+			contentUpdatedAt: item.updatedAt,
+		};
+		const pageKey = getPageQueryOptions(item.id).queryKey;
+		const listKey = listPagesQueryOptions("workspace_test").queryKey;
+		queryClient.setQueryData(pageKey, fullPage);
+		queryClient.setQueryData(listKey, { items: [item] });
+		queryClient.setQueryData<PageNavigationOutput>(navigationKey, {
+			favorites: [{ ...item, favoritedAt: item.updatedAt, lastViewedAt: null }],
+			recents: [{ ...item, favoritedAt: null, lastViewedAt: item.updatedAt }],
+		});
+
+		setSharedPageTitleInCache(queryClient, item.id, "Live title");
+
+		expect(queryClient.getQueryData<Page>(pageKey)).toMatchObject({
+			title: "Live title",
+			updatedAt: item.updatedAt,
+		});
+		expect(
+			queryClient.getQueryData<{ items: PageMeta[] }>(listKey)?.items[0],
+		).toMatchObject({ title: "Live title", updatedAt: item.updatedAt });
+		expect(
+			queryClient.getQueryData<PageNavigationOutput>(navigationKey)?.recents[0],
+		).toMatchObject({ title: "Live title", updatedAt: item.updatedAt });
 	});
 
 	it("cancels stale title projections before applying an optimistic rename", async () => {

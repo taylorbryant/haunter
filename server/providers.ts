@@ -34,7 +34,7 @@ const drizzleSqliteProvider = createDrizzleSqliteProvider({
 });
 
 const outboxDrainProvider = createProvider<
-	Pick<AppPorts, "uow">,
+	Pick<AppPorts, "jobs" | "uow">,
 	AppContext,
 	AppServiceContextInput
 >()({

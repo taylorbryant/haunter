@@ -39,6 +39,17 @@ describe("workspace page events", () => {
 		expect(isWorkspacePageEvent(event)).toBe(true);
 	});
 
+	it("accepts content projection invalidations", () => {
+		const event = createWorkspacePageEvent({
+			type: "page.contentChanged",
+			workspaceId: "workspace_1",
+			pageId: "page_1",
+		});
+
+		expect(isWorkspacePageEvent(event)).toBe(true);
+		expect(workspaceEventAffectedPageIds(event)).toEqual(["page_1"]);
+	});
+
 	it("rejects malformed and future-version broadcast payloads", () => {
 		expect(isWorkspacePageEvent(null)).toBe(false);
 		expect(

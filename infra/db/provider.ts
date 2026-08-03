@@ -1,4 +1,6 @@
 import "@beignet/core/server-only";
+import { createInlineJobDispatcher } from "@beignet/core/jobs";
+import { createServiceActor } from "@beignet/core/ports";
 import { createProvider } from "@beignet/core/providers";
 import {
 	createDrizzleSqliteIdempotencyPort,
@@ -7,17 +9,21 @@ import {
 	createDrizzleSqliteUnitOfWork,
 	type DbPort,
 } from "@beignet/provider-db-drizzle/sqlite";
+import type { AppContext } from "@/app-context";
 import type { AppPorts } from "@/ports";
+import type { AppServiceContextInput } from "@/server/context";
 import { ensureDatabaseReady } from "./database-ready";
 import { createRepositories } from "./repositories";
 import type * as schema from "./schema";
 
-export const starterDatabaseProvider = createProvider<{
-	db: DbPort<typeof schema>;
-}>()({
+export const starterDatabaseProvider = createProvider<
+	{ db: DbPort<typeof schema> },
+	AppContext,
+	AppServiceContextInput
+>()({
 	name: "starter-database",
 
-	async setup({ ports }) {
+	async setup({ ports, createServiceContext }) {
 		const dbPort = ports.db;
 		if (!dbPort) {
 			throw new Error(
@@ -29,6 +35,12 @@ export const starterDatabaseProvider = createProvider<{
 		const idempotency = createDrizzleSqliteIdempotencyPort(dbPort.drizzle);
 		const outbox = createDrizzleSqliteOutboxPort(dbPort.drizzle);
 		const outboxAdmin = createDrizzleSqliteOutboxAdminPort(dbPort.drizzle);
+		const jobs = createInlineJobDispatcher<AppContext>({
+			ctx: () =>
+				createServiceContext({
+					actor: createServiceActor("haunter-background"),
+				}),
+		});
 
 		const providedPorts: Pick<
 			AppPorts,
@@ -36,6 +48,7 @@ export const starterDatabaseProvider = createProvider<{
 			| "changelogState"
 			| "documents"
 			| "idempotency"
+			| "jobs"
 			| "members"
 			| "mcpOAuthClients"
 			| "notificationInbox"
@@ -50,6 +63,7 @@ export const starterDatabaseProvider = createProvider<{
 		> = {
 			...repositories,
 			idempotency,
+			jobs,
 			outbox,
 			outboxAdmin,
 			uow: createDrizzleSqliteUnitOfWork({

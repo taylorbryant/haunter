@@ -36,6 +36,7 @@ import {
 	invalidatePages,
 	recordPageViewMutationOptions,
 	setPageTitleInCache,
+	setSharedPageTitleInCache,
 	syncRecordedPageViewInNavigationCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
@@ -248,17 +249,13 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		});
 	}, [pageId, readOnly, collabRoom, replaceTitle, replaceTitleIfCurrent]);
 
-	// A collaborator renamed the page: refresh the sidebar/breadcrumb lists
-	// (their PATCH already persisted it). Debounced — remote keystrokes
-	// arrive one by one.
-	const sidebarRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	// The shared title is authoritative, so project both local and remote edits
+	// directly into the sidebar and navigation caches. Refetching here can race
+	// asynchronous SQLite materialization and restore the previous title.
 	useEffect(() => {
 		if (sharedTitle === null) return;
-		if (sidebarRefreshRef.current) clearTimeout(sidebarRefreshRef.current);
-		sidebarRefreshRef.current = setTimeout(() => {
-			invalidatePages(queryClient);
-		}, 1000);
-	}, [sharedTitle, queryClient]);
+		setSharedPageTitleInCache(queryClient, pageId, sharedTitle);
+	}, [sharedTitle, queryClient, pageId]);
 
 	// Local typing wins while in flight; otherwise the shared live title;
 	// otherwise the database copy.

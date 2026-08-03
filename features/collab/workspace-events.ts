@@ -14,6 +14,7 @@ export type WorkspacePageEvent = WorkspacePageEventBase &
 	(
 		| { type: "page.created" }
 		| { type: "page.renamed" }
+		| { type: "page.contentChanged" }
 		| { type: "page.moved" }
 		| { type: "page.iconChanged" }
 		| { type: "page.trashed" }
@@ -89,6 +90,7 @@ export function isWorkspacePageEvent(
 				))) &&
 		(event.type === "page.created" ||
 			event.type === "page.renamed" ||
+			event.type === "page.contentChanged" ||
 			event.type === "page.moved" ||
 			event.type === "page.iconChanged" ||
 			event.type === "page.trashed" ||

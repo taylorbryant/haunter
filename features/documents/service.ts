@@ -400,6 +400,7 @@ export type MaterializeResult =
 			updatedAt: string;
 			contentUpdatedAt: string;
 			titleChanged: false;
+			contentChanged: false;
 			tasksChanged: false;
 			linksChanged: false;
 			assignmentNotifications: [];
@@ -415,6 +416,7 @@ export type MaterializeResult =
 			updatedAt: string;
 			contentUpdatedAt: string;
 			titleChanged: boolean;
+			contentChanged: boolean;
 			tasksChanged: boolean;
 			linksChanged: boolean;
 			assignmentNotifications: Awaited<
@@ -613,6 +615,7 @@ async function materializeCollaborativeDocumentAttempt(
 						updatedAt: current.updatedAt,
 						contentUpdatedAt: current.contentUpdatedAt,
 						titleChanged: false,
+						contentChanged: false,
 						tasksChanged: false,
 						linksChanged: false,
 						assignmentNotifications: [],
@@ -703,6 +706,7 @@ async function materializeCollaborativeDocumentAttempt(
 					updatedAt,
 					contentUpdatedAt,
 					titleChanged,
+					contentChanged,
 					tasksChanged,
 					linksChanged,
 					assignmentNotifications,

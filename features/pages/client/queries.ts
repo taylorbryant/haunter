@@ -317,6 +317,64 @@ export function setPageTitleInCache(
 	);
 }
 
+/**
+ * Project the authoritative shared title into every browser cache without
+ * pretending that SQLite has already materialized a newer timestamp. The
+ * eventual workspace event refetches the durable projection and supplies its
+ * real updatedAt value.
+ */
+export function setSharedPageTitleInCache(
+	queryClient: QueryClient,
+	id: string,
+	title: string,
+) {
+	queryClient.setQueryData<Page>(
+		rq(getPage).key({ path: { id } }),
+		(current) => (current ? { ...current, title } : current),
+	);
+	queryClient.setQueriesData<{ items: PageMeta[] }>(
+		rq(listPages).filter(),
+		(current) =>
+			current
+				? {
+						...current,
+						items: current.items.map((page) =>
+							page.id === id ? { ...page, title } : page,
+						),
+					}
+				: current,
+	);
+	queryClient.setQueriesData<PageNavigationOutput>(
+		rq(getPageNavigation).filter(),
+		(current) =>
+			current
+				? {
+						favorites: current.favorites.map((page) =>
+							page.id === id ? { ...page, title } : page,
+						),
+						recents: current.recents.map((page) =>
+							page.id === id ? { ...page, title } : page,
+						),
+					}
+				: current,
+	);
+}
+
+/**
+ * Overlay an authoritative title onto a SQLite-backed page list. This covers
+ * the startup race where the shared document is ready before listPages and the
+ * later list response would otherwise put the projected title back on screen.
+ */
+export function projectPageTitleIntoList(
+	pages: PageMeta[],
+	id: string,
+	title: string,
+): PageMeta[] {
+	const page = pages.find((item) => item.id === id);
+	if (!page || page.title === title) return pages;
+	return pages.map((item) => (item.id === id ? { ...item, title } : item));
+}
+
 export type PageTitleCacheSnapshot = {
 	previousTitle: string;
 	previousUpdatedAt: string;

@@ -90,6 +90,7 @@ import {
 	listPagesQueryOptions,
 	optimisticallySetPagePlacement,
 	optimisticallySetPageTitle,
+	projectPageTitleIntoList,
 	restorePagePlacementInCache,
 	restorePageTitleInCache,
 	setFavoriteInNavigationCache,
@@ -212,6 +213,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const pathname = usePathname();
 	const queryClient = useQueryClient();
 	const { isMobile, setOpenMobile, setSuppressMobileFinalFocus } = useSidebar();
+	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 	// Viewers browse the tree but get no create/rename/move/delete controls.
 	const canEdit = useCanEditWorkspace();
 	const { synced } = useWorkspaceRouteSync(workspaceId);
@@ -222,6 +224,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const navigationQuery = useQuery({
 		...getPageNavigationQueryOptions(workspaceId),
 		enabled: synced,
+	});
+	// Observe the same page cache as PageEditor. Its title is projected from the
+	// authoritative Yjs document, so it remains current while SQLite catches up.
+	const activePageQuery = useQuery({
+		...getPageQueryOptions(activePageId ?? ""),
+		enabled: synced && activePageId !== null,
 	});
 	const createMutation = useMutation({
 		...createPageMutationOptions(),
@@ -278,12 +286,20 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			: null,
 	);
 
-	const pages = pagesQuery.data?.items ?? [];
+	const listedPages = pagesQuery.data?.items ?? [];
+	const pages = useMemo(() => {
+		const activePage = activePageQuery.data;
+		if (!activePage) return listedPages;
+		return projectPageTitleIntoList(
+			listedPages,
+			activePage.id,
+			activePage.title,
+		);
+	}, [listedPages, activePageQuery.data]);
 	const { tree, nodesById, subtreeIdsById } = useMemo(
 		() => buildTreeIndex(pages),
 		[pages],
 	);
-	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 
 	async function createPage(parentPageId: string | null) {
 		setActionError(null);

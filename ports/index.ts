@@ -5,6 +5,7 @@ import type { OutboxAdminPort, OutboxPort } from "@beignet/core/outbox";
 import type {
 	BoundGate,
 	GatePort,
+	JobDispatcherPort,
 	LoggerPort,
 	RateLimitPort,
 	StoragePort,
@@ -93,6 +94,7 @@ export type AppPorts = {
 	errorReporter: ErrorReporterPort;
 	gate: GatePort<AuthorizationContext, AppPolicies>;
 	idempotency: IdempotencyPort;
+	jobs: JobDispatcherPort;
 	logger: LoggerPort;
 	members: MemberRepository;
 	notificationInbox: NotificationRepository;
