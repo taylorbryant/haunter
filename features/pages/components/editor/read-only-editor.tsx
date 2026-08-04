@@ -34,7 +34,7 @@ export default function ReadOnlyEditor({
 	useSyncEditorCodeTheme(editor, resolvedTheme);
 
 	const view = (
-		<div className="haunter-editor">
+		<div className="haunter-editor editor-mobile-flush">
 			<BlockNoteView
 				editor={editor}
 				editable={false}

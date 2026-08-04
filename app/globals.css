@@ -1329,9 +1329,16 @@ html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
 	outline: none;
 }
 
-/* Mobile: the wrapper gets `editor-flush` (JS-driven, see haunter-editor.tsx)
-   to drop BlockNote's 54px inline gutter so content runs edge-to-edge. The
-   block controls that live in that gutter are hidden on mobile too. */
+/* Drop BlockNote's 54px inline gutter from the first mobile paint. Both the
+   read-only projection and collaborative editor use this class so switching
+   between them cannot change the document width. */
+@media (max-width: 767px) {
+	.editor-mobile-flush .bn-editor {
+		padding-inline: 0;
+	}
+}
+
+/* Some constrained previews intentionally remove the gutter at every width. */
 .editor-flush .bn-editor {
 	padding-inline: 0;
 }

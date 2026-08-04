@@ -76,7 +76,6 @@ import {
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
-import { cn } from "@/lib/utils";
 import { withHaunterCollaboration } from "./blocknote-collaboration";
 import {
 	OPEN_CODE_BLOCK_DIALOG_EVENT,
@@ -575,10 +574,9 @@ export default function HaunterEditor({
 	}, []);
 
 	return (
-		// On mobile, `editor-flush` drops BlockNote's 54px inline gutter so
-		// content runs edge-to-edge; the block controls that live there are
-		// hidden below. Driven from JS (not CSS) to share one breakpoint.
-		<div className={cn("haunter-editor", isMobile && "editor-flush")}>
+		// CSS drops BlockNote's 54px inline gutter at the mobile breakpoint from
+		// the first paint. `isMobile` still controls the interactive side menu.
+		<div className="haunter-editor editor-mobile-flush">
 			{saveError ? (
 				<div
 					role="alert"
