@@ -182,6 +182,13 @@ export const PageSchema = PageMetaSchema.extend({
 	contentUpdatedAt: z.string().datetime(),
 });
 
+export const PageDetailSchema = PageSchema.extend({
+	/** Server-issued identity for the current provider document incarnation.
+	 * Null means the authoritative document could not be registered yet, so the
+	 * browser must not hydrate a local Yjs cache for this response. */
+	documentCacheEpoch: z.string().min(1).nullable(),
+});
+
 export const ListPagesInputSchema = z.object({
 	workspaceId: z.string().min(1),
 });
@@ -349,6 +356,7 @@ export type PageNavigationItem = z.infer<typeof PageNavigationItemSchema>;
 export type PageNavigationOutput = z.infer<typeof PageNavigationOutputSchema>;
 export type SearchResult = z.infer<typeof SearchResultSchema>;
 export type Page = z.infer<typeof PageSchema>;
+export type PageDetail = z.infer<typeof PageDetailSchema>;
 export type CreatePageInput = z.infer<typeof CreatePageInputSchema>;
 export type CreatePageOutput = z.infer<typeof CreatePageOutputSchema>;
 export type UpdatePageInput = z.infer<typeof UpdatePageInputSchema>;

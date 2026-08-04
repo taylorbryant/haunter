@@ -24,6 +24,7 @@ import {
 	replacePageTitle,
 	yDocFromUpdate,
 } from "@/features/documents/codec";
+import { documentCacheEpoch } from "@/features/documents/model";
 import type { DocumentStorePort } from "@/features/documents/ports";
 import {
 	ensureCollaborativeDocument,
@@ -1310,6 +1311,14 @@ describe("authoritative collaborative documents", () => {
 				entityId: page.id,
 				ports: fixture.ports,
 			});
+			const beforeRepair = await fixture.ports.documents.findByDocumentId(
+				fixture.scope,
+				seeded.documentId,
+			);
+			if (!beforeRepair) throw new Error("Seeded document was not registered");
+			const initialCacheEpoch = documentCacheEpoch(beforeRepair);
+			// The cache epoch is time-based but must change for every provider repair.
+			await new Promise((resolve) => setTimeout(resolve, 2));
 			await fixture.ports.documentStore.deleteDocument(seeded.documentId);
 
 			const repaired = await ensureCollaborativeDocument({
@@ -1320,6 +1329,12 @@ describe("authoritative collaborative documents", () => {
 				verifyReady: true,
 			});
 			expect(repaired.seeded).toBe(true);
+			const afterRepair = await fixture.ports.documents.findByDocumentId(
+				fixture.scope,
+				repaired.documentId,
+			);
+			if (!afterRepair) throw new Error("Repaired document was not registered");
+			expect(documentCacheEpoch(afterRepair)).not.toBe(initialCacheEpoch);
 			const update = await fixture.ports.documentStore.readBinaryUpdate(
 				repaired.documentId,
 			);

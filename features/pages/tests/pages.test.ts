@@ -341,6 +341,7 @@ describe("pages use cases", () => {
 		const result = await tester.run(getPageUseCase, { id: page.id }, { ctx });
 		expect(result.title).toBe("Last projected title");
 		expect(result.content).toEqual([]);
+		expect(result.documentCacheEpoch).toStartWith("1:");
 	});
 
 	it("creates nested pages and lists workspace pages as meta only", async () => {
@@ -352,6 +353,10 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 		expect(root.parentContentUpdatedAt).toBeNull();
+		expect(
+			(await tester.run(getPageUseCase, { id: root.id }, { ctx }))
+				.documentCacheEpoch,
+		).toStartWith("1:");
 		const intro = {
 			id: "intro",
 			type: "paragraph",

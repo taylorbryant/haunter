@@ -303,9 +303,11 @@ type HaunterEditorProps = {
 function PresencePublisher({
 	pageId,
 	userId,
+	cacheEpoch,
 }: {
 	pageId: string;
 	userId: string | null;
+	cacheEpoch: string | null;
 }) {
 	useEffect(() => {
 		if (!userId) return;
@@ -317,6 +319,7 @@ function PresencePublisher({
 				unsubscribe = subscribeToRoomPresence(
 					documentRoomId("page", pageId),
 					userId,
+					cacheEpoch,
 					setCollabPresence,
 				);
 			},
@@ -326,7 +329,7 @@ function PresencePublisher({
 			unsubscribe?.();
 			setCollabPresence([]);
 		};
-	}, [pageId, userId]);
+	}, [cacheEpoch, pageId, userId]);
 
 	return null;
 }
@@ -602,7 +605,11 @@ export default function HaunterEditor({
 					</Button>
 				</div>
 			) : null}
-			<PresencePublisher pageId={pageId} userId={currentUserId} />
+			<PresencePublisher
+				pageId={pageId}
+				userId={currentUserId}
+				cacheEpoch={collab.cacheEpoch}
+			/>
 			<TaskBlockCurrentUserContext.Provider value={currentUserId}>
 				<BlockNoteView
 					editor={editor}

@@ -2,7 +2,9 @@ import { describe, expect, it } from "bun:test";
 import * as Y from "yjs";
 import {
 	type CollabRoom,
+	canWriteToCollabRoom,
 	isCollabRoomReady,
+	localCacheEpochForSession,
 	waitForCollabPersistence,
 } from "@/features/collab/client/session";
 
@@ -36,6 +38,7 @@ function roomWith(provider: FakeProvider): CollabRoom {
 	return {
 		doc: new Y.Doc(),
 		provider: provider as unknown as CollabRoom["provider"],
+		cacheEpoch: "epoch-1",
 		synced: true,
 		localReady: false,
 	};
@@ -50,6 +53,29 @@ describe("collaboration readiness", () => {
 			isCollabRoomReady({ ...room, synced: false, localReady: true }),
 		).toBe(true);
 		expect(isCollabRoomReady({ ...room, synced: true })).toBe(true);
+		room.doc.destroy();
+	});
+
+	it("does not hydrate a viewer from a local-only document", () => {
+		const room = {
+			...roomWith(new FakeProvider("loading")),
+			synced: false,
+			localReady: true,
+		};
+		expect(isCollabRoomReady(room, false)).toBe(false);
+		expect(localCacheEpochForSession("epoch-1", false)).toBeNull();
+		room.doc.destroy();
+	});
+
+	it("keeps a locally hydrated editor read-only until remote sync", () => {
+		const room = {
+			...roomWith(new FakeProvider("loading")),
+			synced: false,
+			localReady: true,
+		};
+		expect(canWriteToCollabRoom(room, true)).toBe(false);
+		expect(canWriteToCollabRoom({ ...room, synced: true }, true)).toBe(true);
+		expect(canWriteToCollabRoom({ ...room, synced: true }, false)).toBe(false);
 		room.doc.destroy();
 	});
 });

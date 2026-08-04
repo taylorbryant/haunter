@@ -79,6 +79,23 @@ export type NewCollaborativeDocument = Pick<
 	schemaVersion?: number;
 };
 
+/**
+ * Stable identity for one provider-backed incarnation of a document.
+ *
+ * Materialization advances `revision`, so it cannot key the browser cache.
+ * `seededAt` changes only when the provider document is first seeded or
+ * repaired, which lets a repaired room start from a fresh IndexedDB database
+ * instead of merging an incompatible cached Yjs history into the new room.
+ */
+export function documentCacheEpoch(
+	document: Pick<
+		CollaborativeDocument,
+		"schemaVersion" | "seededAt" | "createdAt"
+	>,
+): string {
+	return `${document.schemaVersion}:${document.seededAt ?? `pending:${document.createdAt}`}`;
+}
+
 export function documentId(kind: DocumentKind, entityId: string): string {
 	return `doc:v2:${kind}:${entityId}`;
 }

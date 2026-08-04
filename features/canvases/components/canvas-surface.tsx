@@ -30,6 +30,7 @@ import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
 import {
 	type CollabRoom,
+	canWriteToCollabRoom,
 	useCollabSession,
 	waitForCollabPersistence,
 } from "@/features/collab/client/session";
@@ -82,11 +83,15 @@ function MemberCanvasSurface({
 }) {
 	const canvasQuery = useQuery(getCanvasQueryOptions(canvasId));
 	const currentUser = useCurrentUser();
+	const canEdit = useCanEditWorkspace();
 	const collabSession = useCollabSession(
 		documentRoomId("canvas", canvasId),
 		currentUser?.id ?? null,
+		{
+			cacheEpoch: canvasQuery.data?.documentCacheEpoch,
+			allowLocalReady: canEdit,
+		},
 	);
-	const canEdit = useCanEditWorkspace();
 
 	if (canvasQuery.isPending || collabSession.status === "connecting") {
 		return <CanvasLoading />;
@@ -123,6 +128,7 @@ function MemberCanvasSurface({
 			room={collabSession.room}
 			snapshot={canvasQuery.data.snapshot}
 			canEdit={canEdit}
+			remoteUnavailable={collabSession.remoteUnavailable}
 			onSaveStateChange={onSaveStateChange}
 			layoutKey={layoutKey}
 		/>
@@ -185,6 +191,7 @@ function CollabCanvasSurface({
 	room,
 	snapshot,
 	canEdit,
+	remoteUnavailable,
 	onSaveStateChange,
 	layoutKey,
 }: {
@@ -192,6 +199,7 @@ function CollabCanvasSurface({
 	room: CollabRoom;
 	snapshot: Record<string, unknown>;
 	canEdit: boolean;
+	remoteUnavailable: boolean;
 	onSaveStateChange?: (state: CanvasSaveState) => void;
 	layoutKey?: string;
 }) {
@@ -212,6 +220,7 @@ function CollabCanvasSurface({
 		collabUser,
 		canEdit,
 	);
+	const writable = canWriteToCollabRoom(room, canEdit);
 	const synchronizedSnapshot = useMemo(() => {
 		if (
 			storeWithStatus.status !== "synced-remote" &&
@@ -227,14 +236,20 @@ function CollabCanvasSurface({
 	const [saveState, setSaveState] = useState<CanvasSaveState>("saved");
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const flushRef = useRef<() => Promise<boolean>>(async () => true);
+	const editorRef = useRef<Editor | null>(null);
+
+	useEffect(() => {
+		editorRef.current?.updateInstanceState({ isReadonly: !writable });
+	}, [writable]);
 
 	useEffect(() => {
 		onSaveStateChange?.(saveState);
 	}, [onSaveStateChange, saveState]);
 
 	function handleMount(editor: Editor) {
+		editorRef.current = editor;
 		syncCanvasTheme(editor);
-		if (!canEdit) editor.updateInstanceState({ isReadonly: true });
+		editor.updateInstanceState({ isReadonly: !writable });
 
 		let revision = 0;
 		let savedRevision = 0;
@@ -305,6 +320,7 @@ function CollabCanvasSurface({
 		);
 
 		return () => {
+			if (editorRef.current === editor) editorRef.current = null;
 			unlisten();
 			unregisterFlusher();
 			void flush();
@@ -319,7 +335,7 @@ function CollabCanvasSurface({
 			data-canvas-layout={layoutKey}
 		>
 			<TldrawWithFonts
-				components={canEdit ? CANVAS_LIBRARY_COMPONENTS : undefined}
+				components={writable ? CANVAS_LIBRARY_COMPONENTS : undefined}
 				documentSnapshot={synchronizedSnapshot}
 				layoutKey={layoutKey}
 				licenseKey={TLDRAW_LICENSE_KEY}
@@ -327,6 +343,12 @@ function CollabCanvasSurface({
 				store={storeWithStatus}
 				onMount={handleMount}
 			/>
+			{remoteUnavailable ? (
+				<div className="absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded border bg-background/95 px-3 py-1.5 text-center text-muted-foreground text-xs shadow">
+					Live editing is temporarily unavailable. This canvas is read-only
+					until the shared document reconnects.
+				</div>
+			) : null}
 			{saveState === "error" && saveError ? (
 				<div
 					role="alert"

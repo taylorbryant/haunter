@@ -2,15 +2,21 @@ import type * as Y from "yjs";
 import { parseRoomId } from "@/features/collab/lib/room";
 import { isCollaborativeDocumentSeeded } from "@/features/documents/seed-marker";
 
-const LOCAL_DOCUMENT_CACHE_VERSION = 1;
+const LOCAL_DOCUMENT_CACHE_VERSION = 2;
 
 /** Keep local Yjs data isolated by signed-in account. A shared browser may
  * contain several Haunter accounts, and one account must never hydrate
  * another account's document before authorization completes. Page content
  * generations remain isolated inside the room document by their generation-
- * suffixed Yjs roots and authoritative active-generation pointer. */
-export function localDocumentCacheName(userId: string, roomId: string): string {
-	return `haunter:yjs:v${LOCAL_DOCUMENT_CACHE_VERSION}:${encodeURIComponent(userId)}:${roomId}`;
+ * suffixed Yjs roots and authoritative active-generation pointer. The server
+ * cache epoch changes whenever a provider document is repaired, so stale Yjs
+ * history can never merge into its replacement. */
+export function localDocumentCacheName(
+	userId: string,
+	roomId: string,
+	cacheEpoch: string,
+): string {
+	return `haunter:yjs:v${LOCAL_DOCUMENT_CACHE_VERSION}:${encodeURIComponent(userId)}:${encodeURIComponent(cacheEpoch)}:${roomId}`;
 }
 
 /** IndexedDB reports an empty database as synchronized. Only a document that

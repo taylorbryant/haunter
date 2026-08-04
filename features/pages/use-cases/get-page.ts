@@ -1,15 +1,16 @@
 import "@beignet/core/server-only";
 import { isDocumentStoreUnavailable } from "@/features/documents/errors";
+import { documentCacheEpoch } from "@/features/documents/model";
 import { readCollaborativePageProjection } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
-import { PageIdInputSchema, PageSchema } from "../schemas";
+import { PageDetailSchema, PageIdInputSchema } from "../schemas";
 
 export const getPageUseCase = useCase
 	.query("pages.get")
 	.input(PageIdInputSchema)
-	.output(PageSchema)
+	.output(PageDetailSchema)
 	.run(async ({ ctx, input }) => {
 		const scope = requireActiveWorkspaceScope(ctx);
 
@@ -19,13 +20,14 @@ export const getPageUseCase = useCase
 		}
 
 		await ctx.gate.authorize("pages.read", page);
+		let result = page;
 		try {
 			const projection = await readCollaborativePageProjection({
 				scope,
 				entityId: page.id,
 				ports: ctx.ports,
 			});
-			return {
+			result = {
 				...page,
 				title: projection.title,
 				content: projection.content,
@@ -38,5 +40,13 @@ export const getPageUseCase = useCase
 			);
 		}
 
-		return page;
+		const registered = await ctx.ports.documents.findByEntity(
+			scope,
+			"page",
+			page.id,
+		);
+		return {
+			...result,
+			documentCacheEpoch: registered ? documentCacheEpoch(registered) : null,
+		};
 	});

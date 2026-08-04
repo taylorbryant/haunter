@@ -530,12 +530,19 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			if (pageId === activePageId || !currentUser) return;
 			// Only start a websocket when intent is strong (focus or press), rather
 			// than opening rooms for every row crossed by the pointer.
-			void import("@/features/collab/client/liveblocks").then(
-				({ preloadRoom }) =>
-					preloadRoom(documentRoomId("page", pageId), currentUser.id),
-			);
+			void Promise.all([
+				queryClient.ensureQueryData(getPageQueryOptions(pageId)),
+				import("@/features/collab/client/liveblocks"),
+			]).then(([page, { preloadRoom }]) => {
+				if (!page.documentCacheEpoch) return;
+				preloadRoom(
+					documentRoomId("page", pageId),
+					currentUser.id,
+					page.documentCacheEpoch,
+				);
+			});
 		},
-		[activePageId, currentUser],
+		[activePageId, currentUser, queryClient],
 	);
 
 	function siblingsOf(parentId: string | null): TreeNode[] {

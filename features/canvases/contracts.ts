@@ -1,6 +1,7 @@
 import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import {
+	CanvasDetailSchema,
 	CanvasIdInputSchema,
 	CanvasSchema,
 	CreateCanvasInputSchema,
@@ -43,7 +44,7 @@ export const getCanvas = canvases
 		CanvasNotFound: errors.CanvasNotFound,
 	})
 	.responses({
-		200: CanvasSchema,
+		200: CanvasDetailSchema,
 	});
 
 export const saveCanvasSnapshot = canvases

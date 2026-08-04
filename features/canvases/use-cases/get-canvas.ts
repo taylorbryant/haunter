@@ -1,14 +1,15 @@
 import "@beignet/core/server-only";
-import { ensureCollaborativeDocument } from "@/features/documents/service";
+import { documentCacheEpoch } from "@/features/documents/model";
+import { readCollaborativeCanvasProjection } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
-import { CanvasIdInputSchema, CanvasSchema } from "../schemas";
+import { CanvasDetailSchema, CanvasIdInputSchema } from "../schemas";
 
 export const getCanvasUseCase = useCase
 	.query("canvases.get")
 	.input(CanvasIdInputSchema)
-	.output(CanvasSchema)
+	.output(CanvasDetailSchema)
 	.run(async ({ ctx, input }) => {
 		const scope = requireActiveWorkspaceScope(ctx);
 
@@ -22,19 +23,28 @@ export const getCanvasUseCase = useCase
 		if (!page || page.deletedAt !== null) {
 			throw appError("CanvasNotFound", { details: { id: input.id } });
 		}
+		let result = canvas;
 		try {
-			await ensureCollaborativeDocument({
+			const projection = await readCollaborativeCanvasProjection({
 				scope,
-				kind: "canvas",
 				entityId: canvas.id,
 				ports: ctx.ports,
 			});
+			result = { ...canvas, snapshot: projection };
 		} catch (error) {
 			ctx.ports.logger.warn(
-				"Failed to lazily seed an authoritative canvas document",
+				"Serving a stale read-only canvas projection while the document store is unavailable",
 				{ error, canvasId: canvas.id },
 			);
 		}
 
-		return canvas;
+		const registered = await ctx.ports.documents.findByEntity(
+			scope,
+			"canvas",
+			canvas.id,
+		);
+		return {
+			...result,
+			documentCacheEpoch: registered ? documentCacheEpoch(registered) : null,
+		};
 	});

@@ -7,6 +7,7 @@ import {
 	ListPagesOutputSchema,
 	ListPageVersionsOutputSchema,
 	ListTrashOutputSchema,
+	PageDetailSchema,
 	PageIdInputSchema,
 	PageMetaSchema,
 	PageNavigationOutputSchema,
@@ -112,7 +113,7 @@ export const getPage = pages
 		PageNotFound: errors.PageNotFound,
 	})
 	.responses({
-		200: PageSchema,
+		200: PageDetailSchema,
 	});
 
 export const updatePage = pages

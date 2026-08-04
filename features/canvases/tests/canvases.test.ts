@@ -136,6 +136,7 @@ describe("canvases use cases", () => {
 			{ ctx },
 		);
 		expect(fetched.snapshot).toEqual(snapshot);
+		expect(fetched.documentCacheEpoch).toStartWith("1:");
 	});
 
 	it("applies sequential snapshot replacements to the shared document", async () => {

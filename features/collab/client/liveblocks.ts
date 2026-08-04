@@ -33,6 +33,8 @@ type RoomSubscriber = (room: CollabRoom) => void;
 
 type CachedRoom = {
 	roomId: string;
+	userId: string | null;
+	cacheEpoch: string | null;
 	room: Room;
 	doc: Y.Doc;
 	provider: LiveblocksYjsProvider;
@@ -56,14 +58,54 @@ const roomCache = new Map<string, CachedRoom>();
 const ROOM_LINGER_MS = 5 * 60_000;
 const ROOM_SYNC_TIMEOUT_MS = 8000;
 
-function cacheKeyFor(roomId: string, userId: string | null): string {
-	return `${userId ? encodeURIComponent(userId) : "ephemeral"}:${roomId}`;
+function destroyCachedRoom(cacheKey: string, entry: CachedRoom) {
+	if (entry.linger) clearTimeout(entry.linger);
+	roomCache.delete(cacheKey);
+	entry.provider.off("synced", entry.onProviderSync);
+	entry.provider.off("sync", entry.onProviderSync);
+	if (entry.persistence && entry.onLocalSync) {
+		entry.persistence.off("synced", entry.onLocalSync);
+	}
+	entry.provider.awareness.setLocalState(null);
+	// Destroying the provider destroys the Y.Doc; y-indexeddb listens for that
+	// event and closes its database without clearing the persisted data.
+	entry.provider.destroy();
+	entry.leave();
+}
+
+/** A repaired provider document keeps the same Liveblocks room id. Retire any
+ * in-memory provider for the previous epoch before opening the replacement;
+ * otherwise its stale Y.Doc could remain connected during the linger window
+ * and merge the retired history back into the repaired room. */
+function retireOtherDocumentEpochs(
+	roomId: string,
+	userId: string | null,
+	cacheEpoch: string | null,
+) {
+	for (const [cacheKey, entry] of roomCache) {
+		if (
+			entry.roomId === roomId &&
+			entry.userId === userId &&
+			entry.cacheEpoch !== cacheEpoch
+		) {
+			destroyCachedRoom(cacheKey, entry);
+		}
+	}
+}
+
+function cacheKeyFor(
+	roomId: string,
+	userId: string | null,
+	cacheEpoch: string | null,
+): string {
+	return `${userId ? encodeURIComponent(userId) : "ephemeral"}:${cacheEpoch ? encodeURIComponent(cacheEpoch) : "remote"}:${roomId}`;
 }
 
 function roomSnapshot(entry: CachedRoom): CollabRoom {
 	return {
 		doc: entry.doc,
 		provider: entry.provider,
+		cacheEpoch: entry.cacheEpoch,
 		synced: entry.provider.synced === true,
 		localReady:
 			entry.localLoaded && isUsableLocalDocument(entry.roomId, entry.doc),
@@ -75,8 +117,12 @@ function notifyRoomSubscribers(entry: CachedRoom) {
 	for (const subscriber of entry.subscribers) subscriber(snapshot);
 }
 
-function acquireRoom(roomId: string, userId: string | null): CachedRoom {
-	const cacheKey = cacheKeyFor(roomId, userId);
+function acquireRoom(
+	roomId: string,
+	userId: string | null,
+	cacheEpoch: string | null,
+): CachedRoom {
+	const cacheKey = cacheKeyFor(roomId, userId, cacheEpoch);
 	const cached = roomCache.get(cacheKey);
 	if (cached) {
 		if (cached.linger) {
@@ -86,15 +132,22 @@ function acquireRoom(roomId: string, userId: string | null): CachedRoom {
 		cached.refs += 1;
 		return cached;
 	}
+	retireOtherDocumentEpochs(roomId, userId, cacheEpoch);
 
 	const { room, leave } = getLiveblocksClient(userId).enterRoom(roomId);
 	const doc = new Y.Doc();
 	const provider = new LiveblocksYjsProvider(room, doc);
-	const persistence = userId
-		? new IndexeddbPersistence(localDocumentCacheName(userId, roomId), doc)
-		: null;
+	const persistence =
+		userId && cacheEpoch
+			? new IndexeddbPersistence(
+					localDocumentCacheName(userId, roomId, cacheEpoch),
+					doc,
+				)
+			: null;
 	const entry: CachedRoom = {
 		roomId,
+		userId,
+		cacheEpoch,
 		room,
 		doc,
 		provider,
@@ -130,20 +183,25 @@ function acquireRoom(roomId: string, userId: string | null): CachedRoom {
 export function subscribeToRoomPresence(
 	roomId: string,
 	userId: string,
+	cacheEpoch: string | null,
 	onChange: (peers: PresencePeer[]) => void,
 ): () => void {
-	const { room } = acquireRoom(roomId, userId);
+	const { room } = acquireRoom(roomId, userId, cacheEpoch);
 	const update = () => onChange(presencePeersFromOthers(room.getOthers()));
 	const unsubscribe = room.subscribe("others", update);
 	update();
 	return () => {
 		unsubscribe();
-		releaseRoom(roomId, userId);
+		releaseRoom(roomId, userId, cacheEpoch);
 	};
 }
 
-function releaseRoom(roomId: string, userId: string | null) {
-	const cacheKey = cacheKeyFor(roomId, userId);
+function releaseRoom(
+	roomId: string,
+	userId: string | null,
+	cacheEpoch: string | null,
+) {
+	const cacheKey = cacheKeyFor(roomId, userId, cacheEpoch);
 	const entry = roomCache.get(cacheKey);
 	if (!entry) return;
 	entry.refs -= 1;
@@ -152,16 +210,7 @@ function releaseRoom(roomId: string, userId: string | null) {
 	// (no ghost cursors while the room lingers), tear down after the linger.
 	entry.provider.awareness.setLocalState(null);
 	entry.linger = setTimeout(() => {
-		roomCache.delete(cacheKey);
-		entry.provider.off("synced", entry.onProviderSync);
-		entry.provider.off("sync", entry.onProviderSync);
-		if (entry.persistence && entry.onLocalSync) {
-			entry.persistence.off("synced", entry.onLocalSync);
-		}
-		// Destroying the provider destroys the Y.Doc; y-indexeddb listens for
-		// that event and closes its database without clearing the persisted data.
-		entry.provider.destroy();
-		entry.leave();
+		destroyCachedRoom(cacheKey, entry);
 	}, ROOM_LINGER_MS);
 }
 
@@ -190,20 +239,30 @@ export async function withSyncedRoom<T>(
 	roomId: string,
 	run: (room: CollabRoom) => T | Promise<T>,
 ): Promise<T | null> {
-	const { doc, provider } = acquireRoom(roomId, null);
+	const { doc, provider } = acquireRoom(roomId, null, null);
 	try {
 		if (!(await waitForRoomSync(provider))) return null;
-		return await run({ doc, provider, synced: true, localReady: false });
+		return await run({
+			doc,
+			provider,
+			cacheEpoch: null,
+			synced: true,
+			localReady: false,
+		});
 	} finally {
-		releaseRoom(roomId, null);
+		releaseRoom(roomId, null, null);
 	}
 }
 
 /** Start loading the editor's room before navigation commits. Releasing the
  * preload reference keeps the connected room in the normal linger cache. */
-export function preloadRoom(roomId: string, userId: string): void {
-	acquireRoom(roomId, userId);
-	releaseRoom(roomId, userId);
+export function preloadRoom(
+	roomId: string,
+	userId: string,
+	cacheEpoch: string,
+): void {
+	acquireRoom(roomId, userId, cacheEpoch);
+	releaseRoom(roomId, userId, cacheEpoch);
 }
 
 /** Bind one consumer to a room and publish readiness changes from both the
@@ -211,14 +270,15 @@ export function preloadRoom(roomId: string, userId: string): void {
 export function bindRoom(
 	roomId: string,
 	userId: string,
+	cacheEpoch: string | null,
 	onChange: RoomSubscriber,
 ): () => void {
-	const entry = acquireRoom(roomId, userId);
+	const entry = acquireRoom(roomId, userId, cacheEpoch);
 	entry.subscribers.add(onChange);
 	onChange(roomSnapshot(entry));
 	return () => {
 		entry.subscribers.delete(onChange);
-		releaseRoom(roomId, userId);
+		releaseRoom(roomId, userId, cacheEpoch);
 	};
 }
 

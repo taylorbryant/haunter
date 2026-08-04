@@ -16,6 +16,7 @@ import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
 import {
 	type CollabRoom,
+	canWriteToCollabRoom,
 	useCollabSession,
 	waitForCollabPersistence,
 } from "@/features/collab/client/session";
@@ -172,10 +173,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const collabSession = useCollabSession(
 		documentRoomId("page", pageId),
 		currentUser?.id ?? null,
+		{
+			cacheEpoch: pageQuery.data?.documentCacheEpoch,
+			allowLocalReady: !workspaceReadOnly,
+		},
 	);
-	const readOnly = workspaceReadOnly || collabSession.status === "unavailable";
 	const collabRoom =
 		collabSession.status === "ready" ? collabSession.room : null;
+	const readOnly = !canWriteToCollabRoom(collabRoom, !workspaceReadOnly);
 	const {
 		component: CollaborativeEditor,
 		loadError: editorLoadError,
@@ -547,7 +552,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				<ReadOnlyEditor content={page.content} />
 			) : CollaborativeEditor && collabSession.status === "ready" ? (
 				<CollaborativeEditor
-					key={`${pageId}:${documentGeneration ?? "pending"}`}
+					key={`${pageId}:${documentGeneration ?? "pending"}:${collabSession.room.cacheEpoch ?? "remote"}`}
 					pageId={pageId}
 					workspaceId={page.workspaceId}
 					editable={!readOnly}
@@ -559,10 +564,11 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					onSaveStateChange={setPageSaveState}
 				/>
 			) : null}
-			{collabSession.status === "unavailable" ? (
+			{collabSession.status === "unavailable" ||
+			(collabSession.status === "ready" && collabSession.remoteUnavailable) ? (
 				<p className="mt-2 px-0 text-muted-foreground text-xs md:px-[54px]">
-					Live editing is temporarily unavailable. This page is read-only so a
-					stale projection cannot overwrite the shared document.
+					Live editing is temporarily unavailable. This page is read-only until
+					the shared document reconnects.
 				</p>
 			) : null}
 			{editorLoadError ? (

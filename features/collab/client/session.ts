@@ -11,6 +11,8 @@ import type * as Y from "yjs";
 export type CollabRoom = {
 	doc: Y.Doc;
 	provider: LiveblocksYjsProvider;
+	/** Server-issued provider-document incarnation used by the local cache. */
+	cacheEpoch: string | null;
 	/** True once the initial server document has been applied to the doc. */
 	synced: boolean;
 	/** True once a valid, server-seeded document has loaded from this user's
@@ -81,12 +83,36 @@ export type CollabSession =
 	/** Room joined, waiting for the initial server doc. */
 	| { status: "connecting" }
 	/** Shared doc loaded; safe to bind editors to it. */
-	| { status: "ready"; room: CollabRoom }
+	| { status: "ready"; room: CollabRoom; remoteUnavailable: boolean }
 	/** The authoritative document is unavailable; projections stay read-only. */
 	| { status: "unavailable" };
 
-export function isCollabRoomReady(room: CollabRoom | null): boolean {
-	return room?.synced === true || room?.localReady === true;
+export function isCollabRoomReady(
+	room: CollabRoom | null,
+	allowLocalReady = true,
+): boolean {
+	return (
+		room?.synced === true || (allowLocalReady && room?.localReady === true)
+	);
+}
+
+/** Local-first rendering is safe only for members who can eventually write
+ * the cached state back to the room. Viewers always start from the remote doc,
+ * so private edits cached before a role downgrade cannot remain visible. */
+export function localCacheEpochForSession(
+	cacheEpoch: string | null,
+	allowLocalReady: boolean,
+): string | null {
+	return allowLocalReady ? cacheEpoch : null;
+}
+
+/** A locally hydrated room may render immediately, but it must stay read-only
+ * until Liveblocks has synchronized the authoritative document. */
+export function canWriteToCollabRoom(
+	room: CollabRoom | null,
+	canEdit: boolean,
+): boolean {
+	return canEdit && room?.synced === true;
 }
 
 /**
@@ -97,30 +123,47 @@ export function isCollabRoomReady(room: CollabRoom | null): boolean {
 export function useCollabSession(
 	roomId: string,
 	userId: string | null,
+	options: {
+		/** Undefined while the detail request is pending; null when the server
+		 * could not issue an epoch and the session must join without IndexedDB. */
+		cacheEpoch: string | null | undefined;
+		allowLocalReady: boolean;
+	},
 ): CollabSession {
 	const [room, setRoom] = useState<CollabRoom | null>(null);
 	const [unavailable, setUnavailable] = useState(false);
-	const ready = isCollabRoomReady(room);
+	const { allowLocalReady, cacheEpoch } = options;
+	const waitingForCacheEpoch = allowLocalReady && cacheEpoch === undefined;
+	const localCacheEpoch = localCacheEpochForSession(
+		cacheEpoch ?? null,
+		allowLocalReady,
+	);
+	const canConnect = Boolean(userId) && !waitingForCacheEpoch;
+	const ready = isCollabRoomReady(room, allowLocalReady);
 
 	useEffect(() => {
 		setRoom(null);
 		setUnavailable(false);
 		let disposed = false;
 		let unbind: (() => void) | null = null;
-		if (!userId) return;
+		// Editors wait for the server-issued epoch before opening IndexedDB.
+		// Viewers deliberately join without a local cache.
+		if (!userId || waitingForCacheEpoch) return;
 		void import("./liveblocks").then(({ bindRoom }) => {
 			if (disposed) return;
-			unbind = bindRoom(roomId, userId, setRoom);
+			unbind = bindRoom(roomId, userId, localCacheEpoch, setRoom);
 		});
 		return () => {
 			disposed = true;
 			unbind?.();
 			setRoom(null);
 		};
-	}, [roomId, userId]);
+	}, [localCacheEpoch, roomId, userId, waitingForCacheEpoch]);
 
 	useEffect(() => {
-		if (ready) {
+		setUnavailable(false);
+		if (!canConnect) return;
+		if (room?.synced) {
 			// A slow initial websocket/auth handshake can outlive the bounded
 			// read-only fallback. Recover automatically when that same room finally
 			// synchronizes instead of requiring a page reload.
@@ -132,9 +175,11 @@ export function useCollabSession(
 			COLLAB_CONNECT_TIMEOUT_MS,
 		);
 		return () => clearTimeout(timer);
-	}, [ready]);
+	}, [canConnect, room?.synced]);
 
+	if (room && ready) {
+		return { status: "ready", room, remoteUnavailable: unavailable };
+	}
 	if (unavailable) return { status: "unavailable" };
-	if (room && ready) return { status: "ready", room };
 	return { status: "connecting" };
 }

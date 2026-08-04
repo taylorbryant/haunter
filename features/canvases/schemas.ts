@@ -16,6 +16,11 @@ export const CanvasSchema = z.object({
 	updatedAt: z.string().datetime(),
 });
 
+export const CanvasDetailSchema = CanvasSchema.extend({
+	/** Server-issued identity for the current provider document incarnation. */
+	documentCacheEpoch: z.string().min(1).nullable(),
+});
+
 export const CanvasIdInputSchema = z.object({
 	id: z.string().uuid(),
 });
@@ -42,5 +47,6 @@ export const SaveCanvasSnapshotOutputSchema = z.object({
 });
 
 export type Canvas = z.infer<typeof CanvasSchema>;
+export type CanvasDetail = z.infer<typeof CanvasDetailSchema>;
 export type CanvasSnapshot = z.infer<typeof CanvasSnapshotSchema>;
 export type CreateCanvasInput = z.infer<typeof CreateCanvasInputSchema>;
