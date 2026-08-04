@@ -1,3 +1,4 @@
+
 <img src="app/icon.svg" alt="" width="48" height="48">
 
 # Haunter
