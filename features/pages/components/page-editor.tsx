@@ -104,11 +104,7 @@ function useHaunterEditorComponent() {
 // instead of a skeleton. The live editor swaps in when the room is ready.
 const ReadOnlyEditor = dynamic(() => import("./editor/read-only-editor"), {
 	ssr: false,
-	loading: () => (
-		<div className="py-2">
-			<EditorBodySkeleton />
-		</div>
-	),
+	loading: () => <EditorBodySkeleton />,
 });
 
 const TITLE_SAVE_DELAY_MS = 500;
@@ -542,7 +538,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				</div>
 			</div>
 			{bodyMode === "projection" ? (
-				<div className="py-2" aria-busy={!editorLoadError}>
+				<div aria-busy={!editorLoadError}>
 					<ReadOnlyEditor content={page.content} />
 				</div>
 			) : CollaborativeEditor && collabSession.status === "ready" ? (
