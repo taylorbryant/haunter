@@ -39,6 +39,7 @@ export const appPorts = definePorts<AppPorts>()({
 		"adminUsers",
 		"afterResponse",
 		"agents",
+		"agentPresence",
 		"auth",
 		"canvases",
 		"changelogState",

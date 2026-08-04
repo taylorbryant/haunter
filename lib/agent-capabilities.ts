@@ -5,6 +5,8 @@ import type { AppContext } from "@/app-context";
 export type AgentPrincipal = {
 	agentId: string;
 	userId: string;
+	presenceId: string;
+	displayName?: string;
 	transport?: "agent-auth" | "remote-mcp";
 	remoteConnectionId?: string;
 	remoteClientId?: string;

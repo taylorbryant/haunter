@@ -9,7 +9,10 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
-import type { AgentActivityWrite } from "@/features/agents/ports";
+import type {
+	AgentActivityWrite,
+	AgentPagePresence,
+} from "@/features/agents/ports";
 import { createTestAgentAdminRepository } from "@/features/agents/tests/helpers";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import {
@@ -44,6 +47,7 @@ async function createFixture() {
 	const documents = createTestDocumentRegistryRepository();
 	const documentStore = createTestDocumentStore();
 	const activities: AgentActivityWrite[] = [];
+	const presences: AgentPagePresence[] = [];
 	const agents = createTestAgentAdminRepository([], activities);
 	const members = {
 		async findRole(candidateWorkspaceId: string, candidateUserId: string) {
@@ -78,6 +82,11 @@ async function createFixture() {
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
+			agentPresence: {
+				async setPagePresence(presence) {
+					presences.push(presence);
+				},
+			},
 			agents,
 			documents,
 			documentStore,
@@ -151,6 +160,7 @@ async function createFixture() {
 		createExecutor: () => createHaunterAgentCapabilityExecutor(dependencies),
 		execute,
 		pages,
+		presences,
 		scope: createTenantScope(createTestTenant(workspaceId)),
 		tasks,
 		userId,
@@ -374,7 +384,7 @@ describe("Haunter agent capabilities", () => {
 	});
 
 	it("searches, reads, and appends page markdown", async () => {
-		const { execute, workspaceId } = await createFixture();
+		const { execute, presences, workspaceId } = await createFixture();
 		const created = (await execute("create_page", {
 			workspaceId,
 			title: "Searchable agent notes",
@@ -385,6 +395,7 @@ describe("Haunter agent capabilities", () => {
 			workspaceId,
 			query: "Searchable",
 		})) as { pages: Array<{ pageId: string; title: string }> };
+		presences.length = 0;
 		const before = (await execute("read_page", {
 			workspaceId,
 			pageId: created.pageId,
@@ -404,6 +415,23 @@ describe("Haunter agent capabilities", () => {
 			title: "Searchable agent notes",
 		});
 		expect(before.markdown).toContain("# Original");
+		expect(presences.slice(0, 2)).toEqual([
+			expect.objectContaining({
+				pageId: created.pageId,
+				name: "AI agent",
+				status: "reading",
+				capability: "read_page",
+				ttlSeconds: 60,
+			}),
+			expect.objectContaining({
+				pageId: created.pageId,
+				name: "AI agent",
+				status: "finished",
+				capability: "read_page",
+				ttlSeconds: 3,
+			}),
+		]);
+		expect(presences[0]?.presenceId).toBe(presences[1]?.presenceId);
 		expect(appended.appendedBlocks).toBe(1);
 		expect(after.markdown).toContain("Added paragraph");
 	});
@@ -532,7 +560,7 @@ describe("Haunter agent capabilities", () => {
 	});
 
 	it("does not create pages for a user outside the workspace", async () => {
-		const { activities, execute } = await createFixture();
+		const { activities, execute, presences } = await createFixture();
 
 		await expect(
 			execute("create_page", {
@@ -548,6 +576,7 @@ describe("Haunter agent capabilities", () => {
 				resourceLabel: "Unauthorized",
 			}),
 		]);
+		expect(presences).toEqual([]);
 	});
 
 	it("creates, lists, updates, and completes a task as the acting user", async () => {

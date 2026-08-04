@@ -13,6 +13,7 @@ import { createLocalStorageProvider } from "@beignet/provider-storage-local";
 import { createVercelBlobStorageProvider } from "@beignet/provider-storage-vercel-blob";
 import { after } from "next/server";
 import type { AppContext } from "@/app-context";
+import { liveblocksAgentPresenceProvider } from "@/infra/agents/liveblocks-agent-presence-provider";
 import { liveblocksWorkspaceEventProvider } from "@/infra/collab/liveblocks-workspace-event-provider";
 import { databaseClient } from "@/infra/db/client";
 import { starterDatabaseProvider } from "@/infra/db/provider";
@@ -65,6 +66,7 @@ export const providers = [
 	drizzleSqliteProvider,
 	starterDatabaseProvider,
 	outboxDrainProvider,
+	liveblocksAgentPresenceProvider,
 	liveblocksWorkspaceEventProvider,
 	liveblocksDocumentStoreProvider,
 	// Failed channel results must fail the schedule invocation so production

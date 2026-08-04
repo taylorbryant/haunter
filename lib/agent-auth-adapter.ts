@@ -1,8 +1,8 @@
 import "@beignet/core/server-only";
 import {
-	createBetterAuthAgentCapabilityAdapter,
 	type BetterAuthAgentCapabilityMetadata,
 	type CreateBetterAuthAgentCapabilityAdapterOptions,
+	createBetterAuthAgentCapabilityAdapter,
 } from "@beignet/agent-auth-better-auth";
 import type { AgentCapabilityExecutor } from "@beignet/core/agent-capabilities";
 import { APIError } from "better-auth/api";
@@ -73,6 +73,7 @@ export function createHaunterAgentAuthAdapter(
 			return {
 				agentId: agentSession.agentId,
 				userId: agentSession.userId,
+				presenceId: crypto.randomUUID(),
 			};
 		},
 	});

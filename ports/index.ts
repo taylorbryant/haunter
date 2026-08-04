@@ -15,6 +15,7 @@ import type { ResendMailEscapeHatch } from "@beignet/provider-mail-resend";
 import type { AdminUserRepository } from "@/features/admin/ports";
 import type {
 	AgentAdminRepository,
+	AgentPresencePort,
 	McpConnectionRepository,
 	McpOAuthClientRepository,
 	McpOAuthRequestVerifier,
@@ -82,6 +83,7 @@ export type AppPorts = {
 	adminUsers: AdminUserRepository;
 	afterResponse: AfterResponsePort;
 	agents: AgentAdminRepository;
+	agentPresence: AgentPresencePort;
 	mcpConnections: McpConnectionRepository;
 	mcpOAuthClients: McpOAuthClientRepository;
 	mcpOAuthRequests: McpOAuthRequestVerifier;

@@ -1,9 +1,10 @@
 "use client";
 
-import { type Client, createClient } from "@liveblocks/client";
+import { type Client, createClient, type Room } from "@liveblocks/client";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
 import * as Y from "yjs";
 import type { WorkspaceEvent } from "@/features/collab/workspace-events";
+import { type PresencePeer, presencePeersFromOthers } from "./presence-state";
 import type { CollabRoom } from "./session";
 
 /**
@@ -22,6 +23,7 @@ function getLiveblocksClient(): Client {
 }
 
 type CachedRoom = {
+	room: Room;
 	doc: Y.Doc;
 	provider: LiveblocksYjsProvider;
 	leave: () => void;
@@ -57,6 +59,7 @@ function acquireRoom(roomId: string): CachedRoom {
 	const doc = new Y.Doc();
 	const provider = new LiveblocksYjsProvider(room, doc);
 	const entry: CachedRoom = {
+		room,
 		doc,
 		provider,
 		leave,
@@ -65,6 +68,24 @@ function acquireRoom(roomId: string): CachedRoom {
 	};
 	roomCache.set(roomId, entry);
 	return entry;
+}
+
+/**
+ * Subscribe to native Liveblocks presence. Unlike Yjs awareness, this also
+ * includes short-lived server identities published while an agent tool runs.
+ */
+export function subscribeToRoomPresence(
+	roomId: string,
+	onChange: (peers: PresencePeer[]) => void,
+): () => void {
+	const { room } = acquireRoom(roomId);
+	const update = () => onChange(presencePeersFromOthers(room.getOthers()));
+	const unsubscribe = room.subscribe("others", update);
+	update();
+	return () => {
+		unsubscribe();
+		releaseRoom(roomId);
+	};
 }
 
 function releaseRoom(roomId: string) {

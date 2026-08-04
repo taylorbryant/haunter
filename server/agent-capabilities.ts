@@ -6,6 +6,12 @@ import {
 import { APIError } from "better-auth/api";
 import type { AppContext, AppRuntimePorts } from "@/app-context";
 import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
+import type { AgentPagePresence } from "@/features/agents/ports";
+import {
+	ACTIVE_AGENT_PRESENCE_TTL_SECONDS,
+	FINISHED_AGENT_PRESENCE_TTL_SECONDS,
+	pagePresenceTarget,
+} from "@/features/agents/presence";
 import {
 	recordAgentActivity,
 	recordMcpConnectionActivity,
@@ -16,6 +22,7 @@ import {
 	agentCapabilityRegistry,
 	createHaunterAgentCapabilityRegistry,
 } from "@/lib/agent-capability-registry";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
 import type { AppServiceContextInput } from "@/server/context";
 
 export type AgentCapabilityServer = {
@@ -39,6 +46,71 @@ function executionError(error: unknown): unknown {
 		: error;
 }
 
+function cleanAgentName(value: string | null | undefined): string | null {
+	const name = value?.trim();
+	return name ? name.slice(0, 80) : null;
+}
+
+async function agentDisplayName(
+	server: AgentCapabilityServer,
+	principal: AgentPrincipal,
+): Promise<string> {
+	const supplied = cleanAgentName(principal.displayName);
+	if (supplied) return supplied;
+	try {
+		const agents = await server.ports.agents.listByUser(principal.userId);
+		return (
+			cleanAgentName(
+				agents.find((agent) => agent.id === principal.agentId)?.name,
+			) ?? "AI agent"
+		);
+	} catch (error) {
+		server.ports.logger.warn("Could not resolve agent presence name", {
+			agentId: principal.agentId,
+			error,
+		});
+		return "AI agent";
+	}
+}
+
+async function publishAgentPresence(
+	server: AgentCapabilityServer,
+	presence: AgentPagePresence,
+): Promise<void> {
+	try {
+		await server.ports.agentPresence.setPagePresence(presence);
+	} catch (error) {
+		// Presence is useful context, never part of the capability's correctness.
+		server.ports.logger.warn("Could not publish agent page presence", {
+			capability: presence.capability,
+			pageId: presence.pageId,
+			error,
+		});
+	}
+}
+
+async function authorizePagePresence(
+	ctx: AppContext,
+	capability: string,
+	pageId: string,
+): Promise<boolean> {
+	const scope = requireActiveWorkspaceScope(ctx);
+	const page = await ctx.ports.pages.findMetaById(scope, pageId);
+	if (!page) return false;
+	if (page.deletedAt !== null && capability !== "restore_page") return false;
+
+	if (capability === "read_page") {
+		await ctx.gate.authorize("pages.read", page);
+	} else if (capability === "archive_page") {
+		await ctx.gate.authorize("pages.delete", page);
+	} else if (capability === "create_page") {
+		await ctx.gate.authorize("pages.create");
+	} else {
+		await ctx.gate.authorize("pages.update", page);
+	}
+	return true;
+}
+
 export async function createHaunterAgentCapabilityExecutor(
 	dependencies: AgentCapabilityDependencies,
 ) {
@@ -47,6 +119,10 @@ export async function createHaunterAgentCapabilityExecutor(
 			? createHaunterAgentCapabilityRegistry(dependencies)
 			: agentCapabilityRegistry;
 	const server = await dependencies.getServer();
+	const activePresence = new Map<
+		string,
+		Pick<AgentPagePresence, "pageId" | "name">
+	>();
 
 	const executor = createAgentCapabilityExecutor({
 		registry,
@@ -54,13 +130,33 @@ export async function createHaunterAgentCapabilityExecutor(
 		hooks: [
 			async (event) => {
 				if (event.phase === "start") return;
+				const active = activePresence.get(event.principal.presenceId);
+				activePresence.delete(event.principal.presenceId);
+				const createdTarget =
+					!active && event.phase === "end" && event.name === "create_page"
+						? pagePresenceTarget(event.name, event.input, event.output)
+						: null;
+				const finishedPageId = active?.pageId ?? createdTarget?.pageId ?? null;
+				const finishPresence = finishedPageId
+					? publishAgentPresence(server, {
+							pageId: finishedPageId,
+							presenceId: event.principal.presenceId,
+							name:
+								active?.name ??
+								(await agentDisplayName(server, event.principal)),
+							status: "finished",
+							capability: event.name,
+							ttlSeconds: FINISHED_AGENT_PRESENCE_TTL_SECONDS,
+						})
+					: Promise.resolve();
 				const error =
 					event.phase === "error" ? executionError(event.error) : null;
+				let recordActivity: Promise<void>;
 				if (
 					event.principal.transport === "remote-mcp" &&
 					event.principal.remoteConnectionId
 				) {
-					await recordMcpConnectionActivity({
+					recordActivity = recordMcpConnectionActivity({
 						server,
 						connectionId: event.principal.remoteConnectionId,
 						userId: event.principal.userId,
@@ -76,45 +172,71 @@ export async function createHaunterAgentCapabilityExecutor(
 									? "execution_failed"
 									: null,
 					});
-					return;
+				} else {
+					recordActivity = recordAgentActivity({
+						server,
+						agentId: event.principal.agentId,
+						userId: event.principal.userId,
+						capability: event.name,
+						args: inputRecord(event.input),
+						...(event.phase === "end" ? { result: event.output } : {}),
+						status: event.phase === "end" ? "success" : "error",
+						durationMs: event.durationMs,
+						error:
+							error instanceof Error
+								? error.message
+								: error
+									? String(error)
+									: null,
+					});
 				}
-				await recordAgentActivity({
-					server,
-					agentId: event.principal.agentId,
-					userId: event.principal.userId,
-					capability: event.name,
-					args: inputRecord(event.input),
-					...(event.phase === "end" ? { result: event.output } : {}),
-					status: event.phase === "end" ? "success" : "error",
-					durationMs: event.durationMs,
-					error:
-						error instanceof Error
-							? error.message
-							: error
-								? String(error)
-								: null,
-				});
+				await Promise.all([recordActivity, finishPresence]);
 			},
 		],
-		async createContext({ principal, input }) {
+		async createContext({ name, principal, input }) {
 			const workspaceId = inputRecord(input)?.workspaceId;
+			let context: AppContext;
 			if (typeof workspaceId !== "string") {
-				return server.createServiceContext({
+				context = await server.createServiceContext({
 					asUser: { id: principal.userId, role: "member" },
+				});
+			} else {
+				const ports = server.ports as AppRuntimePorts;
+				const role = await ports.members.findRole(
+					workspaceId,
+					principal.userId,
+				);
+				if (!role) {
+					throw new APIError("FORBIDDEN", {
+						message: "The acting user is not a member of this workspace.",
+					});
+				}
+				context = await server.createServiceContext({
+					asUser: { id: principal.userId, role },
+					tenantId: workspaceId,
 				});
 			}
 
-			const ports = server.ports as AppRuntimePorts;
-			const role = await ports.members.findRole(workspaceId, principal.userId);
-			if (!role) {
-				throw new APIError("FORBIDDEN", {
-					message: "The acting user is not a member of this workspace.",
+			const target = pagePresenceTarget(name, input);
+			if (
+				target &&
+				(await authorizePagePresence(context, name, target.pageId))
+			) {
+				const displayName = await agentDisplayName(server, principal);
+				activePresence.set(principal.presenceId, {
+					pageId: target.pageId,
+					name: displayName,
+				});
+				await publishAgentPresence(server, {
+					pageId: target.pageId,
+					presenceId: principal.presenceId,
+					name: displayName,
+					status: target.status,
+					capability: name,
+					ttlSeconds: ACTIVE_AGENT_PRESENCE_TTL_SECONDS,
 				});
 			}
-			return server.createServiceContext({
-				asUser: { id: principal.userId, role },
-				tenantId: workspaceId,
-			});
+			return context;
 		},
 	});
 
@@ -161,6 +283,8 @@ export async function executeRemoteMcpCapability(
 			principal: {
 				agentId: `mcp:${connection.id}`,
 				userId: input.userId,
+				presenceId: crypto.randomUUID(),
+				displayName: connection.clientName ?? undefined,
 				transport: "remote-mcp",
 				remoteConnectionId: connection.id,
 				remoteClientId: input.clientId,
@@ -211,6 +335,7 @@ export async function executeAgentCapability(
 			principal: {
 				agentId: input.agentSession.agentId,
 				userId: input.agentSession.userId,
+				presenceId: crypto.randomUUID(),
 			},
 			input: input.arguments ?? {},
 		});

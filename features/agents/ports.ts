@@ -23,6 +23,27 @@ export type AgentAdminRow = {
 export type AgentActivityStatus = "success" | "error";
 export type AgentActivityResourceType = "page" | "task";
 
+export type AgentPresenceStatus =
+	| "reading"
+	| "editing"
+	| "creating"
+	| "organizing"
+	| "finished";
+
+export type AgentPagePresence = {
+	pageId: string;
+	presenceId: string;
+	name: string;
+	status: AgentPresenceStatus;
+	capability: string;
+	ttlSeconds: number;
+};
+
+/** Ephemeral collaboration presence for an agent working in a page room. */
+export interface AgentPresencePort {
+	setPagePresence(presence: AgentPagePresence): Promise<void>;
+}
+
 export type AgentActivityWrite = {
 	id: string;
 	agentId: string;

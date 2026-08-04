@@ -1,8 +1,77 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { AgentPresenceStatus } from "@/features/agents/ports";
+import { cursorColorFor } from "@/features/collab/lib/room";
 
-export type PresencePeer = { name: string; color: string };
+export type PresencePeer = {
+	id: string;
+	name: string;
+	color: string;
+	kind: "human" | "agent";
+	status?: AgentPresenceStatus;
+};
+
+type RoomOther = {
+	connectionId?: number;
+	id?: string;
+	info?: unknown;
+	presence?: unknown;
+};
+
+function record(value: unknown): Record<string, unknown> | null {
+	return value !== null && typeof value === "object"
+		? (value as Record<string, unknown>)
+		: null;
+}
+
+function agentStatus(value: unknown): AgentPresenceStatus | undefined {
+	return value === "reading" ||
+		value === "editing" ||
+		value === "creating" ||
+		value === "organizing" ||
+		value === "finished"
+		? value
+		: undefined;
+}
+
+/** Convert Liveblocks' native room users into safe, deduplicated header peers. */
+export function presencePeersFromOthers(
+	others: readonly RoomOther[],
+): PresencePeer[] {
+	const peers = new Map<string, PresencePeer>();
+	for (const other of others) {
+		const id =
+			typeof other.id === "string" && other.id
+				? other.id
+				: `connection:${other.connectionId ?? "unknown"}`;
+		const info = record(other.info);
+		const presence = record(other.presence);
+		const status = agentStatus(presence?.status);
+		const kind =
+			id.startsWith("agent:") && presence?.kind === "agent" && status
+				? "agent"
+				: "human";
+		const name =
+			typeof info?.name === "string" && info.name.trim()
+				? info.name.trim()
+				: kind === "agent"
+					? "AI agent"
+					: "Collaborator";
+		const color =
+			typeof info?.color === "string" && info.color
+				? info.color
+				: cursorColorFor(id);
+		peers.set(id, {
+			id,
+			name,
+			color,
+			kind,
+			...(kind === "agent" ? { status } : {}),
+		});
+	}
+	return [...peers.values()];
+}
 
 /**
  * Tiny external store so the header can show who else is in the current
@@ -18,7 +87,11 @@ export function setCollabPresence(next: PresencePeer[]) {
 		peers.length === next.length &&
 		peers.every(
 			(peer, index) =>
-				peer.name === next[index]?.name && peer.color === next[index]?.color,
+				peer.id === next[index]?.id &&
+				peer.name === next[index]?.name &&
+				peer.color === next[index]?.color &&
+				peer.kind === next[index]?.kind &&
+				peer.status === next[index]?.status,
 		)
 	) {
 		return;

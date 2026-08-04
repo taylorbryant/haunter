@@ -46,13 +46,14 @@ import {
 	type CollabRoom,
 	waitForCollabPersistence,
 } from "@/features/collab/client/session";
+import { documentRoomId } from "@/features/collab/lib/room";
 import { queueMaterialization } from "@/features/documents/client/materialization";
-import { setPageTaskAttributionOperations } from "@/features/documents/task-attribution-operations";
 import {
 	recordPendingTaskAttributions,
 	snapshotPendingTaskAttributions,
 } from "@/features/documents/client/task-attribution";
 import { pageFragmentName } from "@/features/documents/model";
+import { setPageTaskAttributionOperations } from "@/features/documents/task-attribution-operations";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import {
 	invalidatePages,
@@ -300,33 +301,25 @@ type HaunterEditorProps = {
  * Publishes the other people currently in this page to the presence store;
  * the app header renders the chips (next to "Edited X ago").
  */
-function PresencePublisher({ room }: { room: CollabRoom }) {
+function PresencePublisher({ pageId }: { pageId: string }) {
 	useEffect(() => {
-		const awareness = room.provider.awareness;
-		const ownClientId = room.doc.clientID;
-		const update = () => {
-			const seen = new Map<string, { name: string; color: string }>();
-			for (const [clientId, state] of awareness.getStates()) {
-				if (clientId === ownClientId) continue;
-				const user = (
-					state as { user?: { name?: string; color?: string } } | undefined
-				)?.user;
-				if (user?.name) {
-					seen.set(user.name, {
-						name: user.name,
-						color: user.color ?? "#3b82f6",
-					});
-				}
-			}
-			setCollabPresence([...seen.values()]);
-		};
-		awareness.on("change", update);
-		update();
+		let disposed = false;
+		let unsubscribe: (() => void) | null = null;
+		void import("@/features/collab/client/liveblocks").then(
+			({ subscribeToRoomPresence }) => {
+				if (disposed) return;
+				unsubscribe = subscribeToRoomPresence(
+					documentRoomId("page", pageId),
+					setCollabPresence,
+				);
+			},
+		);
 		return () => {
-			awareness.off("change", update);
+			disposed = true;
+			unsubscribe?.();
 			setCollabPresence([]);
 		};
-	}, [room]);
+	}, [pageId]);
 
 	return null;
 }
@@ -603,7 +596,7 @@ export default function HaunterEditor({
 					</Button>
 				</div>
 			) : null}
-			<PresencePublisher room={collab} />
+			<PresencePublisher pageId={pageId} />
 			<TaskBlockCurrentUserContext.Provider value={currentUserId}>
 				<BlockNoteView
 					editor={editor}
