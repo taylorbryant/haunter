@@ -1,15 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { createTenantScope } from "@beignet/core/ports";
 import {
+	createTestContextFactory,
+	createTestPorts,
 	createTestTenant,
 	createTestUserActor,
 } from "@beignet/core/testing";
-import {
-	createTestContextFactory,
-	createTestPorts,
-} from "@beignet/core/testing";
+import { enforceUploadRateLimit } from "@/app/api/uploads/upload-rate-limit";
 import type { AppContext } from "@/app-context";
-import { enforceUploadRateLimit } from "@/app/api/uploads/[uploadName]/[action]/route";
 import { AttachmentUpload } from "@/features/pages/uploads";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
