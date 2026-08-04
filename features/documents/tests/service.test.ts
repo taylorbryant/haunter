@@ -32,6 +32,10 @@ import {
 	readCollaborativeCanvasProjection,
 	readCollaborativePageProjection,
 } from "@/features/documents/service";
+import {
+	pageTaskAttributionOperations,
+	setPageTaskAttributionOperations,
+} from "@/features/documents/task-attribution-operations";
 import { queueDocumentMaterializationUseCase } from "@/features/documents/use-cases";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { BlockJson } from "@/features/pages/schemas";
@@ -358,6 +362,34 @@ describe("authoritative collaborative documents", () => {
 				assignedByUserId: "document_user",
 				assignedByName: "Document User",
 			});
+
+			await mutateCollaborativeDocument({
+				scope: fixture.scope,
+				kind: "page",
+				entityId: page.id,
+				ports: fixture.ports,
+				assignmentActor: {
+					userId: "document_user",
+					name: "Document User",
+				},
+				apply(doc) {
+					replacePageBlocks(doc, [
+						{
+							...taskContent[0],
+							props: { ...taskContent[0]?.props, assignee: "" },
+						} as BlockJson,
+					]);
+				},
+			});
+			const clearedUpdate = await fixture.ports.documentStore.readBinaryUpdate(
+				`doc:v2:page:${page.id}`,
+			);
+			const clearedDoc = yDocFromUpdate(clearedUpdate as Uint8Array);
+			try {
+				expect(pageTaskAttributionOperations(clearedDoc)).toEqual(new Map());
+			} finally {
+				clearedDoc.destroy();
+			}
 		} finally {
 			await fixture.database.close();
 		}
@@ -454,6 +486,8 @@ describe("authoritative collaborative documents", () => {
 	it("consumes only the task attribution matching the projected assignee", async () => {
 		const fixture = await createFixture();
 		try {
+			const firstOperationId = "00000000-0000-4000-8000-000000000001";
+			const nextOperationId = "00000000-0000-4000-8000-000000000002";
 			const now = new Date();
 			await fixture.database.db.insert(schema.user).values({
 				id: "next_assignee",
@@ -489,19 +523,21 @@ describe("authoritative collaborative documents", () => {
 					{
 						blockId: "sequential-task",
 						assignee: "document_user",
+						operationId: firstOperationId,
 						actorUserId: "document_user",
 						actorName: "Document User",
 					},
 					{
 						blockId: "sequential-task",
 						assignee: "next_assignee",
+						operationId: nextOperationId,
 						actorUserId: "document_user",
 						actorName: "Document User",
 					},
 				],
 			);
 
-			const replaceAssignee = async (assignee: string) => {
+			const replaceAssignee = async (assignee: string, operationId: string) => {
 				const update = await fixture.ports.documentStore.readBinaryUpdate(
 					seeded.documentId,
 				);
@@ -523,6 +559,9 @@ describe("authoritative collaborative documents", () => {
 							children: [],
 						},
 					]);
+					setPageTaskAttributionOperations(doc, [
+						{ blockId: "sequential-task", operationId },
+					]);
 					await fixture.ports.documentStore.applyBinaryUpdate(
 						seeded.documentId,
 						Y.encodeStateAsUpdate(doc, before),
@@ -532,7 +571,7 @@ describe("authoritative collaborative documents", () => {
 				}
 			};
 
-			await replaceAssignee("document_user");
+			await replaceAssignee("document_user", firstOperationId);
 			await materializeCollaborativeDocument({
 				scope: fixture.scope,
 				documentId: seeded.documentId,
@@ -550,7 +589,27 @@ describe("authoritative collaborative documents", () => {
 				}),
 			]);
 
-			await replaceAssignee("next_assignee");
+			await replaceAssignee(
+				"next_assignee",
+				"00000000-0000-4000-8000-000000000099",
+			);
+			await materializeCollaborativeDocument({
+				scope: fixture.scope,
+				documentId: seeded.documentId,
+				ports: fixture.ports,
+			});
+			expect(
+				(await fixture.ports.tasks.listByPage(fixture.scope, page.id))[0]
+					?.assigneeId,
+			).toBe("document_user");
+			expect(
+				await fixture.ports.documents.listTaskAttributions(
+					fixture.scope,
+					seeded.documentId,
+				),
+			).toHaveLength(1);
+
+			await replaceAssignee("next_assignee", nextOperationId);
 			await materializeCollaborativeDocument({
 				scope: fixture.scope,
 				documentId: seeded.documentId,
@@ -574,6 +633,7 @@ describe("authoritative collaborative documents", () => {
 	it("projects browser content safely before exact task attribution arrives", async () => {
 		const fixture = await createFixture();
 		try {
+			const browserOperationId = "00000000-0000-4000-8000-000000000003";
 			const now = new Date();
 			await fixture.database.db.insert(schema.user).values({
 				id: "browser_assignee",
@@ -624,6 +684,7 @@ describe("authoritative collaborative documents", () => {
 					{
 						blockId: "browser-task",
 						assignee: "browser_assignee",
+						operationId: browserOperationId,
 						actorUserId: "document_user",
 						actorName: "Document User",
 					},
@@ -654,6 +715,9 @@ describe("authoritative collaborative documents", () => {
 			try {
 				const before = Y.encodeStateVector(contentDoc);
 				replacePageBlocks(contentDoc, taskContent);
+				setPageTaskAttributionOperations(contentDoc, [
+					{ blockId: "browser-task", operationId: browserOperationId },
+				]);
 				await fixture.ports.documentStore.applyBinaryUpdate(
 					seeded.documentId,
 					Y.encodeStateAsUpdate(contentDoc, before),
@@ -744,7 +808,11 @@ describe("authoritative collaborative documents", () => {
 					kind: "page",
 					id: page.id,
 					taskAttributions: [
-						{ blockId: "queued-task", assignee: "document_user" },
+						{
+							blockId: "queued-task",
+							assignee: "document_user",
+							operationId: "00000000-0000-4000-8000-000000000004",
+						},
 					],
 				},
 				{ ctx },
@@ -859,6 +927,16 @@ describe("authoritative collaborative documents", () => {
 			try {
 				const before = Y.encodeStateVector(doc);
 				replacePageBlocks(doc, content);
+				setPageTaskAttributionOperations(doc, [
+					{
+						blockId: "task-alice",
+						operationId: "00000000-0000-4000-8000-000000000005",
+					},
+					{
+						blockId: "task-bob",
+						operationId: "00000000-0000-4000-8000-000000000006",
+					},
+				]);
 				await fixture.ports.documentStore.applyBinaryUpdate(
 					seeded.documentId,
 					Y.encodeStateAsUpdate(doc, before),
@@ -880,6 +958,7 @@ describe("authoritative collaborative documents", () => {
 					{
 						blockId: "task-alice",
 						assignee: "assignee_alice",
+						operationId: "00000000-0000-4000-8000-000000000005",
 						actor: { userId: "assignee_alice", name: "Alice" },
 					},
 				],
@@ -899,6 +978,7 @@ describe("authoritative collaborative documents", () => {
 					{
 						blockId: "task-bob",
 						assignee: "assignee_bob",
+						operationId: "00000000-0000-4000-8000-000000000006",
 						actor: { userId: "assignee_bob", name: "Bob" },
 					},
 				],

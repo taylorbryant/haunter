@@ -2,8 +2,12 @@
 
 import type { PendingTaskAttribution } from "@/features/pages/lib/collab-document";
 
-const STORAGE_PREFIX = "haunter:task-attributions:v1";
-const pendingByActorPage = new Map<string, Map<string, string>>();
+const STORAGE_PREFIX = "haunter:task-attributions:v2";
+type PendingAttributionValue = { assignee: string; operationId: string };
+const pendingByActorPage = new Map<
+	string,
+	Map<string, PendingAttributionValue>
+>();
 export const MAX_TASK_ATTRIBUTIONS_PER_MATERIALIZATION = 100;
 
 function actorPageKey(pageId: string, actorUserId: string): string {
@@ -22,18 +26,27 @@ function browserStorage(): Storage | null {
 	}
 }
 
-function pendingFor(pageId: string, actorUserId: string): Map<string, string> {
+function pendingFor(
+	pageId: string,
+	actorUserId: string,
+): Map<string, PendingAttributionValue> {
 	const key = actorPageKey(pageId, actorUserId);
 	const storage = browserStorage();
 	if (!storage) return pendingByActorPage.get(key) ?? new Map();
-	const pending = new Map<string, string>();
+	const pending = new Map<string, PendingAttributionValue>();
 	const serialized = storage.getItem(storageKey(pageId, actorUserId));
 	if (serialized) {
 		try {
 			const values = JSON.parse(serialized) as Record<string, unknown>;
-			for (const [blockId, assignee] of Object.entries(values)) {
-				if (blockId && typeof assignee === "string" && assignee) {
-					pending.set(blockId, assignee);
+			for (const [blockId, value] of Object.entries(values)) {
+				if (
+					blockId &&
+					typeof value === "object" &&
+					value !== null &&
+					typeof (value as Record<string, unknown>).assignee === "string" &&
+					typeof (value as Record<string, unknown>).operationId === "string"
+				) {
+					pending.set(blockId, value as PendingAttributionValue);
 				}
 			}
 		} catch {
@@ -46,7 +59,7 @@ function pendingFor(pageId: string, actorUserId: string): Map<string, string> {
 function persistPending(
 	pageId: string,
 	actorUserId: string,
-	pending: Map<string, string>,
+	pending: Map<string, PendingAttributionValue>,
 ): void {
 	const key = actorPageKey(pageId, actorUserId);
 	const storage = browserStorage();
@@ -73,7 +86,12 @@ export function recordPendingTaskAttributions(
 	const pending = pendingFor(pageId, actorUserId);
 	for (const attribution of attributions) {
 		if (attribution.assignee === null) pending.delete(attribution.blockId);
-		else pending.set(attribution.blockId, attribution.assignee);
+		else if (attribution.operationId) {
+			pending.set(attribution.blockId, {
+				assignee: attribution.assignee,
+				operationId: attribution.operationId,
+			});
+		}
 	}
 	persistPending(pageId, actorUserId, pending);
 }
@@ -82,20 +100,29 @@ export function snapshotPendingTaskAttributions(
 	pageId: string,
 	actorUserId: string,
 ) {
-	return [...pendingFor(pageId, actorUserId)].map(([blockId, assignee]) => ({
-		blockId,
-		assignee,
-	}));
+	return [...pendingFor(pageId, actorUserId)].map(
+		([blockId, { assignee, operationId }]) => ({
+			blockId,
+			assignee,
+			operationId,
+		}),
+	);
 }
 
 /** Keep each request within the server boundary without losing attribution for
  * a large paste/import. Empty input still produces one actorless projection
  * request so ordinary page edits are materialized. */
 export function batchTaskAttributions(
-	attributions: readonly { blockId: string; assignee: string }[],
-): Array<Array<{ blockId: string; assignee: string }>> {
+	attributions: readonly {
+		blockId: string;
+		assignee: string;
+		operationId: string;
+	}[],
+): Array<Array<{ blockId: string; assignee: string; operationId: string }>> {
 	if (attributions.length === 0) return [[]];
-	const batches: Array<Array<{ blockId: string; assignee: string }>> = [];
+	const batches: Array<
+		Array<{ blockId: string; assignee: string; operationId: string }>
+	> = [];
 	for (
 		let index = 0;
 		index < attributions.length;
@@ -114,11 +141,19 @@ export function batchTaskAttributions(
 export function acknowledgePendingTaskAttributions(
 	pageId: string,
 	actorUserId: string,
-	acknowledged: readonly { blockId: string; assignee: string }[],
+	acknowledged: readonly {
+		blockId: string;
+		assignee: string;
+		operationId: string;
+	}[],
 ): void {
 	const pending = pendingFor(pageId, actorUserId);
 	for (const attribution of acknowledged) {
-		if (pending.get(attribution.blockId) === attribution.assignee) {
+		const current = pending.get(attribution.blockId);
+		if (
+			current?.assignee === attribution.assignee &&
+			current.operationId === attribution.operationId
+		) {
 			pending.delete(attribution.blockId);
 		}
 	}

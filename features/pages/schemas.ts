@@ -235,7 +235,7 @@ export const CreatePageOutputSchema = PageMetaSchema.extend({
 	parentContentUpdatedAt: z.string().datetime().nullable(),
 });
 
-export const UpdatePageBodySchema = z.object({
+const UpdatePageFieldsSchema = z.object({
 	title: z
 		.string()
 		.max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE)
@@ -245,16 +245,38 @@ export const UpdatePageBodySchema = z.object({
 	position: z.number().optional(),
 });
 
-export const UpdatePageInputSchema =
-	PageIdInputSchema.merge(UpdatePageBodySchema);
+function updatesOnePageStore(input: z.infer<typeof UpdatePageFieldsSchema>) {
+	return (
+		input.title === undefined ||
+		(input.icon === undefined &&
+			input.parentPageId === undefined &&
+			input.position === undefined)
+	);
+}
 
-export const SavePageContentBodySchema = z.object({
-	content: PageContentSchema,
-});
+const SINGLE_PAGE_STORE_UPDATE_MESSAGE =
+	"Update the title separately from the icon or page placement.";
 
-export const SavePageContentInputSchema = PageIdInputSchema.merge(
-	SavePageContentBodySchema,
+export const UpdatePageBodySchema = UpdatePageFieldsSchema.refine(
+	updatesOnePageStore,
+	{ message: SINGLE_PAGE_STORE_UPDATE_MESSAGE },
 );
+
+export const UpdatePageInputSchema = PageIdInputSchema.extend(
+	UpdatePageFieldsSchema.shape,
+).refine(updatesOnePageStore, { message: SINGLE_PAGE_STORE_UPDATE_MESSAGE });
+
+const SavePageContentFields = {
+	content: PageContentSchema,
+};
+
+export const SavePageContentBodySchema = z
+	.object(SavePageContentFields)
+	.strict();
+
+export const SavePageContentInputSchema = PageIdInputSchema.extend(
+	SavePageContentFields,
+).strict();
 
 export const SavePageContentOutputSchema = z.object({
 	/** General last-edited timestamp for display and sorting. */

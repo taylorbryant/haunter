@@ -56,10 +56,7 @@ export function waitForCollabPersistence(
 				maybeFinish();
 			}, COLLAB_LOCAL_QUIET_MS);
 		};
-		function handleDocumentUpdate(
-			_update: Uint8Array,
-			origin: unknown,
-		) {
+		function handleDocumentUpdate(_update: Uint8Array, origin: unknown) {
 			// Liveblocks applies server and collaborator updates with its backend
 			// origin. They do not represent new local work and must not keep a local
 			// save pending while another person continues editing the room.

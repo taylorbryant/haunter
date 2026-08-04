@@ -25,13 +25,17 @@ export const CreateCanvasInputSchema = z.object({
 	pageId: z.string().uuid(),
 });
 
-export const SaveCanvasSnapshotBodySchema = z.object({
+const SaveCanvasSnapshotFields = {
 	snapshot: CanvasSnapshotSchema,
-});
+};
 
-export const SaveCanvasSnapshotInputSchema = CanvasIdInputSchema.merge(
-	SaveCanvasSnapshotBodySchema,
-);
+export const SaveCanvasSnapshotBodySchema = z
+	.object(SaveCanvasSnapshotFields)
+	.strict();
+
+export const SaveCanvasSnapshotInputSchema = CanvasIdInputSchema.extend(
+	SaveCanvasSnapshotFields,
+).strict();
 
 export const SaveCanvasSnapshotOutputSchema = z.object({
 	updatedAt: z.string().datetime(),

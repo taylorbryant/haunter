@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { scheduleWorkspaceTaskEvent } from "@/features/collab/server/workspace-events";
 import {
 	pageProjectionFromYDoc,
 	patchPageTaskBlock,
@@ -111,6 +112,10 @@ export const updateTaskUseCase = useCase
 			if (!updated) {
 				throw appError("TaskNotFound", { details: { id: input.id } });
 			}
+			scheduleWorkspaceTaskEvent(ctx, {
+				workspaceId: updated.workspaceId,
+				taskId: updated.id,
+			});
 			return updated;
 		}
 
@@ -223,5 +228,9 @@ export const updateTaskUseCase = useCase
 			ctx,
 			assignmentNotification ? [assignmentNotification] : [],
 		);
+		scheduleWorkspaceTaskEvent(ctx, {
+			workspaceId: updated.workspaceId,
+			taskId: updated.id,
+		});
 		return updated;
 	});

@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CollabRoom } from "@/features/collab/client/session";
 import { pageTitleName } from "@/features/documents/model";
+import { updateSharedText } from "@/features/documents/y-text";
 
 /**
  * The page title as a shared Y.Text in the authoritative page document.
  * SQLite is an asynchronous projection used for navigation and recovery.
  *
- * Concurrent title typing is last-write-wins per keystroke (each local
- * change replaces the whole Y.Text) — good enough for a one-line title,
- * and far simpler than character merging.
+ * Title changes preserve the unchanged prefix and suffix so Yjs can merge
+ * ordinary concurrent typing at character granularity.
  */
 export function useSharedTitle(
 	room: CollabRoom | null,
@@ -30,38 +30,16 @@ export function useSharedTitle(
 		};
 	}, [room, generation]);
 
-	const replaceTitle = useCallback(
-		(next: string) => {
-			if (!room) return null;
-			const yTitle = room.doc.getText(pageTitleName(generation));
-			const previous = yTitle.toString();
-			room.doc.transact(() => {
-				yTitle.delete(0, yTitle.length);
-				yTitle.insert(0, next);
-			});
-			return previous;
-		},
-		[room, generation],
-	);
-	const replaceTitleIfCurrent = useCallback(
-		(expected: string, next: string) => {
-			if (!room) return false;
-			const yTitle = room.doc.getText(pageTitleName(generation));
-			if (yTitle.toString() !== expected) return false;
-			room.doc.transact(() => {
-				yTitle.delete(0, yTitle.length);
-				yTitle.insert(0, next);
-			});
-			return true;
-		},
-		[room, generation],
-	);
 	const pushTitle = useCallback(
 		(next: string) => {
-			replaceTitle(next);
+			if (!room) return;
+			const yTitle = room.doc.getText(pageTitleName(generation));
+			room.doc.transact(() => {
+				updateSharedText(yTitle, next);
+			});
 		},
-		[replaceTitle],
+		[room, generation],
 	);
 
-	return { sharedTitle, pushTitle, replaceTitle, replaceTitleIfCurrent };
+	return { sharedTitle, pushTitle };
 }

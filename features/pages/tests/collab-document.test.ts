@@ -25,7 +25,11 @@ describe("collaborative page document mutations", () => {
 		]);
 
 		expect(attributions).toEqual([
-			{ blockId: "local-task", assignee: "member-2" },
+			{
+				blockId: "local-task",
+				assignee: "member-2",
+				operationId: expect.any(String),
+			},
 		]);
 	});
 });

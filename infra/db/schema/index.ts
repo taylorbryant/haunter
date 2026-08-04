@@ -800,7 +800,7 @@ export const collabDocuments = sqliteTable(
 
 // Browser task assignments can reach the materializer before their Yjs update
 // reaches the provider. Keep the actor attribution durable until a projection
-// observes the exact block/assignee pair and consumes it.
+// observes the exact block/assignee/operation tuple and consumes it.
 export const collabTaskAttributions = sqliteTable(
 	"collab_task_attributions",
 	{
@@ -813,6 +813,7 @@ export const collabTaskAttributions = sqliteTable(
 			.references(() => organization.id, { onDelete: "cascade" }),
 		blockId: text("block_id").notNull(),
 		assignee: text("assignee").notNull(),
+		operationId: text("operation_id"),
 		actorUserId: text("actor_user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),

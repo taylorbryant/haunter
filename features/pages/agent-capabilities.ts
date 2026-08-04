@@ -200,7 +200,7 @@ export const appendToPageCapability = defineAgentCapability("append_to_page", {
 
 export const updatePageCapability = defineAgentCapability("update_page", {
 	description:
-		"Update a page's title, icon, or parent. Set icon to null to remove it or parentPageId to null to move the page to the workspace root.",
+		"Update a page's title, icon, or parent. Title changes must be made in a separate call from icon or parent changes. Set icon to null to remove it or parentPageId to null to move the page to the workspace root.",
 	input: PageInput.extend({
 		title: z
 			.string()
@@ -210,13 +210,22 @@ export const updatePageCapability = defineAgentCapability("update_page", {
 			.optional(),
 		icon: z.string().max(16).nullable().optional(),
 		parentPageId: z.string().uuid().nullable().optional(),
-	}).refine(
-		(input) =>
-			input.title !== undefined ||
-			input.icon !== undefined ||
-			input.parentPageId !== undefined,
-		{ message: "Provide a title, icon, or parentPageId to update." },
-	),
+	})
+		.refine(
+			(input) =>
+				input.title !== undefined ||
+				input.icon !== undefined ||
+				input.parentPageId !== undefined,
+			{ message: "Provide a title, icon, or parentPageId to update." },
+		)
+		.refine(
+			(input) =>
+				input.title === undefined ||
+				(input.icon === undefined && input.parentPageId === undefined),
+			{
+				message: "Update the title separately from the icon or page placement.",
+			},
+		),
 	output: PageMetadataOutput,
 	async handle({ ctx, input }) {
 		const { updatePageUseCase } = await import("@/features/pages/use-cases");

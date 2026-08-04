@@ -3,10 +3,10 @@ import { createTenant, createTenantScope } from "@beignet/core/ports";
 import { z } from "zod";
 import { parseRoomId } from "@/features/collab/lib/room";
 import { publishWorkspacePageEvent } from "@/features/collab/server/workspace-events";
+import { pageMaterializationEventType } from "@/features/documents/materialization-event";
 import { materializeCollaborativeDocument } from "@/features/documents/service";
 import { deliverTaskAssignmentNotifications } from "@/features/tasks/notifications/assigned";
 import { defineJob } from "@/lib/jobs";
-import { pageMaterializationEventType } from "./materialization-event";
 
 export const MaterializeDocumentPayloadSchema = z.object({
 	documentId: z.string().min(1),
@@ -16,6 +16,7 @@ export const MaterializeDocumentPayloadSchema = z.object({
 			z.object({
 				blockId: z.string().min(1),
 				assignee: z.string().min(1),
+				operationId: z.string().uuid().optional(),
 				actor: z.object({
 					userId: z.string().min(1),
 					name: z.string().min(1),
@@ -34,20 +35,26 @@ export const MaterializeDocumentJob = defineJob("documents.materialize", {
 	}),
 	async handle({ payload, ctx }) {
 		const scope = createTenantScope(createTenant(payload.workspaceId));
-		// Messages enqueued by the previous release carried attribution only in
-		// the retry payload. Promote those rows before materializing so a rolling
-		// deployment cannot lose them when the Yjs update arrives after retries.
-		if (payload.taskAttributions?.length) {
+		// Keep older queued payloads parseable during a rolling deployment. Only
+		// operation-bound entries are safe to promote into durable attribution.
+		const legacyAttributions = payload.taskAttributions?.filter(
+			(
+				attribution,
+			): attribution is typeof attribution & { operationId: string } =>
+				attribution.operationId !== undefined,
+		);
+		if (legacyAttributions?.length) {
 			await ctx.ports.uow.transaction((tx) =>
 				tx.documents.recordTaskAttributions(
 					scope,
 					payload.documentId,
-					payload.taskAttributions?.map((attribution) => ({
+					legacyAttributions.map((attribution) => ({
 						blockId: attribution.blockId,
 						assignee: attribution.assignee,
+						operationId: attribution.operationId,
 						actorUserId: attribution.actor.userId,
 						actorName: attribution.actor.name,
-					})) ?? [],
+					})),
 				),
 			);
 		}

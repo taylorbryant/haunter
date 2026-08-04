@@ -3,6 +3,7 @@ import type * as Y from "yjs";
 export const DOCUMENT_SCHEMA_VERSION = 1;
 export const PAGE_FRAGMENT_NAME = "blocknote";
 export const PAGE_TITLE_NAME = "title";
+export const PAGE_TASK_ATTRIBUTIONS_NAME = "task-attribution-operations";
 export const PAGE_META_NAME = "haunter-meta";
 export const PAGE_ACTIVE_GENERATION_KEY = "activePageGeneration";
 export const CANVAS_RECORDS_NAME = "tldraw";
@@ -24,6 +25,12 @@ export function pageFragmentName(generation: string | null): string {
 
 export function pageTitleName(generation: string | null): string {
 	return generation ? `${PAGE_TITLE_NAME}:${generation}` : PAGE_TITLE_NAME;
+}
+
+export function pageTaskAttributionsName(generation: string | null): string {
+	return generation
+		? `${PAGE_TASK_ATTRIBUTIONS_NAME}:${generation}`
+		: PAGE_TASK_ATTRIBUTIONS_NAME;
 }
 
 export type DocumentKind = "page" | "canvas";
@@ -53,6 +60,7 @@ export type DocumentTaskAttribution = {
 	workspaceId: string;
 	blockId: string;
 	assignee: string;
+	operationId: string | null;
 	actorUserId: string;
 	actorName: string;
 	createdAt: string;
@@ -61,7 +69,7 @@ export type DocumentTaskAttribution = {
 
 export type NewDocumentTaskAttribution = Pick<
 	DocumentTaskAttribution,
-	"blockId" | "assignee" | "actorUserId" | "actorName"
+	"blockId" | "assignee" | "operationId" | "actorUserId" | "actorName"
 >;
 
 export type NewCollaborativeDocument = Pick<

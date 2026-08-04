@@ -17,6 +17,7 @@ export type TaskAttributionBlockChange = {
 export type PendingTaskAttribution = {
 	blockId: string;
 	assignee: string | null;
+	operationId: string | null;
 };
 
 function rawTaskAssignee(block: AttributionBlock | undefined): string | null {
@@ -56,5 +57,6 @@ export function taskAttributionsForChanges(
 	return [...attributions].map(([blockId, assignee]) => ({
 		blockId,
 		assignee,
+		operationId: assignee === null ? null : crypto.randomUUID(),
 	}));
 }

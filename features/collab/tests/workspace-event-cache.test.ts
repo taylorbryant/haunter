@@ -4,8 +4,11 @@ import {
 	getPageQueryOptions,
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
+import { listNotificationsQueryOptions } from "@/features/notifications/client/queries";
+import { listTasksQueryOptions } from "@/features/tasks/client/queries";
 import {
 	invalidateWorkspacePageProjections,
+	invalidateWorkspaceTaskProjections,
 	pageIsMissingFromWorkspaceProjection,
 } from "../client/workspace-event-cache";
 
@@ -57,6 +60,46 @@ describe("workspace event cache reconciliation", () => {
 		expect(queryClient.getQueryState(childQuery.queryKey)?.isInvalidated).toBe(
 			true,
 		);
+	});
+
+	it("invalidates task projections after a workspace task event", async () => {
+		const queryClient = new QueryClient();
+		const tasksQuery = listTasksQueryOptions("workspace_1", "open");
+		const notificationsQuery = listNotificationsQueryOptions();
+		queryClient.setQueryData(tasksQuery.queryKey, {
+			items: [],
+			hasMore: false,
+		});
+		queryClient.setQueryData(notificationsQuery.queryKey, {
+			items: [],
+			unreadCount: 0,
+			nextCursor: null,
+		});
+
+		await invalidateWorkspaceTaskProjections(queryClient);
+
+		expect(queryClient.getQueryState(tasksQuery.queryKey)?.isInvalidated).toBe(
+			true,
+		);
+		expect(
+			queryClient.getQueryState(notificationsQuery.queryKey)?.isInvalidated,
+		).toBe(true);
+	});
+
+	it("invalidates notifications after a workspace page event", async () => {
+		const queryClient = new QueryClient();
+		const notificationsQuery = listNotificationsQueryOptions();
+		queryClient.setQueryData(notificationsQuery.queryKey, {
+			items: [],
+			unreadCount: 0,
+			nextCursor: null,
+		});
+
+		await invalidateWorkspacePageProjections(queryClient, "workspace_1");
+
+		expect(
+			queryClient.getQueryState(notificationsQuery.queryKey)?.isInvalidated,
+		).toBe(true);
 	});
 
 	it("detects an open page removed while workspace broadcasts were missed", () => {

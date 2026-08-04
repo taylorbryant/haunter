@@ -3,7 +3,7 @@
 import { type Client, createClient } from "@liveblocks/client";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
 import * as Y from "yjs";
-import type { WorkspacePageEvent } from "@/features/collab/workspace-events";
+import type { WorkspaceEvent } from "@/features/collab/workspace-events";
 import type { CollabRoom } from "./session";
 
 /**
@@ -147,14 +147,14 @@ export function bindRoom(
 export function bindWorkspaceEvents(
 	roomId: string,
 	input: {
-		onEvent(event: WorkspacePageEvent): void;
+		onEvent(event: WorkspaceEvent): void;
 		onConnected(): void;
 	},
 ): () => void {
 	const { room, leave } = getLiveblocksClient().enterRoom<
 		Record<string, never>,
 		Record<string, never>,
-		WorkspacePageEvent
+		WorkspaceEvent
 	>(roomId);
 	const unsubscribeEvent = room.subscribe("event", ({ event }) => {
 		input.onEvent(event);

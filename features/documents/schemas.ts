@@ -8,6 +8,7 @@ export const DocumentPathSchema = z.object({
 export const TaskMaterializationAttributionSchema = z.object({
 	blockId: z.string().min(1).max(200),
 	assignee: z.string().min(1).max(200),
+	operationId: z.string().uuid(),
 });
 export const QueueDocumentMaterializationBodySchema = z.object({
 	taskAttributions: z

@@ -18,11 +18,14 @@ import {
 	PAGE_ACTIVE_GENERATION_KEY,
 	PAGE_FRAGMENT_NAME,
 	PAGE_META_NAME,
+	PAGE_TASK_ATTRIBUTIONS_NAME,
 	PAGE_TITLE_NAME,
 	pageFragmentName,
+	pageTaskAttributionsName,
 	pageTitleName,
 } from "./model";
 import { serverPageSchema } from "./page-schema";
+import { updateSharedText } from "./y-text";
 
 const pageEditor = ServerBlockNoteEditor.create({ schema: serverPageSchema });
 
@@ -82,8 +85,7 @@ export function pageToYDoc(
 export function replacePageTitle(doc: Y.Doc, title: string): void {
 	const sharedTitle = doc.getText(pageTitleName(activePageGeneration(doc)));
 	doc.transact(() => {
-		if (sharedTitle.length > 0) sharedTitle.delete(0, sharedTitle.length);
-		if (title.length > 0) sharedTitle.insert(0, title);
+		updateSharedText(sharedTitle, title);
 		doc.getMap<string | boolean>(PAGE_META_NAME).set("titleSeeded", true);
 	});
 }
@@ -98,6 +100,7 @@ export function replacePageBlocks(doc: Y.Doc, blocks: BlockJson[]): void {
 function retireInactivePageRoots(doc: Y.Doc, activeGeneration: string): void {
 	const activeFragment = pageFragmentName(activeGeneration);
 	const activeTitle = pageTitleName(activeGeneration);
+	const activeTaskAttributions = pageTaskAttributionsName(activeGeneration);
 	for (const [name, root] of doc.share) {
 		if (
 			(root instanceof Y.XmlFragment &&
@@ -106,9 +109,14 @@ function retireInactivePageRoots(doc: Y.Doc, activeGeneration: string): void {
 				name !== activeFragment) ||
 			(root instanceof Y.Text &&
 				(name === PAGE_TITLE_NAME || name.startsWith(`${PAGE_TITLE_NAME}:`)) &&
-				name !== activeTitle)
+				name !== activeTitle) ||
+			(root instanceof Y.Map &&
+				(name === PAGE_TASK_ATTRIBUTIONS_NAME ||
+					name.startsWith(`${PAGE_TASK_ATTRIBUTIONS_NAME}:`)) &&
+				name !== activeTaskAttributions)
 		) {
-			if (root.length > 0) root.delete(0, root.length);
+			if (root instanceof Y.Map) root.clear();
+			else if (root.length > 0) root.delete(0, root.length);
 		}
 	}
 }

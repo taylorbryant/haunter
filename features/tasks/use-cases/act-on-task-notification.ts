@@ -1,5 +1,6 @@
 import "@beignet/core/server-only";
 import { createTenant, createTenantScope } from "@beignet/core/ports";
+import { scheduleWorkspaceTaskEvent } from "@/features/collab/server/workspace-events";
 import { patchPageTaskBlock } from "@/features/documents/codec";
 import { mutateCollaborativeDocument } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
@@ -140,6 +141,10 @@ export const actOnTaskNotificationUseCase = useCase
 				},
 			});
 			if (!found) throw appError("NotificationNotActionable");
+			scheduleWorkspaceTaskEvent(ctx, {
+				workspaceId: task.workspaceId,
+				taskId: task.id,
+			});
 			return {
 				action: "complete",
 				notificationId: notification.id,
@@ -198,6 +203,10 @@ export const actOnTaskNotificationUseCase = useCase
 				actionAt,
 			);
 			return null;
+		});
+		scheduleWorkspaceTaskEvent(ctx, {
+			workspaceId: task.workspaceId,
+			taskId: task.id,
 		});
 
 		return {

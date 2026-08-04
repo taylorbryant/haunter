@@ -7,6 +7,7 @@ import {
 	MAX_INITIAL_PAGE_CONTENT_DEPTH,
 	PAGE_TITLE_MAX_LENGTH,
 	PAGE_TITLE_TOO_LONG_MESSAGE,
+	SavePageContentBodySchema,
 	UpdatePageBodySchema,
 } from "@/features/pages/schemas";
 
@@ -28,6 +29,40 @@ describe("page title validation", () => {
 		expect(result.success).toBe(false);
 		if (result.success) return;
 		expect(result.error.issues[0]?.message).toBe(PAGE_TITLE_TOO_LONG_MESSAGE);
+	});
+});
+
+describe("page write boundaries", () => {
+	test("rejects legacy whole-document autosave payloads", () => {
+		const result = SavePageContentBodySchema.safeParse({
+			content: [],
+			baseUpdatedAt: new Date().toISOString(),
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	test("requires title and metadata changes to use separate writes", () => {
+		const result = UpdatePageBodySchema.safeParse({
+			title: "Renamed",
+			icon: "👻",
+		});
+
+		expect(result.success).toBe(false);
+		if (result.success) return;
+		expect(result.error.issues[0]?.message).toBe(
+			"Update the title separately from the icon or page placement.",
+		);
+	});
+
+	test("allows metadata fields to remain atomic in one write", () => {
+		expect(
+			UpdatePageBodySchema.safeParse({
+				icon: "👻",
+				parentPageId: crypto.randomUUID(),
+				position: 2,
+			}).success,
+		).toBe(true);
 	});
 });
 

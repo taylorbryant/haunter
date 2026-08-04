@@ -1,7 +1,9 @@
 import { retry } from "@beignet/core/jobs";
 import { createTenant, createTenantScope } from "@beignet/core/ports";
 import { z } from "zod";
+import { publishWorkspacePageEvent } from "@/features/collab/server/workspace-events";
 import { appendSubpageLink } from "@/features/documents/codec";
+import { pageMaterializationEventType } from "@/features/documents/materialization-event";
 import { mutateCollaborativeDocument } from "@/features/documents/service";
 import { defineJob } from "@/lib/jobs";
 
@@ -34,7 +36,7 @@ export const AppendSubpageLinkJob = defineJob("documents.appendSubpageLink", {
 		) {
 			return;
 		}
-		await mutateCollaborativeDocument({
+		const result = await mutateCollaborativeDocument({
 			scope,
 			kind: "page",
 			entityId: parent.id,
@@ -43,5 +45,15 @@ export const AppendSubpageLinkJob = defineJob("documents.appendSubpageLink", {
 				appendSubpageLink(doc, child);
 			},
 		});
+		if (result.kind === "page") {
+			const eventType = pageMaterializationEventType(result);
+			if (eventType) {
+				await publishWorkspacePageEvent(ctx, {
+					type: eventType,
+					workspaceId: payload.workspaceId,
+					pageId: parent.id,
+				});
+			}
+		}
 	},
 });

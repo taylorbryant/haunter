@@ -2,7 +2,9 @@ import "@beignet/core/server-only";
 import type { AppContext } from "@/app-context";
 import {
 	createWorkspacePageEvent,
+	createWorkspaceTaskEvent,
 	type WorkspacePageEvent,
+	type WorkspaceTaskEvent,
 } from "@/features/collab/workspace-events";
 
 type PageEventInput = Pick<
@@ -44,6 +46,43 @@ export function scheduleWorkspacePageEvent(
 			type: input.type,
 			workspaceId: input.workspaceId,
 			pageId: input.pageId,
+		});
+	}
+}
+
+type TaskEventInput = Pick<WorkspaceTaskEvent, "workspaceId" | "taskId">;
+
+export async function publishWorkspaceTaskEvent(
+	ctx: AppContext,
+	input: TaskEventInput,
+): Promise<void> {
+	const event = createWorkspaceTaskEvent(input);
+	try {
+		await ctx.ports.workspaceEvents.publish(event);
+	} catch (error) {
+		ctx.ports.logger.warn("Failed to broadcast a workspace task event", {
+			error,
+			type: event.type,
+			workspaceId: event.workspaceId,
+			taskId: event.taskId,
+		});
+	}
+}
+
+export function scheduleWorkspaceTaskEvent(
+	ctx: AppContext,
+	input: TaskEventInput,
+): void {
+	try {
+		ctx.ports.afterResponse.schedule(() =>
+			publishWorkspaceTaskEvent(ctx, input),
+		);
+	} catch (error) {
+		ctx.ports.logger.warn("Failed to schedule a workspace task event", {
+			error,
+			type: "task.changed",
+			workspaceId: input.workspaceId,
+			taskId: input.taskId,
 		});
 	}
 }

@@ -39,6 +39,10 @@ import {
 } from "./model";
 import type { DocumentRegistryRepository, DocumentStorePort } from "./ports";
 import { bytesToBase64 } from "./server-encoding";
+import {
+	pageTaskAttributionOperations,
+	setPageTaskAttributionOperations,
+} from "./task-attribution-operations";
 
 type DocumentPorts = {
 	canvases: CanvasRepository;
@@ -433,35 +437,57 @@ type TrustedTaskAttribution = {
 	id?: string;
 	blockId: string;
 	assignee: string;
+	operationId: string;
 	actor: TaskAssignmentActor;
+};
+
+type ServerTaskAttributionChanges = {
+	attributions: TrustedTaskAttribution[];
+	operations: Array<{ blockId: string; operationId: string | null }>;
 };
 
 function recordServerTaskAttributions(
 	previousContent: Parameters<typeof extractTaskBlocks>[0],
 	nextContent: Parameters<typeof extractTaskBlocks>[0],
 	actor: TaskAssignmentActor | undefined,
-): TrustedTaskAttribution[] {
-	if (!actor) return [];
+): ServerTaskAttributionChanges {
 	const previous = new Map(
 		extractTaskBlocks(previousContent).map((block) => [block.blockId, block]),
 	);
-	return extractTaskBlocks(nextContent)
-		.filter((block) => {
-			const prior = previous.get(block.blockId);
-			return (
-				block.rawAssignee.length > 0 &&
-				(!prior || prior.rawAssignee !== block.rawAssignee)
-			);
-		})
-		.map((block) => ({
-			blockId: block.blockId,
-			assignee: block.rawAssignee,
-			actor,
-		}));
+	const next = new Map(
+		extractTaskBlocks(nextContent).map((block) => [block.blockId, block]),
+	);
+	const attributions: TrustedTaskAttribution[] = [];
+	const operations: ServerTaskAttributionChanges["operations"] = [];
+
+	for (const [blockId, block] of next) {
+		const prior = previous.get(blockId);
+		if (prior?.rawAssignee === block.rawAssignee) continue;
+		if (actor && block.rawAssignee.length > 0) {
+			const operationId = crypto.randomUUID();
+			attributions.push({
+				blockId,
+				assignee: block.rawAssignee,
+				operationId,
+				actor,
+			});
+			operations.push({ blockId, operationId });
+		} else {
+			// Clearing an assignment (or changing it without authenticated
+			// provenance) must also clear any older nonce in the Yjs document.
+			operations.push({ blockId, operationId: null });
+		}
+	}
+	for (const blockId of previous.keys()) {
+		if (!next.has(blockId)) operations.push({ blockId, operationId: null });
+	}
+
+	return { attributions, operations };
 }
 
 async function resolveTaskAttributions(
 	content: Parameters<typeof extractTaskBlocks>[0],
+	operationByBlockId: ReadonlyMap<string, string>,
 	trustedAttributions: readonly TrustedTaskAttribution[],
 	ports: Pick<DocumentPorts, "members">,
 	scope: TenantScope,
@@ -487,9 +513,14 @@ async function resolveTaskAttributions(
 	>();
 	const consumedAttributionIds = new Set<string>();
 	for (const block of extractTaskBlocks(content)) {
+		const currentOperationId = operationByBlockId.get(block.blockId);
 		const matchingAttributions = trusted
 			.get(block.blockId)
-			?.filter((candidate) => candidate.assignee === block.rawAssignee);
+			?.filter(
+				(candidate) =>
+					candidate.assignee === block.rawAssignee &&
+					candidate.operationId === currentOperationId,
+			);
 		const attribution = matchingAttributions?.[0];
 		if (!attribution) continue;
 		const actor = roster.get(attribution.actor.userId);
@@ -576,12 +607,17 @@ async function materializeCollaborativeDocumentAttempt(
 				}
 				const persistedAttributions = durableAttributions
 					.filter(
-						(attribution) => !expiredAttributionIds.includes(attribution.id),
+						(
+							attribution,
+						): attribution is typeof attribution & { operationId: string } =>
+							!expiredAttributionIds.includes(attribution.id) &&
+							attribution.operationId !== null,
 					)
 					.map((attribution) => ({
 						id: attribution.id,
 						blockId: attribution.blockId,
 						assignee: attribution.assignee,
+						operationId: attribution.operationId,
 						actor: {
 							userId: attribution.actorUserId,
 							name: attribution.actorName,
@@ -591,9 +627,11 @@ async function materializeCollaborativeDocumentAttempt(
 				if (!current)
 					throw new Error(`Page ${registered.entityId} was deleted`);
 				const projection = pageProjectionFromYDoc(doc);
+				const attributionOperations = pageTaskAttributionOperations(doc);
 				const { attributionByBlockId, consumedAttributionIds } =
 					await resolveTaskAttributions(
 						projection.content,
+						attributionOperations,
 						[...(input.taskAttributions ?? []), ...persistedAttributions],
 						{ members: tx.members },
 						scope,
@@ -785,6 +823,8 @@ export async function mutateCollaborativeDocument(input: {
 		throw new Error(`Collaborative document ${ensured.documentId} is missing`);
 	const doc = yDocFromUpdate(update);
 	let taskAttributions: TrustedTaskAttribution[] = [];
+	let taskAttributionOperations: ServerTaskAttributionChanges["operations"] =
+		[];
 	try {
 		const before = documentStateVector(doc);
 		const previousPageContent =
@@ -802,11 +842,14 @@ export async function mutateCollaborativeDocument(input: {
 				nextContent,
 				{ defaultAssigneeId: input.defaultTaskAssigneeId },
 			);
-			taskAttributions = recordServerTaskAttributions(
+			const attributionChanges = recordServerTaskAttributions(
 				previousPageContent ?? [],
 				nextContent,
 				input.assignmentActor,
 			);
+			taskAttributions = attributionChanges.attributions;
+			taskAttributionOperations = attributionChanges.operations;
+			setPageTaskAttributionOperations(doc, taskAttributionOperations);
 		}
 		const differential = Y.encodeStateAsUpdate(doc, before);
 		if (differential.byteLength > 2) {
@@ -822,6 +865,7 @@ export async function mutateCollaborativeDocument(input: {
 						taskAttributions.map((attribution) => ({
 							blockId: attribution.blockId,
 							assignee: attribution.assignee,
+							operationId: attribution.operationId,
 							actorUserId: attribution.actor.userId,
 							actorName: attribution.actor.name,
 						})),

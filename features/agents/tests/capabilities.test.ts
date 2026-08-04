@@ -419,10 +419,14 @@ describe("Haunter agent capabilities", () => {
 			title: "Draft",
 		})) as { pageId: string };
 
-		const updated = (await execute("update_page", {
+		await execute("update_page", {
 			workspaceId,
 			pageId: child.pageId,
 			title: "Launch plan",
+		});
+		const updated = (await execute("update_page", {
+			workspaceId,
+			pageId: child.pageId,
 			icon: "🚀",
 			parentPageId: parent.pageId,
 		})) as {

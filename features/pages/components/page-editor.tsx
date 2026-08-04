@@ -30,7 +30,6 @@ import {
 	consumeTitleFocus,
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
-import { registerOpenPageTitleWriter } from "@/features/pages/client/open-page-title";
 import {
 	getPageQueryOptions,
 	invalidatePages,
@@ -54,17 +53,50 @@ import {
 } from "@/features/pages/schemas";
 import { cn } from "@/lib/utils";
 import { Backlinks } from "./backlinks";
+import { pageEditorBodyMode } from "./page-editor-body-mode";
 import { EditorBodySkeleton, PageEditorSkeleton } from "./page-editor-skeleton";
 import { PageIconButton } from "./page-icon-picker";
+import { createRetryableModuleLoader } from "./retryable-module-loader";
 
-const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
-	ssr: false,
-	loading: () => (
-		<div className="py-2">
-			<EditorBodySkeleton />
-		</div>
-	),
-});
+type HaunterEditorComponent =
+	typeof import("./editor/haunter-editor")["default"];
+
+const haunterEditorLoader = createRetryableModuleLoader<HaunterEditorComponent>(
+	() => import("./editor/haunter-editor").then((module) => module.default),
+);
+
+function useHaunterEditorComponent() {
+	const [component, setComponent] = useState<HaunterEditorComponent | null>(
+		() => haunterEditorLoader.loaded,
+	);
+	const [loadError, setLoadError] = useState(false);
+	const [attempt, setAttempt] = useState(0);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: attempt is an explicit retry signal for a rejected dynamic import
+	useEffect(() => {
+		let active = true;
+		void haunterEditorLoader.load().then(
+			(loaded) => {
+				if (!active) return;
+				setComponent(() => loaded);
+				setLoadError(false);
+			},
+			() => {
+				if (active) setLoadError(true);
+			},
+		);
+		return () => {
+			active = false;
+		};
+	}, [attempt]);
+
+	const retry = useCallback(() => {
+		setLoadError(false);
+		setAttempt((current) => current + 1);
+	}, []);
+
+	return { component, loadError, retry };
+}
 
 // Shown while the collab room connects: the Liveblocks websocket upgrade
 // takes 1-2s on cold rooms (server-side; measured, not our stack), and the
@@ -147,9 +179,16 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const readOnly = workspaceReadOnly || collabSession.status === "unavailable";
 	const collabRoom =
 		collabSession.status === "ready" ? collabSession.room : null;
+	const {
+		component: CollaborativeEditor,
+		loadError: editorLoadError,
+		retry: retryEditorLoad,
+	} = useHaunterEditorComponent();
 	const documentGeneration = useDocumentGeneration(collabRoom);
-	const { sharedTitle, pushTitle, replaceTitle, replaceTitleIfCurrent } =
-		useSharedTitle(collabRoom, documentGeneration);
+	const { sharedTitle, pushTitle } = useSharedTitle(
+		collabRoom,
+		documentGeneration,
+	);
 
 	const [title, setTitle] = useState<string | null>(null);
 	const [titleError, setTitleError] = useState<string | null>(null);
@@ -236,19 +275,6 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		};
 	}, [pageId, readOnly]);
 
-	useEffect(() => {
-		if (readOnly || !collabRoom) return;
-		return registerOpenPageTitleWriter(pageId, {
-			replace(nextTitle) {
-				const previousTitle = replaceTitle(nextTitle);
-				if (previousTitle === null)
-					throw new Error("Shared title is unavailable");
-				return previousTitle;
-			},
-			replaceIfCurrent: replaceTitleIfCurrent,
-		});
-	}, [pageId, readOnly, collabRoom, replaceTitle, replaceTitleIfCurrent]);
-
 	// The shared title is authoritative, so project both local and remote edits
 	// directly into the sidebar and navigation caches. Refetching here can race
 	// asynchronous SQLite materialization and restore the previous title.
@@ -292,6 +318,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	}
 
 	const page = pageQuery.data;
+	const bodyMode = pageEditorBodyMode(
+		collabSession.status,
+		CollaborativeEditor !== null,
+	);
 
 	function handleTitleChange(next: string) {
 		const normalized = normalizeTitleInput(next);
@@ -511,12 +541,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					) : null}
 				</div>
 			</div>
-			{collabSession.status !== "ready" ? (
-				<div className="py-2" aria-busy>
+			{bodyMode === "projection" ? (
+				<div className="py-2" aria-busy={!editorLoadError}>
 					<ReadOnlyEditor content={page.content} />
 				</div>
-			) : (
-				<HaunterEditor
+			) : CollaborativeEditor && collabSession.status === "ready" ? (
+				<CollaborativeEditor
 					key={`${pageId}:${documentGeneration ?? "pending"}`}
 					pageId={pageId}
 					workspaceId={page.workspaceId}
@@ -528,12 +558,27 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					currentUserId={currentUser?.id ?? null}
 					onSaveStateChange={setPageSaveState}
 				/>
-			)}
+			) : null}
 			{collabSession.status === "unavailable" ? (
 				<p className="mt-2 px-0 text-muted-foreground text-xs md:px-[54px]">
 					Live editing is temporarily unavailable. This page is read-only so a
 					stale projection cannot overwrite the shared document.
 				</p>
+			) : null}
+			{editorLoadError ? (
+				<div className="mt-2 flex items-center gap-2 px-0 text-muted-foreground text-xs md:px-[54px]">
+					<span className="flex-1">
+						The editor could not be loaded. This page is temporarily read-only.
+					</span>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={retryEditorLoad}
+					>
+						Retry
+					</Button>
+				</div>
 			) : null}
 			{/* Same 54px inset as the editor content column. */}
 			<div className="px-0 md:px-[54px]">

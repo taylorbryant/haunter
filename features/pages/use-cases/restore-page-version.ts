@@ -4,6 +4,7 @@ import {
 	pageProjectionFromYDoc,
 	replacePageDocument,
 } from "@/features/documents/codec";
+import { pageMaterializationEventType } from "@/features/documents/materialization-event";
 import { mutateCollaborativeDocument } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import {
@@ -90,9 +91,10 @@ export const restorePageVersionUseCase = useCase
 		if (result.kind !== "page") {
 			throw new Error(`Expected a page projection for ${page.id}`);
 		}
-		if (result.titleChanged) {
+		const eventType = pageMaterializationEventType(result);
+		if (eventType) {
 			scheduleWorkspacePageEvent(ctx, {
-				type: "page.renamed",
+				type: eventType,
 				workspaceId: page.workspaceId,
 				pageId: page.id,
 			});

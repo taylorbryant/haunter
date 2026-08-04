@@ -7,38 +7,53 @@ import {
 	snapshotPendingTaskAttributions,
 } from "@/features/documents/client/task-attribution";
 
+function attribution(blockId: string, assignee: string) {
+	return { blockId, assignee, operationId: crypto.randomUUID() };
+}
+
 describe("pending task attribution", () => {
 	it("does not acknowledge a newer operation with an older request", () => {
 		const pageId = crypto.randomUUID();
 		const actorUserId = crypto.randomUUID();
-		recordPendingTaskAttributions(pageId, actorUserId, [
-			{ blockId: "task-1", assignee: "member-a" },
-		]);
+		const first = attribution("task-1", "member-a");
+		recordPendingTaskAttributions(pageId, actorUserId, [first]);
 		const firstRequest = snapshotPendingTaskAttributions(pageId, actorUserId);
 
-		recordPendingTaskAttributions(pageId, actorUserId, [
-			{ blockId: "task-1", assignee: "member-b" },
-		]);
+		const second = attribution("task-1", "member-b");
+		recordPendingTaskAttributions(pageId, actorUserId, [second]);
 		acknowledgePendingTaskAttributions(pageId, actorUserId, firstRequest);
 
 		expect(snapshotPendingTaskAttributions(pageId, actorUserId)).toEqual([
-			{ blockId: "task-1", assignee: "member-b" },
+			second,
 		]);
 
-		acknowledgePendingTaskAttributions(pageId, actorUserId, [
-			{ blockId: "task-1", assignee: "member-b" },
-		]);
+		acknowledgePendingTaskAttributions(pageId, actorUserId, [second]);
 		expect(snapshotPendingTaskAttributions(pageId, actorUserId)).toEqual([]);
+	});
+
+	it("does not acknowledge a newer operation with the same assignee", () => {
+		const pageId = crypto.randomUUID();
+		const actorUserId = crypto.randomUUID();
+		const first = attribution("task-1", "member-a");
+		recordPendingTaskAttributions(pageId, actorUserId, [first]);
+		const firstRequest = snapshotPendingTaskAttributions(pageId, actorUserId);
+		const second = attribution("task-1", "member-a");
+		recordPendingTaskAttributions(pageId, actorUserId, [second]);
+
+		acknowledgePendingTaskAttributions(pageId, actorUserId, firstRequest);
+		expect(snapshotPendingTaskAttributions(pageId, actorUserId)).toEqual([
+			second,
+		]);
 	});
 
 	it("drops attribution when a local assignment is cleared", () => {
 		const pageId = crypto.randomUUID();
 		const actorUserId = crypto.randomUUID();
 		recordPendingTaskAttributions(pageId, actorUserId, [
-			{ blockId: "task-1", assignee: "member-a" },
+			attribution("task-1", "member-a"),
 		]);
 		recordPendingTaskAttributions(pageId, actorUserId, [
-			{ blockId: "task-1", assignee: null },
+			{ blockId: "task-1", assignee: null, operationId: null },
 		]);
 
 		expect(snapshotPendingTaskAttributions(pageId, actorUserId)).toEqual([]);
@@ -48,26 +63,20 @@ describe("pending task attribution", () => {
 		const pageId = crypto.randomUUID();
 		const firstActor = crypto.randomUUID();
 		const secondActor = crypto.randomUUID();
-		recordPendingTaskAttributions(pageId, firstActor, [
-			{ blockId: "task-1", assignee: "member-a" },
-		]);
-		recordPendingTaskAttributions(pageId, secondActor, [
-			{ blockId: "task-2", assignee: "member-b" },
-		]);
+		const first = attribution("task-1", "member-a");
+		const second = attribution("task-2", "member-b");
+		recordPendingTaskAttributions(pageId, firstActor, [first]);
+		recordPendingTaskAttributions(pageId, secondActor, [second]);
 
 		expect(snapshotPendingTaskAttributions(pageId, firstActor)).toEqual([
-			{ blockId: "task-1", assignee: "member-a" },
+			first,
 		]);
 		expect(snapshotPendingTaskAttributions(pageId, secondActor)).toEqual([
-			{ blockId: "task-2", assignee: "member-b" },
+			second,
 		]);
 
-		acknowledgePendingTaskAttributions(pageId, firstActor, [
-			{ blockId: "task-1", assignee: "member-a" },
-		]);
-		acknowledgePendingTaskAttributions(pageId, secondActor, [
-			{ blockId: "task-2", assignee: "member-b" },
-		]);
+		acknowledgePendingTaskAttributions(pageId, firstActor, [first]);
+		acknowledgePendingTaskAttributions(pageId, secondActor, [second]);
 	});
 
 	it("persists attribution outside component memory for a later retry", () => {
@@ -103,20 +112,22 @@ describe("pending task attribution", () => {
 		try {
 			const pageId = crypto.randomUUID();
 			const actorUserId = crypto.randomUUID();
-			recordPendingTaskAttributions(pageId, actorUserId, [
-				{ blockId: "task-1", assignee: "member-a" },
-			]);
+			const pending = attribution("task-1", "member-a");
+			recordPendingTaskAttributions(pageId, actorUserId, [pending]);
 
 			const stored = [...values.values()][0];
-			expect(stored).toBe(JSON.stringify({ "task-1": "member-a" }));
-			// Reading the browser store on every retry models a fresh component or tab,
-			// rather than relying on this module's in-memory map.
+			expect(stored).toBe(
+				JSON.stringify({
+					"task-1": {
+						assignee: pending.assignee,
+						operationId: pending.operationId,
+					},
+				}),
+			);
 			expect(snapshotPendingTaskAttributions(pageId, actorUserId)).toEqual([
-				{ blockId: "task-1", assignee: "member-a" },
+				pending,
 			]);
-			acknowledgePendingTaskAttributions(pageId, actorUserId, [
-				{ blockId: "task-1", assignee: "member-a" },
-			]);
+			acknowledgePendingTaskAttributions(pageId, actorUserId, [pending]);
 			expect(values.size).toBe(0);
 		} finally {
 			if (previousWindow) {
@@ -130,10 +141,7 @@ describe("pending task attribution", () => {
 	it("batches large attribution sets within the server request limit", () => {
 		const attributions = Array.from(
 			{ length: MAX_TASK_ATTRIBUTIONS_PER_MATERIALIZATION * 2 + 1 },
-			(_, index) => ({
-				blockId: `task-${index}`,
-				assignee: `member-${index}`,
-			}),
+			(_, index) => attribution(`task-${index}`, `member-${index}`),
 		);
 
 		const batches = batchTaskAttributions(attributions);

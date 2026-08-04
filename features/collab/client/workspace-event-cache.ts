@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { invalidateNotifications } from "@/features/notifications/client/queries";
 import {
 	invalidateBacklinks,
 	invalidatePage,
@@ -63,6 +64,18 @@ export async function invalidateWorkspacePageProjections(
 		invalidateBacklinks(queryClient),
 		invalidatePageSearch(queryClient),
 		invalidateTasksWhenIdle(queryClient),
+		invalidateNotifications(queryClient),
 		...affectedPageIds.map((pageId) => invalidatePage(queryClient, pageId)),
+	]);
+}
+
+/** Reconcile task lists in another tab after a direct Tasks/MCP mutation. */
+export async function invalidateWorkspaceTaskProjections(
+	queryClient: QueryClient,
+): Promise<void> {
+	await waitForMutationsToSettle(queryClient);
+	await Promise.all([
+		invalidateTasksWhenIdle(queryClient),
+		invalidateNotifications(queryClient),
 	]);
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
+import type { MemoryOutboxPort } from "@beignet/core/outbox";
 import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestContextFactory,
@@ -12,9 +13,12 @@ import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import type { WorkspacePageEvent } from "@/features/collab/workspace-events";
 import { DocumentStoreUnavailableError } from "@/features/documents/errors";
+import { documentId } from "@/features/documents/model";
 import type { DocumentStorePort } from "@/features/documents/ports";
-import { createTestDocumentRegistryRepository } from "@/features/documents/tests/helpers";
-import { createTestDocumentStore } from "@/features/documents/tests/helpers";
+import {
+	createTestDocumentRegistryRepository,
+	createTestDocumentStore,
+} from "@/features/documents/tests/helpers";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import type {
 	PageNavigationRepository,
@@ -25,6 +29,7 @@ import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import {
+	appendPageContentUseCase,
 	createPageUseCase,
 	deletePageUseCase,
 	getPageNavigationUseCase,
@@ -62,6 +67,7 @@ function createTester(
 		scheduled: Array<() => Promise<void>>;
 		published: WorkspacePageEvent[];
 	},
+	testArtifacts?: { outbox?: MemoryOutboxPort },
 ) {
 	const auth = {
 		user: {
@@ -145,6 +151,7 @@ function createTester(
 			},
 		},
 	);
+	if (testArtifacts) testArtifacts.outbox = testFixture.outbox;
 	const createTestContext = createTestContextFactory<
 		AppContext,
 		AppContext["ports"]
@@ -169,6 +176,7 @@ async function createFixture(userId = "user_test") {
 	const pageNavigation = createTestPageNavigationRepository({ pages });
 	const scheduled: Array<() => Promise<void>> = [];
 	const publishedWorkspaceEvents: WorkspacePageEvent[] = [];
+	const testArtifacts: { outbox?: MemoryOutboxPort } = {};
 	// Better Auth org ids are nanoid-style, not UUIDs — use a matching shape so
 	// schema validation is exercised realistically.
 	const workspace = {
@@ -184,6 +192,7 @@ async function createFixture(userId = "user_test") {
 		pageNavigation,
 		createTestDocumentStore(),
 		{ scheduled, published: publishedWorkspaceEvents },
+		testArtifacts,
 	);
 	const ctx = await tester.ctx();
 	const scope = createTenantScope(createTestTenant(workspace.id));
@@ -197,6 +206,7 @@ async function createFixture(userId = "user_test") {
 		ctx,
 		pageNavigation,
 		publishedWorkspaceEvents,
+		outbox: testArtifacts.outbox,
 		async flushAfterResponse() {
 			while (scheduled.length > 0) {
 				const work = scheduled.shift();
@@ -228,7 +238,12 @@ describe("pages use cases", () => {
 		]);
 		await tester.run(
 			updatePageUseCase,
-			{ id: page.id, title: "Renamed", icon: "👻", position: 2 },
+			{ id: page.id, title: "Renamed" },
+			{ ctx },
+		);
+		await tester.run(
+			updatePageUseCase,
+			{ id: page.id, icon: "👻", position: 2 },
 			{ ctx },
 		);
 		await flushAfterResponse();
@@ -238,6 +253,42 @@ describe("pages use cases", () => {
 			"page.iconChanged",
 			"page.moved",
 		]);
+		await tester.run(
+			appendPageContentUseCase,
+			{
+				id: page.id,
+				content: [
+					{
+						id: "appended",
+						type: "paragraph",
+						props: {},
+						content: [{ type: "text", text: "Appended", styles: {} }],
+						children: [],
+					},
+				],
+			},
+			{ ctx },
+		);
+		await flushAfterResponse();
+		expect(publishedWorkspaceEvents.at(-1)?.type).toBe("page.contentChanged");
+		await tester.run(
+			savePageContentUseCase,
+			{
+				id: page.id,
+				content: [
+					{
+						id: "saved",
+						type: "paragraph",
+						props: {},
+						content: [{ type: "text", text: "Saved", styles: {} }],
+						children: [],
+					},
+				],
+			},
+			{ ctx },
+		);
+		await flushAfterResponse();
+		expect(publishedWorkspaceEvents.at(-1)?.type).toBe("page.contentChanged");
 
 		await tester.run(deletePageUseCase, { id: page.id }, { ctx });
 		await flushAfterResponse();
@@ -561,6 +612,33 @@ describe("pages use cases", () => {
 		expect(fetched.contentUpdatedAt).toBe(saved.contentUpdatedAt);
 	});
 
+	it("rejects combined title and metadata writes before either store changes", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+		const created = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Before" },
+			{ ctx },
+		);
+
+		await expect(
+			tester.run(
+				updatePageUseCase,
+				{ id: created.id, title: "After", icon: "👻" },
+				{ ctx },
+			),
+		).rejects.toThrow(
+			"Update the title separately from the icon or page placement.",
+		);
+
+		const fetched = await tester.run(
+			getPageUseCase,
+			{ id: created.id },
+			{ ctx },
+		);
+		expect(fetched.title).toBe("Before");
+		expect(fetched.icon).toBeNull();
+	});
+
 	it("rejects moving a page under one of its descendants", async () => {
 		const { workspace, tester, ctx } = await createFixture();
 
@@ -705,7 +783,8 @@ describe("pages use cases", () => {
 	});
 
 	it("purges a trashed subtree with its tasks", async () => {
-		const { pages, scope, tester, ctx, workspace } = await createFixture();
+		const { pages, scope, tester, ctx, workspace, outbox } =
+			await createFixture();
 
 		const root = await tester.run(
 			createPageUseCase,
@@ -739,6 +818,20 @@ describe("pages use cases", () => {
 		);
 		expect(trash.items).toEqual([]);
 		expect(await pages.findMetaById(scope, root.id)).toBeNull();
+		expect(
+			outbox?.messages.some((message) => {
+				if (
+					message.name !== "documents.deleteProviderDocument" ||
+					typeof message.payload !== "object" ||
+					message.payload === null ||
+					Array.isArray(message.payload)
+				) {
+					return false;
+				}
+				const payload = message.payload as Record<string, unknown>;
+				return payload.documentId === documentId("page", root.id);
+			}),
+		).toBe(true);
 	});
 
 	it("hides tasks from trashed pages in the workspace task list", async () => {
@@ -1267,7 +1360,15 @@ describe("page versioning", () => {
 	});
 
 	it("restore snapshots the current state, applies the version, and reconciles tasks", async () => {
-		const { tasks, workspace, scope, tester, ctx } = await createFixture();
+		const {
+			tasks,
+			workspace,
+			scope,
+			tester,
+			ctx,
+			publishedWorkspaceEvents,
+			flushAfterResponse,
+		} = await createFixture();
 		const page = await tester.run(
 			createPageUseCase,
 			{ workspaceId: workspace.id, title: "Restorable" },
@@ -1300,6 +1401,8 @@ describe("page versioning", () => {
 			{ id: page.id, versionId: withTask.id },
 			{ ctx },
 		);
+		await flushAfterResponse();
+		expect(publishedWorkspaceEvents.at(-1)?.type).toBe("page.contentChanged");
 
 		// The doc is back on v1 and its task row is reconciled back into being.
 		const restored = await tester.run(getPageUseCase, { id: page.id }, { ctx });

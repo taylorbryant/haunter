@@ -74,11 +74,6 @@ import {
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
 import {
-	type OpenPageTitleSnapshot,
-	optimisticallySetOpenPageTitle,
-	restoreOpenPageTitle,
-} from "@/features/pages/client/open-page-title";
-import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
 	getPageNavigationQueryOptions,
@@ -372,7 +367,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		let snapshot: Awaited<
 			ReturnType<typeof optimisticallySetPageTitle>
 		> | null = null;
-		let sharedTitleSnapshot: OpenPageTitleSnapshot | null = null;
 		try {
 			if (!(await flushPendingPageSave(pageId))) {
 				setRenameError({
@@ -391,7 +385,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					previousUpdatedAt: node.updatedAt,
 				},
 			);
-			sharedTitleSnapshot = optimisticallySetOpenPageTitle(pageId, title);
 			setRenamingId((current) => (current === pageId ? null : current));
 			const page = await renameMutation.mutateAsync({
 				path: { id: pageId },
@@ -410,9 +403,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					snapshot.previousTitle,
 					snapshot.previousUpdatedAt,
 				);
-			}
-			if (sharedTitleSnapshot) {
-				restoreOpenPageTitle(pageId, title, sharedTitleSnapshot);
 			}
 			setRenamingId(pageId);
 			setRenameError({

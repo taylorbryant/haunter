@@ -230,6 +230,7 @@ export function createDrizzleDocumentRegistryRepository(
 						],
 						set: {
 							actorName: attribution.actorName,
+							operationId: attribution.operationId,
 							updatedAt: now,
 						},
 					});

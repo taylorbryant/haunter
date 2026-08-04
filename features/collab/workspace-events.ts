@@ -1,13 +1,16 @@
 export const WORKSPACE_EVENT_SCHEMA_VERSION = 1 as const;
 
-type WorkspacePageEventBase = {
+type WorkspaceEventBase = {
 	schemaVersion: typeof WORKSPACE_EVENT_SCHEMA_VERSION;
 	workspaceId: string;
+	occurredAt: string;
+};
+
+type WorkspacePageEventBase = WorkspaceEventBase & {
 	pageId: string;
 	/** Every page whose direct projection changed. Subtree mutations include
 	 * descendants so an already-open child can be invalidated immediately. */
 	affectedPageIds?: string[];
-	occurredAt: string;
 };
 
 export type WorkspacePageEvent = WorkspacePageEventBase &
@@ -22,11 +25,18 @@ export type WorkspacePageEvent = WorkspacePageEventBase &
 		| { type: "page.purged" }
 	);
 
+export type WorkspaceTaskEvent = WorkspaceEventBase & {
+	type: "task.changed";
+	taskId: string;
+};
+
+export type WorkspaceEvent = WorkspacePageEvent | WorkspaceTaskEvent;
+
 /** Server-side transport for ephemeral workspace invalidation hints. SQLite
  * remains authoritative; consumers always refetch instead of trusting event
  * payloads as durable state. */
 export type WorkspaceEventPublisherPort = {
-	publish(event: WorkspacePageEvent): Promise<void>;
+	publish(event: WorkspaceEvent): Promise<void>;
 };
 
 export function createWorkspacePageEvent(input: {
@@ -47,6 +57,20 @@ export function createWorkspacePageEvent(input: {
 		...(affectedPageIds ? { affectedPageIds } : {}),
 		occurredAt: input.occurredAt ?? new Date().toISOString(),
 	} as WorkspacePageEvent;
+}
+
+export function createWorkspaceTaskEvent(input: {
+	workspaceId: string;
+	taskId: string;
+	occurredAt?: string;
+}): WorkspaceTaskEvent {
+	return {
+		schemaVersion: WORKSPACE_EVENT_SCHEMA_VERSION,
+		type: "task.changed",
+		workspaceId: input.workspaceId,
+		taskId: input.taskId,
+		occurredAt: input.occurredAt ?? new Date().toISOString(),
+	};
 }
 
 export function workspaceEventAffectedPageIds(
@@ -97,4 +121,26 @@ export function isWorkspacePageEvent(
 			event.type === "page.restored" ||
 			event.type === "page.purged")
 	);
+}
+
+export function isWorkspaceTaskEvent(
+	value: unknown,
+): value is WorkspaceTaskEvent {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		return false;
+	}
+	const event = value as Record<string, unknown>;
+	return (
+		event.schemaVersion === WORKSPACE_EVENT_SCHEMA_VERSION &&
+		event.type === "task.changed" &&
+		typeof event.workspaceId === "string" &&
+		event.workspaceId.length > 0 &&
+		typeof event.taskId === "string" &&
+		event.taskId.length > 0 &&
+		typeof event.occurredAt === "string"
+	);
+}
+
+export function isWorkspaceEvent(value: unknown): value is WorkspaceEvent {
+	return isWorkspacePageEvent(value) || isWorkspaceTaskEvent(value);
 }

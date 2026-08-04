@@ -1,6 +1,8 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
+import { scheduleWorkspacePageEvent } from "@/features/collab/server/workspace-events";
 import { appendPageBlocks } from "@/features/documents/codec";
+import { pageMaterializationEventType } from "@/features/documents/materialization-event";
 import { mutateCollaborativeDocument } from "@/features/documents/service";
 import { appError } from "@/features/shared/errors";
 import {
@@ -49,6 +51,14 @@ export const appendPageContentUseCase = useCase
 		});
 		if (result.kind !== "page") {
 			throw new Error(`Expected a page projection for ${page.id}`);
+		}
+		const eventType = pageMaterializationEventType(result);
+		if (eventType) {
+			scheduleWorkspacePageEvent(ctx, {
+				type: eventType,
+				workspaceId: page.workspaceId,
+				pageId: page.id,
+			});
 		}
 		scheduleTaskAssignmentDelivery(ctx, result.assignmentNotifications);
 		return {

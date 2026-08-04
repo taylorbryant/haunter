@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { pageMaterializationEventType } from "@/features/documents/jobs/materialization-event";
+import { pageMaterializationEventType } from "@/features/documents/materialization-event";
 import type { MaterializeResult } from "@/features/documents/service";
 
 function projected(

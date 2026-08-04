@@ -47,6 +47,7 @@ import {
 	waitForCollabPersistence,
 } from "@/features/collab/client/session";
 import { queueMaterialization } from "@/features/documents/client/materialization";
+import { setPageTaskAttributionOperations } from "@/features/documents/task-attribution-operations";
 import {
 	recordPendingTaskAttributions,
 	snapshotPendingTaskAttributions,
@@ -501,7 +502,11 @@ export default function HaunterEditor({
 			if (!editable) return;
 			if (currentUserId) {
 				const attributions = taskAttributionsForChanges(context.getChanges());
+				// Persist the authenticated intent before exposing its operation marker to
+				// Liveblocks. A webhook can safely project an earlier content update with no
+				// marker; it must never observe an attributable marker that cannot be retried.
 				recordPendingTaskAttributions(pageId, currentUserId, attributions);
+				setPageTaskAttributionOperations(collab.doc, attributions);
 				if (attributions.some((attribution) => attribution.assignee !== null)) {
 					// The authenticated request durably records the actor and target before
 					// acknowledging the browser queue. If this Yjs update has not reached the
@@ -522,7 +527,7 @@ export default function HaunterEditor({
 				AUTOSAVE_DELAY_MS,
 			);
 		},
-		[currentUserId, editor, pageId, reportState, editable],
+		[currentUserId, editor, pageId, reportState, editable, collab.doc],
 	);
 
 	// Retain the page-scoped coordinator through cleanup. If this editor is

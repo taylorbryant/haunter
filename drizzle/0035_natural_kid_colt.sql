@@ -1,0 +1,1 @@
+ALTER TABLE `collab_task_attributions` ADD `operation_id` text;

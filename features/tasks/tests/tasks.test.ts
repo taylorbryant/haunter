@@ -10,6 +10,7 @@ import {
 import { createInMemoryDevtools } from "@beignet/devtools";
 import * as Y from "yjs";
 import type { AppContext } from "@/app-context";
+import type { WorkspaceEvent } from "@/features/collab/workspace-events";
 import { patchPageTaskBlock } from "@/features/documents/codec";
 import { documentId } from "@/features/documents/model";
 import {
@@ -99,6 +100,7 @@ async function createFixture(
 	const dismissedScheduledTaskIds: string[] = [];
 	const afterResponseTasks: Array<() => Promise<void>> = [];
 	const pushDeliveries: unknown[] = [];
+	const workspaceEvents: WorkspaceEvent[] = [];
 	const afterResponse = {
 		schedule(work: () => Promise<void>) {
 			afterResponseTasks.push(work);
@@ -234,6 +236,11 @@ async function createFixture(
 			pages,
 			pageVersions,
 			tasks,
+			workspaceEvents: {
+				async publish(event) {
+					workspaceEvents.push(event);
+				},
+			},
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
@@ -266,6 +273,7 @@ async function createFixture(
 		tasks,
 		tester,
 		workspace,
+		workspaceEvents,
 		ctx,
 	};
 }
@@ -786,6 +794,7 @@ describe("tasks use cases", () => {
 			tasks,
 			tester,
 			workspace,
+			workspaceEvents,
 			ctx,
 		} = await createFixture("user_test", { assignmentDeliveryFails: true });
 
@@ -804,8 +813,17 @@ describe("tasks use cases", () => {
 			title: "Review the launch plan",
 		});
 		expect(assignmentNotifications).toHaveLength(1);
-		expect(afterResponseTasks).toHaveLength(1);
-		await expect(afterResponseTasks[0]?.()).resolves.toBeUndefined();
+		expect(afterResponseTasks).toHaveLength(2);
+		await expect(
+			Promise.all(afterResponseTasks.map((work) => work())),
+		).resolves.toBeDefined();
+		expect(workspaceEvents).toEqual([
+			expect.objectContaining({
+				type: "task.changed",
+				workspaceId: workspace.id,
+				taskId: created.id,
+			}),
+		]);
 	});
 
 	it("accepts detailed task titles and rejects only genuinely excessive ones", async () => {
@@ -858,6 +876,34 @@ describe("tasks use cases", () => {
 
 		expect(scheduled.dueTime).toBe("14:00");
 		expect(cleared).toMatchObject({ dueDate: null, dueTime: null });
+	});
+
+	it("broadcasts schedule changes to other workspace tabs", async () => {
+		const { afterResponseTasks, tester, workspace, workspaceEvents, ctx } =
+			await createFixture();
+		const task = await tester.run(
+			createTaskUseCase,
+			{ workspaceId: workspace.id, title: "Pick up meds" },
+			{ ctx },
+		);
+		afterResponseTasks.length = 0;
+		workspaceEvents.length = 0;
+
+		await tester.run(
+			updateTaskUseCase,
+			{ id: task.id, dueDate: "2026-08-08", dueTime: "14:00" },
+			{ ctx },
+		);
+
+		expect(afterResponseTasks).toHaveLength(1);
+		await afterResponseTasks[0]?.();
+		expect(workspaceEvents).toEqual([
+			expect.objectContaining({
+				type: "task.changed",
+				workspaceId: workspace.id,
+				taskId: task.id,
+			}),
+		]);
 	});
 
 	it("validates, preserves, and clears proactive reminders with the due date", async () => {
