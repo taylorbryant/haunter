@@ -539,7 +539,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 			</div>
 			{bodyMode === "projection" ? (
 				<div aria-busy={!editorLoadError}>
-					<ReadOnlyEditor content={page.content} />
+					<ReadOnlyEditor content={page.content} matchEditableHeight />
 				</div>
 			) : CollaborativeEditor && collabSession.status === "ready" ? (
 				<CollaborativeEditor

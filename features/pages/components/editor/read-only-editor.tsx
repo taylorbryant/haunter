@@ -9,8 +9,10 @@ import { useTheme } from "next-themes";
 import type { BlockJson } from "@/features/pages/schemas";
 import { SharedPageTokenProvider } from "@/features/shares/components/shared-page-context";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
+import { cn } from "@/lib/utils";
 import { useSyncEditorCodeTheme } from "./code-theme";
 import { editorSchema } from "./schema";
+import { needsEditableTrailingSpace } from "./trailing-editor-space";
 
 /**
  * Render a page document read-only, outside the app shell — used by the
@@ -20,9 +22,11 @@ import { editorSchema } from "./schema";
 export default function ReadOnlyEditor({
 	content,
 	shareToken,
+	matchEditableHeight = false,
 }: {
 	content: BlockJson[];
 	shareToken?: string;
+	matchEditableHeight?: boolean;
 }) {
 	const { resolvedTheme } = useTheme();
 
@@ -34,7 +38,14 @@ export default function ReadOnlyEditor({
 	useSyncEditorCodeTheme(editor, resolvedTheme);
 
 	const view = (
-		<div className="haunter-editor editor-mobile-flush">
+		<div
+			className={cn(
+				"haunter-editor editor-mobile-flush",
+				matchEditableHeight &&
+					needsEditableTrailingSpace(content) &&
+					"after:block after:h-[30px]",
+			)}
+		>
 			<BlockNoteView
 				editor={editor}
 				editable={false}
