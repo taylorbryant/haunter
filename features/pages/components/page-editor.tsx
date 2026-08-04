@@ -98,10 +98,8 @@ function useHaunterEditorComponent() {
 	return { component, loadError, retry };
 }
 
-// Shown while the collab room connects: the Liveblocks websocket upgrade
-// takes 1-2s on cold rooms (server-side; measured, not our stack), and the
-// page content is already fetched — so paint it read-only immediately
-// instead of a skeleton. The live editor swaps in when the room is ready.
+// Used only as an explicit read-only fallback when the authoritative room is
+// unavailable. It is not part of the normal loading path.
 const ReadOnlyEditor = dynamic(() => import("./editor/read-only-editor"), {
 	ssr: false,
 	loading: () => <EditorBodySkeleton />,
@@ -171,7 +169,10 @@ export function PageEditor({ pageId }: { pageId: string }) {
 			}
 		: undefined;
 	// One shared room per page carries both the document and the title.
-	const collabSession = useCollabSession(documentRoomId("page", pageId));
+	const collabSession = useCollabSession(
+		documentRoomId("page", pageId),
+		currentUser?.id ?? null,
+	);
 	const readOnly = workspaceReadOnly || collabSession.status === "unavailable";
 	const collabRoom =
 		collabSession.status === "ready" ? collabSession.room : null;
@@ -317,6 +318,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	const bodyMode = pageEditorBodyMode(
 		collabSession.status,
 		CollaborativeEditor !== null,
+		editorLoadError,
 	);
 
 	function handleTitleChange(next: string) {
@@ -537,10 +539,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					) : null}
 				</div>
 			</div>
-			{bodyMode === "projection" ? (
-				<div aria-busy={!editorLoadError}>
-					<ReadOnlyEditor content={page.content} matchEditableHeight />
+			{bodyMode === "loading" ? (
+				<div aria-busy="true">
+					<EditorBodySkeleton />
 				</div>
+			) : bodyMode === "fallback" ? (
+				<ReadOnlyEditor content={page.content} />
 			) : CollaborativeEditor && collabSession.status === "ready" ? (
 				<CollaborativeEditor
 					key={`${pageId}:${documentGeneration ?? "pending"}`}
@@ -576,10 +580,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					</Button>
 				</div>
 			) : null}
-			{/* Same 54px inset as the editor content column. */}
-			<div className="px-0 md:px-[54px]">
-				<Backlinks pageId={pageId} />
-			</div>
+			{bodyMode !== "loading" ? (
+				/* Same 54px inset as the editor content column. */
+				<div className="px-0 md:px-[54px]">
+					<Backlinks pageId={pageId} />
+				</div>
+			) : null}
 		</div>
 	);
 }

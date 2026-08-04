@@ -25,6 +25,7 @@ import {
 	pageTitleName,
 } from "./model";
 import { serverPageSchema } from "./page-schema";
+import { CANVAS_SEEDED_KEY } from "./seed-marker";
 import { updateSharedText } from "./y-text";
 
 const pageEditor = ServerBlockNoteEditor.create({ schema: serverPageSchema });
@@ -251,7 +252,7 @@ export function canvasToYDoc(snapshot: CanvasSnapshot): Y.Doc {
 		if (snapshot.schema && typeof snapshot.schema === "object") {
 			meta.set("schema", snapshot.schema);
 		}
-		meta.set("canvasSeeded", true);
+		meta.set(CANVAS_SEEDED_KEY, true);
 	});
 	return doc;
 }
@@ -284,7 +285,7 @@ export function replaceCanvasSnapshot(
 		} else {
 			meta.delete("schema");
 		}
-		meta.set("canvasSeeded", true);
+		meta.set(CANVAS_SEEDED_KEY, true);
 	});
 }
 

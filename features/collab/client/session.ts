@@ -13,6 +13,9 @@ export type CollabRoom = {
 	provider: LiveblocksYjsProvider;
 	/** True once the initial server document has been applied to the doc. */
 	synced: boolean;
+	/** True once a valid, server-seeded document has loaded from this user's
+	 * local IndexedDB cache. Remote synchronization may still be in progress. */
+	localReady: boolean;
 };
 
 const COLLAB_CONNECT_TIMEOUT_MS = 8000;
@@ -82,34 +85,42 @@ export type CollabSession =
 	/** The authoritative document is unavailable; projections stay read-only. */
 	| { status: "unavailable" };
 
+export function isCollabRoomReady(room: CollabRoom | null): boolean {
+	return room?.synced === true || room?.localReady === true;
+}
+
 /**
  * The full collaboration lifecycle for one room, including the connect
  * timeout. Consumers render a loading state during "connecting" and the last
  * materialized projection read-only when the authoritative room is unavailable.
  */
-export function useCollabSession(roomId: string): CollabSession {
+export function useCollabSession(
+	roomId: string,
+	userId: string | null,
+): CollabSession {
 	const [room, setRoom] = useState<CollabRoom | null>(null);
 	const [unavailable, setUnavailable] = useState(false);
-	const synced = room?.synced === true;
+	const ready = isCollabRoomReady(room);
 
 	useEffect(() => {
 		setRoom(null);
 		setUnavailable(false);
 		let disposed = false;
 		let unbind: (() => void) | null = null;
+		if (!userId) return;
 		void import("./liveblocks").then(({ bindRoom }) => {
 			if (disposed) return;
-			unbind = bindRoom(roomId, setRoom);
+			unbind = bindRoom(roomId, userId, setRoom);
 		});
 		return () => {
 			disposed = true;
 			unbind?.();
 			setRoom(null);
 		};
-	}, [roomId]);
+	}, [roomId, userId]);
 
 	useEffect(() => {
-		if (synced) {
+		if (ready) {
 			// A slow initial websocket/auth handshake can outlive the bounded
 			// read-only fallback. Recover automatically when that same room finally
 			// synchronizes instead of requiring a page reload.
@@ -121,9 +132,9 @@ export function useCollabSession(roomId: string): CollabSession {
 			COLLAB_CONNECT_TIMEOUT_MS,
 		);
 		return () => clearTimeout(timer);
-	}, [synced]);
+	}, [ready]);
 
 	if (unavailable) return { status: "unavailable" };
-	if (room && synced) return { status: "ready", room };
+	if (room && ready) return { status: "ready", room };
 	return { status: "connecting" };
 }

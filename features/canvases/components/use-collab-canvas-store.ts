@@ -19,6 +19,7 @@ import { haunterShapeUtils } from "@/features/canvases/lib/shape-utils";
 import { isLoadableSnapshot } from "@/features/canvases/lib/snapshot";
 import type { CollabRoom } from "@/features/collab/client/session";
 import { CANVAS_META_NAME } from "@/features/documents/model";
+import { CANVAS_SEEDED_KEY } from "@/features/documents/seed-marker";
 
 export type CanvasCollabUser = { id: string; name: string; color: string };
 
@@ -48,6 +49,7 @@ export function useCollabCanvasStore(
 	user?: CanvasCollabUser,
 	canEdit = true,
 ): TLStoreWithStatus {
+	const { doc, provider } = room;
 	const [storeWithStatus, setStoreWithStatus] = useState<TLStoreWithStatus>({
 		status: "loading",
 	});
@@ -66,8 +68,8 @@ export function useCollabCanvasStore(
 			shapeUtils: haunterShapeUtils,
 			bindingUtils: defaultBindingUtils,
 		});
-		const yRecords = room.doc.getMap<TLRecord>("tldraw");
-		const meta = room.doc.getMap<unknown>(CANVAS_META_NAME);
+		const yRecords = doc.getMap<TLRecord>("tldraw");
+		const meta = doc.getMap<unknown>(CANVAS_META_NAME);
 
 		if (yRecords.size > 0) {
 			// The shared doc already has the drawing — it wins over the DB copy.
@@ -90,13 +92,13 @@ export function useCollabCanvasStore(
 				// older failed seed left only the marker behind, an empty map is
 				// therefore safe to repair from the database snapshot.
 				const seeded = store.getStoreSnapshot().store;
-				room.doc.transact(() => {
+				doc.transact(() => {
 					// Document scope only: session records (instance, camera, user)
 					// must never enter the shared map or persisted DB snapshot.
 					for (const record of Object.values(seeded)) {
 						yRecords.set(record.id, record as TLRecord);
 					}
-					meta.set("canvasSeeded", true);
+					meta.set(CANVAS_SEEDED_KEY, true);
 				});
 			}
 		}
@@ -105,9 +107,9 @@ export function useCollabCanvasStore(
 		// projections need this to decode records created after a tldraw upgrade.
 		const normalizedSchema = store.getStoreSnapshot().schema;
 		if (canEdit) {
-			room.doc.transact(() => {
+			doc.transact(() => {
 				meta.set("schema", normalizedSchema);
-				meta.set("canvasSeeded", true);
+				meta.set(CANVAS_SEEDED_KEY, true);
 			});
 		}
 
@@ -116,7 +118,7 @@ export function useCollabCanvasStore(
 		const unsubscribe = canEdit
 			? store.listen(
 					({ changes }) => {
-						room.doc.transact(() => {
+						doc.transact(() => {
 							for (const record of Object.values(changes.added)) {
 								yRecords.set(record.id, record);
 							}
@@ -150,8 +152,8 @@ export function useCollabCanvasStore(
 		yRecords.observe(observer);
 
 		// --- Presence: remote cursors -----------------------------------
-		const awareness = room.provider.awareness;
-		const ownClientId = room.doc.clientID;
+		const awareness = provider.awareness;
+		const ownClientId = doc.clientID;
 		// Ids derive from awareness client ids so a departing peer's record
 		// can be removed without knowing anything else about them.
 		const presenceId = InstancePresenceRecordType.createId(String(ownClientId));
@@ -202,11 +204,20 @@ export function useCollabCanvasStore(
 			removed: [],
 		});
 
-		setStoreWithStatus({
-			status: "synced-remote",
-			connectionStatus: "online",
-			store,
-		});
+		const publishStoreStatus = () => {
+			setStoreWithStatus(
+				provider.synced
+					? {
+							status: "synced-remote",
+							connectionStatus: "online",
+							store,
+						}
+					: { status: "synced-local", store },
+			);
+		};
+		provider.on("synced", publishStoreStatus);
+		provider.on("sync", publishStoreStatus);
+		publishStoreStatus();
 
 		if (process.env.NODE_ENV === "development") {
 			// Dev-only handle for inspecting presence flow from the console.
@@ -217,13 +228,15 @@ export function useCollabCanvasStore(
 
 		return () => {
 			stopPresencePush();
+			provider.off("synced", publishStoreStatus);
+			provider.off("sync", publishStoreStatus);
 			awareness.off("update", applyPeerPresence);
 			awareness.setLocalStateField("tldraw", null);
 			yRecords.unobserve(observer);
 			unsubscribe?.();
 			setStoreWithStatus({ status: "loading" });
 		};
-	}, [room, canEdit]);
+	}, [doc, provider, canEdit]);
 
 	return storeWithStatus;
 }

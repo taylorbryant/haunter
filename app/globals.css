@@ -1329,9 +1329,8 @@ html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
 	outline: none;
 }
 
-/* Drop BlockNote's 54px inline gutter from the first mobile paint. Both the
-   read-only projection and collaborative editor use this class so switching
-   between them cannot change the document width. */
+/* Drop BlockNote's 54px inline gutter from the first mobile paint. Both
+   editable and public read-only documents use the same mobile content width. */
 @media (max-width: 767px) {
 	.editor-mobile-flush .bn-editor {
 		padding-inline: 0;

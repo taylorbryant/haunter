@@ -81,7 +81,11 @@ function MemberCanvasSurface({
 	layoutKey?: string;
 }) {
 	const canvasQuery = useQuery(getCanvasQueryOptions(canvasId));
-	const collabSession = useCollabSession(documentRoomId("canvas", canvasId));
+	const currentUser = useCurrentUser();
+	const collabSession = useCollabSession(
+		documentRoomId("canvas", canvasId),
+		currentUser?.id ?? null,
+	);
 	const canEdit = useCanEditWorkspace();
 
 	if (canvasQuery.isPending || collabSession.status === "connecting") {
@@ -209,7 +213,12 @@ function CollabCanvasSurface({
 		canEdit,
 	);
 	const synchronizedSnapshot = useMemo(() => {
-		if (storeWithStatus.status !== "synced-remote") return null;
+		if (
+			storeWithStatus.status !== "synced-remote" &&
+			storeWithStatus.status !== "synced-local"
+		) {
+			return null;
+		}
 		return storeWithStatus.store.getStoreSnapshot() as unknown as Record<
 			string,
 			unknown

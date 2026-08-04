@@ -2,51 +2,82 @@
 
 import { type Client, createClient, type Room } from "@liveblocks/client";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
+import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import type { WorkspaceEvent } from "@/features/collab/workspace-events";
+import {
+	isUsableLocalDocument,
+	localDocumentCacheName,
+} from "./local-document-cache";
 import { type PresencePeer, presencePeersFromOthers } from "./presence-state";
 import type { CollabRoom } from "./session";
 
 /**
  * The Liveblocks/Yjs browser runtime. `session.ts` loads it dynamically so
  * the collaboration libraries are initialized only when a document room is
- * mounted in the client.
+ * mounted or deliberately preloaded in the client.
  */
 
-let client: Client | null = null;
+const clients = new Map<string, Client>();
 
-function getLiveblocksClient(): Client {
-	if (!client) {
-		client = createClient({ authEndpoint: "/api/liveblocks-auth" });
-	}
-	return client;
+function getLiveblocksClient(userId: string | null): Client {
+	const key = userId ? encodeURIComponent(userId) : "ephemeral";
+	const cached = clients.get(key);
+	if (cached) return cached;
+	const created = createClient({ authEndpoint: "/api/liveblocks-auth" });
+	clients.set(key, created);
+	return created;
 }
 
+type RoomSubscriber = (room: CollabRoom) => void;
+
 type CachedRoom = {
+	roomId: string;
 	room: Room;
 	doc: Y.Doc;
 	provider: LiveblocksYjsProvider;
+	persistence: IndexeddbPersistence | null;
+	localLoaded: boolean;
 	leave: () => void;
 	refs: number;
 	linger: ReturnType<typeof setTimeout> | null;
+	subscribers: Set<RoomSubscriber>;
+	onProviderSync: () => void;
+	onLocalSync: (() => void) | null;
 };
 
-/**
- * Rooms are ref-counted and linger briefly after their last consumer
- * unmounts: connecting + initial sync costs ~0.5s, so tearing the room down
- * on every navigation made hopping between pages feel slow. Revisiting a
- * lingering room is instant (already synced).
- */
+/** Rooms are keyed by account as well as room. This prevents a second account
+ * in the same browser from seeing another account's cached document while its
+ * own room authorization is still pending. */
 const roomCache = new Map<string, CachedRoom>();
 // Five minutes: the cold websocket upgrade to Liveblocks costs 1-2s
 // (server-side), so lingering rooms longer keeps typical hop-between-pages
-// sessions instant. Lingering docs are small; memory is not a concern at
-// this scale.
+// sessions instant. IndexedDB handles visits after the in-memory room expires.
 const ROOM_LINGER_MS = 5 * 60_000;
 const ROOM_SYNC_TIMEOUT_MS = 8000;
 
-function acquireRoom(roomId: string): CachedRoom {
-	const cached = roomCache.get(roomId);
+function cacheKeyFor(roomId: string, userId: string | null): string {
+	return `${userId ? encodeURIComponent(userId) : "ephemeral"}:${roomId}`;
+}
+
+function roomSnapshot(entry: CachedRoom): CollabRoom {
+	return {
+		doc: entry.doc,
+		provider: entry.provider,
+		synced: entry.provider.synced === true,
+		localReady:
+			entry.localLoaded && isUsableLocalDocument(entry.roomId, entry.doc),
+	};
+}
+
+function notifyRoomSubscribers(entry: CachedRoom) {
+	const snapshot = roomSnapshot(entry);
+	for (const subscriber of entry.subscribers) subscriber(snapshot);
+}
+
+function acquireRoom(roomId: string, userId: string | null): CachedRoom {
+	const cacheKey = cacheKeyFor(roomId, userId);
+	const cached = roomCache.get(cacheKey);
 	if (cached) {
 		if (cached.linger) {
 			clearTimeout(cached.linger);
@@ -55,41 +86,65 @@ function acquireRoom(roomId: string): CachedRoom {
 		cached.refs += 1;
 		return cached;
 	}
-	const { room, leave } = getLiveblocksClient().enterRoom(roomId);
+
+	const { room, leave } = getLiveblocksClient(userId).enterRoom(roomId);
 	const doc = new Y.Doc();
 	const provider = new LiveblocksYjsProvider(room, doc);
+	const persistence = userId
+		? new IndexeddbPersistence(localDocumentCacheName(userId, roomId), doc)
+		: null;
 	const entry: CachedRoom = {
+		roomId,
 		room,
 		doc,
 		provider,
+		persistence,
+		localLoaded: persistence?.synced === true,
 		leave,
 		refs: 1,
 		linger: null,
+		subscribers: new Set(),
+		onProviderSync: () => notifyRoomSubscribers(entry),
+		onLocalSync: null,
 	};
-	roomCache.set(roomId, entry);
+
+	provider.on("synced", entry.onProviderSync);
+	provider.on("sync", entry.onProviderSync);
+	if (persistence) {
+		entry.onLocalSync = () => {
+			entry.localLoaded = true;
+			// Liveblocks intentionally does not stream IndexedDB updates one by one.
+			// Re-run the state-vector exchange after the local merge so offline edits
+			// are sent and remote edits are applied to this same Y.Doc in place.
+			provider.rootDocHandler.syncDoc();
+			notifyRoomSubscribers(entry);
+		};
+		persistence.on("synced", entry.onLocalSync);
+	}
+	roomCache.set(cacheKey, entry);
 	return entry;
 }
 
-/**
- * Subscribe to native Liveblocks presence. Unlike Yjs awareness, this also
- * includes short-lived server identities published while an agent tool runs.
- */
+/** Subscribe to native Liveblocks presence. Unlike Yjs awareness, this also
+ * includes short-lived server identities published while an agent tool runs. */
 export function subscribeToRoomPresence(
 	roomId: string,
+	userId: string,
 	onChange: (peers: PresencePeer[]) => void,
 ): () => void {
-	const { room } = acquireRoom(roomId);
+	const { room } = acquireRoom(roomId, userId);
 	const update = () => onChange(presencePeersFromOthers(room.getOthers()));
 	const unsubscribe = room.subscribe("others", update);
 	update();
 	return () => {
 		unsubscribe();
-		releaseRoom(roomId);
+		releaseRoom(roomId, userId);
 	};
 }
 
-function releaseRoom(roomId: string) {
-	const entry = roomCache.get(roomId);
+function releaseRoom(roomId: string, userId: string | null) {
+	const cacheKey = cacheKeyFor(roomId, userId);
+	const entry = roomCache.get(cacheKey);
 	if (!entry) return;
 	entry.refs -= 1;
 	if (entry.refs > 0) return;
@@ -97,10 +152,16 @@ function releaseRoom(roomId: string) {
 	// (no ghost cursors while the room lingers), tear down after the linger.
 	entry.provider.awareness.setLocalState(null);
 	entry.linger = setTimeout(() => {
-		roomCache.delete(roomId);
+		roomCache.delete(cacheKey);
+		entry.provider.off("synced", entry.onProviderSync);
+		entry.provider.off("sync", entry.onProviderSync);
+		if (entry.persistence && entry.onLocalSync) {
+			entry.persistence.off("synced", entry.onLocalSync);
+		}
+		// Destroying the provider destroys the Y.Doc; y-indexeddb listens for
+		// that event and closes its database without clearing the persisted data.
 		entry.provider.destroy();
 		entry.leave();
-		entry.doc.destroy();
 	}, ROOM_LINGER_MS);
 }
 
@@ -123,43 +184,41 @@ function waitForRoomSync(provider: LiveblocksYjsProvider): Promise<boolean> {
 	});
 }
 
-/**
- * Run one bounded mutation against a synced room without making it a React
- * session. The normal room cache keeps the provider alive long enough to send
- * any Yjs update after the callback releases its reference.
- */
+/** Run one bounded mutation against a remotely synced room without making it
+ * a React session. Server-mutating helpers must not trust a local cache. */
 export async function withSyncedRoom<T>(
 	roomId: string,
 	run: (room: CollabRoom) => T | Promise<T>,
 ): Promise<T | null> {
-	const { doc, provider } = acquireRoom(roomId);
+	const { doc, provider } = acquireRoom(roomId, null);
 	try {
 		if (!(await waitForRoomSync(provider))) return null;
-		return await run({ doc, provider, synced: true });
+		return await run({ doc, provider, synced: true, localReady: false });
 	} finally {
-		releaseRoom(roomId);
+		releaseRoom(roomId, null);
 	}
 }
 
-/**
- * Bind one consumer to a room: acquire (or reuse) the cached room, push a
- * fresh CollabRoom snapshot into onChange as sync state changes, and return
- * the cleanup that unsubscribes and releases the reference.
- */
+/** Start loading the editor's room before navigation commits. Releasing the
+ * preload reference keeps the connected room in the normal linger cache. */
+export function preloadRoom(roomId: string, userId: string): void {
+	acquireRoom(roomId, userId);
+	releaseRoom(roomId, userId);
+}
+
+/** Bind one consumer to a room and publish readiness changes from both the
+ * local IndexedDB document and the remote Liveblocks provider. */
 export function bindRoom(
 	roomId: string,
-	onChange: (room: CollabRoom) => void,
+	userId: string,
+	onChange: RoomSubscriber,
 ): () => void {
-	const { doc, provider } = acquireRoom(roomId);
-	const update = () =>
-		onChange({ doc, provider, synced: provider.synced === true });
-	provider.on("synced", update);
-	provider.on("sync", update);
-	update();
+	const entry = acquireRoom(roomId, userId);
+	entry.subscribers.add(onChange);
+	onChange(roomSnapshot(entry));
 	return () => {
-		provider.off("synced", update);
-		provider.off("sync", update);
-		releaseRoom(roomId);
+		entry.subscribers.delete(onChange);
+		releaseRoom(roomId, userId);
 	};
 }
 
@@ -167,12 +226,13 @@ export function bindRoom(
  * invalidation hints. Document rooms remain separately scoped per page/canvas. */
 export function bindWorkspaceEvents(
 	roomId: string,
+	userId: string,
 	input: {
 		onEvent(event: WorkspaceEvent): void;
 		onConnected(): void;
 	},
 ): () => void {
-	const { room, leave } = getLiveblocksClient().enterRoom<
+	const { room, leave } = getLiveblocksClient(userId).enterRoom<
 		Record<string, never>,
 		Record<string, never>,
 		WorkspaceEvent

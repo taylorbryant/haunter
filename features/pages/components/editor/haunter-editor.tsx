@@ -300,8 +300,15 @@ type HaunterEditorProps = {
  * Publishes the other people currently in this page to the presence store;
  * the app header renders the chips (next to "Edited X ago").
  */
-function PresencePublisher({ pageId }: { pageId: string }) {
+function PresencePublisher({
+	pageId,
+	userId,
+}: {
+	pageId: string;
+	userId: string | null;
+}) {
 	useEffect(() => {
+		if (!userId) return;
 		let disposed = false;
 		let unsubscribe: (() => void) | null = null;
 		void import("@/features/collab/client/liveblocks").then(
@@ -309,6 +316,7 @@ function PresencePublisher({ pageId }: { pageId: string }) {
 				if (disposed) return;
 				unsubscribe = subscribeToRoomPresence(
 					documentRoomId("page", pageId),
+					userId,
 					setCollabPresence,
 				);
 			},
@@ -318,7 +326,7 @@ function PresencePublisher({ pageId }: { pageId: string }) {
 			unsubscribe?.();
 			setCollabPresence([]);
 		};
-	}, [pageId]);
+	}, [pageId, userId]);
 
 	return null;
 }
@@ -594,7 +602,7 @@ export default function HaunterEditor({
 					</Button>
 				</div>
 			) : null}
-			<PresencePublisher pageId={pageId} />
+			<PresencePublisher pageId={pageId} userId={currentUserId} />
 			<TaskBlockCurrentUserContext.Provider value={currentUserId}>
 				<BlockNoteView
 					editor={editor}

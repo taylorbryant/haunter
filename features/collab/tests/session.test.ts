@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import * as Y from "yjs";
 import {
 	type CollabRoom,
+	isCollabRoomReady,
 	waitForCollabPersistence,
 } from "@/features/collab/client/session";
 
@@ -36,8 +37,22 @@ function roomWith(provider: FakeProvider): CollabRoom {
 		doc: new Y.Doc(),
 		provider: provider as unknown as CollabRoom["provider"],
 		synced: true,
+		localReady: false,
 	};
 }
+
+describe("collaboration readiness", () => {
+	it("mounts from either a valid local document or remote synchronization", () => {
+		const provider = new FakeProvider("loading");
+		const room = roomWith(provider);
+		expect(isCollabRoomReady({ ...room, synced: false })).toBe(false);
+		expect(
+			isCollabRoomReady({ ...room, synced: false, localReady: true }),
+		).toBe(true);
+		expect(isCollabRoomReady({ ...room, synced: true })).toBe(true);
+		room.doc.destroy();
+	});
+});
 
 describe("collaboration persistence", () => {
 	it("waits for a local quiet period and provider acknowledgement", async () => {

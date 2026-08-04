@@ -24,6 +24,7 @@ import {
 	useState,
 } from "react";
 import { userErrorMessage } from "@/client/error-feedback";
+import { useCurrentUser } from "@/components/app-session-provider";
 import { useCommand } from "@/components/command-palette/registry";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import {
@@ -67,6 +68,7 @@ import {
 	SidebarMenuSub,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { documentRoomId } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	focusTitleOnArrival,
@@ -207,6 +209,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const queryClient = useQueryClient();
+	const currentUser = useCurrentUser();
 	const { isMobile, setOpenMobile, setSuppressMobileFinalFocus } = useSidebar();
 	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 	// Viewers browse the tree but get no create/rename/move/delete controls.
@@ -516,8 +519,23 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		(pageId: string) => {
 			if (pageId === activePageId) return;
 			void queryClient.prefetchQuery(getPageQueryOptions(pageId));
+			// The browser module cache deduplicates repeated pointer intent events.
+			void import("./editor/haunter-editor");
 		},
 		[activePageId, queryClient],
+	);
+
+	const preloadPageRoom = useCallback(
+		(pageId: string) => {
+			if (pageId === activePageId || !currentUser) return;
+			// Only start a websocket when intent is strong (focus or press), rather
+			// than opening rooms for every row crossed by the pointer.
+			void import("@/features/collab/client/liveblocks").then(
+				({ preloadRoom }) =>
+					preloadRoom(documentRoomId("page", pageId), currentUser.id),
+			);
+		},
+		[activePageId, currentUser],
 	);
 
 	function siblingsOf(parentId: string | null): TreeNode[] {
@@ -708,8 +726,14 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							render={
 								<Link
 									href={`/w/${workspaceId}/p/${node.id}`}
-									onFocus={() => prefetchPage(node.id)}
-									onPointerDown={() => prefetchPage(node.id)}
+									onFocus={() => {
+										prefetchPage(node.id);
+										preloadPageRoom(node.id);
+									}}
+									onPointerDown={() => {
+										prefetchPage(node.id);
+										preloadPageRoom(node.id);
+									}}
 									onPointerEnter={() => prefetchPage(node.id)}
 									// On mobile, tapping a page navigates and closes the
 									// sidebar sheet so the page is visible immediately.

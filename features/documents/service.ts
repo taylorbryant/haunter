@@ -5,7 +5,6 @@ import type { CanvasRepository } from "@/features/canvases/ports";
 import type { MemberRepository } from "@/features/members/ports";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import { reconcilePageDerivations } from "@/features/pages/lib/apply-page-content";
-import { COLLAB_SEEDED_KEY } from "@/features/pages/lib/collab-document";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import {
 	PAGE_CHECKPOINT_INTERVAL_MS,
@@ -30,14 +29,9 @@ import {
 	pageToYDoc,
 	yDocFromUpdate,
 } from "./codec";
-import {
-	CANVAS_META_NAME,
-	DOCUMENT_SEED_LEASE_MS,
-	type DocumentKind,
-	documentId,
-	PAGE_META_NAME,
-} from "./model";
+import { DOCUMENT_SEED_LEASE_MS, type DocumentKind, documentId } from "./model";
 import type { DocumentRegistryRepository, DocumentStorePort } from "./ports";
+import { isCollaborativeDocumentSeeded } from "./seed-marker";
 import { bytesToBase64 } from "./server-encoding";
 import {
 	pageTaskAttributionOperations,
@@ -58,9 +52,7 @@ type DocumentPorts = {
 };
 
 function seededMarker(doc: Y.Doc, kind: DocumentKind): boolean {
-	return kind === "page"
-		? doc.getMap(PAGE_META_NAME).get(COLLAB_SEEDED_KEY) === true
-		: doc.getMap(CANVAS_META_NAME).get("canvasSeeded") === true;
+	return isCollaborativeDocumentSeeded(doc, kind);
 }
 
 const SEED_WAIT_INTERVAL_MS = 50;
