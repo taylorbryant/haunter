@@ -23,6 +23,10 @@ export interface DocumentRegistryRepository {
 		kind: DocumentKind,
 		entityId: string,
 	): Promise<CollaborativeDocument | null>;
+	listByKind(
+		scope: TenantScope,
+		kind: DocumentKind,
+	): Promise<CollaborativeDocument[]>;
 	createPending(
 		scope: TenantScope,
 		input: NewCollaborativeDocument,

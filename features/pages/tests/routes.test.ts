@@ -28,6 +28,7 @@ import {
 	createPage,
 	deletePage,
 	getPage,
+	getPageBootstrap,
 	getPageNavigation,
 	listPages,
 	recordPageView,
@@ -222,10 +223,15 @@ describe("pageRoutes", () => {
 		const fetched = await requester.request(getPage, {
 			path: { id: created.id },
 		});
+		const bootstrap = await requester.request(getPageBootstrap, {
+			path: { id: created.id },
+		});
 
 		await app.stop();
 
 		expect(fetched.content).toMatchObject(initialContent);
+		expect(bootstrap.content).toMatchObject(initialContent);
+		expect(bootstrap.documentCacheEpoch).toStartWith("1:");
 		expect(created.contentUpdatedAt).toBe(fetched.contentUpdatedAt);
 	});
 

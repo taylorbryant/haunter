@@ -33,6 +33,7 @@ import {
 	createPageUseCase,
 	deletePageUseCase,
 	getPageNavigationUseCase,
+	getPageBootstrapUseCase,
 	getPageUseCase,
 	getPageVersionUseCase,
 	listBacklinksUseCase,
@@ -344,6 +345,49 @@ describe("pages use cases", () => {
 		expect(result.documentCacheEpoch).toStartWith("1:");
 	});
 
+	it("loads the page bootstrap without reading the authoritative document store", async () => {
+		const pages = createTestPageRepository();
+		const workspaceId = crypto.randomUUID().replaceAll("-", "");
+		const baseStore = createTestDocumentStore();
+		let countReads = false;
+		let readCount = 0;
+		const documentStore: DocumentStorePort = {
+			...baseStore,
+			async readBinaryUpdate(documentId) {
+				if (countReads) readCount += 1;
+				return baseStore.readBinaryUpdate(documentId);
+			},
+		};
+		const tester = createTester(
+			"bootstrap_user",
+			pages,
+			workspaceId,
+			createTestTaskRepository({ pages }),
+			"owner",
+			createTestPageNavigationRepository({ pages }),
+			documentStore,
+		);
+		const ctx = await tester.ctx();
+		const page = await tester.run(
+			createPageUseCase,
+			{ workspaceId, title: "Projected title" },
+			{ ctx },
+		);
+
+		countReads = true;
+		const bootstrap = await tester.run(
+			getPageBootstrapUseCase,
+			{ id: page.id },
+			{ ctx },
+		);
+		expect(bootstrap.title).toBe("Projected title");
+		expect(bootstrap.documentCacheEpoch).toStartWith("1:");
+		expect(readCount).toBe(0);
+
+		await tester.run(getPageUseCase, { id: page.id }, { ctx });
+		expect(readCount).toBeGreaterThan(0);
+	});
+
 	it("creates nested pages and lists workspace pages as meta only", async () => {
 		const { workspace, tester, ctx } = await createFixture();
 
@@ -405,6 +449,9 @@ describe("pages use cases", () => {
 		expect(backlinks.items.map((page) => page.id)).toEqual([root.id]);
 		expect(listed.items).toHaveLength(2);
 		expect(listed.items.every((item) => !("content" in item))).toBe(true);
+		expect(
+			listed.items.every((item) => item.documentCacheEpoch?.startsWith("1:")),
+		).toBe(true);
 	});
 
 	it("lets the editor place a new subpage block at the cursor", async () => {

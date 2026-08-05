@@ -64,6 +64,13 @@ export function createTestDocumentRegistryRepository(): DocumentRegistryReposito
 				) ?? null
 			);
 		},
+		async listByKind(scope, kind) {
+			return Array.from(documents.values()).filter(
+				(document) =>
+					document.workspaceId === tenantScopeId(scope) &&
+					document.kind === kind,
+			);
+		},
 		async createPending(scope, input) {
 			const existing = await this.findByEntity(
 				scope,

@@ -2,6 +2,7 @@ export { appendPageContentUseCase } from "./append-page-content";
 export { createPageUseCase } from "./create-page";
 export { deletePageUseCase } from "./delete-page";
 export { getPageUseCase } from "./get-page";
+export { getPageBootstrapUseCase } from "./get-page-bootstrap";
 export { getPageNavigationUseCase } from "./get-page-navigation";
 export { getPageVersionUseCase } from "./get-page-version";
 export { listBacklinksUseCase } from "./list-backlinks";

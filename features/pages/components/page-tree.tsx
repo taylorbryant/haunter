@@ -68,7 +68,6 @@ import {
 	SidebarMenuSub,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import { documentRoomId } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	focusTitleOnArrival,
@@ -76,10 +75,14 @@ import {
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
 import {
+	preloadPageCollaboration,
+	preloadPageResources,
+} from "@/features/pages/client/preload-page";
+import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
+	getPageBootstrapQueryOptions,
 	getPageNavigationQueryOptions,
-	getPageQueryOptions,
 	invalidatePage,
 	invalidatePageNavigation,
 	invalidatePages,
@@ -99,6 +102,7 @@ import { flushPendingPageSave } from "@/features/pages/client/save-state";
 import {
 	PAGE_TITLE_MAX_LENGTH,
 	PAGE_TITLE_TOO_LONG_MESSAGE,
+	type PageListItem,
 	type PageMeta,
 } from "@/features/pages/schemas";
 import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
@@ -124,7 +128,7 @@ const MarkdownImportDialog = dynamic(
 	{ ssr: false },
 );
 
-type TreeNode = PageMeta & { children: TreeNode[] };
+type TreeNode = PageListItem & { children: TreeNode[] };
 const PAGE_TREE_SKELETON_ROWS = [
 	"page-tree-a",
 	"page-tree-b",
@@ -132,7 +136,7 @@ const PAGE_TREE_SKELETON_ROWS = [
 	"page-tree-d",
 ];
 
-function buildTree(pages: PageMeta[]): TreeNode[] {
+function buildTree(pages: PageListItem[]): TreeNode[] {
 	const nodes = new Map<string, TreeNode>(
 		pages.map((page) => [page.id, { ...page, children: [] }]),
 	);
@@ -150,7 +154,7 @@ function buildTree(pages: PageMeta[]): TreeNode[] {
 	return roots;
 }
 
-function buildTreeIndex(pages: PageMeta[]) {
+function buildTreeIndex(pages: PageListItem[]) {
 	const tree = buildTree(pages);
 	const nodesById = new Map<string, TreeNode>();
 	const subtreeIdsById = new Map<string, Set<string>>();
@@ -226,7 +230,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	// Observe the same page cache as PageEditor. Its title is projected from the
 	// authoritative Yjs document, so it remains current while SQLite catches up.
 	const activePageQuery = useQuery({
-		...getPageQueryOptions(activePageId ?? ""),
+		...getPageBootstrapQueryOptions(activePageId ?? ""),
 		enabled: synced && activePageId !== null,
 	});
 	const createMutation = useMutation({
@@ -518,9 +522,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const prefetchPage = useCallback(
 		(pageId: string) => {
 			if (pageId === activePageId) return;
-			void queryClient.prefetchQuery(getPageQueryOptions(pageId));
-			// The browser module cache deduplicates repeated pointer intent events.
-			void import("./editor/haunter-editor");
+			preloadPageResources(queryClient, pageId);
 		},
 		[activePageId, queryClient],
 	);
@@ -530,19 +532,11 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			if (pageId === activePageId || !currentUser) return;
 			// Only start a websocket when intent is strong (focus or press), rather
 			// than opening rooms for every row crossed by the pointer.
-			void Promise.all([
-				queryClient.ensureQueryData(getPageQueryOptions(pageId)),
-				import("@/features/collab/client/liveblocks"),
-			]).then(([page, { preloadRoom }]) => {
-				if (!page.documentCacheEpoch) return;
-				preloadRoom(
-					documentRoomId("page", pageId),
-					currentUser.id,
-					page.documentCacheEpoch,
-				);
-			});
+			const page = nodesById.get(pageId);
+			if (!page) return;
+			preloadPageCollaboration(pageId, currentUser.id, page.documentCacheEpoch);
 		},
-		[activePageId, currentUser, queryClient],
+		[activePageId, currentUser, nodesById],
 	);
 
 	function siblingsOf(parentId: string | null): TreeNode[] {

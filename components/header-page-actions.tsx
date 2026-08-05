@@ -42,6 +42,7 @@ import {
 import { downloadPageMarkdown } from "@/features/pages/client/markdown-files";
 import {
 	deletePageMutationOptions,
+	getPageBootstrapQueryOptions,
 	getPageNavigationQueryOptions,
 	getPageQueryOptions,
 	invalidatePageNavigation,
@@ -79,7 +80,7 @@ export function HeaderPageActions() {
 	const canEdit = useCanEditWorkspace();
 	const isMobile = useIsMobile();
 	const pageQuery = useQuery({
-		...getPageQueryOptions(pageId ?? ""),
+		...getPageBootstrapQueryOptions(pageId ?? ""),
 		enabled: Boolean(pageId && synced),
 	});
 	const navigationQuery = useQuery({

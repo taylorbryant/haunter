@@ -66,6 +66,18 @@ export function createDrizzleDocumentRegistryRepository(
 				.limit(1);
 			return row ? toDocument(row) : null;
 		},
+		async listByKind(scope, kind) {
+			const rows = await db
+				.select()
+				.from(schema.collabDocuments)
+				.where(
+					and(
+						eq(schema.collabDocuments.workspaceId, tenantScopeId(scope)),
+						eq(schema.collabDocuments.kind, kind),
+					),
+				);
+			return rows.map(toDocument);
+		},
 		async createPending(scope, input) {
 			const now = new Date().toISOString();
 			const [row] = await db

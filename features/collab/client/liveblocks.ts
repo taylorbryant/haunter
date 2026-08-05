@@ -4,6 +4,7 @@ import { type Client, createClient, type Room } from "@liveblocks/client";
 import { LiveblocksYjsProvider } from "@liveblocks/yjs";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
+import { markLoadStage, measureLoadStage } from "@/client/load-performance";
 import type { WorkspaceEvent } from "@/features/collab/workspace-events";
 import {
 	isUsableLocalDocument,
@@ -46,6 +47,10 @@ type CachedRoom = {
 	subscribers: Set<RoomSubscriber>;
 	onProviderSync: () => void;
 	onLocalSync: (() => void) | null;
+	unsubscribeStatus: () => void;
+	socketConnectMeasured: boolean;
+	remoteSyncMeasured: boolean;
+	localSyncMeasured: boolean;
 };
 
 /** Rooms are keyed by account as well as room. This prevents a second account
@@ -63,6 +68,7 @@ function destroyCachedRoom(cacheKey: string, entry: CachedRoom) {
 	roomCache.delete(cacheKey);
 	entry.provider.off("synced", entry.onProviderSync);
 	entry.provider.off("sync", entry.onProviderSync);
+	entry.unsubscribeStatus();
 	if (entry.persistence && entry.onLocalSync) {
 		entry.persistence.off("synced", entry.onLocalSync);
 	}
@@ -125,6 +131,7 @@ function acquireRoom(
 	const cacheKey = cacheKeyFor(roomId, userId, cacheEpoch);
 	const cached = roomCache.get(cacheKey);
 	if (cached) {
+		markLoadStage(`collab:${roomId}`, "room-reused");
 		if (cached.linger) {
 			clearTimeout(cached.linger);
 			cached.linger = null;
@@ -133,6 +140,8 @@ function acquireRoom(
 		return cached;
 	}
 	retireOtherDocumentEpochs(roomId, userId, cacheEpoch);
+	const performanceScope = `collab:${roomId}`;
+	markLoadStage(performanceScope, "room-open-start");
 
 	const { room, leave } = getLiveblocksClient(userId).enterRoom(roomId);
 	const doc = new Y.Doc();
@@ -157,15 +166,52 @@ function acquireRoom(
 		refs: 1,
 		linger: null,
 		subscribers: new Set(),
-		onProviderSync: () => notifyRoomSubscribers(entry),
+		onProviderSync: () => {
+			if (provider.synced && !entry.remoteSyncMeasured) {
+				entry.remoteSyncMeasured = true;
+				markLoadStage(performanceScope, "remote-synced");
+				measureLoadStage(
+					performanceScope,
+					"remote-sync-duration",
+					"room-open-start",
+					"remote-synced",
+				);
+			}
+			notifyRoomSubscribers(entry);
+		},
 		onLocalSync: null,
+		unsubscribeStatus: () => {},
+		socketConnectMeasured: false,
+		remoteSyncMeasured: false,
+		localSyncMeasured: false,
 	};
+	entry.unsubscribeStatus = room.subscribe("status", (status) => {
+		if (status !== "connected" || entry.socketConnectMeasured) return;
+		entry.socketConnectMeasured = true;
+		markLoadStage(performanceScope, "socket-connected");
+		measureLoadStage(
+			performanceScope,
+			"socket-connect-duration",
+			"room-open-start",
+			"socket-connected",
+		);
+	});
 
 	provider.on("synced", entry.onProviderSync);
 	provider.on("sync", entry.onProviderSync);
 	if (persistence) {
 		entry.onLocalSync = () => {
 			entry.localLoaded = true;
+			if (!entry.localSyncMeasured) {
+				entry.localSyncMeasured = true;
+				markLoadStage(performanceScope, "local-cache-ready");
+				measureLoadStage(
+					performanceScope,
+					"local-cache-duration",
+					"room-open-start",
+					"local-cache-ready",
+				);
+			}
 			// Liveblocks intentionally does not stream IndexedDB updates one by one.
 			// Re-run the state-vector exchange after the local merge so offline edits
 			// are sent and remote edits are applied to this same Y.Doc in place.
@@ -259,7 +305,7 @@ export async function withSyncedRoom<T>(
 export function preloadRoom(
 	roomId: string,
 	userId: string,
-	cacheEpoch: string,
+	cacheEpoch: string | null,
 ): void {
 	acquireRoom(roomId, userId, cacheEpoch);
 	releaseRoom(roomId, userId, cacheEpoch);

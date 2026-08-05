@@ -2,9 +2,9 @@ import { isAppError } from "@beignet/core/errors";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { notFound } from "next/navigation";
 import { makeQueryClient } from "@/client";
-import { getPageQueryOptions } from "@/features/pages/client/queries";
+import { getPageBootstrapQueryOptions } from "@/features/pages/client/queries";
 import { PageEditor } from "@/features/pages/components/page-editor";
-import { getPageUseCase } from "@/features/pages/use-cases";
+import { getPageBootstrapUseCase } from "@/features/pages/use-cases";
 import {
 	getAppRequestContext,
 	serverUseCaseQueryOptions,
@@ -26,8 +26,8 @@ export default async function PagePage({
 		try {
 			const page = await queryClient.fetchQuery(
 				serverUseCaseQueryOptions(
-					getPageQueryOptions(pageId),
-					getPageUseCase,
+					getPageBootstrapQueryOptions(pageId),
+					getPageBootstrapUseCase,
 					ctx,
 					{ id: pageId },
 				),

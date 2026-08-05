@@ -189,12 +189,24 @@ export const PageDetailSchema = PageSchema.extend({
 	documentCacheEpoch: z.string().min(1).nullable(),
 });
 
+/**
+ * SQLite-backed data used to render the page shell and provide an explicitly
+ * stale, read-only fallback while the authoritative Yjs document connects.
+ */
+export const PageBootstrapSchema = PageDetailSchema;
+
+export const PageListItemSchema = PageMetaSchema.extend({
+	/** Provider-document incarnation used to open the local Yjs cache without
+	 * waiting for a per-page detail request. */
+	documentCacheEpoch: z.string().min(1).nullable(),
+});
+
 export const ListPagesInputSchema = z.object({
 	workspaceId: z.string().min(1),
 });
 
 export const ListPagesOutputSchema = z.object({
-	items: z.array(PageMetaSchema),
+	items: z.array(PageListItemSchema),
 });
 
 export const PageNavigationItemSchema = PageMetaSchema.extend({
@@ -352,11 +364,13 @@ export const SearchPagesOutputSchema = z.object({
 });
 
 export type PageMeta = z.infer<typeof PageMetaSchema>;
+export type PageListItem = z.infer<typeof PageListItemSchema>;
 export type PageNavigationItem = z.infer<typeof PageNavigationItemSchema>;
 export type PageNavigationOutput = z.infer<typeof PageNavigationOutputSchema>;
 export type SearchResult = z.infer<typeof SearchResultSchema>;
 export type Page = z.infer<typeof PageSchema>;
 export type PageDetail = z.infer<typeof PageDetailSchema>;
+export type PageBootstrap = z.infer<typeof PageBootstrapSchema>;
 export type CreatePageInput = z.infer<typeof CreatePageInputSchema>;
 export type CreatePageOutput = z.infer<typeof CreatePageOutputSchema>;
 export type UpdatePageInput = z.infer<typeof UpdatePageInputSchema>;

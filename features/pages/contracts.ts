@@ -8,6 +8,7 @@ import {
 	ListPageVersionsOutputSchema,
 	ListTrashOutputSchema,
 	PageDetailSchema,
+	PageBootstrapSchema,
 	PageIdInputSchema,
 	PageMetaSchema,
 	PageNavigationOutputSchema,
@@ -114,6 +115,17 @@ export const getPage = pages
 	})
 	.responses({
 		200: PageDetailSchema,
+	});
+
+export const getPageBootstrap = pages
+	.get("/api/pages/:id/bootstrap")
+	.pathParams(PageIdInputSchema)
+	.errors({
+		Forbidden: errors.Forbidden,
+		PageNotFound: errors.PageNotFound,
+	})
+	.responses({
+		200: PageBootstrapSchema,
 	});
 
 export const updatePage = pages

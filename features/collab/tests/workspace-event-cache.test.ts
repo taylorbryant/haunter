@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import {
 	getPageQueryOptions,
+	getPageBootstrapQueryOptions,
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
 import { listNotificationsQueryOptions } from "@/features/notifications/client/queries";
@@ -46,8 +47,12 @@ describe("workspace event cache reconciliation", () => {
 		const queryClient = new QueryClient();
 		const rootQuery = getPageQueryOptions("root");
 		const childQuery = getPageQueryOptions("child");
+		const rootBootstrapQuery = getPageBootstrapQueryOptions("root");
+		const childBootstrapQuery = getPageBootstrapQueryOptions("child");
 		queryClient.setQueryData(rootQuery.queryKey, { id: "root" });
 		queryClient.setQueryData(childQuery.queryKey, { id: "child" });
+		queryClient.setQueryData(rootBootstrapQuery.queryKey, { id: "root" });
+		queryClient.setQueryData(childBootstrapQuery.queryKey, { id: "child" });
 
 		await invalidateWorkspacePageProjections(queryClient, "workspace_1", [
 			"root",
@@ -60,6 +65,12 @@ describe("workspace event cache reconciliation", () => {
 		expect(queryClient.getQueryState(childQuery.queryKey)?.isInvalidated).toBe(
 			true,
 		);
+		expect(
+			queryClient.getQueryState(rootBootstrapQuery.queryKey)?.isInvalidated,
+		).toBe(true);
+		expect(
+			queryClient.getQueryState(childBootstrapQuery.queryKey)?.isInvalidated,
+		).toBe(true);
 	});
 
 	it("invalidates task projections after a workspace task event", async () => {

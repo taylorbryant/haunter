@@ -4,6 +4,7 @@ import {
 	createPage,
 	deletePage,
 	getPage,
+	getPageBootstrap,
 	getPageNavigation,
 	getPageVersion,
 	listBacklinks,
@@ -21,6 +22,7 @@ import {
 import type {
 	BlockJson,
 	Page,
+	PageDetail,
 	PageMeta,
 	PageNavigationOutput,
 } from "@/features/pages/schemas";
@@ -36,6 +38,27 @@ export function listPagesQueryOptions(workspaceId: string) {
 
 export function getPageQueryOptions(id: string) {
 	return rq(getPage).queryOptions({ path: { id } });
+}
+
+export function getPageBootstrapQueryOptions(id: string) {
+	return rq(getPageBootstrap).queryOptions({ path: { id } });
+}
+
+function pageDetailQueryKeys(id: string): QueryKey[] {
+	return [
+		rq(getPage).key({ path: { id } }),
+		rq(getPageBootstrap).key({ path: { id } }),
+	];
+}
+
+function setPageDetailQueries(
+	queryClient: QueryClient,
+	id: string,
+	updater: (current: PageDetail | undefined) => PageDetail | undefined,
+) {
+	for (const queryKey of pageDetailQueryKeys(id)) {
+		queryClient.setQueryData<PageDetail>(queryKey, updater);
+	}
 }
 
 export function getPageNavigationQueryOptions(workspaceId: string) {
@@ -195,7 +218,11 @@ export function invalidateTrash(queryClient: QueryClient) {
 }
 
 export function invalidatePage(queryClient: QueryClient, id: string) {
-	return rq(getPage).invalidate(queryClient, { path: { id } });
+	return Promise.all(
+		pageDetailQueryKeys(id).map((queryKey) =>
+			queryClient.invalidateQueries({ queryKey, exact: true }),
+		),
+	);
 }
 
 /**
@@ -209,9 +236,8 @@ export function setPageIconInCache(
 	id: string,
 	icon: string | null,
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) => (current ? { ...current, icon } : current),
+	setPageDetailQueries(queryClient, id, (current) =>
+		current ? { ...current, icon } : current,
 	);
 	queryClient.setQueriesData<{ items: PageMeta[] }>(
 		rq(listPages).filter(),
@@ -252,10 +278,8 @@ export function setPageSavedAtInCache(
 	updatedAt: string,
 	contentUpdatedAt: string,
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) =>
-			current ? { ...current, updatedAt, contentUpdatedAt } : current,
+	setPageDetailQueries(queryClient, id, (current) =>
+		current ? { ...current, updatedAt, contentUpdatedAt } : current,
 	);
 	queryClient.setQueriesData<PageNavigationOutput>(
 		rq(getPageNavigation).filter(),
@@ -285,9 +309,8 @@ export function setPageTitleInCache(
 	title: string,
 	updatedAt: string,
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) => (current ? { ...current, title, updatedAt } : current),
+	setPageDetailQueries(queryClient, id, (current) =>
+		current ? { ...current, title, updatedAt } : current,
 	);
 	queryClient.setQueriesData<{ items: PageMeta[] }>(
 		rq(listPages).filter(),
@@ -328,9 +351,8 @@ export function setSharedPageTitleInCache(
 	id: string,
 	title: string,
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) => (current ? { ...current, title } : current),
+	setPageDetailQueries(queryClient, id, (current) =>
+		current ? { ...current, title } : current,
 	);
 	queryClient.setQueriesData<{ items: PageMeta[] }>(
 		rq(listPages).filter(),
@@ -365,11 +387,11 @@ export function setSharedPageTitleInCache(
  * the startup race where the shared document is ready before listPages and the
  * later list response would otherwise put the projected title back on screen.
  */
-export function projectPageTitleIntoList(
-	pages: PageMeta[],
+export function projectPageTitleIntoList<TPage extends PageMeta>(
+	pages: TPage[],
 	id: string,
 	title: string,
-): PageMeta[] {
+): TPage[] {
 	const page = pages.find((item) => item.id === id);
 	if (!page || page.title === title) return pages;
 	return pages.map((item) => (item.id === id ? { ...item, title } : item));
@@ -394,9 +416,11 @@ export async function optimisticallySetPageTitle(
 	fallback: PageTitleCacheSnapshot,
 ): Promise<PageTitleCacheSnapshot> {
 	await Promise.all([
-		queryClient.cancelQueries(
-			{ queryKey: rq(getPage).key({ path: { id } }), exact: true },
-			{ revert: false, silent: true },
+		...pageDetailQueryKeys(id).map((queryKey) =>
+			queryClient.cancelQueries(
+				{ queryKey, exact: true },
+				{ revert: false, silent: true },
+			),
 		),
 		queryClient.cancelQueries(
 			{
@@ -415,14 +439,14 @@ export async function optimisticallySetPageTitle(
 	]);
 
 	const candidates: PageTitleCacheSnapshot[] = [fallback];
-	const fullPage = queryClient.getQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-	);
-	if (fullPage) {
-		candidates.push({
-			previousTitle: fullPage.title,
-			previousUpdatedAt: fullPage.updatedAt,
-		});
+	for (const queryKey of pageDetailQueryKeys(id)) {
+		const fullPage = queryClient.getQueryData<Page>(queryKey);
+		if (fullPage) {
+			candidates.push({
+				previousTitle: fullPage.title,
+				previousUpdatedAt: fullPage.updatedAt,
+			});
+		}
 	}
 	const listedPage = queryClient
 		.getQueryData<{ items: PageMeta[] }>(
@@ -450,12 +474,10 @@ export function restorePageTitleInCache(
 	previousTitle: string,
 	previousUpdatedAt: string,
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) =>
-			current?.title === optimisticTitle
-				? { ...current, title: previousTitle, updatedAt: previousUpdatedAt }
-				: current,
+	setPageDetailQueries(queryClient, id, (current) =>
+		current?.title === optimisticTitle
+			? { ...current, title: previousTitle, updatedAt: previousUpdatedAt }
+			: current,
 	);
 	queryClient.setQueriesData<{ items: PageMeta[] }>(
 		rq(listPages).filter(),
@@ -580,9 +602,8 @@ export function setPageContentInCache(
 	id: string,
 	content: BlockJson[],
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) => (current ? { ...current, content } : current),
+	setPageDetailQueries(queryClient, id, (current) =>
+		current ? { ...current, content } : current,
 	);
 }
 

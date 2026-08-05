@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import {
 	getPageNavigationQueryOptions,
+	getPageBootstrapQueryOptions,
 	getPageQueryOptions,
 	listPagesQueryOptions,
 	optimisticallySetPagePlacement,
@@ -170,8 +171,13 @@ describe("page navigation cache", () => {
 			contentUpdatedAt: item.updatedAt,
 		};
 		const pageKey = getPageQueryOptions(item.id).queryKey;
+		const bootstrapKey = getPageBootstrapQueryOptions(item.id).queryKey;
 		const listKey = listPagesQueryOptions("workspace_test").queryKey;
 		queryClient.setQueryData(pageKey, fullPage);
+		queryClient.setQueryData(bootstrapKey, {
+			...fullPage,
+			documentCacheEpoch: "1:seeded",
+		});
 		queryClient.setQueryData(listKey, { items: [item] });
 		queryClient.setQueryData<PageNavigationOutput>(navigationKey, {
 			favorites: [{ ...item, favoritedAt: item.updatedAt, lastViewedAt: null }],
@@ -185,6 +191,9 @@ describe("page navigation cache", () => {
 			"2026-07-01T12:01:00.000Z",
 		);
 		expect(queryClient.getQueryData<Page>(pageKey)?.title).toBe(
+			"Optimistic title",
+		);
+		expect(queryClient.getQueryData<Page>(bootstrapKey)?.title).toBe(
 			"Optimistic title",
 		);
 		expect(
@@ -203,6 +212,9 @@ describe("page navigation cache", () => {
 			item.updatedAt,
 		);
 		expect(queryClient.getQueryData<Page>(pageKey)).toEqual(fullPage);
+		expect(queryClient.getQueryData<Page>(bootstrapKey)?.title).toBe(
+			item.title,
+		);
 
 		setPageTitleInCache(
 			queryClient,

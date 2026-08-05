@@ -20,7 +20,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-	getPageQueryOptions,
+	getPageBootstrapQueryOptions,
 	listPagesQueryOptions,
 	projectPageTitleIntoList,
 } from "@/features/pages/client/queries";
@@ -53,7 +53,7 @@ export function HeaderBreadcrumbs() {
 		enabled: workspaceId !== null && synced,
 	});
 	const activePageQuery = useQuery({
-		...getPageQueryOptions(pageId ?? ""),
+		...getPageBootstrapQueryOptions(pageId ?? ""),
 		enabled: pageId !== null && synced,
 	});
 

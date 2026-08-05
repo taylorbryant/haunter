@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
-import { getPageQueryOptions } from "@/features/pages/client/queries";
+import { getPageBootstrapQueryOptions } from "@/features/pages/client/queries";
 import { usePageSaveState } from "@/features/pages/client/save-state";
 import { formatEditedAt } from "@/features/pages/lib/format-edited-at";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
@@ -39,7 +39,7 @@ export function HeaderSaveIndicator() {
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 	const { synced } = useWorkspaceRouteSync(workspaceId);
 	const pageQuery = useQuery({
-		...getPageQueryOptions(pageId ?? ""),
+		...getPageBootstrapQueryOptions(pageId ?? ""),
 		enabled: pageId !== null,
 	});
 

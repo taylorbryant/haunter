@@ -37,6 +37,7 @@ export async function POST(req: Request) {
 			metadata: { rateLimit: { max: 300, windowSec: 60, scope: "user" } },
 		})
 		.handle(async ({ ctx, req: request }) => {
+			const startedAt = performance.now();
 			const userId = ctx.auth?.user.id;
 			if (!userId) {
 				return new Response(null, { status: 403 });
@@ -145,6 +146,11 @@ export async function POST(req: Request) {
 			}
 
 			const { status, body: token } = await session.authorize();
+			ctx.ports.logger.debug("Liveblocks room authorized", {
+				roomId: body.room,
+				roomKind: target.kind,
+				durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+			});
 			return new Response(token, {
 				status,
 				headers: { "content-type": "application/json" },

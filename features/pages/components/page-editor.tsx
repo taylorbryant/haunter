@@ -12,6 +12,7 @@ import {
 	useSyncExternalStore,
 } from "react";
 import { userErrorMessage } from "@/client/error-feedback";
+import { markLoadStage, measureLoadStage } from "@/client/load-performance";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +33,7 @@ import {
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
 import {
-	getPageQueryOptions,
+	getPageBootstrapQueryOptions,
 	invalidatePages,
 	recordPageViewMutationOptions,
 	setPageTitleInCache,
@@ -66,7 +67,7 @@ const haunterEditorLoader = createRetryableModuleLoader<HaunterEditorComponent>(
 	() => import("./editor/haunter-editor").then((module) => module.default),
 );
 
-function useHaunterEditorComponent() {
+function useHaunterEditorComponent(pageId: string) {
 	const [component, setComponent] = useState<HaunterEditorComponent | null>(
 		() => haunterEditorLoader.loaded,
 	);
@@ -76,9 +77,18 @@ function useHaunterEditorComponent() {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: attempt is an explicit retry signal for a rejected dynamic import
 	useEffect(() => {
 		let active = true;
+		const scope = `page:${pageId}`;
+		markLoadStage(scope, "editor-module-start");
 		void haunterEditorLoader.load().then(
 			(loaded) => {
 				if (!active) return;
+				markLoadStage(scope, "editor-module-ready");
+				measureLoadStage(
+					scope,
+					"editor-module-duration",
+					"editor-module-start",
+					"editor-module-ready",
+				);
 				setComponent(() => loaded);
 				setLoadError(false);
 			},
@@ -89,7 +99,7 @@ function useHaunterEditorComponent() {
 		return () => {
 			active = false;
 		};
-	}, [attempt]);
+	}, [attempt, pageId]);
 
 	const retry = useCallback(() => {
 		setLoadError(false);
@@ -149,7 +159,7 @@ function resizeTitleTextarea(textarea: HTMLTextAreaElement | null) {
 
 export function PageEditor({ pageId }: { pageId: string }) {
 	const queryClient = useQueryClient();
-	const pageQuery = useQuery(getPageQueryOptions(pageId));
+	const pageQuery = useQuery(getPageBootstrapQueryOptions(pageId));
 	const updatePageMutation = useMutation({
 		...updatePageMutationOptions(),
 		meta: { errorMode: "inline" },
@@ -185,7 +195,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		component: CollaborativeEditor,
 		loadError: editorLoadError,
 		retry: retryEditorLoad,
-	} = useHaunterEditorComponent();
+	} = useHaunterEditorComponent(pageId);
 	const documentGeneration = useDocumentGeneration(collabRoom);
 	const { sharedTitle, pushTitle } = useSharedTitle(
 		collabRoom,
@@ -207,6 +217,49 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	activePageIdRef.current = pageId;
 	const [editorFocusRequest, setEditorFocusRequest] = useState(0);
 	const recordedViewPageIdRef = useRef<string | null>(null);
+	const bootstrapPageIdRef = useRef<string | null>(null);
+	const interactivePageIdRef = useRef<string | null>(null);
+
+	useEffect(() => {
+		markLoadStage(`page:${pageId}`, "shell-mounted");
+	}, [pageId]);
+
+	useEffect(() => {
+		if (!pageQuery.data || bootstrapPageIdRef.current === pageId) return;
+		bootstrapPageIdRef.current = pageId;
+		markLoadStage(`page:${pageId}`, "bootstrap-ready");
+		measureLoadStage(
+			`page:${pageId}`,
+			"intent-to-bootstrap",
+			"navigation-intent",
+			"bootstrap-ready",
+		);
+	}, [pageId, pageQuery.data]);
+
+	useEffect(() => {
+		if (
+			!pageQuery.data ||
+			collabSession.status !== "ready" ||
+			CollaborativeEditor === null ||
+			interactivePageIdRef.current === pageId
+		) {
+			return;
+		}
+		interactivePageIdRef.current = pageId;
+		markLoadStage(`page:${pageId}`, "editor-interactive");
+		measureLoadStage(
+			`page:${pageId}`,
+			"shell-to-interactive",
+			"shell-mounted",
+			"editor-interactive",
+		);
+		measureLoadStage(
+			`page:${pageId}`,
+			"intent-to-interactive",
+			"navigation-intent",
+			"editor-interactive",
+		);
+	}, [CollaborativeEditor, collabSession.status, pageId, pageQuery.data]);
 
 	// Reset local title state when navigating between pages.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on page change
