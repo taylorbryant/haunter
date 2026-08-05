@@ -9,6 +9,7 @@ export const PAGE_ACTIVE_GENERATION_KEY = "activePageGeneration";
 export const CANVAS_RECORDS_NAME = "tldraw";
 export const CANVAS_META_NAME = "haunter-meta";
 export const DOCUMENT_SEED_LEASE_MS = 2 * 60 * 1000;
+export const DOCUMENT_PROVIDER_VERIFICATION_TTL_MS = 5 * 60 * 1000;
 
 export function activePageGeneration(doc: Y.Doc): string | null {
 	const value = doc
@@ -48,11 +49,30 @@ export type CollaborativeDocument = {
 	revision: number;
 	lastStateVector: string | null;
 	seededAt: string | null;
+	lastProviderVerifiedAt: string | null;
 	lastProjectedAt: string | null;
 	lastError: string | null;
 	createdAt: string;
 	updatedAt: string;
 };
+
+/** Provider verification is an availability/integrity check, not an
+ * authorization cache. User, workspace, and role checks still run for every
+ * room token request. */
+export function isProviderVerificationFresh(
+	document: Pick<CollaborativeDocument, "state" | "lastProviderVerifiedAt">,
+	now = Date.now(),
+): boolean {
+	if (document.state !== "ready" || !document.lastProviderVerifiedAt) {
+		return false;
+	}
+	const verifiedAt = Date.parse(document.lastProviderVerifiedAt);
+	return (
+		Number.isFinite(verifiedAt) &&
+		verifiedAt <= now &&
+		verifiedAt >= now - DOCUMENT_PROVIDER_VERIFICATION_TTL_MS
+	);
+}
 
 export type DocumentTaskAttribution = {
 	id: string;

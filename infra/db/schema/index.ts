@@ -780,6 +780,7 @@ export const collabDocuments = sqliteTable(
 		revision: integer("revision").notNull().default(0),
 		lastStateVector: text("last_state_vector"),
 		seededAt: text("seeded_at"),
+		lastProviderVerifiedAt: text("last_provider_verified_at"),
 		lastProjectedAt: text("last_projected_at"),
 		lastError: text("last_error"),
 		createdAt: text("created_at").notNull(),

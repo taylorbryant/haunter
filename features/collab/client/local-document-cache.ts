@@ -26,3 +26,14 @@ export function isUsableLocalDocument(roomId: string, doc: Y.Doc): boolean {
 	if (!target || target.kind === "workspace") return false;
 	return isCollaborativeDocumentSeeded(doc, target.kind);
 }
+
+/** A provider can synchronize an empty Yjs document successfully. Treat the
+ * remote room as authoritative only when it also contains Haunter's seed
+ * marker. */
+export function isUsableRemoteDocument(
+	roomId: string,
+	doc: Y.Doc,
+	providerSynced: boolean,
+): boolean {
+	return providerSynced && isUsableLocalDocument(roomId, doc);
+}

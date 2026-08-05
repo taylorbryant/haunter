@@ -24,7 +24,10 @@ import {
 	replacePageTitle,
 	yDocFromUpdate,
 } from "@/features/documents/codec";
-import { documentCacheEpoch } from "@/features/documents/model";
+import {
+	DOCUMENT_PROVIDER_VERIFICATION_TTL_MS,
+	documentCacheEpoch,
+} from "@/features/documents/model";
 import type { DocumentStorePort } from "@/features/documents/ports";
 import {
 	ensureCollaborativeDocument,
@@ -129,6 +132,126 @@ async function createFixture(options: { applyDelayMs?: number } = {}) {
 }
 
 describe("authoritative collaborative documents", () => {
+	it("reuses a fresh provider verification but preserves forced checks", async () => {
+		const fixture = await createFixture();
+		try {
+			const page = await fixture.ports.pages.create(fixture.scope, {
+				userId: "document_user",
+				parentPageId: null,
+				title: "Verification cache",
+				position: 1,
+			});
+			const seeded = await ensureCollaborativeDocument({
+				scope: fixture.scope,
+				kind: "page",
+				entityId: page.id,
+				ports: fixture.ports,
+			});
+			let providerReads = 0;
+			const ports = {
+				...fixture.ports,
+				documentStore: {
+					...fixture.ports.documentStore,
+					async readBinaryUpdate(documentId: string) {
+						providerReads += 1;
+						return fixture.ports.documentStore.readBinaryUpdate(documentId);
+					},
+				},
+			};
+
+			const cached = await ensureCollaborativeDocument({
+				scope: fixture.scope,
+				kind: "page",
+				entityId: page.id,
+				ports,
+				verifyReady: "if-stale",
+			});
+			expect(providerReads).toBe(0);
+			expect(cached.providerVerification).toBe("cached");
+
+			const forced = await ensureCollaborativeDocument({
+				scope: fixture.scope,
+				kind: "page",
+				entityId: page.id,
+				ports,
+				verifyReady: true,
+			});
+			expect(providerReads).toBe(1);
+			expect(forced.providerVerification).toBe("provider");
+
+			const registered = await fixture.ports.documents.findByDocumentId(
+				fixture.scope,
+				seeded.documentId,
+			);
+			expect(registered?.lastProviderVerifiedAt).not.toBeNull();
+		} finally {
+			await fixture.database.close();
+		}
+	});
+
+	it("revalidates a stale provider verification", async () => {
+		const fixture = await createFixture();
+		try {
+			const page = await fixture.ports.pages.create(fixture.scope, {
+				userId: "document_user",
+				parentPageId: null,
+				title: "Stale verification",
+				position: 1,
+			});
+			const seeded = await ensureCollaborativeDocument({
+				scope: fixture.scope,
+				kind: "page",
+				entityId: page.id,
+				ports: fixture.ports,
+			});
+			const registered = await fixture.ports.documents.findByDocumentId(
+				fixture.scope,
+				seeded.documentId,
+			);
+			if (!registered) throw new Error("Expected a registered document");
+			const staleVerifiedAt = new Date(
+				Date.now() - DOCUMENT_PROVIDER_VERIFICATION_TTL_MS - 1_000,
+			).toISOString();
+			expect(
+				await fixture.ports.documents.markProviderVerified(
+					fixture.scope,
+					seeded.documentId,
+					{
+						expectedSeededAt: registered.seededAt,
+						verifiedAt: staleVerifiedAt,
+					},
+				),
+			).toBe(true);
+
+			let providerReads = 0;
+			const result = await ensureCollaborativeDocument({
+				scope: fixture.scope,
+				kind: "page",
+				entityId: page.id,
+				ports: {
+					...fixture.ports,
+					documentStore: {
+						...fixture.ports.documentStore,
+						async readBinaryUpdate(documentId: string) {
+							providerReads += 1;
+							return fixture.ports.documentStore.readBinaryUpdate(documentId);
+						},
+					},
+				},
+				verifyReady: "if-stale",
+			});
+			expect(providerReads).toBe(1);
+			expect(result.providerVerification).toBe("provider");
+			const reverified = await fixture.ports.documents.findByDocumentId(
+				fixture.scope,
+				seeded.documentId,
+			);
+			expect(reverified?.lastProviderVerifiedAt).not.toBe(staleVerifiedAt);
+		} finally {
+			await fixture.database.close();
+		}
+	});
+
 	it("serializes concurrent first seeds", async () => {
 		const fixture = await createFixture({ applyDelayMs: 25 });
 		try {
@@ -1335,6 +1458,25 @@ describe("authoritative collaborative documents", () => {
 			);
 			if (!afterRepair) throw new Error("Repaired document was not registered");
 			expect(documentCacheEpoch(afterRepair)).not.toBe(initialCacheEpoch);
+			const lateVerification = "2099-01-01T00:00:00.000Z";
+			expect(
+				await fixture.ports.documents.markProviderVerified(
+					fixture.scope,
+					repaired.documentId,
+					{
+						expectedSeededAt: beforeRepair.seededAt,
+						verifiedAt: lateVerification,
+					},
+				),
+			).toBe(false);
+			const afterLateVerification =
+				await fixture.ports.documents.findByDocumentId(
+					fixture.scope,
+					repaired.documentId,
+				);
+			expect(afterLateVerification?.lastProviderVerifiedAt).not.toBe(
+				lateVerification,
+			);
 			const update = await fixture.ports.documentStore.readBinaryUpdate(
 				repaired.documentId,
 			);

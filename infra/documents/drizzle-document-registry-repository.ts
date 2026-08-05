@@ -1,7 +1,7 @@
 import "@beignet/core/server-only";
 import { type TenantScope, tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { and, asc, desc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
 	type CollaborativeDocument,
 	DOCUMENT_SCHEMA_VERSION,
@@ -124,6 +124,7 @@ export function createDrizzleDocumentRegistryRepository(
 				.set({
 					state: "seeding",
 					lastError: null,
+					lastProviderVerifiedAt: null,
 					updatedAt: new Date().toISOString(),
 					revision: sql`${schema.collabDocuments.revision} + 1`,
 				})
@@ -160,6 +161,7 @@ export function createDrizzleDocumentRegistryRepository(
 					seededAt: now,
 					lastStateVector: input.stateVector,
 					lastError: null,
+					lastProviderVerifiedAt: now,
 					updatedAt: now,
 					revision: sql`${schema.collabDocuments.revision} + 1`,
 				})
@@ -168,6 +170,25 @@ export function createDrizzleDocumentRegistryRepository(
 						scopedWhere(scope, id),
 						eq(schema.collabDocuments.state, "seeding"),
 						eq(schema.collabDocuments.revision, input.expectedRevision),
+					),
+				)
+				.returning({ documentId: schema.collabDocuments.documentId });
+			return rows.length === 1;
+		},
+		async markProviderVerified(scope, id, input) {
+			const rows = await db
+				.update(schema.collabDocuments)
+				.set({
+					lastProviderVerifiedAt: input.verifiedAt,
+					updatedAt: input.verifiedAt,
+				})
+				.where(
+					and(
+						scopedWhere(scope, id),
+						eq(schema.collabDocuments.state, "ready"),
+						input.expectedSeededAt === null
+							? isNull(schema.collabDocuments.seededAt)
+							: eq(schema.collabDocuments.seededAt, input.expectedSeededAt),
 					),
 				)
 				.returning({ documentId: schema.collabDocuments.documentId });

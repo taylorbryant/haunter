@@ -53,6 +53,18 @@ export interface DocumentRegistryRepository {
 		documentId: string,
 		input: { stateVector: string; expectedRevision: number },
 	): Promise<boolean>;
+	/** Record a successful provider read only if the verified provider
+	 * incarnation is still current. `seededAt` changes whenever a room is
+	 * repaired, which fences a late verification from validating its
+	 * replacement. */
+	markProviderVerified(
+		scope: TenantScope,
+		documentId: string,
+		input: {
+			expectedSeededAt: string | null;
+			verifiedAt: string;
+		},
+	): Promise<boolean>;
 	markProjected(
 		scope: TenantScope,
 		documentId: string,

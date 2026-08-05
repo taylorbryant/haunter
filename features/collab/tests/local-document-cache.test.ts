@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import * as Y from "yjs";
 import {
 	isUsableLocalDocument,
+	isUsableRemoteDocument,
 	localDocumentCacheName,
 } from "@/features/collab/client/local-document-cache";
 import { documentRoomId, workspaceRoomId } from "@/features/collab/lib/room";
@@ -59,6 +60,16 @@ describe("local collaborative document cache", () => {
 		expect(isUsableLocalDocument(roomId, doc)).toBe(false);
 		doc.getMap(PAGE_META_NAME).set(COLLAB_SEEDED_KEY, true);
 		expect(isUsableLocalDocument(roomId, doc)).toBe(true);
+		doc.destroy();
+	});
+
+	it("keeps remotely synchronized empty rooms from becoming authoritative", () => {
+		const roomId = documentRoomId("page", PAGE_ID);
+		const doc = new Y.Doc();
+		expect(isUsableRemoteDocument(roomId, doc, true)).toBe(false);
+		doc.getMap(PAGE_META_NAME).set(COLLAB_SEEDED_KEY, true);
+		expect(isUsableRemoteDocument(roomId, doc, false)).toBe(false);
+		expect(isUsableRemoteDocument(roomId, doc, true)).toBe(true);
 		doc.destroy();
 	});
 

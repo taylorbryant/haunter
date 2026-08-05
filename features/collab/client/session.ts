@@ -13,7 +13,8 @@ export type CollabRoom = {
 	provider: LiveblocksYjsProvider;
 	/** Server-issued provider-document incarnation used by the local cache. */
 	cacheEpoch: string | null;
-	/** True once the initial server document has been applied to the doc. */
+	/** True once the initial server document has been applied and Haunter's
+	 * server-written seed marker is present. */
 	synced: boolean;
 	/** True once a valid, server-seeded document has loaded from this user's
 	 * local IndexedDB cache. Remote synchronization may still be in progress. */

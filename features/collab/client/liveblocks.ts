@@ -8,6 +8,7 @@ import { markLoadStage, measureLoadStage } from "@/client/load-performance";
 import type { WorkspaceEvent } from "@/features/collab/workspace-events";
 import {
 	isUsableLocalDocument,
+	isUsableRemoteDocument,
 	localDocumentCacheName,
 } from "./local-document-cache";
 import { type PresencePeer, presencePeersFromOthers } from "./presence-state";
@@ -108,13 +109,20 @@ function cacheKeyFor(
 }
 
 function roomSnapshot(entry: CachedRoom): CollabRoom {
+	const seeded = isUsableLocalDocument(entry.roomId, entry.doc);
 	return {
 		doc: entry.doc,
 		provider: entry.provider,
 		cacheEpoch: entry.cacheEpoch,
-		synced: entry.provider.synced === true,
-		localReady:
-			entry.localLoaded && isUsableLocalDocument(entry.roomId, entry.doc),
+		// Provider synchronization alone is not enough: an accidentally empty or
+		// partially seeded room is a valid Yjs document. Keep it read-only until
+		// Haunter's server-written seed marker is present.
+		synced: isUsableRemoteDocument(
+			entry.roomId,
+			entry.doc,
+			entry.provider.synced === true,
+		),
+		localReady: entry.localLoaded && seeded,
 	};
 }
 

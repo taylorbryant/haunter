@@ -29,7 +29,13 @@ import {
 	pageToYDoc,
 	yDocFromUpdate,
 } from "./codec";
-import { DOCUMENT_SEED_LEASE_MS, type DocumentKind, documentId } from "./model";
+import {
+	type CollaborativeDocument,
+	DOCUMENT_SEED_LEASE_MS,
+	type DocumentKind,
+	documentId,
+	isProviderVerificationFresh,
+} from "./model";
 import type { DocumentRegistryRepository, DocumentStorePort } from "./ports";
 import { isCollaborativeDocumentSeeded } from "./seed-marker";
 import { bytesToBase64 } from "./server-encoding";
@@ -53,6 +59,24 @@ type DocumentPorts = {
 
 function seededMarker(doc: Y.Doc, kind: DocumentKind): boolean {
 	return isCollaborativeDocumentSeeded(doc, kind);
+}
+
+type ReadyVerificationMode = boolean | "if-stale";
+type ProviderVerificationResult = "cached" | "not-requested" | "provider";
+
+function skippedProviderVerificationResult(
+	mode: ReadyVerificationMode,
+): ProviderVerificationResult {
+	return mode === "if-stale" ? "cached" : "not-requested";
+}
+
+function readyDocumentNeedsProviderVerification(
+	document: CollaborativeDocument | null,
+	mode: ReadyVerificationMode,
+): boolean {
+	if (mode === true) return true;
+	if (mode !== "if-stale") return false;
+	return document === null || !isProviderVerificationFresh(document);
 }
 
 const SEED_WAIT_INTERVAL_MS = 50;
@@ -144,15 +168,21 @@ export async function ensureCollaborativeDocument(input: {
 	kind: DocumentKind;
 	entityId: string;
 	ports: DocumentPorts;
-	/** Re-read the provider document even when the registry is ready. Room auth
-	 * uses this to repair a provider-side deletion before a client can join an
-	 * empty authoritative room. Ordinary reads skip the extra provider request. */
-	verifyReady?: boolean;
+	/** Re-read the provider document even when the registry is ready. `true`
+	 * remains a forced recovery check for server reads and mutations;
+	 * `"if-stale"` lets room authorization reuse a recent successful provider
+	 * verification without caching any user or workspace authorization. */
+	verifyReady?: ReadyVerificationMode;
 	/** Replace a ready provider document from the current SQLite projection.
 	 * This is reserved for the final SQLite-to-Yjs backfill while writes are
 	 * paused; it must never run after the provider becomes authoritative. */
 	refreshFromProjection?: boolean;
-}): Promise<{ documentId: string; seeded: boolean; refreshed: boolean }> {
+}): Promise<{
+	documentId: string;
+	seeded: boolean;
+	refreshed: boolean;
+	providerVerification: ProviderVerificationResult;
+}> {
 	const {
 		scope,
 		kind,
@@ -163,11 +193,16 @@ export async function ensureCollaborativeDocument(input: {
 	} = input;
 	const id = documentId(kind, entityId);
 	const existing = await ports.documents.findByEntity(scope, kind, entityId);
-	if (existing?.state === "ready" && !verifyReady && !refreshFromProjection) {
+	if (
+		existing?.state === "ready" &&
+		!readyDocumentNeedsProviderVerification(existing, verifyReady) &&
+		!refreshFromProjection
+	) {
 		return {
 			documentId: existing.documentId,
 			seeded: false,
 			refreshed: false,
+			providerVerification: skippedProviderVerificationResult(verifyReady),
 		};
 	}
 
@@ -189,15 +224,47 @@ export async function ensureCollaborativeDocument(input: {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		if (registered.state === "ready") {
 			if (refreshFromProjection) refreshingReady = true;
-			if (!verifyReady && !refreshFromProjection) {
-				return { documentId: id, seeded: false, refreshed: false };
+			if (
+				!readyDocumentNeedsProviderVerification(registered, verifyReady) &&
+				!refreshFromProjection
+			) {
+				return {
+					documentId: id,
+					seeded: false,
+					refreshed: false,
+					providerVerification: skippedProviderVerificationResult(verifyReady),
+				};
 			}
 			const remoteUpdate = await ports.documentStore.readBinaryUpdate(id);
 			if (remoteUpdate) {
 				const remote = yDocFromUpdate(remoteUpdate);
 				try {
 					if (seededMarker(remote, kind) && !refreshFromProjection) {
-						return { documentId: id, seeded: false, refreshed: false };
+						const verifiedAt = new Date().toISOString();
+						if (
+							!(await ports.documents.markProviderVerified(scope, id, {
+								expectedSeededAt: registered.seededAt,
+								verifiedAt,
+							}))
+						) {
+							const current = await ports.documents.findByDocumentId(scope, id);
+							if (!current) {
+								throw new Error(
+									`Collaborative document ${id} is not registered`,
+								);
+							}
+							registered =
+								current.state === "seeding"
+									? await waitForSeedResolution(scope, id, ports.documents)
+									: current;
+							continue;
+						}
+						return {
+							documentId: id,
+							seeded: false,
+							refreshed: false,
+							providerVerification: "provider",
+						};
 					}
 				} finally {
 					remote.destroy();
@@ -243,7 +310,12 @@ export async function ensureCollaborativeDocument(input: {
 						) {
 							throw new Error(`Lost the seed claim for ${id}`);
 						}
-						return { documentId: id, seeded: false, refreshed: false };
+						return {
+							documentId: id,
+							seeded: false,
+							refreshed: false,
+							providerVerification: "provider",
+						};
 					}
 				} finally {
 					remote.destroy();
@@ -286,6 +358,7 @@ export async function ensureCollaborativeDocument(input: {
 				documentId: id,
 				seeded: !refreshingReady,
 				refreshed: refreshingReady,
+				providerVerification: "provider",
 			};
 		} catch (error) {
 			await ports.documents.markError(scope, id, {
@@ -298,8 +371,17 @@ export async function ensureCollaborativeDocument(input: {
 		}
 	}
 
-	if (registered.state === "ready") {
-		return { documentId: id, seeded: false, refreshed: false };
+	if (
+		registered.state === "ready" &&
+		!refreshFromProjection &&
+		!readyDocumentNeedsProviderVerification(registered, verifyReady)
+	) {
+		return {
+			documentId: id,
+			seeded: false,
+			refreshed: false,
+			providerVerification: skippedProviderVerificationResult(verifyReady),
+		};
 	}
 	throw new Error(`Collaborative document ${id} could not be seeded`);
 }

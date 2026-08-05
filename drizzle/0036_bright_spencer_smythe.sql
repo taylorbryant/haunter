@@ -1,0 +1,1 @@
+ALTER TABLE `collab_documents` ADD `last_provider_verified_at` text;

@@ -87,6 +87,7 @@ export function createTestDocumentRegistryRepository(): DocumentRegistryReposito
 				revision: 0,
 				lastStateVector: null,
 				seededAt: null,
+				lastProviderVerifiedAt: null,
 				lastProjectedAt: null,
 				lastError: null,
 				createdAt: now,
@@ -116,6 +117,7 @@ export function createTestDocumentRegistryRepository(): DocumentRegistryReposito
 				state: "seeding",
 				revision: current.revision + 1,
 				lastError: null,
+				lastProviderVerifiedAt: null,
 				updatedAt: new Date().toISOString(),
 			};
 			documents.set(documentId, claimed);
@@ -151,7 +153,23 @@ export function createTestDocumentRegistryRepository(): DocumentRegistryReposito
 				lastStateVector: input.stateVector,
 				seededAt: now,
 				lastError: null,
+				lastProviderVerifiedAt: now,
 				updatedAt: now,
+			});
+			return true;
+		},
+		async markProviderVerified(scope, documentId, input) {
+			const current = await this.findByDocumentId(scope, documentId);
+			if (
+				current?.state !== "ready" ||
+				current.seededAt !== input.expectedSeededAt
+			) {
+				return false;
+			}
+			documents.set(documentId, {
+				...current,
+				lastProviderVerifiedAt: input.verifiedAt,
+				updatedAt: input.verifiedAt,
 			});
 			return true;
 		},

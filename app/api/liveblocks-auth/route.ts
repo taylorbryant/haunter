@@ -85,6 +85,7 @@ export async function POST(req: Request) {
 			if (!role) {
 				return new Response(null, { status: 403 });
 			}
+			let providerVerification: "cached" | "provider" | null = null;
 			if (target.kind !== "workspace") {
 				try {
 					const ensured = await ensureCollaborativeDocument({
@@ -92,11 +93,13 @@ export async function POST(req: Request) {
 						kind: target.kind,
 						entityId: target.id,
 						ports: ctx.ports,
-						verifyReady: true,
+						verifyReady: "if-stale",
 					});
 					if (ensured.documentId !== body.room) {
 						return new Response(null, { status: 403 });
 					}
+					providerVerification =
+						ensured.providerVerification === "provider" ? "provider" : "cached";
 				} catch (error) {
 					ctx.ports.logger.error(
 						"Failed to prepare an authoritative document room",
@@ -149,6 +152,7 @@ export async function POST(req: Request) {
 			ctx.ports.logger.debug("Liveblocks room authorized", {
 				roomId: body.room,
 				roomKind: target.kind,
+				providerVerification,
 				durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
 			});
 			return new Response(token, {
