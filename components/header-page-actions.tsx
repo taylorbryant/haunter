@@ -34,12 +34,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
-import {
-	downloadPageHtml,
-	HtmlExportError,
-	pageHtmlSourceUrl,
-} from "@/features/pages/client/html-files";
-import { downloadPageMarkdown } from "@/features/pages/client/markdown-files";
+import { HtmlExportError } from "@/features/pages/client/html-export-error";
 import {
 	deletePageMutationOptions,
 	getPageNavigationQueryOptions,
@@ -122,11 +117,12 @@ export function HeaderPageActions() {
 	async function exportPage(format: "markdown" | "html") {
 		if (exporting) return;
 		setExporting(format);
-		const sourceUrl = pageHtmlSourceUrl(
-			window.location.origin,
-			activeWorkspaceId,
-			activePageId,
-		);
+		const markdownExport =
+			format === "markdown"
+				? import("@/features/pages/client/markdown-files")
+				: null;
+		const htmlExport =
+			format === "html" ? import("@/features/pages/client/html-files") : null;
 		try {
 			if (!(await flushPendingPageSave(activePageId))) {
 				reportUserError("Save this page before exporting it.");
@@ -179,14 +175,22 @@ export function HeaderPageActions() {
 					: Promise.resolve(null),
 			]);
 			if (format === "markdown") {
+				if (!markdownExport) throw new Error("Markdown export did not load");
+				const { downloadPageMarkdown } = await markdownExport;
 				downloadPageMarkdown(refreshed.title, refreshed.content);
 			} else {
+				if (!htmlExport) throw new Error("HTML export did not load");
+				const { downloadPageHtml, pageHtmlSourceUrl } = await htmlExport;
 				await downloadPageHtml({
 					title: refreshed.title,
 					icon: refreshed.icon,
 					content: refreshed.content,
 					resolvedTheme,
-					sourceUrl,
+					sourceUrl: pageHtmlSourceUrl(
+						window.location.origin,
+						activeWorkspaceId,
+						activePageId,
+					),
 					pageReferences: pageList?.items ?? [],
 				});
 			}

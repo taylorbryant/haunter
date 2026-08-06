@@ -74,11 +74,11 @@ import {
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
 import { appendSubpageLinkToOpenPage } from "@/features/pages/client/open-page-content";
+import { preloadHaunterEditor } from "@/features/pages/client/preload-editor";
 import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
 	getPageNavigationQueryOptions,
-	getPageQueryOptions,
 	invalidatePage,
 	invalidatePageNavigation,
 	invalidatePages,
@@ -508,9 +508,11 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const prefetchPage = useCallback(
 		(pageId: string) => {
 			if (pageId === activePageId) return;
-			void queryClient.prefetchQuery(getPageQueryOptions(pageId));
+			const href = `/w/${workspaceId}/p/${pageId}`;
+			router.prefetch(href);
+			void preloadHaunterEditor().catch(() => undefined);
 		},
-		[activePageId, queryClient],
+		[activePageId, router, workspaceId],
 	);
 
 	function siblingsOf(parentId: string | null): TreeNode[] {

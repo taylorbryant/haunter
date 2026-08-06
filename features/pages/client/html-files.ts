@@ -1,5 +1,6 @@
 "use client";
 
+import { HtmlExportError } from "@/features/pages/client/html-export-error";
 import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
 import { pageExportFilename } from "@/features/pages/lib/export-filename";
 import {
@@ -35,12 +36,7 @@ const EMBEDDABLE_IMAGE_TYPES = new Set([
 	"image/avif",
 ]);
 
-export class HtmlExportError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "HtmlExportError";
-	}
-}
+export { HtmlExportError } from "@/features/pages/client/html-export-error";
 
 function cssVariable(
 	style: CSSStyleDeclaration,
