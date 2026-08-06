@@ -12,17 +12,13 @@ import {
 import { userErrorMessage } from "@/client/error-feedback";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
-import { useCollabSession } from "@/features/collab/client/session";
-import { cursorColorFor, pageRoomId } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	consumeTitleFocus,
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
-import { registerOpenPageTitleWriter } from "@/features/pages/client/open-page-title";
 import {
 	getPageQueryOptions,
-	invalidatePage,
 	invalidatePages,
 	recordPageViewMutationOptions,
 	setPageTitleInCache,
@@ -36,7 +32,6 @@ import {
 	registerPageSaveFlusher,
 	setPageSaveState,
 } from "@/features/pages/client/save-state";
-import { useSharedTitle } from "@/features/pages/client/use-shared-title";
 import {
 	PAGE_TITLE_MAX_LENGTH,
 	PAGE_TITLE_TOO_LONG_MESSAGE,
@@ -47,19 +42,6 @@ import { EditorBodySkeleton, PageEditorSkeleton } from "./page-editor-skeleton";
 import { PageIconButton } from "./page-icon-picker";
 
 const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
-	ssr: false,
-	loading: () => (
-		<div className="py-2">
-			<EditorBodySkeleton />
-		</div>
-	),
-});
-
-// Shown while the collab room connects: the Liveblocks websocket upgrade
-// takes 1-2s on cold rooms (server-side; measured, not our stack), and the
-// page content is already fetched — so paint it read-only immediately
-// instead of a skeleton. The live editor swaps in when the room is ready.
-const ReadOnlyEditor = dynamic(() => import("./editor/read-only-editor"), {
 	ssr: false,
 	loading: () => (
 		<div className="py-2">
@@ -106,20 +88,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// Viewers get a read-only surface; the server denies their writes anyway,
 	// but the UI must not pretend edits will stick.
 	const readOnly = !useCanEditWorkspace();
-	// Cursor identity shown to collaborators when Liveblocks is configured.
 	const currentUser = useCurrentUser();
-	const collabUser = currentUser
-		? {
-				name: currentUser.name || currentUser.email || "Member",
-				color: cursorColorFor(currentUser.id),
-			}
-		: undefined;
-	// One shared room per page carries both the document and the title.
-	const collabSession = useCollabSession(pageRoomId(pageId));
-	const collabRoom =
-		collabSession.status === "ready" ? collabSession.room : null;
-	const { sharedTitle, pushTitle, replaceTitle, replaceTitleIfCurrent } =
-		useSharedTitle(collabRoom, pageQuery.data?.title ?? null);
 
 	const [title, setTitle] = useState<string | null>(null);
 	const [titleError, setTitleError] = useState<string | null>(null);
@@ -134,12 +103,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 			: titleSaveQueues.get(pageId);
 	const activePageIdRef = useRef(pageId);
 	activePageIdRef.current = pageId;
-	// Bumped when a save is rejected as stale: refetches the doc and remounts
-	// the editor on the newer version instead of clobbering it.
-	const [reloadCount, setReloadCount] = useState(0);
 	const [editorFocusRequest, setEditorFocusRequest] = useState(0);
-	const [conflictNotice, setConflictNotice] = useState(false);
-	const conflictTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const recordedViewPageIdRef = useRef<string | null>(null);
 
 	// Reset local title state when navigating between pages.
@@ -189,8 +153,8 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	}, [pageId, pageLoaded]);
 
 	// Metadata and document saves are independent registrations. Keeping the
-	// title flusher mounted at this level covers collaboration startup, the
-	// dynamically loaded editor fallback, and ordinary navigation cleanup.
+	// title flusher mounted at this level covers the dynamically loaded editor
+	// fallback and ordinary navigation cleanup.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: capture one page-scoped flusher until this page changes
 	useEffect(() => {
 		if (readOnly) return;
@@ -211,54 +175,13 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		};
 	}, [pageId, readOnly]);
 
-	useEffect(() => {
-		if (readOnly || !collabRoom) return;
-		return registerOpenPageTitleWriter(pageId, {
-			replace(nextTitle) {
-				const previousTitle = replaceTitle(nextTitle);
-				if (previousTitle === null)
-					throw new Error("Shared title is unavailable");
-				return previousTitle;
-			},
-			replaceIfCurrent: replaceTitleIfCurrent,
-		});
-	}, [pageId, readOnly, collabRoom, replaceTitle, replaceTitleIfCurrent]);
-
-	// A collaborator renamed the page: refresh the sidebar/breadcrumb lists
-	// (their PATCH already persisted it). Debounced — remote keystrokes
-	// arrive one by one.
-	const sidebarRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	useEffect(() => {
-		if (sharedTitle === null) return;
-		if (sidebarRefreshRef.current) clearTimeout(sidebarRefreshRef.current);
-		sidebarRefreshRef.current = setTimeout(() => {
-			invalidatePages(queryClient);
-		}, 1000);
-	}, [sharedTitle, queryClient]);
-
-	// Local typing wins while in flight; otherwise the shared live title;
-	// otherwise the database copy.
+	// Local typing wins while in flight; SQLite-backed query data is otherwise
+	// authoritative and workspace events refresh it after remote changes.
 	const shownTitle =
-		title ??
-		titleQueue.pending?.value ??
-		sharedTitle ??
-		pageQuery.data?.title ??
-		"";
+		title ?? titleQueue.pending?.value ?? pageQuery.data?.title ?? "";
 	useLayoutEffect(() => {
 		resizeTitleTextarea(titleInputRef.current);
 	});
-
-	async function handleConflict() {
-		// Refetch first so the remounted editor initializes from the newer doc.
-		await invalidatePage(queryClient, pageId);
-		setReloadCount((count) => count + 1);
-		setConflictNotice(true);
-		if (conflictTimeoutRef.current) clearTimeout(conflictTimeoutRef.current);
-		conflictTimeoutRef.current = setTimeout(
-			() => setConflictNotice(false),
-			5000,
-		);
-	}
 
 	if (pageQuery.isPending) {
 		return <PageEditorSkeleton />;
@@ -298,8 +221,6 @@ export function PageEditor({ pageId }: { pageId: string }) {
 		);
 		setTitle(normalized);
 		titleQueue.pending = draft;
-		// Collaborators see every keystroke; the database write is debounced.
-		pushTitle(normalized);
 		if (titleQueue.timeout) clearTimeout(titleQueue.timeout);
 		titleQueue.timeout = setTimeout(() => {
 			titleQueue.timeout = null;
@@ -460,31 +381,17 @@ export function PageEditor({ pageId }: { pageId: string }) {
 					) : null}
 				</div>
 			</div>
-			{conflictNotice ? (
-				<p className="mb-2 px-0 text-muted-foreground text-xs md:px-[54px]">
-					This page was updated elsewhere — reloaded with the latest version.
-				</p>
-			) : null}
-			{collabSession.status === "connecting" ? (
-				<div className="py-2" aria-busy>
-					<ReadOnlyEditor content={page.content} />
-				</div>
-			) : (
-				<HaunterEditor
-					key={`${pageId}:${reloadCount}`}
-					pageId={pageId}
-					workspaceId={page.workspaceId}
-					initialContent={page.content}
-					contentUpdatedAt={page.contentUpdatedAt}
-					editable={!readOnly}
-					collab={collabRoom}
-					collabUser={collabUser}
-					focusRequest={editorFocusRequest}
-					currentUserId={currentUser?.id ?? null}
-					onSaveStateChange={setPageSaveState}
-					onConflict={handleConflict}
-				/>
-			)}
+			<HaunterEditor
+				key={`${currentUser?.id ?? "anonymous"}:${pageId}`}
+				pageId={pageId}
+				workspaceId={page.workspaceId}
+				initialContent={page.content}
+				contentUpdatedAt={page.contentUpdatedAt}
+				editable={!readOnly}
+				focusRequest={editorFocusRequest}
+				currentUserId={currentUser?.id ?? null}
+				onSaveStateChange={setPageSaveState}
+			/>
 			{/* Same 54px inset as the editor content column. */}
 			<div className="px-0 md:px-[54px]">
 				<Backlinks pageId={pageId} />

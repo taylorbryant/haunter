@@ -1,4 +1,3 @@
-import type { CollaborativeTaskBlockProps } from "@/features/pages/ports";
 import type { BlockJson } from "@/features/pages/schemas";
 
 export type TaskBlockPatch = {
@@ -14,9 +13,15 @@ export type PatchResult = {
 	found: boolean;
 };
 
-export function toCollaborativeTaskBlockProps(
-	patch: TaskBlockPatch,
-): CollaborativeTaskBlockProps {
+export type TaskBlockPropsPatch = {
+	checked?: boolean;
+	due?: string;
+	dueTime?: string;
+	reminder?: string;
+	assignee?: string;
+};
+
+export function toTaskBlockProps(patch: TaskBlockPatch): TaskBlockPropsPatch {
 	return {
 		...(patch.checked !== undefined ? { checked: patch.checked } : {}),
 		...(patch.due !== undefined ? { due: patch.due ?? "" } : {}),
@@ -43,7 +48,7 @@ export function patchTaskBlock(
 	patch: TaskBlockPatch,
 ): PatchResult {
 	let found = false;
-	const props = toCollaborativeTaskBlockProps(patch);
+	const props = toTaskBlockProps(patch);
 
 	function walk(nodes: BlockJson[]): BlockJson[] {
 		return nodes.map((block) => {

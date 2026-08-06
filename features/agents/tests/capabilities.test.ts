@@ -14,10 +14,10 @@ import { createTestAgentAdminRepository } from "@/features/agents/tests/helpers"
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import {
-	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
+	createTestWorkspaceEventPublisher,
 } from "@/features/pages/tests/helpers";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
@@ -38,7 +38,7 @@ async function createFixture() {
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
-	const pageCollaboration = createTestPageCollaborationPort();
+	const workspaceEvents = createTestWorkspaceEventPublisher();
 	const activities: AgentActivityWrite[] = [];
 	const agents = createTestAgentAdminRepository([], activities);
 	const members = {
@@ -80,10 +80,10 @@ async function createFixture() {
 			members,
 			notificationInbox,
 			pageLinks,
-			pageCollaboration,
 			pages,
 			pageVersions,
 			tasks,
+			workspaceEvents,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {

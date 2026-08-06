@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { scheduleWorkspacePageEvent } from "@/features/collab/server/workspace-events";
 import { appError } from "@/features/shared/errors";
 import {
 	resolveTaskAssignmentActor,
@@ -28,65 +29,74 @@ export const restorePageVersionUseCase = useCase
 		const user = requireUser(ctx);
 		const scope = requireActiveWorkspaceScope(ctx);
 
-		const { result: output, assignmentNotifications } =
-			await ctx.ports.uow.transaction(async (tx) => {
-				const page = await tx.pages.findMetaById(scope, input.id);
-				if (!page || page.deletedAt !== null) {
-					throw appError("PageNotFound", { details: { id: input.id } });
-				}
+		const {
+			result: output,
+			assignmentNotifications,
+			workspaceId,
+		} = await ctx.ports.uow.transaction(async (tx) => {
+			const page = await tx.pages.findMetaById(scope, input.id);
+			if (!page || page.deletedAt !== null) {
+				throw appError("PageNotFound", { details: { id: input.id } });
+			}
 
-				await ctx.gate.authorize("pages.update", page);
+			await ctx.gate.authorize("pages.update", page);
 
-				const version = await tx.pageVersions.findById(scope, input.versionId);
-				if (!version || version.pageId !== page.id) {
-					throw appError("PageNotFound", { details: { id: input.versionId } });
-				}
+			const version = await tx.pageVersions.findById(scope, input.versionId);
+			if (!version || version.pageId !== page.id) {
+				throw appError("PageNotFound", { details: { id: input.versionId } });
+			}
 
-				// Preserve what's being replaced.
-				const current = await tx.pages.findById(scope, page.id);
-				if (current) {
-					await tx.pageVersions.create(scope, {
-						pageId: page.id,
-						title: current.title,
-						icon: current.icon,
-						contentJson: JSON.stringify(current.content),
-						cause: "restore",
-						createdBy: user.id,
-					});
-					await tx.pageVersions.prune(scope, page.id, VERSION_RETENTION);
-				}
+			// Preserve what's being replaced.
+			const current = await tx.pages.findById(scope, page.id);
+			if (current) {
+				await tx.pageVersions.create(scope, {
+					pageId: page.id,
+					title: current.title,
+					icon: current.icon,
+					contentJson: JSON.stringify(current.content),
+					cause: "restore",
+					createdBy: user.id,
+				});
+				await tx.pageVersions.prune(scope, page.id, VERSION_RETENTION);
+			}
 
-				const result = await tx.pages.saveContent(
-					scope,
-					page.id,
-					JSON.stringify(version.content),
-					extractPageSearchText(version.content),
-				);
+			const result = await tx.pages.saveContent(
+				scope,
+				page.id,
+				JSON.stringify(version.content),
+				extractPageSearchText(version.content),
+			);
 
-				// A restored document is the source of truth again: reconcile its
-				// task rows and page links exactly like a normal save.
-				const assignmentActor = await resolveTaskAssignmentActor(
-					tx.members,
-					scope,
-					user,
-				);
-				const derivations = await reconcilePageDerivations(
-					tx,
-					scope,
-					page,
-					version.content,
-					{
-						assignmentActor,
-						defaultTaskAssigneeId: user.id,
-					},
-				);
+			// A restored document is the source of truth again: reconcile its
+			// task rows and page links exactly like a normal save.
+			const assignmentActor = await resolveTaskAssignmentActor(
+				tx.members,
+				scope,
+				user,
+			);
+			const derivations = await reconcilePageDerivations(
+				tx,
+				scope,
+				page,
+				version.content,
+				{
+					assignmentActor,
+					defaultTaskAssigneeId: user.id,
+				},
+			);
 
-				const { assignmentNotifications, ...publicDerivations } = derivations;
-				return {
-					result: { ...result, ...publicDerivations },
-					assignmentNotifications,
-				};
-			});
+			const { assignmentNotifications, ...publicDerivations } = derivations;
+			return {
+				result: { ...result, ...publicDerivations },
+				assignmentNotifications,
+				workspaceId: page.workspaceId,
+			};
+		});
 		scheduleTaskAssignmentDelivery(ctx, assignmentNotifications);
+		scheduleWorkspacePageEvent(ctx, {
+			type: "page.contentChanged",
+			workspaceId,
+			pageId: input.id,
+		});
 		return output;
 	});

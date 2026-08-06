@@ -24,10 +24,10 @@ import { type AppServiceContextInput, appContext } from "@/server/context";
 import { createPage, listPages, searchPages } from "../contracts";
 import { pageRoutes } from "../routes";
 import {
-	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
+	createTestWorkspaceEventPublisher,
 } from "./helpers";
 
 /**
@@ -43,7 +43,7 @@ async function createHookedTestApp(options: { auth: AppPorts["auth"] }) {
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
-	const pageCollaboration = createTestPageCollaborationPort();
+	const workspaceEvents = createTestWorkspaceEventPublisher();
 	const members = {
 		async findRole() {
 			return "owner";
@@ -61,11 +61,11 @@ async function createHookedTestApp(options: { auth: AppPorts["auth"] }) {
 			gate: appPorts.gate,
 			members,
 			pageLinks,
-			pageCollaboration,
 			pages,
 			pageVersions,
 			tasks,
 			canvases,
+			workspaceEvents,
 			devtools: createInMemoryDevtools(),
 			auth: options.auth,
 			// The point of this file: with the port bound, meta.rateLimit is

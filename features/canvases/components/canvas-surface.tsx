@@ -5,10 +5,14 @@ import "tldraw/tldraw.css";
 import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createTLStore, defaultBindingUtils, type Editor } from "tldraw";
+import { useEffect, useRef, useState } from "react";
+import {
+	createTLStore,
+	defaultBindingUtils,
+	type Editor,
+	loadSnapshot,
+} from "tldraw";
 import { userErrorMessage } from "@/client/error-feedback";
-import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
 import {
 	getCanvasQueryOptions,
@@ -28,18 +32,9 @@ import { CANVAS_LIBRARY_COMPONENTS } from "@/features/canvases/components/canvas
 import SharedCanvasSurface from "@/features/canvases/components/shared-canvas-surface";
 import { TldrawWithFonts } from "@/features/canvases/components/tldraw-with-fonts";
 import { useCanvasTheme } from "@/features/canvases/components/use-canvas-theme";
-import {
-	type CanvasCollabUser,
-	useCollabCanvasStore,
-} from "@/features/canvases/components/use-collab-canvas-store";
 import { haunterShapeUtils } from "@/features/canvases/lib/shape-utils";
 import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
-import {
-	type CollabRoom,
-	useCollabSession,
-} from "@/features/collab/client/session";
-import { canvasRoomId, cursorColorFor } from "@/features/collab/lib/room";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { useSharedPageToken } from "@/features/shares/components/shared-page-context";
 
@@ -96,7 +91,6 @@ function MemberCanvasSurface({
 		...saveCanvasSnapshotMutationOptions(),
 		meta: { errorMode: "inline" },
 	});
-	const collabSession = useCollabSession(canvasRoomId(canvasId));
 	const canEdit = useCanEditWorkspace();
 	const pendingSaveAtRender = getPendingCanvasSave(canvasId);
 
@@ -117,12 +111,11 @@ function MemberCanvasSurface({
 		canvasId: string;
 		store: ReturnType<typeof createTLStore>;
 	} | null>(null);
+	const localDirtyRef = useRef(pendingSaveAtRender !== null);
 
 	useEffect(() => {
-		if (collabSession.status !== "ready") {
-			onSaveStateChange?.(saveState);
-		}
-	}, [collabSession.status, onSaveStateChange, saveState]);
+		onSaveStateChange?.(saveState);
+	}, [onSaveStateChange, saveState]);
 
 	if (canvasQuery.data && baseVersionRef.current?.canvasId !== canvasId) {
 		baseVersionRef.current = {
@@ -130,9 +123,43 @@ function MemberCanvasSurface({
 			updatedAt:
 				pendingSaveAtRender?.baseUpdatedAt ?? canvasQuery.data.updatedAt,
 		};
+		// This component can be reused for a different canvas block. A dirty bit
+		// from the previous store must not prevent the new canvas from accepting
+		// workspace-event refreshes.
+		localDirtyRef.current = pendingSaveAtRender !== null;
 	}
 
-	if (canvasQuery.isPending || collabSession.status === "connecting") {
+	useEffect(() => {
+		const data = canvasQuery.data;
+		const store = localStoreRef.current;
+		const base = baseVersionRef.current;
+		if (
+			!data ||
+			!store ||
+			store.canvasId !== canvasId ||
+			!base ||
+			base.canvasId !== canvasId ||
+			base.updatedAt === data.updatedAt ||
+			pendingSaveAtRender ||
+			localDirtyRef.current ||
+			saveState !== "saved" ||
+			saveMutation.isPending
+		) {
+			return;
+		}
+		const remoteSnapshot = loadableSnapshot(data.snapshot);
+		if (!remoteSnapshot) return;
+		loadSnapshot(store.store, remoteSnapshot);
+		baseVersionRef.current = { canvasId, updatedAt: data.updatedAt };
+	}, [
+		canvasId,
+		canvasQuery.data,
+		pendingSaveAtRender,
+		saveMutation.isPending,
+		saveState,
+	]);
+
+	if (canvasQuery.isPending) {
 		return (
 			<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
 				Loading canvas…
@@ -153,19 +180,6 @@ function MemberCanvasSurface({
 					Try again
 				</Button>
 			</div>
-		);
-	}
-
-	if (collabSession.status === "ready") {
-		return (
-			<CollabCanvasSurface
-				canvasId={canvasId}
-				room={collabSession.room}
-				snapshot={canvasQuery.data.snapshot}
-				canEdit={canEdit}
-				onSaveStateChange={onSaveStateChange}
-				layoutKey={layoutKey}
-			/>
 		);
 	}
 
@@ -310,6 +324,7 @@ function MemberCanvasSurface({
 				clearPendingCanvasSave(canvasId, pendingSave);
 				pendingSave = null;
 			}
+			localDirtyRef.current = false;
 			setSaveState("saved");
 			return true;
 		}
@@ -335,6 +350,7 @@ function MemberCanvasSurface({
 
 		const unlisten = editor.store.listen(
 			() => {
+				localDirtyRef.current = true;
 				revision += 1;
 				if (pendingSave) {
 					const latestSnapshot =
@@ -387,200 +403,6 @@ function MemberCanvasSurface({
 						size="sm"
 						disabled={saveMutation.isPending}
 						onClick={() => void retryRef.current()}
-					>
-						Retry
-					</Button>
-				</div>
-			) : null}
-		</div>
-	);
-}
-
-/**
- * The collaborative canvas: the tldraw store is bound to the room's shared
- * Y.Map, so shapes sync live between members. Persistence works like the
- * page editor's — every editing peer debounce-saves the materialized
- * snapshot, without a CAS precondition (Yjs already merges).
- */
-function CollabCanvasSurface({
-	canvasId,
-	room,
-	snapshot,
-	canEdit,
-	onSaveStateChange,
-	layoutKey,
-}: {
-	canvasId: string;
-	room: CollabRoom;
-	snapshot: Record<string, unknown>;
-	canEdit: boolean;
-	onSaveStateChange?: (state: CanvasSaveState) => void;
-	layoutKey?: string;
-}) {
-	const { resolvedTheme } = useTheme();
-	const syncCanvasTheme = useCanvasTheme(resolvedTheme);
-	const queryClient = useQueryClient();
-	const saveMutation = useMutation({
-		...saveCanvasSnapshotMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
-	// Cursor identity shown to the other people on this canvas.
-	const currentUser = useCurrentUser();
-	const collabUser: CanvasCollabUser | undefined = currentUser
-		? {
-				id: currentUser.id,
-				name: currentUser.name || currentUser.email || "Member",
-				color: cursorColorFor(currentUser.id),
-			}
-		: undefined;
-	const storeWithStatus = useCollabCanvasStore(room, snapshot, collabUser);
-	const synchronizedSnapshot = useMemo(() => {
-		if (storeWithStatus.status !== "synced-remote") return null;
-		return storeWithStatus.store.getStoreSnapshot() as unknown as Record<
-			string,
-			unknown
-		>;
-	}, [storeWithStatus]);
-
-	const [saveState, setSaveState] = useState<CanvasSaveState>("saved");
-	const [saveError, setSaveError] = useState<string | null>(null);
-	const flushRef = useRef<() => Promise<boolean>>(async () => true);
-
-	useEffect(() => {
-		onSaveStateChange?.(saveState);
-	}, [onSaveStateChange, saveState]);
-
-	function handleMount(editor: Editor) {
-		syncCanvasTheme(editor);
-		if (!canEdit) {
-			editor.updateInstanceState({ isReadonly: true });
-		}
-
-		let revision = 0;
-		let savedRevision = 0;
-		let saveInFlight: Promise<boolean> | null = null;
-		let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
-
-		async function save(): Promise<boolean> {
-			if (!canEdit) return true;
-			if (saveInFlight) {
-				const saved = await saveInFlight;
-				return saved && savedRevision < revision ? save() : saved;
-			}
-			if (savedRevision >= revision) return true;
-
-			const savingRevision = revision;
-			setSaveError(null);
-			setSaveState("saving");
-			const document = editor.store.getStoreSnapshot() as unknown as Record<
-				string,
-				unknown
-			>;
-			const request = (async () => {
-				try {
-					await setCanvasSnapshotInCache(queryClient, canvasId, document);
-					const result = await saveMutation.mutateAsync({
-						path: { id: canvasId },
-						body: { snapshot: document },
-					});
-					savedRevision = savingRevision;
-					await setCanvasSnapshotInCache(
-						queryClient,
-						canvasId,
-						document,
-						result.updatedAt,
-					);
-					setSaveError(null);
-					return true;
-				} catch (error) {
-					// Keep the shared document and local revision pending. A retry
-					// materializes the current converged room state again.
-					setSaveError(
-						userErrorMessage(error, "Canvas changes could not be saved."),
-					);
-					setSaveState("error");
-					return false;
-				}
-			})();
-
-			saveInFlight = request;
-			const saved = await request;
-			if (saveInFlight === request) saveInFlight = null;
-			if (!saved) return false;
-			if (savedRevision < revision) return save();
-			setSaveState("saved");
-			return true;
-		}
-
-		const flush = () =>
-			drainCanvasSaveQueue({
-				clearPendingTimer: () => {
-					if (pendingTimeout) {
-						clearTimeout(pendingTimeout);
-						pendingTimeout = null;
-					}
-				},
-				hasPendingChanges: () =>
-					savedRevision < revision || saveInFlight !== null,
-				save,
-			});
-		flushRef.current = flush;
-		const unregisterFlusher = registerCanvasSaveFlusher(canvasId, flush);
-
-		// Local and remote document changes both reset the debounce. Concurrent
-		// peers may initially persist partial snapshots, but once their Yjs
-		// updates arrive every editor materializes and saves the converged room.
-		const unlisten = editor.store.listen(
-			() => {
-				if (!canEdit) return;
-				revision += 1;
-				if (pendingTimeout) clearTimeout(pendingTimeout);
-				pendingTimeout = setTimeout(() => void flush(), SNAPSHOT_SAVE_DELAY_MS);
-			},
-			{ scope: "document" },
-		);
-
-		return () => {
-			unlisten();
-			unregisterFlusher();
-			void flush();
-		};
-	}
-
-	if (!synchronizedSnapshot) {
-		return (
-			<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-				Loading canvas…
-			</div>
-		);
-	}
-
-	return (
-		<div
-			className="haunter-canvas relative h-full w-full"
-			data-canvas-layout={layoutKey}
-		>
-			<TldrawWithFonts
-				components={canEdit ? CANVAS_LIBRARY_COMPONENTS : undefined}
-				documentSnapshot={synchronizedSnapshot}
-				layoutKey={layoutKey}
-				licenseKey={TLDRAW_LICENSE_KEY}
-				shapeUtils={haunterShapeUtils}
-				store={storeWithStatus}
-				onMount={handleMount}
-			/>
-			{saveState === "error" && saveError ? (
-				<div
-					role="alert"
-					className="absolute right-2 bottom-2 z-10 flex max-w-xs items-center gap-2 rounded border border-destructive/30 bg-background/95 px-2 py-1.5 text-destructive text-xs shadow"
-				>
-					<span className="flex-1">{saveError}</span>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={saveMutation.isPending}
-						onClick={() => void flushRef.current()}
 					>
 						Retry
 					</Button>

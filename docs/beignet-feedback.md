@@ -191,10 +191,9 @@ still enforces its rate limit manually.
 
 ### 3. Realtime has no framework story
 
-The entire Liveblocks integration (room auth, env-mode gating, Y.Doc
-lifecycle, client-side room caching) was bespoke. That may be the right
-call — realtime is opinionated — but even a docs recipe would have saved
-time.
+The Liveblocks workspace-event integration (room auth, environment gating,
+best-effort publish, and query invalidation) is bespoke. That may be the right
+call — realtime is opinionated — but even a docs recipe would have saved time.
 
 ### 4. Declarative mutation→query linkage on contracts
 

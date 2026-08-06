@@ -102,10 +102,9 @@ export const env = createEnv({
 		// Key prefix shared with @beignet/provider-rate-limit-upstash (which
 		// reads it directly); the default mirrors that provider's default.
 		UPSTASH_PREFIX: z.string().default("beignet:ratelimit"),
-		// Liveblocks room auth (permissioned collaboration). When set (together
-		// with NEXT_PUBLIC_LIVEBLOCKS_AUTH=true on the client), room access is
-		// granted per workspace membership via /api/liveblocks-auth. Without it
-		// the client can still run in public-key prototyping mode.
+		// Optional Liveblocks workspace events. SQLite remains authoritative;
+		// Liveblocks only tells other open clients which projections to refetch.
+		// Set this together with NEXT_PUBLIC_LIVEBLOCKS_AUTH=true at build time.
 		LIVEBLOCKS_SECRET_KEY: z.string().optional(),
 		LOG_LEVEL: z
 			.enum(["trace", "debug", "info", "warn", "error", "fatal"])

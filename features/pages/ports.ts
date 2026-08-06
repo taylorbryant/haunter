@@ -7,33 +7,6 @@ import type {
 	PageVersionMeta,
 } from "@/features/pages/schemas";
 
-export type PublishSubpageLinkInput = {
-	parentPageId: string;
-	parentContentUpdatedAt: string;
-	child: Pick<PageMeta, "id" | "workspaceId">;
-};
-
-export type CollaborativeTaskBlockProps = {
-	checked?: boolean;
-	due?: string;
-	dueTime?: string;
-	reminder?: string;
-	assignee?: string;
-};
-
-export type PublishTaskBlockPatchInput = {
-	pageId: string;
-	pageContentUpdatedAt: string;
-	blockId: string;
-	props: CollaborativeTaskBlockProps;
-};
-
-/** Post-commit propagation from application writes into an open collab room. */
-export interface PageCollaborationPort {
-	publishSubpageLink(input: PublishSubpageLinkInput): Promise<void>;
-	publishTaskBlockPatch(input: PublishTaskBlockPatchInput): Promise<void>;
-}
-
 export type NewPage = {
 	userId: string;
 	parentPageId: string | null;

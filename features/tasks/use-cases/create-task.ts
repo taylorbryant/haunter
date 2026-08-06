@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { scheduleWorkspaceTaskEvent } from "@/features/collab/server/workspace-events";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -66,5 +67,9 @@ export const createTaskUseCase = useCase
 			ctx,
 			assignmentNotification ? [assignmentNotification] : [],
 		);
+		scheduleWorkspaceTaskEvent(ctx, {
+			workspaceId: task.workspaceId,
+			taskId: task.id,
+		});
 		return task;
 	});

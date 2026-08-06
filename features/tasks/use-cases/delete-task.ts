@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { scheduleWorkspaceTaskEvent } from "@/features/collab/server/workspace-events";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -11,7 +12,7 @@ export const deleteTaskUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const scope = requireActiveWorkspaceScope(ctx);
 
-		await ctx.ports.uow.transaction(async (tx) => {
+		const deletedTask = await ctx.ports.uow.transaction(async (tx) => {
 			const task = await tx.tasks.findById(scope, input.id);
 			if (!task) {
 				throw appError("TaskNotFound", { details: { id: input.id } });
@@ -30,5 +31,10 @@ export const deleteTaskUseCase = useCase
 				new Date().toISOString(),
 			);
 			await tx.tasks.delete(scope, task.id);
+			return task;
+		});
+		scheduleWorkspaceTaskEvent(ctx, {
+			workspaceId: deletedTask.workspaceId,
+			taskId: deletedTask.id,
 		});
 	});

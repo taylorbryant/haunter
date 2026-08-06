@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { scheduleWorkspacePageEvent } from "@/features/collab/server/workspace-events";
 import type { Notification } from "@/features/notifications/schemas";
 import {
 	reconcilePageDerivations,
@@ -124,30 +125,13 @@ export const createPageUseCase = useCase
 
 		scheduleTaskAssignmentDelivery(ctx, assignmentNotifications);
 
-		if (
-			result.parentPageId &&
-			result.parentContentUpdatedAt &&
-			input.appendToParentContent !== false
-		) {
-			try {
-				await ctx.ports.pageCollaboration.publishSubpageLink({
-					parentPageId: result.parentPageId,
-					parentContentUpdatedAt: result.parentContentUpdatedAt,
-					child: result,
-				});
-			} catch (error) {
-				// SQLite already committed. A collaboration transport failure must not
-				// make a successful create look failed and invite a duplicate retry.
-				ctx.ports.logger.warn(
-					"Failed to propagate a subpage link to collaboration",
-					{
-						error,
-						parentPageId: result.parentPageId,
-						pageId: result.id,
-					},
-				);
-			}
-		}
-
+		scheduleWorkspacePageEvent(ctx, {
+			type: "page.created",
+			workspaceId: result.workspaceId,
+			pageId: result.id,
+			...(result.parentPageId
+				? { affectedPageIds: [result.parentPageId] }
+				: {}),
+		});
 		return result;
 	});

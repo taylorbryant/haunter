@@ -75,11 +75,6 @@ import {
 } from "@/features/pages/client/new-page-focus";
 import { appendSubpageLinkToOpenPage } from "@/features/pages/client/open-page-content";
 import {
-	type OpenPageTitleSnapshot,
-	optimisticallySetOpenPageTitle,
-	restoreOpenPageTitle,
-} from "@/features/pages/client/open-page-title";
-import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
 	getPageNavigationQueryOptions,
@@ -314,24 +309,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 				onSuccess: async (page) => {
 					if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
 					const parentContentUpdatedAt = page.parentContentUpdatedAt;
-					const appendedToOpenPage =
-						parentPageId && parentContentUpdatedAt
-							? appendSubpageLinkToOpenPage(
-									parentPageId,
-									page,
-									parentContentUpdatedAt,
-								)
-							: false;
-					if (parentPageId && parentContentUpdatedAt && !appendedToOpenPage) {
-						void import("./editor/sync-subpage-link")
-							.then(({ syncSubpageLinkToCollabRoom }) =>
-								syncSubpageLinkToCollabRoom(
-									parentPageId,
-									page,
-									parentContentUpdatedAt,
-								),
-							)
-							.catch(() => undefined);
+					if (parentPageId && parentContentUpdatedAt) {
+						appendSubpageLinkToOpenPage(
+							parentPageId,
+							page,
+							parentContentUpdatedAt,
+						);
 					}
 					await Promise.all([
 						invalidatePages(queryClient),
@@ -377,7 +360,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		let snapshot: Awaited<
 			ReturnType<typeof optimisticallySetPageTitle>
 		> | null = null;
-		let sharedTitleSnapshot: OpenPageTitleSnapshot | null = null;
 		try {
 			if (!(await flushPendingPageSave(pageId))) {
 				setRenameError({
@@ -396,7 +378,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					previousUpdatedAt: node.updatedAt,
 				},
 			);
-			sharedTitleSnapshot = optimisticallySetOpenPageTitle(pageId, title);
 			setRenamingId((current) => (current === pageId ? null : current));
 			const page = await renameMutation.mutateAsync({
 				path: { id: pageId },
@@ -415,9 +396,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					snapshot.previousTitle,
 					snapshot.previousUpdatedAt,
 				);
-			}
-			if (sharedTitleSnapshot) {
-				restoreOpenPageTitle(pageId, title, sharedTitleSnapshot);
 			}
 			setRenamingId(pageId);
 			setRenameError({
