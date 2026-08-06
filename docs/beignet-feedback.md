@@ -178,16 +178,14 @@ The roadmapped devtools waterfall covers observability, and 0.0.31's
 budgets for serverless + remote-DB deployments (the default deployment
 story).
 
-### 2. Escape-hatch routes drop the hooks pipeline
+### 2. Escape-hatch routes participate in the hooks pipeline — resolved
 
-Confirmed by the author; `wrapRawRoute` is roadmapped. Sharpened scope
-after review: `@beignet/next` already ships `createWebhookRoute`,
-`createPaymentWebhookRoute`, and schedule/outbox/storage/upload route
-factories that assemble the full app context (ports, requestId, trace,
-logger) — so "raw routes start from nothing" was overstated. What none of
-them do is run the configured hooks array, which is why
-[app/api/liveblocks-auth/route.ts](../app/api/liveblocks-auth/route.ts)
-still enforces its rate limit manually.
+`server.rawRoute(...)` closed this gap in 0.0.29. Haunter's
+[Liveblocks auth route](../app/api/liveblocks-auth/route.ts) now declares its
+rate limit as route metadata and runs through the same context, hooks, request
+instrumentation, and error pipeline as contract-backed routes. The specialized
+webhook, schedule, outbox, storage, and upload factories remain useful when a
+narrower transport owns the route shape.
 
 ### 3. Realtime has no framework story
 

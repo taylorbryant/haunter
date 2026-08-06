@@ -19,6 +19,12 @@ import {
 	pageIsMissingFromWorkspaceProjection,
 } from "./workspace-event-cache";
 
+const liveUpdatesEnabled =
+	process.env.NEXT_PUBLIC_LIVE_UPDATES === "true" ||
+	// Compatibility for deployments configured before workspace events replaced
+	// document collaboration. New installations should use NEXT_PUBLIC_LIVE_UPDATES.
+	process.env.NEXT_PUBLIC_LIVEBLOCKS_AUTH === "true";
+
 export function WorkspaceEventSubscriber({
 	workspaceId,
 }: {
@@ -36,7 +42,7 @@ export function WorkspaceEventSubscriber({
 	activePageIdRef.current = activePageId;
 
 	useEffect(() => {
-		if (!currentUserId || process.env.NEXT_PUBLIC_LIVEBLOCKS_AUTH !== "true") {
+		if (!currentUserId || !liveUpdatesEnabled) {
 			return;
 		}
 		let disposed = false;

@@ -187,10 +187,12 @@ first signs in. Leave it unset on established installations.
   notification workflow described below.
 
 - **Live updates:** Set `LIVEBLOCKS_SECRET_KEY` and build with
-  `NEXT_PUBLIC_LIVEBLOCKS_AUTH=true` to notify other open clients after a page,
+  `NEXT_PUBLIC_LIVE_UPDATES=true` to notify other open clients after a page,
   task, or canvas changes. SQLite remains the source of truth, and polling
   keeps the app functional without Liveblocks. Because `NEXT_PUBLIC_` values
-  are embedded at build time, changing them requires a new deployment.
+  are embedded at build time, changing them requires a new deployment. The
+  previous `NEXT_PUBLIC_LIVEBLOCKS_AUTH` name remains accepted as a deprecated
+  compatibility alias.
 
 ### Authentication origins
 

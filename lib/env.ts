@@ -104,7 +104,7 @@ export const env = createEnv({
 		UPSTASH_PREFIX: z.string().default("beignet:ratelimit"),
 		// Optional Liveblocks workspace events. SQLite remains authoritative;
 		// Liveblocks only tells other open clients which projections to refetch.
-		// Set this together with NEXT_PUBLIC_LIVEBLOCKS_AUTH=true at build time.
+		// Set this together with NEXT_PUBLIC_LIVE_UPDATES=true at build time.
 		LIVEBLOCKS_SECRET_KEY: z.string().optional(),
 		LOG_LEVEL: z
 			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
