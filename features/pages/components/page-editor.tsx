@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import dynamic from "next/dynamic";
 import {
 	type KeyboardEvent,
 	useEffect,
@@ -17,6 +16,11 @@ import {
 	consumeTitleFocus,
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
+import {
+	beginPageLoadVisit,
+	markPageLoad,
+	startPageLoadLongTaskObserver,
+} from "@/features/pages/client/page-load-performance";
 import {
 	getPageQueryOptions,
 	invalidatePages,
@@ -38,17 +42,12 @@ import {
 } from "@/features/pages/schemas";
 import { cn } from "@/lib/utils";
 import { Backlinks } from "./backlinks";
-import { EditorBodySkeleton, PageEditorSkeleton } from "./page-editor-skeleton";
+import HaunterEditor from "./editor/haunter-editor";
+import { PageEditorSkeleton } from "./page-editor-skeleton";
 import { PageIconButton } from "./page-icon-picker";
 
-const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
-	ssr: false,
-	loading: () => (
-		<div className="py-2">
-			<EditorBodySkeleton />
-		</div>
-	),
-});
+startPageLoadLongTaskObserver();
+markPageLoad("page-editor-module-evaluated");
 
 const TITLE_SAVE_DELAY_MS = 500;
 
@@ -75,6 +74,7 @@ function resizeTitleTextarea(textarea: HTMLTextAreaElement | null) {
 }
 
 export function PageEditor({ pageId }: { pageId: string }) {
+	beginPageLoadVisit(pageId);
 	const queryClient = useQueryClient();
 	const pageQuery = useQuery(getPageQueryOptions(pageId));
 	const updatePageMutation = useMutation({
@@ -105,6 +105,17 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	activePageIdRef.current = pageId;
 	const [editorFocusRequest, setEditorFocusRequest] = useState(0);
 	const recordedViewPageIdRef = useRef<string | null>(null);
+	const measuredPageIdRef = useRef<string | null>(null);
+
+	useLayoutEffect(() => {
+		if (measuredPageIdRef.current === pageId) return;
+		measuredPageIdRef.current = pageId;
+		markPageLoad("page-editor-mounted");
+	}, [pageId]);
+
+	useLayoutEffect(() => {
+		if (pageQuery.data) markPageLoad("page-data-ready");
+	}, [pageQuery.data]);
 
 	// Reset local title state when navigating between pages.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on page change

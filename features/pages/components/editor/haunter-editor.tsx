@@ -36,14 +36,33 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { apiClient } from "@/client";
 import { reportUserError, userErrorMessage } from "@/client/error-feedback";
+import {
+	deleteLocalDraft,
+	getLocalDraft,
+	hasLocalDraftHint,
+	type LocalDraft,
+	localDraftKey,
+	putLocalDraft,
+} from "@/client/local-drafts";
 import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
 import { invalidateNotifications } from "@/features/notifications/client/queries";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-content";
+import {
+	markPageLoad,
+	publishPageLoadTimings,
+} from "@/features/pages/client/page-load-performance";
 import {
 	getPageQueryOptions,
 	invalidateBacklinks,
@@ -74,6 +93,7 @@ import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { EditorBodySkeleton } from "../page-editor-skeleton";
 import {
 	OPEN_CODE_BLOCK_DIALOG_EVENT,
 	type OpenCodeBlockDialogDetail,
@@ -85,6 +105,8 @@ import { editorSchema } from "./schema";
 import { TaskBlockCurrentUserContext } from "./task-block";
 
 const AUTOSAVE_DELAY_MS = 1000;
+
+markPageLoad("editor-module-evaluated");
 
 type HaunterBlockNoteEditor = BlockNoteEditor<
 	(typeof editorSchema)["blockSchema"],
@@ -279,6 +301,8 @@ type PageContentConflict = {
 	content: BlockJson[];
 };
 
+type PageRecoveryDraft = LocalDraft<BlockJson[]>;
+
 function cloneDocument(content: BlockJson[]): BlockJson[] {
 	return structuredClone(content);
 }
@@ -299,7 +323,63 @@ type HaunterEditorProps = {
 	onSaveStateChange?: (state: SaveState) => void;
 };
 
-export default function HaunterEditor({
+type MountedHaunterEditorProps = HaunterEditorProps & {
+	initialRecoveryDraft: PageRecoveryDraft | null;
+};
+
+export default function HaunterEditor(props: HaunterEditorProps) {
+	const [mounted, setMounted] = useState(false);
+	const [recoveryDraft, setRecoveryDraft] = useState<
+		PageRecoveryDraft | null | undefined
+	>(undefined);
+
+	// Keep the editor in the route bundle, but do not render BlockNote until the
+	// browser is mounted because one of its hooks dereferences `window`.
+	useEffect(() => setMounted(true), []);
+
+	const recoveryKey = props.currentUserId
+		? localDraftKey(props.currentUserId, "page", props.pageId)
+		: null;
+	const shouldLoadRecoveryDraft =
+		mounted && recoveryKey !== null && hasLocalDraftHint(recoveryKey);
+	useEffect(() => {
+		if (!shouldLoadRecoveryDraft || !recoveryKey) return;
+		let active = true;
+		void getLocalDraft<BlockJson[]>(recoveryKey)
+			.then((draft) => {
+				if (!active) return;
+				if (draft && draft.workspaceId !== props.workspaceId) {
+					setRecoveryDraft(null);
+					void deleteLocalDraft(recoveryKey).catch(() => undefined);
+					return;
+				}
+				setRecoveryDraft(draft);
+			})
+			.catch(() => {
+				if (active) setRecoveryDraft(null);
+			});
+		return () => {
+			active = false;
+		};
+	}, [props.workspaceId, recoveryKey, shouldLoadRecoveryDraft]);
+
+	if (!mounted || (shouldLoadRecoveryDraft && recoveryDraft === undefined)) {
+		return (
+			<div className="py-2">
+				<EditorBodySkeleton />
+			</div>
+		);
+	}
+
+	return (
+		<MountedHaunterEditor
+			{...props}
+			initialRecoveryDraft={recoveryDraft ?? null}
+		/>
+	);
+}
+
+function MountedHaunterEditor({
 	pageId,
 	workspaceId,
 	initialContent,
@@ -308,7 +388,11 @@ export default function HaunterEditor({
 	focusRequest = 0,
 	currentUserId = null,
 	onSaveStateChange,
-}: HaunterEditorProps) {
+	initialRecoveryDraft,
+}: MountedHaunterEditorProps) {
+	const editorCreateStartedAtRef = useRef(
+		typeof performance === "undefined" ? 0 : performance.now(),
+	);
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -316,10 +400,15 @@ export default function HaunterEditor({
 	const isMobile = useIsMobile();
 	const documentSaveQueue: InFlightSaveQueue<DocumentSaveOutcome> =
 		documentSaveQueues.get(pageDocumentSaveQueueKey(pageId, currentUserId));
+	const recoveryKey = currentUserId
+		? localDraftKey(currentUserId, "page", pageId)
+		: null;
 	const initialQueuedConflict = useRef<PageContentConflict | null>(
 		documentSaveQueue.lastResult?.status === "conflict"
 			? { content: documentSaveQueue.lastResult.content }
-			: null,
+			: initialRecoveryDraft
+				? { content: initialRecoveryDraft.payload }
+				: null,
 	).current;
 	const [saveState, setSaveState] = useState<SaveState>(
 		initialQueuedConflict ? "error" : "saved",
@@ -373,6 +462,20 @@ export default function HaunterEditor({
 				(editorInitialContent as never)
 			: undefined,
 	});
+	const editorCreatedAtRef = useRef(
+		typeof performance === "undefined" ? 0 : performance.now(),
+	);
+	useLayoutEffect(() => {
+		markPageLoad("editor-committed");
+		const frame = requestAnimationFrame(() => {
+			publishPageLoadTimings({
+				pageId,
+				editorCreateStartedAt: editorCreateStartedAtRef.current,
+				editorCreatedAt: editorCreatedAtRef.current,
+			});
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [pageId]);
 	useSyncEditorCodeTheme(editor, resolvedTheme);
 
 	const appendSubpageLink = useCallback(
@@ -501,8 +604,30 @@ export default function HaunterEditor({
 		[onSaveStateChange],
 	);
 
+	const persistRecoveryDraft = useCallback(
+		async (content: BlockJson[]) => {
+			if (!currentUserId || !recoveryKey) return;
+			await putLocalDraft({
+				key: recoveryKey,
+				userId: currentUserId,
+				workspaceId,
+				resourceType: "page",
+				resourceId: pageId,
+				baseVersion: baseUpdatedAtRef.current,
+				payload: cloneDocument(content),
+				status: "conflict",
+				updatedAt: new Date().toISOString(),
+			});
+		},
+		[currentUserId, pageId, recoveryKey, workspaceId],
+	);
+
+	const clearRecoveryDraft = useCallback(async () => {
+		if (recoveryKey) await deleteLocalDraft(recoveryKey);
+	}, [recoveryKey]);
+
 	const preserveConflict = useCallback(
-		(content: BlockJson[], restoreEditor: boolean) => {
+		async (content: BlockJson[], restoreEditor: boolean) => {
 			const snapshot = cloneDocument(content);
 			const conflict = { content: snapshot } satisfies PageContentConflict;
 			saveConflictRef.current = conflict;
@@ -529,8 +654,25 @@ export default function HaunterEditor({
 				});
 			}
 			reportState("error");
+			try {
+				await persistRecoveryDraft(snapshot);
+			} catch (error) {
+				setSaveError(
+					userErrorMessage(
+						error,
+						"Your unsaved version is open, but could not be stored on this device.",
+					),
+				);
+			}
 		},
-		[documentSaveQueue, editor, pageId, queryClient, reportState],
+		[
+			documentSaveQueue,
+			editor,
+			pageId,
+			persistRecoveryDraft,
+			queryClient,
+			reportState,
+		],
 	);
 
 	const loadLatestAfterConflict = useCallback(async () => {
@@ -541,6 +683,7 @@ export default function HaunterEditor({
 				...getPageQueryOptions(pageId),
 				staleTime: 0,
 			});
+			await clearRecoveryDraft().catch(() => undefined);
 			applyingRemoteRef.current = true;
 			editor.replaceBlocks(
 				editor.document,
@@ -566,7 +709,14 @@ export default function HaunterEditor({
 		} finally {
 			setResolvingConflict(false);
 		}
-	}, [documentSaveQueue, editor, pageId, queryClient, reportState]);
+	}, [
+		clearRecoveryDraft,
+		documentSaveQueue,
+		editor,
+		pageId,
+		queryClient,
+		reportState,
+	]);
 
 	const saveLocalAfterConflict = useCallback(async () => {
 		setResolvingConflict(true);
@@ -595,6 +745,7 @@ export default function HaunterEditor({
 				save: () => saveRef.current(),
 			});
 			if (saved) {
+				await clearRecoveryDraft().catch(() => undefined);
 				saveConflictRef.current = null;
 				setHasSaveConflict(false);
 				documentSaveQueues.clearLastResult(documentSaveQueue);
@@ -610,7 +761,7 @@ export default function HaunterEditor({
 			}
 		} catch (error) {
 			const content = editor.document as unknown as BlockJson[];
-			preserveConflict(content, false);
+			await preserveConflict(content, false);
 			setSaveError(
 				userErrorMessage(error, "Your page version could not be saved."),
 			);
@@ -620,6 +771,7 @@ export default function HaunterEditor({
 		}
 	}, [
 		documentSaveQueue,
+		clearRecoveryDraft,
 		editor,
 		pageId,
 		preserveConflict,
@@ -638,7 +790,7 @@ export default function HaunterEditor({
 			if (outcome.status === "conflict") {
 				if (!saveConflictRef.current) {
 					const hasNewerLocalEdits = dirtyRef.current;
-					preserveConflict(
+					await preserveConflict(
 						hasNewerLocalEdits
 							? (editor.document as unknown as BlockJson[])
 							: outcome.content,
@@ -704,7 +856,7 @@ export default function HaunterEditor({
 						contentUpdatedAt: result.contentUpdatedAt,
 					} satisfies DocumentSaveOutcome;
 				},
-				(error) => {
+				async (error) => {
 					if (error instanceof ContractError && error.status === 409) {
 						// Keep the current editor document—including any typing that
 						// happened while this request was in flight—until the user
@@ -712,7 +864,7 @@ export default function HaunterEditor({
 						const localContent = cloneDocument(
 							editor.document as unknown as BlockJson[],
 						);
-						preserveConflict(localContent, false);
+						await preserveConflict(localContent, false);
 						return {
 							status: "conflict",
 							content: localContent,
@@ -764,6 +916,14 @@ export default function HaunterEditor({
 				},
 				{ retainWhenIdle: true },
 			);
+			void persistRecoveryDraft(content).catch((error) => {
+				setSaveError(
+					userErrorMessage(
+						error,
+						"Your unsaved version is open, but could not be stored on this device.",
+					),
+				);
+			});
 			reportState("error");
 			return;
 		}
@@ -771,7 +931,7 @@ export default function HaunterEditor({
 		reportState("pending");
 		if (timeoutRef.current) clearTimeout(timeoutRef.current);
 		timeoutRef.current = setTimeout(() => saveRef.current(), AUTOSAVE_DELAY_MS);
-	}, [documentSaveQueue, editable, editor, reportState]);
+	}, [documentSaveQueue, editable, editor, persistRecoveryDraft, reportState]);
 
 	// Retain the page-scoped coordinator through cleanup. If this editor is
 	// replaced while its save is running, the replacement adopts that exact
@@ -782,7 +942,9 @@ export default function HaunterEditor({
 		if (lastResult?.status === "saved") {
 			advanceBaseUpdatedAt(lastResult.contentUpdatedAt);
 		} else if (lastResult?.status === "conflict") {
-			preserveConflict(lastResult.content, false);
+			void preserveConflict(lastResult.content, false);
+		} else if (initialRecoveryDraft) {
+			void preserveConflict(initialRecoveryDraft.payload, false);
 		}
 		const precedingSave = documentSaveQueue.inFlight;
 		if (precedingSave) {
@@ -798,7 +960,7 @@ export default function HaunterEditor({
 					// The component that started the request may already be gone. The
 					// replacement adopts the rejected local snapshot rather than
 					// initializing from—and then overwriting it with—the server copy.
-					preserveConflict(outcome.content, true);
+					void preserveConflict(outcome.content, true);
 				}
 			});
 			return () => {
@@ -811,7 +973,12 @@ export default function HaunterEditor({
 			if (timeoutRef.current) clearTimeout(timeoutRef.current);
 			void saveRef.current().finally(releaseQueue);
 		};
-	}, [advanceBaseUpdatedAt, documentSaveQueue, preserveConflict]);
+	}, [
+		advanceBaseUpdatedAt,
+		documentSaveQueue,
+		initialRecoveryDraft,
+		preserveConflict,
+	]);
 
 	useEffect(() => {
 		return registerPageSaveFlusher(pageId, async () => {

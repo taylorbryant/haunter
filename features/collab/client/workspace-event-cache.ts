@@ -48,6 +48,7 @@ export async function invalidateWorkspacePageProjections(
 	queryClient: QueryClient,
 	workspaceId: string,
 	pageIds: readonly string[] = [],
+	options?: { skipPageDetails?: boolean },
 ) {
 	await waitForMutationsToSettle(queryClient);
 	const affectedPageIds = [...new Set(pageIds)];
@@ -59,11 +60,19 @@ export async function invalidateWorkspacePageProjections(
 		invalidatePageSearch(queryClient),
 		invalidateTasksWhenIdle(queryClient),
 		invalidateNotifications(queryClient),
-		...(affectedPageIds.length === 0
+		...(affectedPageIds.length === 0 && !options?.skipPageDetails
 			? [invalidatePageDetails(queryClient)]
 			: []),
 		...affectedPageIds.map((pageId) => invalidatePage(queryClient, pageId)),
 	]);
+}
+
+export async function invalidateWorkspacePageDocument(
+	queryClient: QueryClient,
+	pageId: string,
+) {
+	await waitForMutationsToSettle(queryClient);
+	await invalidatePage(queryClient, pageId);
 }
 
 export async function invalidateWorkspaceTaskProjections(

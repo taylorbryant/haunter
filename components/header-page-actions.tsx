@@ -45,6 +45,7 @@ import {
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
+import { useCachedPage } from "@/features/pages/client/use-cached-page";
 import { usePageFavorite } from "@/features/pages/client/use-page-favorite";
 import type { PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
@@ -73,15 +74,12 @@ export function HeaderPageActions() {
 	const { synced } = useWorkspaceRouteSync(workspaceId);
 	const canEdit = useCanEditWorkspace();
 	const isMobile = useIsMobile();
-	const pageQuery = useQuery({
-		...getPageQueryOptions(pageId ?? ""),
-		enabled: Boolean(pageId && synced),
-	});
+	const page = useCachedPage(pageId);
 	const navigationQuery = useQuery({
 		...getPageNavigationQueryOptions(workspaceId ?? ""),
 		enabled: Boolean(workspaceId && synced),
 	});
-	const favorite = usePageFavorite(workspaceId ?? "", pageQuery.data);
+	const favorite = usePageFavorite(workspaceId ?? "", page);
 	const isFavorite = navigationQuery.data?.favorites.some(
 		(item) => item.id === pageId,
 	);
@@ -242,9 +240,7 @@ export function HeaderPageActions() {
 				className="text-muted-foreground"
 				aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
 				title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-				disabled={
-					!pageQuery.data || !navigationQuery.data || favorite.isPending
-				}
+				disabled={!page || !navigationQuery.data || favorite.isPending}
 				onClick={() => favorite.toggle(!isFavorite)}
 			>
 				<StarIcon className={isFavorite ? "fill-current" : undefined} />
@@ -320,7 +316,7 @@ export function HeaderPageActions() {
 											setTrashTarget({
 												pageId: activePageId,
 												workspaceId: activeWorkspaceId,
-												title: pageQuery.data?.title || "Untitled",
+												title: page?.title || "Untitled",
 											});
 										}}
 									/>
@@ -373,7 +369,7 @@ export function HeaderPageActions() {
 									setTrashTarget({
 										pageId: activePageId,
 										workspaceId: activeWorkspaceId,
-										title: pageQuery.data?.title || "Untitled",
+										title: page?.title || "Untitled",
 									});
 								}}
 							>

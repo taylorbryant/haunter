@@ -5,7 +5,7 @@ import "tldraw/tldraw.css";
 import { ContractError } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	createTLStore,
 	defaultBindingUtils,
@@ -13,6 +13,15 @@ import {
 	loadSnapshot,
 } from "tldraw";
 import { userErrorMessage } from "@/client/error-feedback";
+import {
+	deleteLocalDraft,
+	getLocalDraft,
+	hasLocalDraftHint,
+	type LocalDraft,
+	localDraftKey,
+	putLocalDraft,
+} from "@/client/local-drafts";
+import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
 import {
 	getCanvasQueryOptions,
@@ -21,6 +30,7 @@ import {
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
 import {
+	canvasPendingSaveKey,
 	clearPendingCanvasSave,
 	drainCanvasSaveQueue,
 	getPendingCanvasSave,
@@ -35,6 +45,7 @@ import { useCanvasTheme } from "@/features/canvases/components/use-canvas-theme"
 import { haunterShapeUtils } from "@/features/canvases/lib/shape-utils";
 import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
 import { TLDRAW_LICENSE_KEY } from "@/features/canvases/lib/tldraw-license";
+import type { CanvasSnapshot } from "@/features/canvases/schemas";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { useSharedPageToken } from "@/features/shares/components/shared-page-context";
 
@@ -92,7 +103,69 @@ function MemberCanvasSurface({
 		meta: { errorMode: "inline" },
 	});
 	const canEdit = useCanEditWorkspace();
-	const pendingSaveAtRender = getPendingCanvasSave(canvasId);
+	const currentUser = useCurrentUser();
+	const pendingSaveKey = canvasPendingSaveKey(
+		canvasId,
+		currentUser?.id ?? null,
+	);
+	const recoveryKey = currentUser
+		? localDraftKey(currentUser.id, "canvas", canvasId)
+		: null;
+	const shouldLoadRecovery =
+		recoveryKey !== null && hasLocalDraftHint(recoveryKey);
+	const [recoveryState, setRecoveryState] = useState<{
+		key: string | null;
+		draft: LocalDraft<CanvasSnapshot> | null;
+	}>({ key: null, draft: null });
+	const recoveryDraft =
+		recoveryState.key === recoveryKey ? recoveryState.draft : undefined;
+	useEffect(() => {
+		if (!shouldLoadRecovery || !recoveryKey) return;
+		let active = true;
+		void getLocalDraft<CanvasSnapshot>(recoveryKey)
+			.then((draft) => {
+				if (active) setRecoveryState({ key: recoveryKey, draft });
+			})
+			.catch(() => {
+				if (active) setRecoveryState({ key: recoveryKey, draft: null });
+			});
+		return () => {
+			active = false;
+		};
+	}, [recoveryKey, shouldLoadRecovery]);
+	const matchingRecoveryDraft =
+		recoveryDraft &&
+		canvasQuery.data &&
+		recoveryDraft.workspaceId === canvasQuery.data.workspaceId
+			? recoveryDraft
+			: null;
+	useEffect(() => {
+		if (
+			!recoveryKey ||
+			!recoveryDraft ||
+			!canvasQuery.data ||
+			recoveryDraft.workspaceId === canvasQuery.data.workspaceId
+		) {
+			return;
+		}
+		void deleteLocalDraft(recoveryKey).catch(() => undefined);
+	}, [canvasQuery.data, recoveryDraft, recoveryKey]);
+	const recoveredPendingSave = useMemo<PendingCanvasSave | null>(
+		() =>
+			matchingRecoveryDraft
+				? {
+						snapshot: matchingRecoveryDraft.payload,
+						baseUpdatedAt:
+							matchingRecoveryDraft.baseVersion ??
+							canvasQuery.data?.updatedAt ??
+							"",
+						requiresConfirmation: true,
+					}
+				: null,
+		[canvasQuery.data?.updatedAt, matchingRecoveryDraft],
+	);
+	const pendingSaveAtRender =
+		getPendingCanvasSave(pendingSaveKey) ?? recoveredPendingSave;
 
 	const [saveState, setSaveState] = useState<CanvasSaveState>(
 		pendingSaveAtRender ? "error" : "saved",
@@ -116,6 +189,14 @@ function MemberCanvasSurface({
 	useEffect(() => {
 		onSaveStateChange?.(saveState);
 	}, [onSaveStateChange, saveState]);
+
+	useEffect(() => {
+		if (!recoveredPendingSave) return;
+		if (getPendingCanvasSave(pendingSaveKey)) return;
+		rememberPendingCanvasSave(pendingSaveKey, recoveredPendingSave);
+		setSaveState("error");
+		setSaveError(CANVAS_CONFLICT_MESSAGE);
+	}, [pendingSaveKey, recoveredPendingSave]);
 
 	if (canvasQuery.data && baseVersionRef.current?.canvasId !== canvasId) {
 		baseVersionRef.current = {
@@ -159,7 +240,10 @@ function MemberCanvasSurface({
 		saveState,
 	]);
 
-	if (canvasQuery.isPending) {
+	if (
+		canvasQuery.isPending ||
+		(shouldLoadRecovery && recoveryDraft === undefined)
+	) {
 		return (
 			<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
 				Loading canvas…
@@ -201,6 +285,35 @@ function MemberCanvasSurface({
 		};
 	}
 	const localStore = localStoreRef.current.store;
+	const persistRecovery = async (
+		snapshot: CanvasSnapshot,
+		baseUpdatedAt: string,
+	) => {
+		if (!currentUser || !recoveryKey) return;
+		await putLocalDraft({
+			key: recoveryKey,
+			userId: currentUser.id,
+			workspaceId: canvasQuery.data.workspaceId,
+			resourceType: "canvas",
+			resourceId: canvasId,
+			baseVersion: baseUpdatedAt,
+			payload: structuredClone(snapshot),
+			status: "conflict",
+			updatedAt: new Date().toISOString(),
+		});
+	};
+	const clearRecovery = async () => {
+		if (!recoveryKey) return;
+		try {
+			await deleteLocalDraft(recoveryKey);
+		} finally {
+			setRecoveryState((current) =>
+				current.key === recoveryKey
+					? { key: recoveryKey, draft: null }
+					: current,
+			);
+		}
+	};
 
 	function handleMount(editor: Editor) {
 		syncCanvasTheme(editor);
@@ -233,6 +346,15 @@ function MemberCanvasSurface({
 			>;
 			const request = (async () => {
 				try {
+					try {
+						await persistRecovery(
+							snapshot,
+							baseVersionRef.current?.updatedAt ?? initialUpdatedAt,
+						);
+					} catch {
+						// The mounted tldraw store still protects the drawing for this
+						// session; the server save must not be blocked by local storage.
+					}
 					// Cancel an older GET before staging the local value. Otherwise its
 					// response can land later and make a remount restore stale shapes.
 					await setCanvasSnapshotInCache(queryClient, canvasId, snapshot);
@@ -264,7 +386,7 @@ function MemberCanvasSurface({
 								string,
 								unknown
 							>;
-						pendingSave = rememberPendingCanvasSave(canvasId, {
+						pendingSave = rememberPendingCanvasSave(pendingSaveKey, {
 							snapshot: latestSnapshot,
 							baseUpdatedAt: result.updatedAt,
 						});
@@ -279,7 +401,7 @@ function MemberCanvasSurface({
 								string,
 								unknown
 							>;
-						pendingSave = rememberPendingCanvasSave(canvasId, {
+						pendingSave = rememberPendingCanvasSave(pendingSaveKey, {
 							snapshot: localSnapshot,
 							baseUpdatedAt:
 								baseVersionRef.current?.updatedAt ?? initialUpdatedAt,
@@ -292,10 +414,11 @@ function MemberCanvasSurface({
 								canvasId,
 								updatedAt: fresh.updatedAt,
 							};
-							pendingSave = rememberPendingCanvasSave(canvasId, {
+							pendingSave = rememberPendingCanvasSave(pendingSaveKey, {
 								snapshot: localSnapshot,
 								baseUpdatedAt: fresh.updatedAt,
 							});
+							await persistRecovery(localSnapshot, fresh.updatedAt);
 							setSaveError(CANVAS_CONFLICT_MESSAGE);
 						} catch (refreshError) {
 							setSaveError(
@@ -321,9 +444,10 @@ function MemberCanvasSurface({
 			if (!saved) return false;
 			if (savedRevision < revision) return save();
 			if (pendingSave) {
-				clearPendingCanvasSave(canvasId, pendingSave);
+				clearPendingCanvasSave(pendingSaveKey, pendingSave);
 				pendingSave = null;
 			}
+			await clearRecovery().catch(() => undefined);
 			localDirtyRef.current = false;
 			setSaveState("saved");
 			return true;
@@ -358,11 +482,15 @@ function MemberCanvasSurface({
 							string,
 							unknown
 						>;
-					pendingSave = rememberPendingCanvasSave(canvasId, {
+					pendingSave = rememberPendingCanvasSave(pendingSaveKey, {
 						snapshot: latestSnapshot,
 						baseUpdatedAt:
 							baseVersionRef.current?.updatedAt ?? pendingSave.baseUpdatedAt,
 					});
+					void persistRecovery(
+						latestSnapshot,
+						baseVersionRef.current?.updatedAt ?? pendingSave.baseUpdatedAt,
+					).catch(() => undefined);
 				}
 				if (pendingTimeout) clearTimeout(pendingTimeout);
 				pendingTimeout = setTimeout(() => void flush(), SNAPSHOT_SAVE_DELAY_MS);

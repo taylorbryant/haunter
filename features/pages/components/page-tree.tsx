@@ -74,7 +74,6 @@ import {
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
 import { appendSubpageLinkToOpenPage } from "@/features/pages/client/open-page-content";
-import { preloadHaunterEditor } from "@/features/pages/client/preload-editor";
 import {
 	createPageMutationOptions,
 	deletePageMutationOptions,
@@ -510,7 +509,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			if (pageId === activePageId) return;
 			const href = `/w/${workspaceId}/p/${pageId}`;
 			router.prefetch(href);
-			void preloadHaunterEditor().catch(() => undefined);
 		},
 		[activePageId, router, workspaceId],
 	);

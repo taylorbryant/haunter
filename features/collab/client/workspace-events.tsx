@@ -14,6 +14,7 @@ import {
 } from "@/features/collab/workspace-events";
 import {
 	invalidateWorkspaceCanvasProjection,
+	invalidateWorkspacePageDocument,
 	invalidateWorkspacePageProjections,
 	invalidateWorkspaceTaskProjections,
 	pageIsMissingFromWorkspaceProjection,
@@ -118,7 +119,9 @@ export function WorkspaceEventSubscriber({
 							return;
 						}
 						void Promise.all([
-							invalidateWorkspacePageProjections(queryClient, workspaceId),
+							invalidateWorkspacePageProjections(queryClient, workspaceId, [], {
+								skipPageDetails: true,
+							}),
 							invalidateWorkspaceTaskProjections(queryClient),
 							invalidateWorkspaceCanvasProjection(queryClient),
 						]).then(() => {
@@ -131,7 +134,14 @@ export function WorkspaceEventSubscriber({
 									currentPageId,
 								)
 							) {
-								router.replace(`/w/${workspaceId}/home`);
+								if (!disposed && activePageIdRef.current === currentPageId) {
+									router.replace(`/w/${workspaceId}/home`);
+								}
+							} else if (currentPageId) {
+								void invalidateWorkspacePageDocument(
+									queryClient,
+									currentPageId,
+								);
 							}
 						});
 					},

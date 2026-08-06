@@ -11,6 +11,13 @@ export type PendingCanvasSave = {
 	requiresConfirmation: true;
 };
 
+export function canvasPendingSaveKey(
+	canvasId: string,
+	currentUserId: string | null,
+) {
+	return JSON.stringify([currentUserId ?? "anonymous", canvasId]);
+}
+
 type DrainCanvasSaveQueueOptions = {
 	clearPendingTimer: () => void;
 	hasPendingChanges: () => boolean;
@@ -46,25 +53,25 @@ export async function flushPendingCanvasSave(
  * inline/fullscreen or route remount cannot silently reclassify it as saved.
  */
 export function rememberPendingCanvasSave(
-	canvasId: string,
+	key: string,
 	input: Omit<PendingCanvasSave, "requiresConfirmation">,
 ): PendingCanvasSave {
 	const pending = { ...input, requiresConfirmation: true } as const;
-	pendingSaves.set(canvasId, pending);
+	pendingSaves.set(key, pending);
 	return pending;
 }
 
-export function getPendingCanvasSave(canvasId: string) {
-	return pendingSaves.get(canvasId) ?? null;
+export function getPendingCanvasSave(key: string) {
+	return pendingSaves.get(key) ?? null;
 }
 
 /** A stale surface must not clear a newer pending snapshot for the same id. */
 export function clearPendingCanvasSave(
-	canvasId: string,
+	key: string,
 	expected: PendingCanvasSave,
 ) {
-	if (pendingSaves.get(canvasId) === expected) {
-		pendingSaves.delete(canvasId);
+	if (pendingSaves.get(key) === expected) {
+		pendingSaves.delete(key);
 	}
 }
 

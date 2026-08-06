@@ -45,6 +45,13 @@ function setup() {
 }
 
 describe("page navigation cache", () => {
+	it("keeps a hydrated page fresh until its background poll", () => {
+		const options = getPageQueryOptions("page-1");
+
+		expect(options.staleTime).toBe(30_000);
+		expect(options.refetchInterval).toBe(30_000);
+	});
+
 	it("adds and removes favorites at the front", () => {
 		const { queryClient, queryKey } = setup();
 		const first = page(1);

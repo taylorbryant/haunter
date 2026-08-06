@@ -15,13 +15,7 @@ import { env } from "@/lib/env";
 import { appContext } from "./context";
 import { routes } from "./routes";
 
-/**
- * Dev-only per-stage request timings, one compact line per request. The
- * same numbers feed the devtools waterfall; this makes them greppable so
- * latency work (e.g. how much of a request is context creation) starts
- * from measurements instead of endpoint-total inference.
- */
-const devStageTimingsHook: ServerHook<AppContext> = {
+const stageTimingsHook: ServerHook<AppContext> = {
 	afterSend: ({ contract, durationMs, stages }) => {
 		console.info(
 			`[stages] ${contract.method.toUpperCase()} ${contract.name} ` +
@@ -54,7 +48,10 @@ export const getServer = createNextServerLoader(async () => {
 			createRateLimitHooks<AppContext>({
 				ipSource: "x-forwarded-for-first",
 			}),
-			...(env.NODE_ENV !== "production" ? [devStageTimingsHook] : []),
+			...(env.NODE_ENV !== "production" ||
+			process.env.HAUNTER_PERFORMANCE_LOGGING === "1"
+				? [stageTimingsHook]
+				: []),
 		],
 		context: appContext,
 		routes,

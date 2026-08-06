@@ -12,18 +12,28 @@ import {
 
 export default async function PagePage({
 	params,
+	searchParams,
 }: {
 	params: Promise<{ pageId: string; workspaceId: string }>;
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-	const [{ pageId, workspaceId }, ctx] = await Promise.all([
-		params,
-		getAppRequestContext(),
-	]);
+	const routeStartedAt = performance.now();
+	const contextStartedAt = performance.now();
+	const contextPromise = getAppRequestContext().then((ctx) => ({
+		ctx,
+		durationMs: performance.now() - contextStartedAt,
+	}));
+	const [{ pageId, workspaceId }, { ctx, durationMs: contextMs }, search] =
+		await Promise.all([params, contextPromise, searchParams]);
+	const timingEnabled =
+		search.perf === "1" || process.env.HAUNTER_PERFORMANCE_LOGGING === "1";
 	const queryClient = makeQueryClient();
 	const activeWorkspaceId = ctx.auth?.session?.activeOrganizationId ?? null;
+	let pageQueryMs: number | null = null;
 
 	if (activeWorkspaceId === workspaceId) {
 		try {
+			const pageQueryStartedAt = performance.now();
 			const page = await queryClient.fetchQuery(
 				serverUseCaseQueryOptions(
 					getPageQueryOptions(pageId),
@@ -32,6 +42,7 @@ export default async function PagePage({
 					{ id: pageId },
 				),
 			);
+			pageQueryMs = performance.now() - pageQueryStartedAt;
 			if (page.workspaceId !== workspaceId) {
 				notFound();
 			}
@@ -41,6 +52,15 @@ export default async function PagePage({
 			}
 			throw error;
 		}
+	}
+
+	if (timingEnabled) {
+		console.info("[page-load:server]", {
+			pageId,
+			contextMs: Math.round(contextMs),
+			pageQueryMs: pageQueryMs === null ? null : Math.round(pageQueryMs),
+			routeMs: Math.round(performance.now() - routeStartedAt),
+		});
 	}
 
 	return (
