@@ -61,7 +61,7 @@
 		"@shikijs/langs-precompiled": "4.3.1",
 		"@shikijs/themes": "4.3.1",
 		"@tanstack/react-query": "5.101.4",
-		"@upstash/redis": "1.38.0",
+		"@upstash/redis": "1.38.1",
 		"@vercel/blob": "2.6.1",
 		"better-auth": "1.6.25",
 		"chrono-node": "2.10.1",
