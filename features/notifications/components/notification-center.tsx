@@ -61,6 +61,7 @@ import {
 	actOnTaskNotificationMutationOptions,
 	invalidateTasksWhenIdle,
 } from "@/features/tasks/client/queries";
+import { useAfterFirstPaint } from "@/hooks/use-after-first-paint";
 import { formatDueDateTimeLabel, parseIsoDate } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 
@@ -323,11 +324,21 @@ export function NotificationCenter() {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const [open, setOpen] = useState(false);
+	const afterFirstPaint = useAfterFirstPaint();
 	const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(
 		() => new Set(),
 	);
 	const pendingActionIdsRef = useRef(new Set<string>());
-	const query = useQuery(listNotificationsQueryOptions());
+	const badgeQuery = useQuery({
+		...listNotificationsQueryOptions(1),
+		meta: { errorMode: "silent" },
+	});
+	const query = useQuery({
+		...listNotificationsQueryOptions(),
+		enabled: open || afterFirstPaint,
+		refetchInterval: open ? 30_000 : false,
+		meta: { errorMode: "inline" },
+	});
 	const markRead = useMutation({
 		...markNotificationReadMutationOptions(),
 		meta: { errorMode: "silent" },
@@ -365,7 +376,7 @@ export function NotificationCenter() {
 		meta: { errorMode: "silent" },
 	});
 	const items = query.data?.items ?? [];
-	const unreadCount = query.data?.unreadCount ?? 0;
+	const unreadCount = badgeQuery.data?.unreadCount ?? 0;
 
 	useEffect(() => {
 		const badgeNavigator = navigator as BadgeNavigator;

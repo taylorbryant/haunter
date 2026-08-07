@@ -8,10 +8,15 @@ import {
 	notificationSettingsQueryOptions,
 } from "@/features/notifications/client/queries";
 import { getBrowserTimezone } from "@/features/notifications/client/timezone";
+import { useAfterFirstPaint } from "@/hooks/use-after-first-paint";
 
 export function NotificationTimezoneInitializer() {
 	const queryClient = useQueryClient();
-	const settings = useQuery(notificationSettingsQueryOptions());
+	const afterFirstPaint = useAfterFirstPaint();
+	const settings = useQuery({
+		...notificationSettingsQueryOptions(),
+		enabled: afterFirstPaint,
+	});
 	const initializeTimezone = useMutation({
 		...initializeNotificationTimezoneMutationOptions(),
 		meta: { errorMode: "silent" },
