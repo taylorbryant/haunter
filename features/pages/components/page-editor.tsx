@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import {
 	type KeyboardEvent,
 	useEffect,
@@ -41,11 +42,19 @@ import {
 } from "@/features/pages/schemas";
 import { cn } from "@/lib/utils";
 import { Backlinks } from "./backlinks";
-import HaunterEditor from "./editor/haunter-editor";
-import { PageEditorSkeleton } from "./page-editor-skeleton";
+import { EditorBodySkeleton, PageEditorSkeleton } from "./page-editor-skeleton";
 import { PageIconButton } from "./page-icon-picker";
 
 markPageLoad("page-editor-module-evaluated");
+
+const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
+	ssr: false,
+	loading: () => (
+		<div className="py-2">
+			<EditorBodySkeleton />
+		</div>
+	),
+});
 
 const TITLE_SAVE_DELAY_MS = 500;
 
