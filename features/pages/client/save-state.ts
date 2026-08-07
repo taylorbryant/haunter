@@ -38,6 +38,14 @@ export type InFlightSaveQueue<TResult> = {
 	readonly lastResult: TResult | null;
 };
 
+/** Isolate retained document drafts between accounts on a shared browser. */
+export function pageDocumentSaveQueueKey(
+	pageId: string,
+	currentUserId: string | null,
+) {
+	return JSON.stringify([currentUserId ?? "anonymous", pageId]);
+}
+
 type StoredLatestSaveQueue<T, TResult> = LatestSaveQueue<T, TResult> & {
 	consumers: Set<symbol>;
 };
@@ -100,6 +108,7 @@ type StoredInFlightSaveQueue<TResult> = {
 	readonly key: string;
 	inFlight: Promise<TResult> | null;
 	lastResult: TResult | null;
+	retainLastResultWhenIdle: boolean;
 	consumers: Set<symbol>;
 };
 
@@ -115,6 +124,7 @@ export function createInFlightSaveQueueStore<TResult>() {
 		if (
 			queue.consumers.size === 0 &&
 			queue.inFlight === null &&
+			!queue.retainLastResultWhenIdle &&
 			queues.get(queue.key) === queue
 		) {
 			queues.delete(queue.key);
@@ -129,6 +139,7 @@ export function createInFlightSaveQueueStore<TResult>() {
 					key,
 					inFlight: null,
 					lastResult: null,
+					retainLastResultWhenIdle: false,
 					consumers: new Set(),
 				};
 				queues.set(key, queue);
@@ -163,6 +174,25 @@ export function createInFlightSaveQueueStore<TResult>() {
 				});
 			stored.inFlight = tracked;
 			return tracked;
+		},
+
+		setLastResult(
+			queue: InFlightSaveQueue<TResult>,
+			result: TResult,
+			options?: { retainWhenIdle?: boolean },
+		) {
+			const stored = queue as StoredInFlightSaveQueue<TResult>;
+			stored.lastResult = result;
+			if (options?.retainWhenIdle !== undefined) {
+				stored.retainLastResultWhenIdle = options.retainWhenIdle;
+			}
+		},
+
+		clearLastResult(queue: InFlightSaveQueue<TResult>) {
+			const stored = queue as StoredInFlightSaveQueue<TResult>;
+			stored.lastResult = null;
+			stored.retainLastResultWhenIdle = false;
+			evictIfIdle(stored);
 		},
 	};
 }

@@ -36,12 +36,22 @@ export function listPagesQueryOptions(workspaceId: string) {
 }
 
 export function getPageQueryOptions(id: string) {
-	return rq(getPage).queryOptions({ path: { id } });
+	return {
+		...rq(getPage).queryOptions({ path: { id } }),
+		// The server hydrates direct page loads. Treat that snapshot as fresh
+		// until the normal page poll so mounting does not fetch it twice.
+		staleTime: 30_000,
+		refetchOnMount: false,
+		// Liveblocks events accelerate this refresh, but polling remains the
+		// correctness fallback when live updates are disabled or missed.
+		refetchInterval: 30_000,
+	};
 }
 
 export function getPageNavigationQueryOptions(workspaceId: string) {
 	return {
 		...rq(getPageNavigation).queryOptions({ path: { workspaceId } }),
+		refetchOnMount: false,
 		refetchInterval: 30_000,
 	};
 }
@@ -166,6 +176,10 @@ export function searchPagesQueryOptions(q: string) {
 	return rq(searchPages).queryOptions({ query: { q } });
 }
 
+export function invalidatePageSearch(queryClient: QueryClient) {
+	return rq(searchPages).invalidate(queryClient);
+}
+
 export function listBacklinksQueryOptions(id: string) {
 	return rq(listBacklinks).queryOptions({ path: { id } });
 }
@@ -197,6 +211,10 @@ export function invalidateTrash(queryClient: QueryClient) {
 
 export function invalidatePage(queryClient: QueryClient, id: string) {
 	return rq(getPage).invalidate(queryClient, { path: { id } });
+}
+
+export function invalidatePageDetails(queryClient: QueryClient) {
+	return rq(getPage).invalidate(queryClient);
 }
 
 /**
@@ -277,8 +295,7 @@ export function setPageSavedAtInCache(
 /**
  * Fold a title save's response into the getPage cache. The title input hands
  * display back to the cached copy after a save, so without this the
- * just-typed title snaps back to the stale one (always visible with
- * collaboration off — there is no shared live title to paper over it).
+ * just-typed title snaps back to the stale one.
  */
 export function setPageTitleInCache(
 	queryClient: QueryClient,

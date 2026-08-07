@@ -1,5 +1,6 @@
 import "@beignet/core/server-only";
 import type { TenantScope } from "@beignet/core/ports";
+import { scheduleWorkspacePageEvent } from "@/features/collab/server/workspace-events";
 import type { PageRepository } from "@/features/pages/ports";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
@@ -36,7 +37,7 @@ export const updatePageUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const scope = requireActiveWorkspaceScope(ctx);
 
-		return ctx.ports.uow.transaction(async (tx) => {
+		const updated = await ctx.ports.uow.transaction(async (tx) => {
 			const page = await tx.pages.findMetaById(scope, input.id);
 			if (!page || page.deletedAt !== null) {
 				throw appError("PageNotFound", { details: { id: input.id } });
@@ -67,4 +68,20 @@ export const updatePageUseCase = useCase
 				...(input.position !== undefined ? { position: input.position } : {}),
 			});
 		});
+		const eventType =
+			input.parentPageId !== undefined || input.position !== undefined
+				? "page.moved"
+				: input.title !== undefined
+					? "page.renamed"
+					: input.icon !== undefined
+						? "page.iconChanged"
+						: null;
+		if (eventType) {
+			scheduleWorkspacePageEvent(ctx, {
+				type: eventType,
+				workspaceId: updated.workspaceId,
+				pageId: updated.id,
+			});
+		}
+		return updated;
 	});

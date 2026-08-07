@@ -1,15 +1,11 @@
 import "@beignet/core/server-only";
 import type { TenantScope } from "@beignet/core/ports";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
-import type {
-	PageRepository,
-	PublishTaskBlockPatchInput,
-} from "@/features/pages/ports";
+import type { PageRepository } from "@/features/pages/ports";
 import { appError } from "@/features/shared/errors";
 import {
 	patchTaskBlock,
 	type TaskBlockPatch,
-	toCollaborativeTaskBlockProps,
 } from "@/features/tasks/lib/patch-task-block";
 
 const TASK_BLOCK_PATCH_ATTEMPTS = 3;
@@ -22,7 +18,7 @@ export async function savePageTaskBlockPatch(
 		blockId: string;
 		patch: TaskBlockPatch;
 	},
-): Promise<PublishTaskBlockPatchInput | null> {
+): Promise<{ pageId: string; pageContentUpdatedAt: string } | null> {
 	let page = await pages.findById(scope, input.pageId);
 
 	for (
@@ -46,8 +42,6 @@ export async function savePageTaskBlockPatch(
 			return {
 				pageId: page.id,
 				pageContentUpdatedAt: saved.contentUpdatedAt,
-				blockId: input.blockId,
-				props: toCollaborativeTaskBlockProps(input.patch),
 			};
 		}
 

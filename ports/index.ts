@@ -21,6 +21,7 @@ import type {
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
+import type { WorkspaceEventPublisherPort } from "@/features/collab/workspace-events";
 import type { MemberRepository } from "@/features/members/ports";
 import type {
 	NotificationRepository,
@@ -28,7 +29,6 @@ import type {
 } from "@/features/notifications/ports";
 import type { pagePolicy } from "@/features/pages/policy";
 import type {
-	PageCollaborationPort,
 	PageLinkRepository,
 	PageNavigationRepository,
 	PageRepository,
@@ -89,7 +89,6 @@ export type AppPorts = {
 	notificationInbox: NotificationRepository;
 	notifications: import("@beignet/core/notifications").NotificationPort;
 	mailer: MailerPort;
-	pageCollaboration: PageCollaborationPort;
 	pageLinks: PageLinkRepository;
 	pageNavigation: PageNavigationRepository;
 	pages: PageRepository;
@@ -101,4 +100,5 @@ export type AppPorts = {
 	uow: UnitOfWorkPort<AppTransactionPorts>;
 	storage: StoragePort;
 	webPush: WebPushPort;
+	workspaceEvents: WorkspaceEventPublisherPort;
 };

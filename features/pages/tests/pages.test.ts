@@ -39,11 +39,11 @@ import {
 	updatePageUseCase,
 } from "../use-cases";
 import {
-	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageNavigationRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
+	createTestWorkspaceEventPublisher,
 } from "./helpers";
 
 function createTester(
@@ -52,7 +52,7 @@ function createTester(
 	workspaceId: string,
 	tasks = createTestTaskRepository(),
 	role = "owner",
-	pageCollaboration = createTestPageCollaborationPort(),
+	workspaceEvents = createTestWorkspaceEventPublisher(),
 	pageNavigation = createTestPageNavigationRepository({ pages }),
 ) {
 	const auth = {
@@ -75,15 +75,20 @@ function createTester(
 		{
 			base: appPorts,
 			overrides: {
+				afterResponse: {
+					schedule(work) {
+						void work();
+					},
+				},
 				gate: appPorts.gate,
 				canvases,
 				notificationInbox,
 				pageLinks,
 				pageNavigation,
-				pageCollaboration,
 				pages,
 				pageVersions,
 				tasks,
+				workspaceEvents,
 				devtools: createInMemoryDevtools(),
 			},
 			transaction: {
@@ -121,11 +126,10 @@ function createTester(
 async function createFixture(userId = "user_test") {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository({ pages });
-	const publishedSubpageLinks: Parameters<
-		ReturnType<typeof createTestPageCollaborationPort>["publishSubpageLink"]
-	>[0][] = [];
-	const pageCollaboration = createTestPageCollaborationPort(
-		publishedSubpageLinks,
+	const publishedWorkspaceEvents: import("@/features/collab/workspace-events").WorkspaceEvent[] =
+		[];
+	const workspaceEvents = createTestWorkspaceEventPublisher(
+		publishedWorkspaceEvents,
 	);
 	const pageNavigation = createTestPageNavigationRepository({ pages });
 	// Better Auth org ids are nanoid-style, not UUIDs — use a matching shape so
@@ -140,7 +144,7 @@ async function createFixture(userId = "user_test") {
 		workspace.id,
 		tasks,
 		"owner",
-		pageCollaboration,
+		workspaceEvents,
 		pageNavigation,
 	);
 	const ctx = await tester.ctx();
@@ -153,14 +157,14 @@ async function createFixture(userId = "user_test") {
 		scope,
 		tester,
 		ctx,
-		publishedSubpageLinks,
+		publishedWorkspaceEvents,
 		pageNavigation,
 	};
 }
 
 describe("pages use cases", () => {
 	it("creates nested pages and lists workspace pages as meta only", async () => {
-		const { workspace, tester, ctx, publishedSubpageLinks } =
+		const { workspace, tester, ctx, publishedWorkspaceEvents } =
 			await createFixture();
 
 		const root = await tester.run(
@@ -215,16 +219,12 @@ describe("pages use cases", () => {
 			props: { pageId: child.id, workspaceId: workspace.id },
 		});
 		expect(backlinks.items.map((page) => page.id)).toEqual([root.id]);
-		expect(publishedSubpageLinks).toEqual([
-			{
-				parentPageId: root.id,
-				parentContentUpdatedAt: child.parentContentUpdatedAt,
-				child: expect.objectContaining({
-					id: child.id,
-					workspaceId: workspace.id,
-				}),
-			},
-		]);
+		expect(publishedWorkspaceEvents.at(-1)).toMatchObject({
+			type: "page.created",
+			workspaceId: workspace.id,
+			pageId: child.id,
+			affectedPageIds: [child.id, root.id],
+		});
 		expect(listed.items).toHaveLength(2);
 		expect(listed.items.every((item) => !("content" in item))).toBe(true);
 	});
@@ -379,7 +379,7 @@ describe("pages use cases", () => {
 		expect(fetched.content[1]?.props.pageId).toBe(child.id);
 	});
 
-	it("keeps a committed nested page when collaboration propagation fails", async () => {
+	it("keeps a committed nested page when its live-update signal fails", async () => {
 		const pages = createTestPageRepository();
 		const workspaceId = crypto.randomUUID().replaceAll("-", "");
 		const tester = createTester(
@@ -389,10 +389,9 @@ describe("pages use cases", () => {
 			createTestTaskRepository({ pages }),
 			"owner",
 			{
-				async publishSubpageLink() {
+				async publish() {
 					throw new Error("Liveblocks unavailable");
 				},
-				async publishTaskBlockPatch() {},
 			},
 		);
 		const ctx = await tester.ctx();
@@ -1385,7 +1384,7 @@ describe("page versioning", () => {
 			workspace.id,
 			createTestTaskRepository({ pages }),
 			"viewer",
-			createTestPageCollaborationPort(),
+			createTestWorkspaceEventPublisher(),
 			pageNavigation,
 		);
 		const viewerCtx = await viewer.ctx();

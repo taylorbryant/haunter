@@ -1,5 +1,6 @@
 import "@beignet/core/server-only";
 import type { TenantScope } from "@beignet/core/ports";
+import { scheduleWorkspacePageEvent } from "@/features/collab/server/workspace-events";
 import type { PageRepository } from "@/features/pages/ports";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
@@ -37,15 +38,28 @@ export const deletePageUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const scope = requireActiveWorkspaceScope(ctx);
 
-		await ctx.ports.uow.transaction(async (tx) => {
-			const page = await tx.pages.findMetaById(scope, input.id);
-			if (!page || page.deletedAt !== null) {
-				throw appError("PageNotFound", { details: { id: input.id } });
-			}
+		const { workspaceId, subtree } = await ctx.ports.uow.transaction(
+			async (tx) => {
+				const page = await tx.pages.findMetaById(scope, input.id);
+				if (!page || page.deletedAt !== null) {
+					throw appError("PageNotFound", { details: { id: input.id } });
+				}
 
-			await ctx.gate.authorize("pages.delete", page);
+				await ctx.gate.authorize("pages.delete", page);
 
-			const subtree = await collectSubtreeIds(tx.pages, scope, page.id);
-			await tx.pages.setDeletedByIds(scope, subtree, new Date().toISOString());
+				const subtree = await collectSubtreeIds(tx.pages, scope, page.id);
+				await tx.pages.setDeletedByIds(
+					scope,
+					subtree,
+					new Date().toISOString(),
+				);
+				return { workspaceId: page.workspaceId, subtree };
+			},
+		);
+		scheduleWorkspacePageEvent(ctx, {
+			type: "page.trashed",
+			workspaceId,
+			pageId: input.id,
+			affectedPageIds: subtree,
 		});
 	});

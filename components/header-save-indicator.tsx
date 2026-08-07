@@ -1,12 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
-import { getPageQueryOptions } from "@/features/pages/client/queries";
 import { usePageSaveState } from "@/features/pages/client/save-state";
+import { useCachedPage } from "@/features/pages/client/use-cached-page";
 import { formatEditedAt } from "@/features/pages/lib/format-edited-at";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 
@@ -38,10 +37,7 @@ export function HeaderSaveIndicator() {
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 	const { synced } = useWorkspaceRouteSync(workspaceId);
-	const pageQuery = useQuery({
-		...getPageQueryOptions(pageId ?? ""),
-		enabled: pageId !== null,
-	});
+	const page = useCachedPage(pageId);
 
 	if (pageId === null) return null;
 
@@ -50,8 +46,8 @@ export function HeaderSaveIndicator() {
 		label = "Saving…";
 	} else if (state === "error") {
 		label = "Save failed";
-	} else if (pageQuery.data) {
-		label = formatEditedAt(pageQuery.data.updatedAt, now);
+	} else if (page) {
+		label = formatEditedAt(page.updatedAt, now);
 	} else {
 		// Page still loading; the editor shows its own skeleton.
 		label = null;
@@ -61,7 +57,7 @@ export function HeaderSaveIndicator() {
 
 	const className =
 		"ml-auto shrink-0 whitespace-nowrap text-muted-foreground text-xs tabular-nums";
-	const canOpenHistory = pageQuery.data !== undefined && canEdit && synced;
+	const canOpenHistory = page !== undefined && canEdit && synced;
 
 	if (!canOpenHistory) {
 		return <span className={className}>{label}</span>;

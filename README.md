@@ -24,8 +24,8 @@ what matters from a focused Home dashboard.
 - **Tasks** can live inside a page or stand alone. Assign them to workspace
   members, use natural-language due dates, add due times, and manage them from
   the workspace task list.
-- **Collaboration** includes workspace roles, task assignment, optional
-  real-time editing, and read-only public page links.
+- **Team workspaces** include roles, task assignment, optional live refreshes
+  across open clients, and read-only public page links.
 - **Import and export** move pages in and out as Markdown or create standalone
   HTML files that preserve the selected Haunter theme.
 - **Themes and installation** provide coordinated light and dark app and code
@@ -186,12 +186,13 @@ first signs in. Leave it unset on established installations.
 - **Scheduled notifications:** Set `CRON_SECRET` before enabling the
   notification workflow described below.
 
-Real-time collaboration is optional and disabled by default. Enable it with
-`NEXT_PUBLIC_ENABLE_COLLABORATION=true`; add
-`NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY`, `LIVEBLOCKS_SECRET_KEY`, and
-`NEXT_PUBLIC_LIVEBLOCKS_AUTH=true` for workspace-authorized rooms. Because
-`NEXT_PUBLIC_` values are embedded at build time, changing them requires a new
-deployment.
+- **Live updates:** Set `LIVEBLOCKS_SECRET_KEY` and build with
+  `NEXT_PUBLIC_LIVE_UPDATES=true` to notify other open clients after a page,
+  task, or canvas changes. SQLite remains the source of truth, and polling
+  keeps the app functional without Liveblocks. Because `NEXT_PUBLIC_` values
+  are embedded at build time, changing them requires a new deployment. The
+  previous `NEXT_PUBLIC_LIVEBLOCKS_AUTH` name remains accepted as a deprecated
+  compatibility alias.
 
 ### Authentication origins
 

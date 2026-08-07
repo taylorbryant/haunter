@@ -5,6 +5,7 @@ import {
 	drainLatestSaveQueue,
 	drainPageSaveQueue,
 	flushPendingPageSave,
+	pageDocumentSaveQueueKey,
 	registerPageSaveFlusher,
 } from "@/features/pages/client/save-state";
 
@@ -153,6 +154,12 @@ describe("latest save queue store", () => {
 });
 
 describe("in-flight save queue store", () => {
+	it("isolates retained page drafts by signed-in user", () => {
+		expect(pageDocumentSaveQueueKey("page_1", "user_1")).not.toBe(
+			pageDocumentSaveQueueKey("page_1", "user_2"),
+		);
+	});
+
 	it("shares an exact save result with a replacement consumer", async () => {
 		const store = createInFlightSaveQueueStore<{ version: string }>();
 		const first = store.get("page_1");
@@ -176,5 +183,58 @@ describe("in-flight save queue store", () => {
 		releaseReplacement();
 		await Promise.resolve();
 		expect(store.get("page_1")).not.toBe(first);
+	});
+
+	it("keeps a rejected local document available to a replacement editor", async () => {
+		const store = createInFlightSaveQueueStore<{
+			status: "conflict";
+			content: Array<{ id: string; text: string }>;
+		}>();
+		const first = store.get("page_conflict");
+		const releaseFirst = store.retain(first);
+		const localContent = [{ id: "block_1", text: "Unsaved local prose" }];
+
+		await store.track(
+			first,
+			Promise.resolve({ status: "conflict", content: localContent }),
+		);
+		store.setLastResult(
+			first,
+			{ status: "conflict", content: localContent },
+			{ retainWhenIdle: true },
+		);
+		releaseFirst();
+		await Promise.resolve();
+
+		// A later visit still finds the draft after the page fully unmounted.
+		const replacement = store.get("page_conflict");
+		const releaseReplacement = store.retain(replacement);
+		expect(replacement).toBe(first);
+		expect(replacement.lastResult).toEqual({
+			status: "conflict",
+			content: localContent,
+		});
+
+		const newerLocalContent = [
+			{ id: "block_1", text: "Unsaved local prose, still editing" },
+		];
+		store.setLastResult(
+			replacement,
+			{
+				status: "conflict",
+				content: newerLocalContent,
+			},
+			{ retainWhenIdle: true },
+		);
+		expect(replacement.lastResult).toEqual({
+			status: "conflict",
+			content: newerLocalContent,
+		});
+
+		store.clearLastResult(replacement);
+		expect(replacement.lastResult).toBeNull();
+		releaseReplacement();
+		await Promise.resolve();
+		expect(store.get("page_conflict")).not.toBe(replacement);
 	});
 });

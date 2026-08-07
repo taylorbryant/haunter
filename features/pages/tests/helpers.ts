@@ -1,9 +1,12 @@
 import { tenantScopeId } from "@beignet/core/ports";
+import type {
+	WorkspaceEvent,
+	WorkspaceEventPublisherPort,
+} from "@/features/collab/workspace-events";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type {
 	NewPage,
 	NewPageVersion,
-	PageCollaborationPort,
 	PageLinkRepository,
 	PageNavigationRepository,
 	PageRepository,
@@ -12,18 +15,12 @@ import type {
 } from "@/features/pages/ports";
 import type { Page, PageMeta, PageVersion } from "@/features/pages/schemas";
 
-export function createTestPageCollaborationPort(
-	published: Parameters<PageCollaborationPort["publishSubpageLink"]>[0][] = [],
-	publishedTaskPatches: Parameters<
-		PageCollaborationPort["publishTaskBlockPatch"]
-	>[0][] = [],
-): PageCollaborationPort {
+export function createTestWorkspaceEventPublisher(
+	published: WorkspaceEvent[] = [],
+): WorkspaceEventPublisherPort {
 	return {
-		async publishSubpageLink(input) {
-			published.push(input);
-		},
-		async publishTaskBlockPatch(input) {
-			publishedTaskPatches.push(input);
+		async publish(event) {
+			published.push(event);
 		},
 	};
 }

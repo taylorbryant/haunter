@@ -8,7 +8,12 @@ import {
 import type { Canvas, CanvasSnapshot } from "@/features/canvases/schemas";
 
 export function getCanvasQueryOptions(id: string) {
-	return rq(getCanvas).queryOptions({ path: { id } });
+	return {
+		...rq(getCanvas).queryOptions({ path: { id } }),
+		// Liveblocks is only an acceleration layer. Polling keeps canvases fresh
+		// when live updates are disabled or a client misses a broadcast.
+		refetchInterval: 30_000,
+	};
 }
 
 export function createCanvasMutationOptions() {
@@ -33,6 +38,14 @@ export function cancelCanvasQuery(queryClient: QueryClient, id: string) {
 		queryKey: canvasQueryKey(id),
 		exact: true,
 	});
+}
+
+export function invalidateCanvas(queryClient: QueryClient, id: string) {
+	return rq(getCanvas).invalidate(queryClient, { path: { id } });
+}
+
+export function invalidateCanvases(queryClient: QueryClient) {
+	return rq(getCanvas).invalidate(queryClient);
 }
 
 /** Fetch and cache the current server snapshot without reusing an older request. */

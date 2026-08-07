@@ -50,7 +50,6 @@ export const appPorts = definePorts<AppPorts>()({
 		"mcpOAuthClients",
 		"notificationInbox",
 		"notifications",
-		"pageCollaboration",
 		"pageLinks",
 		"pageNavigation",
 		"pages",
@@ -62,5 +61,6 @@ export const appPorts = definePorts<AppPorts>()({
 		"uow",
 		"storage",
 		"webPush",
+		"workspaceEvents",
 	],
 });

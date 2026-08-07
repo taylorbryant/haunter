@@ -94,16 +94,16 @@ missing-`prepublishOnly` failure), fixable with a rebuild-and-republish.
 >   it immediately flagged Haunter's own pages routes test for registering
 >   rate-limited contracts without a bound limiter (now bound). Good
 >   design: the warning names the contracts and says exactly what to do.
-> - The per-stage timings work: a dev-only `afterSend` hook in
->   [server/index.ts](../server/index.ts) logs one `[stages]` line per
->   request. First measurements replaced the report's inferred "~250ms
+> - The per-stage timings worked during a focused performance audit. First
+>   measurements replaced the report's inferred "~250ms
 >   context floor" with data: warm context creation is ~40–60ms with the
 >   session cookie cache (the remaining `findRole` round trip) and
 >   ~120–230ms when the session needs a database lookup — so the original
 >   pre-fix estimate's 150–250ms range was right, with 250 at the
 >   ceiling rather than the middle. The breakdown also cleanly separates
 >   the rate-limit hook (~50ms Upstash round trip, `hooks=`) and shows
->   raw routes participating in instrumentation.
+>   raw routes participating in instrumentation. The temporary logging hook
+>   was removed after the audit.
 >
 > This closes original gap #2 entirely, and the raw-route pipeline plus
 > stage timings close most of gap #1's observability half. One note from
@@ -178,23 +178,20 @@ The roadmapped devtools waterfall covers observability, and 0.0.31's
 budgets for serverless + remote-DB deployments (the default deployment
 story).
 
-### 2. Escape-hatch routes drop the hooks pipeline
+### 2. Escape-hatch routes participate in the hooks pipeline — resolved
 
-Confirmed by the author; `wrapRawRoute` is roadmapped. Sharpened scope
-after review: `@beignet/next` already ships `createWebhookRoute`,
-`createPaymentWebhookRoute`, and schedule/outbox/storage/upload route
-factories that assemble the full app context (ports, requestId, trace,
-logger) — so "raw routes start from nothing" was overstated. What none of
-them do is run the configured hooks array, which is why
-[app/api/liveblocks-auth/route.ts](../app/api/liveblocks-auth/route.ts)
-still enforces its rate limit manually.
+`server.rawRoute(...)` closed this gap in 0.0.29. Haunter's
+[Liveblocks auth route](../app/api/liveblocks-auth/route.ts) now declares its
+rate limit as route metadata and runs through the same context, hooks, request
+instrumentation, and error pipeline as contract-backed routes. The specialized
+webhook, schedule, outbox, storage, and upload factories remain useful when a
+narrower transport owns the route shape.
 
 ### 3. Realtime has no framework story
 
-The entire Liveblocks integration (room auth, env-mode gating, Y.Doc
-lifecycle, client-side room caching) was bespoke. That may be the right
-call — realtime is opinionated — but even a docs recipe would have saved
-time.
+The Liveblocks workspace-event integration (room auth, environment gating,
+best-effort publish, and query invalidation) is bespoke. That may be the right
+call — realtime is opinionated — but even a docs recipe would have saved time.
 
 ### 4. Declarative mutation→query linkage on contracts
 

@@ -34,12 +34,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
-import {
-	downloadPageHtml,
-	HtmlExportError,
-	pageHtmlSourceUrl,
-} from "@/features/pages/client/html-files";
-import { downloadPageMarkdown } from "@/features/pages/client/markdown-files";
+import { HtmlExportError } from "@/features/pages/client/html-export-error";
 import {
 	deletePageMutationOptions,
 	getPageNavigationQueryOptions,
@@ -50,6 +45,7 @@ import {
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
+import { useCachedPage } from "@/features/pages/client/use-cached-page";
 import { usePageFavorite } from "@/features/pages/client/use-page-favorite";
 import type { PageMeta } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
@@ -78,15 +74,12 @@ export function HeaderPageActions() {
 	const { synced } = useWorkspaceRouteSync(workspaceId);
 	const canEdit = useCanEditWorkspace();
 	const isMobile = useIsMobile();
-	const pageQuery = useQuery({
-		...getPageQueryOptions(pageId ?? ""),
-		enabled: Boolean(pageId && synced),
-	});
+	const page = useCachedPage(pageId);
 	const navigationQuery = useQuery({
 		...getPageNavigationQueryOptions(workspaceId ?? ""),
 		enabled: Boolean(workspaceId && synced),
 	});
-	const favorite = usePageFavorite(workspaceId ?? "", pageQuery.data);
+	const favorite = usePageFavorite(workspaceId ?? "", page);
 	const isFavorite = navigationQuery.data?.favorites.some(
 		(item) => item.id === pageId,
 	);
@@ -122,11 +115,12 @@ export function HeaderPageActions() {
 	async function exportPage(format: "markdown" | "html") {
 		if (exporting) return;
 		setExporting(format);
-		const sourceUrl = pageHtmlSourceUrl(
-			window.location.origin,
-			activeWorkspaceId,
-			activePageId,
-		);
+		const markdownExport =
+			format === "markdown"
+				? import("@/features/pages/client/markdown-files")
+				: null;
+		const htmlExport =
+			format === "html" ? import("@/features/pages/client/html-files") : null;
 		try {
 			if (!(await flushPendingPageSave(activePageId))) {
 				reportUserError("Save this page before exporting it.");
@@ -179,14 +173,22 @@ export function HeaderPageActions() {
 					: Promise.resolve(null),
 			]);
 			if (format === "markdown") {
+				if (!markdownExport) throw new Error("Markdown export did not load");
+				const { downloadPageMarkdown } = await markdownExport;
 				downloadPageMarkdown(refreshed.title, refreshed.content);
 			} else {
+				if (!htmlExport) throw new Error("HTML export did not load");
+				const { downloadPageHtml, pageHtmlSourceUrl } = await htmlExport;
 				await downloadPageHtml({
 					title: refreshed.title,
 					icon: refreshed.icon,
 					content: refreshed.content,
 					resolvedTheme,
-					sourceUrl,
+					sourceUrl: pageHtmlSourceUrl(
+						window.location.origin,
+						activeWorkspaceId,
+						activePageId,
+					),
 					pageReferences: pageList?.items ?? [],
 				});
 			}
@@ -238,9 +240,7 @@ export function HeaderPageActions() {
 				className="text-muted-foreground"
 				aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
 				title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-				disabled={
-					!pageQuery.data || !navigationQuery.data || favorite.isPending
-				}
+				disabled={!page || !navigationQuery.data || favorite.isPending}
 				onClick={() => favorite.toggle(!isFavorite)}
 			>
 				<StarIcon className={isFavorite ? "fill-current" : undefined} />
@@ -316,7 +316,7 @@ export function HeaderPageActions() {
 											setTrashTarget({
 												pageId: activePageId,
 												workspaceId: activeWorkspaceId,
-												title: pageQuery.data?.title || "Untitled",
+												title: page?.title || "Untitled",
 											});
 										}}
 									/>
@@ -369,7 +369,7 @@ export function HeaderPageActions() {
 									setTrashTarget({
 										pageId: activePageId,
 										workspaceId: activeWorkspaceId,
-										title: pageQuery.data?.title || "Untitled",
+										title: page?.title || "Untitled",
 									});
 								}}
 							>

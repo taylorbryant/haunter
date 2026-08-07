@@ -33,11 +33,11 @@ import {
 } from "../contracts";
 import { pageRoutes } from "../routes";
 import {
-	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageNavigationRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
+	createTestWorkspaceEventPublisher,
 } from "./helpers";
 
 function createSignedInAuth(
@@ -63,7 +63,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageNavigation = createTestPageNavigationRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
-	const pageCollaboration = createTestPageCollaborationPort();
+	const workspaceEvents = createTestWorkspaceEventPublisher();
 	// Every signed-in test user is an owner of their active workspace.
 	const members = {
 		async findRole() {
@@ -83,11 +83,11 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 			members,
 			pageLinks,
 			pageNavigation,
-			pageCollaboration,
 			pages,
 			pageVersions,
 			tasks,
 			canvases,
+			workspaceEvents,
 			devtools: createInMemoryDevtools(),
 			auth: options.auth,
 			// Bound so the harness's unenforceable-metadata warning stays quiet;

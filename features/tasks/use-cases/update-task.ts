@@ -1,5 +1,8 @@
 import "@beignet/core/server-only";
-import type { PublishTaskBlockPatchInput } from "@/features/pages/ports";
+import {
+	scheduleWorkspacePageEvent,
+	scheduleWorkspaceTaskEvent,
+} from "@/features/collab/server/workspace-events";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -19,7 +22,7 @@ export const updateTaskUseCase = useCase
 		const user = requireUser(ctx);
 		const scope = requireActiveWorkspaceScope(ctx);
 
-		const { updated, assignmentNotification, collaborationPatch } =
+		const { updated, assignmentNotification, pagePatch } =
 			await ctx.ports.uow.transaction(async (tx) => {
 				const task = await tx.tasks.findById(scope, input.id);
 				if (!task) {
@@ -108,7 +111,9 @@ export const updateTaskUseCase = useCase
 				}
 
 				// Write the change through to the source page so the doc agrees.
-				let collaborationPatch: PublishTaskBlockPatchInput | null = null;
+				let pagePatch: Awaited<
+					ReturnType<typeof savePageTaskBlockPatch>
+				> | null = null;
 				if (
 					task.pageId !== null &&
 					task.sourceBlockId !== null &&
@@ -118,7 +123,7 @@ export const updateTaskUseCase = useCase
 						input.reminderOffsetMinutes !== undefined ||
 						input.assigneeId !== undefined)
 				) {
-					collaborationPatch = await savePageTaskBlockPatch(tx.pages, scope, {
+					pagePatch = await savePageTaskBlockPatch(tx.pages, scope, {
 						pageId: task.pageId,
 						blockId: task.sourceBlockId,
 						patch: {
@@ -154,27 +159,22 @@ export const updateTaskUseCase = useCase
 							)
 						: null;
 
-				return { updated, assignmentNotification, collaborationPatch };
+				return { updated, assignmentNotification, pagePatch };
 			});
 		scheduleTaskAssignmentDelivery(
 			ctx,
 			assignmentNotification ? [assignmentNotification] : [],
 		);
-		if (collaborationPatch) {
-			try {
-				await ctx.ports.pageCollaboration.publishTaskBlockPatch(
-					collaborationPatch,
-				);
-			} catch (error) {
-				ctx.ports.logger.warn(
-					"Failed to propagate task properties to collaboration",
-					{
-						error,
-						pageId: collaborationPatch.pageId,
-						taskId: updated.id,
-					},
-				);
-			}
+		if (pagePatch) {
+			scheduleWorkspacePageEvent(ctx, {
+				type: "page.contentChanged",
+				workspaceId: updated.workspaceId,
+				pageId: pagePatch.pageId,
+			});
 		}
+		scheduleWorkspaceTaskEvent(ctx, {
+			workspaceId: updated.workspaceId,
+			taskId: updated.id,
+		});
 		return updated;
 	});

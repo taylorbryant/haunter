@@ -47,6 +47,7 @@ import {
 import { changelogStatusQueryOptions } from "@/features/changelog/client/queries";
 import { ChangelogDialog } from "@/features/changelog/components/changelog-dialog";
 import type { ChangelogRelease } from "@/features/changelog/releases";
+import { useAfterFirstPaint } from "@/hooks/use-after-first-paint";
 import { isThemeMode, type ThemeMode } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 
@@ -115,8 +116,10 @@ export function NavUser({
 	const { isMobile } = useSidebar();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [changelogOpen, setChangelogOpen] = useState(false);
+	const afterFirstPaint = useAfterFirstPaint();
 	const changelogStatus = useQuery({
 		...changelogStatusQueryOptions(),
+		enabled: afterFirstPaint,
 		meta: { errorMode: "silent" },
 	});
 	const hasUnreadChangelog = changelogStatus.data?.hasUnread === true;

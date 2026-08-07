@@ -10,7 +10,7 @@ const child = {
 };
 
 describe("open page content mutations", () => {
-	it("applies a subpage link through the registered collaborative editor", () => {
+	it("applies a subpage link through the registered open editor", () => {
 		const calls: unknown[][] = [];
 		const unregister = registerSubpageLinkAppender(
 			"00000000-0000-4000-8000-000000000001",
@@ -31,7 +31,7 @@ describe("open page content mutations", () => {
 		expect(calls).toEqual([[child, "2026-07-16T20:00:00.000Z"]]);
 	});
 
-	it("falls back when no collaborative editor is registered", () => {
+	it("falls back when no open editor is registered", () => {
 		expect(
 			appendSubpageLinkToOpenPage(
 				"00000000-0000-4000-8000-000000000003",

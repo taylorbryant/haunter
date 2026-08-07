@@ -5,6 +5,7 @@ import {
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
 import {
+	canvasPendingSaveKey,
 	clearPendingCanvasSave,
 	drainCanvasSaveQueue,
 	flushPendingCanvasSave,
@@ -157,6 +158,12 @@ describe("canvas snapshot cache", () => {
 });
 
 describe("pending canvas saves", () => {
+	it("isolates pending snapshots between signed-in users", () => {
+		expect(canvasPendingSaveKey("canvas_1", "user_1")).not.toBe(
+			canvasPendingSaveKey("canvas_1", "user_2"),
+		);
+	});
+
 	it("survives remounts until the exact pending snapshot is saved", () => {
 		const id = "56fc14c1-127a-4a1c-942a-b3e5f445b68f";
 		const first = rememberPendingCanvasSave(id, {

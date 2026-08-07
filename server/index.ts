@@ -5,7 +5,6 @@ import {
 	createIdempotencyHooks,
 	createRateLimitHooks,
 	createSecurityHeadersHooks,
-	type ServerHook,
 } from "@beignet/core/server";
 import { createNextServer, createNextServerLoader } from "@beignet/next";
 import type { AppContext } from "@/app-context";
@@ -14,23 +13,6 @@ import { closeDatabaseClient } from "@/infra/db/client";
 import { env } from "@/lib/env";
 import { appContext } from "./context";
 import { routes } from "./routes";
-
-/**
- * Dev-only per-stage request timings, one compact line per request. The
- * same numbers feed the devtools waterfall; this makes them greppable so
- * latency work (e.g. how much of a request is context creation) starts
- * from measurements instead of endpoint-total inference.
- */
-const devStageTimingsHook: ServerHook<AppContext> = {
-	afterSend: ({ contract, durationMs, stages }) => {
-		console.info(
-			`[stages] ${contract.method.toUpperCase()} ${contract.name} ` +
-				`${Math.round(durationMs)}ms — context=${Math.round(stages.contextMs)} ` +
-				`parse=${Math.round(stages.parseMs)} hooks=${Math.round(stages.beforeHandleMs)} ` +
-				`handler=${Math.round(stages.handlerMs)} send=${Math.round(stages.sendMs)}`,
-		);
-	},
-};
 
 /**
  * Lazily construct the server the first time a route handles a request.
@@ -54,7 +36,6 @@ export const getServer = createNextServerLoader(async () => {
 			createRateLimitHooks<AppContext>({
 				ipSource: "x-forwarded-for-first",
 			}),
-			...(env.NODE_ENV !== "production" ? [devStageTimingsHook] : []),
 		],
 		context: appContext,
 		routes,

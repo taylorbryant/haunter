@@ -37,19 +37,24 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Awareness } from "y-protocols/awareness";
 import { apiClient } from "@/client";
 import { reportUserError, userErrorMessage } from "@/client/error-feedback";
+import {
+	deleteLocalDraft,
+	getLocalDraft,
+	hasLocalDraftHint,
+	type LocalDraft,
+	localDraftKey,
+	putLocalDraft,
+} from "@/client/local-drafts";
 import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
-import { setCollabPresence } from "@/features/collab/client/presence-state";
-import type { CollabRoom } from "@/features/collab/client/session";
 import { invalidateNotifications } from "@/features/notifications/client/queries";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-content";
 import {
+	getPageQueryOptions,
 	invalidateBacklinks,
-	invalidatePage,
 	invalidatePages,
 	listPagesQueryOptions,
 	savePageContentMutationOptions,
@@ -60,35 +65,24 @@ import {
 	createInFlightSaveQueueStore,
 	drainPageSaveQueue,
 	type InFlightSaveQueue,
+	pageDocumentSaveQueueKey,
 	registerPageSaveFlusher,
 } from "@/features/pages/client/save-state";
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
+import { containsBlockId } from "@/features/pages/lib/block-tree";
 import {
 	normalizeCodeBlockLanguage,
 	normalizeCodeBlockLanguages,
 } from "@/features/pages/lib/code-block-language";
-import {
-	COLLAB_CONTENT_VERSION_KEY,
-	COLLAB_SEEDED_KEY,
-	COLLAB_SUBPAGE_LINKS_KEY,
-	COLLAB_TASK_BLOCK_PATCHES_KEY,
-	isSameOrNewerContentVersion,
-	isSubpageLinkedCollabEvent,
-	isTaskBlockPatchedCollabEvent,
-	type SubpageLinkedCollabEvent,
-} from "@/features/pages/lib/collab-document";
-import {
-	containsBlockId,
-	reconcilePageLinkBlocks,
-} from "@/features/pages/lib/reconcile-page-link-blocks";
+import { isSameOrNewerContentVersion } from "@/features/pages/lib/content-version";
 import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
-import { reconcileTaskBlockProps } from "@/features/tasks/lib/reconcile-task-block-props";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { EditorBodySkeleton } from "../page-editor-skeleton";
 import {
 	OPEN_CODE_BLOCK_DIALOG_EVENT,
 	type OpenCodeBlockDialogDetail,
@@ -287,8 +281,18 @@ export type SaveState = "saved" | "pending" | "saving" | "error";
 
 type DocumentSaveOutcome =
 	| { status: "saved"; contentUpdatedAt: string }
-	| { status: "conflict" }
-	| { status: "error"; error: unknown };
+	| { status: "conflict"; content: BlockJson[] }
+	| { status: "error"; error: unknown; retryWithNewerContent: boolean };
+
+type PageContentConflict = {
+	content: BlockJson[];
+};
+
+type PageRecoveryDraft = LocalDraft<BlockJson[]>;
+
+function cloneDocument(content: BlockJson[]): BlockJson[] {
+	return structuredClone(content);
+}
 
 const documentSaveQueues = createInFlightSaveQueueStore<DocumentSaveOutcome>();
 
@@ -299,88 +303,124 @@ type HaunterEditorProps = {
 	/** Document-only optimistic-concurrency token. */
 	contentUpdatedAt?: string;
 	editable?: boolean;
-	/**
-	 * The page's synced Liveblocks room, or null for local-only editing.
-	 * PageEditor owns the session lifecycle (and its connecting/fallback
-	 * states) so the title can share the same doc.
-	 */
-	collab?: CollabRoom | null;
-	/** Cursor identity shown to collaborators when collaboration is on. */
-	collabUser?: { name: string; color: string };
 	/** Incremented by the owner when focus should move from the title to body. */
 	focusRequest?: number;
 	/** Current signed-in user, used for same-user authoring defaults. */
 	currentUserId?: string | null;
 	onSaveStateChange?: (state: SaveState) => void;
-	/** The server rejected a save as stale; the owner should reload the doc. */
-	onConflict?: () => void;
 };
 
-/**
- * Publishes the other people currently in this page to the presence store;
- * the app header renders the chips (next to "Edited X ago").
- */
-function PresencePublisher({ room }: { room: CollabRoom }) {
-	useEffect(() => {
-		const awareness = room.provider.awareness;
-		const ownClientId = room.doc.clientID;
-		const update = () => {
-			const seen = new Map<string, { name: string; color: string }>();
-			for (const [clientId, state] of awareness.getStates()) {
-				if (clientId === ownClientId) continue;
-				const user = (
-					state as { user?: { name?: string; color?: string } } | undefined
-				)?.user;
-				if (user?.name) {
-					seen.set(user.name, {
-						name: user.name,
-						color: user.color ?? "#3b82f6",
-					});
-				}
-			}
-			setCollabPresence([...seen.values()]);
-		};
-		awareness.on("change", update);
-		update();
-		return () => {
-			awareness.off("change", update);
-			setCollabPresence([]);
-		};
-	}, [room]);
+type MountedHaunterEditorProps = HaunterEditorProps & {
+	initialRecoveryDraft: PageRecoveryDraft | null;
+};
 
-	return null;
+export default function HaunterEditor(props: HaunterEditorProps) {
+	const [mounted, setMounted] = useState(false);
+	const [recoveryDraft, setRecoveryDraft] = useState<
+		PageRecoveryDraft | null | undefined
+	>(undefined);
+
+	// Keep the editor in the route bundle, but do not render BlockNote until the
+	// browser is mounted because one of its hooks dereferences `window`.
+	useEffect(() => setMounted(true), []);
+
+	const recoveryKey = props.currentUserId
+		? localDraftKey(props.currentUserId, "page", props.pageId)
+		: null;
+	const shouldLoadRecoveryDraft =
+		mounted && recoveryKey !== null && hasLocalDraftHint(recoveryKey);
+	useEffect(() => {
+		if (!shouldLoadRecoveryDraft || !recoveryKey) return;
+		let active = true;
+		void getLocalDraft<BlockJson[]>(recoveryKey)
+			.then((draft) => {
+				if (!active) return;
+				if (draft && draft.workspaceId !== props.workspaceId) {
+					setRecoveryDraft(null);
+					void deleteLocalDraft(recoveryKey).catch(() => undefined);
+					return;
+				}
+				setRecoveryDraft(draft);
+			})
+			.catch(() => {
+				if (active) setRecoveryDraft(null);
+			});
+		return () => {
+			active = false;
+		};
+	}, [props.workspaceId, recoveryKey, shouldLoadRecoveryDraft]);
+
+	if (!mounted || (shouldLoadRecoveryDraft && recoveryDraft === undefined)) {
+		return (
+			<div className="py-2">
+				<EditorBodySkeleton />
+			</div>
+		);
+	}
+
+	return (
+		<MountedHaunterEditor
+			{...props}
+			initialRecoveryDraft={recoveryDraft ?? null}
+		/>
+	);
 }
 
-export default function HaunterEditor({
+function MountedHaunterEditor({
 	pageId,
 	workspaceId,
 	initialContent,
 	contentUpdatedAt,
 	editable = true,
-	collabUser,
-	collab = null,
 	focusRequest = 0,
 	currentUserId = null,
 	onSaveStateChange,
-	onConflict,
-}: HaunterEditorProps) {
+	initialRecoveryDraft,
+}: MountedHaunterEditorProps) {
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const queryClient = useQueryClient();
 	const isMobile = useIsMobile();
 	const documentSaveQueue: InFlightSaveQueue<DocumentSaveOutcome> =
-		documentSaveQueues.get(pageId);
-	const [saveState, setSaveState] = useState<SaveState>("saved");
+		documentSaveQueues.get(pageDocumentSaveQueueKey(pageId, currentUserId));
+	const recoveryKey = currentUserId
+		? localDraftKey(currentUserId, "page", pageId)
+		: null;
+	const initialQueuedConflict = useRef<PageContentConflict | null>(
+		documentSaveQueue.lastResult?.status === "conflict"
+			? { content: documentSaveQueue.lastResult.content }
+			: initialRecoveryDraft
+				? { content: initialRecoveryDraft.payload }
+				: null,
+	).current;
+	const [saveState, setSaveState] = useState<SaveState>(
+		initialQueuedConflict ? "error" : "saved",
+	);
 	const [saveError, setSaveError] = useState<string | null>(null);
-	const onConflictRef = useRef(onConflict);
-	onConflictRef.current = onConflict;
-	const normalizedInitialContent = useMemo(
+	const [hasSaveConflict, setHasSaveConflict] = useState(
+		initialQueuedConflict !== null,
+	);
+	const saveConflictRef = useRef<PageContentConflict | null>(
+		initialQueuedConflict,
+	);
+	const [resolvingConflict, setResolvingConflict] = useState(false);
+	const [editorInitialContent] = useState(() =>
+		normalizeCodeBlockLanguages(
+			initialQueuedConflict?.content ?? initialContent,
+		),
+	);
+	const normalizedRemoteContent = useMemo(
 		() => normalizeCodeBlockLanguages(initialContent),
 		[initialContent],
 	);
 	// Last document version this editor saw: metadata writes do not affect it.
 	const baseUpdatedAtRef = useRef<string | null>(contentUpdatedAt ?? null);
+	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const dirtyRef = useRef(initialQueuedConflict !== null);
+	const applyingRemoteRef = useRef(false);
+	const allowConflictSaveRef = useRef(false);
+	const saveRef = useRef<() => Promise<boolean>>(async () => true);
 
 	const advanceBaseUpdatedAt = useCallback(
 		(next: string | null | undefined) => {
@@ -390,27 +430,6 @@ export default function HaunterEditor({
 		},
 		[],
 	);
-
-	useEffect(() => {
-		if (!collab) return;
-		const meta = collab.doc.getMap<unknown>("haunter-meta");
-		const advanceFromRoom = () => {
-			const version = meta.get(COLLAB_CONTENT_VERSION_KEY);
-			if (typeof version === "string") advanceBaseUpdatedAt(version);
-		};
-		meta.observe(advanceFromRoom);
-		advanceFromRoom();
-		return () => meta.unobserve(advanceFromRoom);
-	}, [collab, advanceBaseUpdatedAt]);
-
-	// Only the doc-level marker establishes that the shared document completed
-	// its database seed. Fragment length is not authoritative because BlockNote
-	// materializes an empty paragraph while binding a new document.
-	const [shouldSeed] = useState(() => {
-		if (!collab) return false;
-		const meta = collab.doc.getMap<unknown>("haunter-meta");
-		return meta.get(COLLAB_SEEDED_KEY) !== true;
-	});
 
 	const editor = useCreateBlockNote({
 		schema: editorSchema,
@@ -422,33 +441,18 @@ export default function HaunterEditor({
 				throw error;
 			}
 		},
-		collaboration: collab
-			? {
-					fragment: collab.doc.getXmlFragment("blocknote"),
-					// Liveblocks bundles its own copy of y-protocols, so its
-					// Awareness is a structural twin of the one BlockNote expects.
-					provider: collab.provider as unknown as { awareness: Awareness },
-					user: collabUser ?? { name: "Member", color: "#3b82f6" },
-				}
+		initialContent: editorInitialContent.length
+			? // The server stores the document verbatim; the editor owns its shape.
+				(editorInitialContent as never)
 			: undefined,
-		// BlockNote rejects an empty initialContent array; with collaboration
-		// the shared doc is the source of truth instead.
-		initialContent:
-			!collab && normalizedInitialContent.length
-				? // The server stores the document verbatim; the editor owns its shape.
-					(normalizedInitialContent as never)
-				: undefined,
 	});
 	useSyncEditorCodeTheme(editor, resolvedTheme);
 
 	const appendSubpageLink = useCallback(
 		(
-			child: SubpageLinkedCollabEvent["child"],
+			child: Pick<PageMeta, "id" | "workspaceId">,
 			parentContentUpdatedAt: string,
 		) => {
-			const meta = collab?.doc.getMap<unknown>("haunter-meta");
-			if (meta && meta.get(COLLAB_SEEDED_KEY) !== true) return false;
-
 			const block = createSubpageLinkBlock(child);
 			const exists = containsBlockId(
 				editor.document as unknown as BlockJson[],
@@ -462,24 +466,11 @@ export default function HaunterEditor({
 					editor.insertBlocks([block as never], lastBlock, "after");
 				}
 			};
-			if (collab && meta) {
-				collab.doc.transact(() => {
-					insert();
-					const current = meta.get(COLLAB_CONTENT_VERSION_KEY);
-					if (
-						typeof current !== "string" ||
-						isSameOrNewerContentVersion(parentContentUpdatedAt, current)
-					) {
-						meta.set(COLLAB_CONTENT_VERSION_KEY, parentContentUpdatedAt);
-					}
-				});
-			} else {
-				insert();
-			}
+			insert();
 			advanceBaseUpdatedAt(parentContentUpdatedAt);
 			return true;
 		},
-		[collab, editor, advanceBaseUpdatedAt],
+		[editor, advanceBaseUpdatedAt],
 	);
 
 	useEffect(() => {
@@ -487,94 +478,44 @@ export default function HaunterEditor({
 		return registerSubpageLinkAppender(pageId, appendSubpageLink);
 	}, [editable, pageId, appendSubpageLink]);
 
+	// A workspace event invalidates this page after another client commits.
+	// Apply a newer clean SQLite document in place. If local edits are pending,
+	// the content CAS preserves the local draft and asks the user which version
+	// should win instead of silently replacing either document.
+	const appliedRemoteVersionRef = useRef(contentUpdatedAt ?? null);
 	useEffect(() => {
-		if (!collab || !editable) return;
-		const pending = collab.doc.getMap<unknown>(COLLAB_SUBPAGE_LINKS_KEY);
-		const applyPending = () => {
-			for (const event of pending.values()) {
-				if (!isSubpageLinkedCollabEvent(event)) continue;
-				appendSubpageLink(event.child, event.parentContentUpdatedAt);
-			}
-		};
-		pending.observe(applyPending);
-		applyPending();
-		return () => pending.unobserve(applyPending);
-	}, [collab, editable, appendSubpageLink]);
-
-	useEffect(() => {
-		if (!collab) return;
-		const pending = collab.doc.getMap<unknown>(COLLAB_TASK_BLOCK_PATCHES_KEY);
-		const applyPending = () => {
-			for (const candidate of pending.values()) {
-				if (!isTaskBlockPatchedCollabEvent(candidate)) continue;
-				if (
-					contentUpdatedAt &&
-					!isSameOrNewerContentVersion(
-						candidate.pageContentUpdatedAt,
-						contentUpdatedAt,
-					)
-				) {
-					continue;
-				}
-				const block = editor.getBlock(candidate.blockId);
-				if (block?.type !== "task") continue;
-				const currentProps = block.props as Record<string, unknown>;
-				if (
-					Object.entries(candidate.props).every(
-						([key, value]) => currentProps[key] === value,
-					)
-				) {
-					continue;
-				}
-				editor.updateBlock(candidate.blockId, {
-					props: candidate.props,
-				} as never);
-			}
-		};
-		pending.observe(applyPending);
-		applyPending();
-		return () => pending.unobserve(applyPending);
-	}, [collab, contentUpdatedAt, editor]);
-
-	// Seed a brand-new shared doc from the database copy exactly once.
-	const seededRef = useRef(false);
-	useEffect(() => {
-		if (!collab || !shouldSeed || seededRef.current) return;
-		seededRef.current = true;
-		const meta = collab.doc.getMap<unknown>("haunter-meta");
-		if (meta.get(COLLAB_SEEDED_KEY) === true) return;
-		collab.doc.transact(() => {
-			if (normalizedInitialContent.length > 0) {
-				editor.replaceBlocks(
-					editor.document,
-					normalizedInitialContent as never,
-				);
-			}
-			if (contentUpdatedAt) {
-				meta.set(COLLAB_CONTENT_VERSION_KEY, contentUpdatedAt);
-			}
-			meta.set(COLLAB_SEEDED_KEY, true);
-		});
-	}, [collab, shouldSeed, contentUpdatedAt, editor, normalizedInitialContent]);
-
-	const reconciledVersionRef = useRef<string | null>(null);
-	useEffect(() => {
-		if (!collab) return;
-		if (reconciledVersionRef.current === contentUpdatedAt) return;
-		reconciledVersionRef.current = contentUpdatedAt ?? null;
-
-		const taskResult = reconcileTaskBlockProps(
-			editor.document as unknown as BlockJson[],
-			normalizedInitialContent,
-		);
-		const pageLinkResult = reconcilePageLinkBlocks(
-			taskResult.blocks,
-			normalizedInitialContent,
-		);
-		if (taskResult.changed || pageLinkResult.changed) {
-			editor.replaceBlocks(editor.document, pageLinkResult.blocks as never);
+		if (
+			!contentUpdatedAt ||
+			contentUpdatedAt === baseUpdatedAtRef.current ||
+			contentUpdatedAt === appliedRemoteVersionRef.current ||
+			!isSameOrNewerContentVersion(
+				contentUpdatedAt,
+				baseUpdatedAtRef.current,
+			) ||
+			dirtyRef.current ||
+			documentSaveQueue.inFlight
+		) {
+			return;
 		}
-	}, [collab, contentUpdatedAt, editor, normalizedInitialContent]);
+		applyingRemoteRef.current = true;
+		editor.replaceBlocks(
+			editor.document,
+			(normalizedRemoteContent.length > 0
+				? normalizedRemoteContent
+				: [{ type: "paragraph" }]) as never,
+		);
+		requestAnimationFrame(() => {
+			applyingRemoteRef.current = false;
+		});
+		appliedRemoteVersionRef.current = contentUpdatedAt;
+		advanceBaseUpdatedAt(contentUpdatedAt);
+	}, [
+		advanceBaseUpdatedAt,
+		contentUpdatedAt,
+		documentSaveQueue,
+		editor,
+		normalizedRemoteContent,
+	]);
 
 	useEffect(() => {
 		if (!focusRequest || !editable) return;
@@ -624,9 +565,6 @@ export default function HaunterEditor({
 		...savePageContentMutationOptions(),
 		meta: { errorMode: "inline" },
 	});
-	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const dirtyRef = useRef(false);
-	const saveRef = useRef<() => Promise<boolean>>(async () => true);
 
 	const reportState = useCallback(
 		(state: SaveState) => {
@@ -635,6 +573,181 @@ export default function HaunterEditor({
 		},
 		[onSaveStateChange],
 	);
+
+	const persistRecoveryDraft = useCallback(
+		async (content: BlockJson[]) => {
+			if (!currentUserId || !recoveryKey) return;
+			await putLocalDraft({
+				key: recoveryKey,
+				userId: currentUserId,
+				workspaceId,
+				resourceType: "page",
+				resourceId: pageId,
+				baseVersion: baseUpdatedAtRef.current,
+				payload: cloneDocument(content),
+				status: "conflict",
+				updatedAt: new Date().toISOString(),
+			});
+		},
+		[currentUserId, pageId, recoveryKey, workspaceId],
+	);
+
+	const clearRecoveryDraft = useCallback(async () => {
+		if (recoveryKey) await deleteLocalDraft(recoveryKey);
+	}, [recoveryKey]);
+
+	const preserveConflict = useCallback(
+		async (content: BlockJson[], restoreEditor: boolean) => {
+			const snapshot = cloneDocument(content);
+			const conflict = { content: snapshot } satisfies PageContentConflict;
+			saveConflictRef.current = conflict;
+			setHasSaveConflict(true);
+			documentSaveQueues.setLastResult(
+				documentSaveQueue,
+				{
+					status: "conflict",
+					content: snapshot,
+				},
+				{ retainWhenIdle: true },
+			);
+			dirtyRef.current = true;
+			setSaveError(null);
+			setPageContentInCache(queryClient, pageId, snapshot);
+			if (restoreEditor) {
+				applyingRemoteRef.current = true;
+				editor.replaceBlocks(
+					editor.document,
+					(snapshot.length > 0 ? snapshot : [{ type: "paragraph" }]) as never,
+				);
+				requestAnimationFrame(() => {
+					applyingRemoteRef.current = false;
+				});
+			}
+			reportState("error");
+			try {
+				await persistRecoveryDraft(snapshot);
+			} catch (error) {
+				setSaveError(
+					userErrorMessage(
+						error,
+						"Your unsaved version is open, but could not be stored on this device.",
+					),
+				);
+			}
+		},
+		[
+			documentSaveQueue,
+			editor,
+			pageId,
+			persistRecoveryDraft,
+			queryClient,
+			reportState,
+		],
+	);
+
+	const loadLatestAfterConflict = useCallback(async () => {
+		setResolvingConflict(true);
+		setSaveError(null);
+		try {
+			const latest = await queryClient.fetchQuery({
+				...getPageQueryOptions(pageId),
+				staleTime: 0,
+			});
+			await clearRecoveryDraft().catch(() => undefined);
+			applyingRemoteRef.current = true;
+			editor.replaceBlocks(
+				editor.document,
+				(latest.content.length > 0
+					? latest.content
+					: [{ type: "paragraph" }]) as never,
+			);
+			requestAnimationFrame(() => {
+				applyingRemoteRef.current = false;
+			});
+			baseUpdatedAtRef.current = latest.contentUpdatedAt;
+			appliedRemoteVersionRef.current = latest.contentUpdatedAt;
+			dirtyRef.current = false;
+			saveConflictRef.current = null;
+			setHasSaveConflict(false);
+			documentSaveQueues.clearLastResult(documentSaveQueue);
+			reportState("saved");
+		} catch (error) {
+			setSaveError(
+				userErrorMessage(error, "The latest page version could not be loaded."),
+			);
+			reportState("error");
+		} finally {
+			setResolvingConflict(false);
+		}
+	}, [
+		clearRecoveryDraft,
+		documentSaveQueue,
+		editor,
+		pageId,
+		queryClient,
+		reportState,
+	]);
+
+	const saveLocalAfterConflict = useCallback(async () => {
+		setResolvingConflict(true);
+		setSaveError(null);
+		try {
+			// Refresh only to obtain the current CAS token. The editor remains on
+			// the preserved local document, and the recovery snapshot remains pinned
+			// until every edit made during this explicit overwrite is saved.
+			const latest = await queryClient.fetchQuery({
+				...getPageQueryOptions(pageId),
+				staleTime: 0,
+			});
+			baseUpdatedAtRef.current = latest.contentUpdatedAt;
+			allowConflictSaveRef.current = true;
+			dirtyRef.current = true;
+			reportState("pending");
+			const saved = await drainPageSaveQueue({
+				clearPendingTimer: () => {
+					if (timeoutRef.current) {
+						clearTimeout(timeoutRef.current);
+						timeoutRef.current = null;
+					}
+				},
+				hasPendingChanges: () =>
+					dirtyRef.current || documentSaveQueue.inFlight !== null,
+				save: () => saveRef.current(),
+			});
+			if (saved) {
+				await clearRecoveryDraft().catch(() => undefined);
+				saveConflictRef.current = null;
+				setHasSaveConflict(false);
+				documentSaveQueues.clearLastResult(documentSaveQueue);
+			} else if (saveConflictRef.current) {
+				documentSaveQueues.setLastResult(
+					documentSaveQueue,
+					{
+						status: "conflict",
+						content: cloneDocument(saveConflictRef.current.content),
+					},
+					{ retainWhenIdle: true },
+				);
+			}
+		} catch (error) {
+			const content = editor.document as unknown as BlockJson[];
+			await preserveConflict(content, false);
+			setSaveError(
+				userErrorMessage(error, "Your page version could not be saved."),
+			);
+		} finally {
+			allowConflictSaveRef.current = false;
+			setResolvingConflict(false);
+		}
+	}, [
+		documentSaveQueue,
+		clearRecoveryDraft,
+		editor,
+		pageId,
+		preserveConflict,
+		queryClient,
+		reportState,
+	]);
 
 	saveRef.current = async () => {
 		const precedingSave = documentSaveQueue.inFlight;
@@ -645,15 +758,20 @@ export default function HaunterEditor({
 				return dirtyRef.current ? saveRef.current() : true;
 			}
 			if (outcome.status === "conflict") {
-				dirtyRef.current = false;
-				setSaveError(null);
-				reportState("saved");
-				onConflict?.();
+				if (!saveConflictRef.current) {
+					const hasNewerLocalEdits = dirtyRef.current;
+					await preserveConflict(
+						hasNewerLocalEdits
+							? (editor.document as unknown as BlockJson[])
+							: outcome.content,
+						!hasNewerLocalEdits,
+					);
+				}
 				return false;
 			}
 			// A newer local document supersedes the failed snapshot and can retry
 			// from the same content version once the old request has settled.
-			if (dirtyRef.current) return saveRef.current();
+			if (outcome.retryWithNewerContent) return saveRef.current();
 			setSaveError(
 				userErrorMessage(
 					outcome.error,
@@ -663,6 +781,9 @@ export default function HaunterEditor({
 			reportState("error");
 			return false;
 		}
+		// Conflicts require an explicit choice. Normal autosave and navigation
+		// flushes must not silently overwrite the newer server document.
+		if (saveConflictRef.current && !allowConflictSaveRef.current) return false;
 		if (!dirtyRef.current) return true;
 		dirtyRef.current = false;
 		reportState("saving");
@@ -705,22 +826,31 @@ export default function HaunterEditor({
 						contentUpdatedAt: result.contentUpdatedAt,
 					} satisfies DocumentSaveOutcome;
 				},
-				(error) => {
+				async (error) => {
 					if (error instanceof ContractError && error.status === 409) {
-						// Someone else saved a newer version. Don't retry over it —
-						// hand off so the owner reloads the doc into a fresh editor.
-						dirtyRef.current = false;
-						setSaveError(null);
-						reportState("saved");
-						onConflict?.();
-						return { status: "conflict" } satisfies DocumentSaveOutcome;
+						// Keep the current editor document—including any typing that
+						// happened while this request was in flight—until the user
+						// chooses whether the local or server version should win.
+						const localContent = cloneDocument(
+							editor.document as unknown as BlockJson[],
+						);
+						await preserveConflict(localContent, false);
+						return {
+							status: "conflict",
+							content: localContent,
+						} satisfies DocumentSaveOutcome;
 					}
+					const retryWithNewerContent = dirtyRef.current;
 					dirtyRef.current = true;
 					setSaveError(
 						userErrorMessage(error, "Your page changes could not be saved."),
 					);
 					reportState("error");
-					return { status: "error", error } satisfies DocumentSaveOutcome;
+					return {
+						status: "error",
+						error,
+						retryWithNewerContent,
+					} satisfies DocumentSaveOutcome;
 				},
 			);
 		const run = documentSaveQueues
@@ -737,16 +867,41 @@ export default function HaunterEditor({
 	};
 
 	const handleChange = useCallback(() => {
-		// Viewers must never autosave: with collaboration on, remote peers'
-		// edits also fire onChange here, and a viewer's save would just 403.
-		if (!editable) return;
+		// Viewers must never autosave an editor initialized from read-only data.
+		if (!editable || applyingRemoteRef.current) return;
 		normalizeEditorCodeBlockLanguages(editor);
 		dirtyRef.current = true;
+		if (saveConflictRef.current) {
+			// Keep edits made while the conflict banner is open in the shared
+			// page queue as well, so a same-page remount restores the latest local
+			// draft rather than only the snapshot rejected by the server.
+			const content = cloneDocument(editor.document as unknown as BlockJson[]);
+			const conflict = { content } satisfies PageContentConflict;
+			saveConflictRef.current = conflict;
+			documentSaveQueues.setLastResult(
+				documentSaveQueue,
+				{
+					status: "conflict",
+					content,
+				},
+				{ retainWhenIdle: true },
+			);
+			void persistRecoveryDraft(content).catch((error) => {
+				setSaveError(
+					userErrorMessage(
+						error,
+						"Your unsaved version is open, but could not be stored on this device.",
+					),
+				);
+			});
+			reportState("error");
+			return;
+		}
 		setSaveError(null);
 		reportState("pending");
 		if (timeoutRef.current) clearTimeout(timeoutRef.current);
 		timeoutRef.current = setTimeout(() => saveRef.current(), AUTOSAVE_DELAY_MS);
-	}, [editor, reportState, editable]);
+	}, [documentSaveQueue, editable, editor, persistRecoveryDraft, reportState]);
 
 	// Retain the page-scoped coordinator through cleanup. If this editor is
 	// replaced while its save is running, the replacement adopts that exact
@@ -756,6 +911,10 @@ export default function HaunterEditor({
 		const lastResult = documentSaveQueue.lastResult;
 		if (lastResult?.status === "saved") {
 			advanceBaseUpdatedAt(lastResult.contentUpdatedAt);
+		} else if (lastResult?.status === "conflict") {
+			void preserveConflict(lastResult.content, false);
+		} else if (initialRecoveryDraft) {
+			void preserveConflict(initialRecoveryDraft.payload, false);
 		}
 		const precedingSave = documentSaveQueue.inFlight;
 		if (precedingSave) {
@@ -763,10 +922,15 @@ export default function HaunterEditor({
 			void precedingSave.then((outcome) => {
 				if (outcome.status === "saved") {
 					advanceBaseUpdatedAt(outcome.contentUpdatedAt);
-				} else if (outcome.status === "conflict" && active) {
+				} else if (
+					outcome.status === "conflict" &&
+					active &&
+					!saveConflictRef.current
+				) {
 					// The component that started the request may already be gone. The
-					// replacement must reload its own editor, not only invalidate cache.
-					void onConflictRef.current?.();
+					// replacement adopts the rejected local snapshot rather than
+					// initializing from—and then overwriting it with—the server copy.
+					void preserveConflict(outcome.content, true);
 				}
 			});
 			return () => {
@@ -779,7 +943,12 @@ export default function HaunterEditor({
 			if (timeoutRef.current) clearTimeout(timeoutRef.current);
 			void saveRef.current().finally(releaseQueue);
 		};
-	}, [advanceBaseUpdatedAt, documentSaveQueue]);
+	}, [
+		advanceBaseUpdatedAt,
+		documentSaveQueue,
+		initialRecoveryDraft,
+		preserveConflict,
+	]);
 
 	useEffect(() => {
 		return registerPageSaveFlusher(pageId, async () => {
@@ -819,7 +988,42 @@ export default function HaunterEditor({
 		// content runs edge-to-edge; the block controls that live there are
 		// hidden below. Driven from JS (not CSS) to share one breakpoint.
 		<div className={cn("haunter-editor", isMobile && "editor-flush")}>
-			{saveError ? (
+			{hasSaveConflict ? (
+				<div
+					role="alert"
+					className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 px-3 py-2 text-sm"
+				>
+					<div className="min-w-0 flex-1">
+						<p className="font-medium text-destructive">
+							This page changed elsewhere. Your unsaved version is still open.
+						</p>
+						<p className="text-muted-foreground text-xs">
+							Load the latest version, or save yours over the newer content.
+						</p>
+						{saveError ? (
+							<p className="mt-1 text-destructive text-xs">{saveError}</p>
+						) : null}
+					</div>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={resolvingConflict}
+						onClick={() => void loadLatestAfterConflict()}
+					>
+						Load latest
+					</Button>
+					<Button
+						type="button"
+						variant="destructive"
+						size="sm"
+						disabled={resolvingConflict}
+						onClick={() => void saveLocalAfterConflict()}
+					>
+						Save my version
+					</Button>
+				</div>
+			) : saveError ? (
 				<div
 					role="alert"
 					className="mb-2 flex items-center gap-2 rounded-md border border-destructive/30 px-3 py-2 text-destructive text-sm"
@@ -836,7 +1040,6 @@ export default function HaunterEditor({
 					</Button>
 				</div>
 			) : null}
-			{collab ? <PresencePublisher room={collab} /> : null}
 			<TaskBlockCurrentUserContext.Provider value={currentUserId}>
 				<BlockNoteView
 					editor={editor}

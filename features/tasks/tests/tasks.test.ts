@@ -17,10 +17,10 @@ import type { Notification } from "@/features/notifications/schemas";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { BlockJson } from "@/features/pages/schemas";
 import {
-	createTestPageCollaborationPort,
 	createTestPageLinkRepository,
 	createTestPageRepository,
 	createTestPageVersionRepository,
+	createTestWorkspaceEventPublisher,
 } from "@/features/pages/tests/helpers";
 import {
 	createPageUseCase,
@@ -87,13 +87,7 @@ async function createFixture(
 	};
 	const pageLinks = createTestPageLinkRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
-	const publishedTaskBlockPatches: Parameters<
-		ReturnType<typeof createTestPageCollaborationPort>["publishTaskBlockPatch"]
-	>[0][] = [];
-	const pageCollaboration = createTestPageCollaborationPort(
-		[],
-		publishedTaskBlockPatches,
-	);
+	const workspaceEvents = createTestWorkspaceEventPublisher();
 	const assignmentNotifications: Notification[] = [];
 	const dismissedScheduledTaskIds: string[] = [];
 	const afterResponseTasks: Array<() => Promise<void>> = [];
@@ -227,11 +221,11 @@ async function createFixture(
 			members,
 			notificationInbox,
 			notifications,
-			pageCollaboration,
 			pageLinks,
 			pages,
 			pageVersions,
 			tasks,
+			workspaceEvents,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
@@ -259,7 +253,6 @@ async function createFixture(
 		page,
 		pages,
 		pushDeliveries,
-		publishedTaskBlockPatches,
 		scope,
 		tasks,
 		tester,
@@ -554,7 +547,6 @@ describe("tasks use cases", () => {
 			notificationInbox,
 			page,
 			pages,
-			publishedTaskBlockPatches,
 			scope,
 			tasks,
 			tester,
@@ -629,14 +621,6 @@ describe("tasks use cases", () => {
 			{ ctx },
 		);
 
-		expect(publishedTaskBlockPatches).toEqual([
-			{
-				pageId: page.id,
-				pageContentUpdatedAt: expect.any(String),
-				blockId: "page-task",
-				props: { checked: true },
-			},
-		]);
 		expect((await tasks.findById(scope, task.id))?.completed).toBe(true);
 		const savedPage = await pages.findById(scope, page.id);
 		expect(savedPage?.content).toEqual([
@@ -649,15 +633,7 @@ describe("tasks use cases", () => {
 	});
 
 	it("writes My Tasks toggles through to the source page document", async () => {
-		const {
-			page,
-			pages,
-			publishedTaskBlockPatches,
-			scope,
-			tasks,
-			tester,
-			ctx,
-		} = await createFixture();
+		const { page, pages, scope, tasks, tester, ctx } = await createFixture();
 
 		await tester.run(
 			savePageContentUseCase,
@@ -682,18 +658,6 @@ describe("tasks use cases", () => {
 			due: "2026-07-04",
 			dueTime: "",
 		});
-		expect(publishedTaskBlockPatches).toEqual([
-			{
-				pageId: page.id,
-				pageContentUpdatedAt: expect.any(String),
-				blockId: "b1",
-				props: {
-					checked: true,
-					due: "2026-07-04",
-					dueTime: "",
-				},
-			},
-		]);
 	});
 
 	it("does not let a stale page save revert task-list write-through changes", async () => {
@@ -857,8 +821,8 @@ describe("tasks use cases", () => {
 			title: "Review the launch plan",
 		});
 		expect(assignmentNotifications).toHaveLength(1);
-		expect(afterResponseTasks).toHaveLength(1);
-		await expect(afterResponseTasks[0]?.()).resolves.toBeUndefined();
+		expect(afterResponseTasks).toHaveLength(2);
+		await Promise.all(afterResponseTasks.map((work) => work()));
 	});
 
 	it("accepts detailed task titles and rejects only genuinely excessive ones", async () => {

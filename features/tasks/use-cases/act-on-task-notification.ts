@@ -1,6 +1,9 @@
 import "@beignet/core/server-only";
 import { createTenant, createTenantScope } from "@beignet/core/ports";
-import type { PublishTaskBlockPatchInput } from "@/features/pages/ports";
+import {
+	scheduleWorkspacePageEvent,
+	scheduleWorkspaceTaskEvent,
+} from "@/features/collab/server/workspace-events";
 import { appError } from "@/features/shared/errors";
 import { zonedDateTimeToUtc } from "@/features/tasks/lib/reminder-time";
 import { requireUser } from "@/lib/auth";
@@ -127,7 +130,7 @@ export const actOnTaskNotificationUseCase = useCase
 			throw appError("NotificationNotActionable");
 		}
 
-		const collaborationPatch = await ctx.ports.uow.transaction(async (tx) => {
+		const pagePatch = await ctx.ports.uow.transaction(async (tx) => {
 			const currentRole = await tx.members.findRole(
 				notification.workspaceId,
 				user.id,
@@ -168,9 +171,10 @@ export const actOnTaskNotificationUseCase = useCase
 				completed: true,
 				completedAt: actionAt,
 			});
-			let collaborationPatch: PublishTaskBlockPatchInput | null = null;
+			let pagePatch: Awaited<ReturnType<typeof savePageTaskBlockPatch>> | null =
+				null;
 			if (currentTask.pageId && currentTask.sourceBlockId) {
-				collaborationPatch = await savePageTaskBlockPatch(tx.pages, scope, {
+				pagePatch = await savePageTaskBlockPatch(tx.pages, scope, {
 					pageId: currentTask.pageId,
 					blockId: currentTask.sourceBlockId,
 					patch: { checked: true },
@@ -181,26 +185,20 @@ export const actOnTaskNotificationUseCase = useCase
 				"completed",
 				actionAt,
 			);
-			return collaborationPatch;
+			return pagePatch;
 		});
 
-		if (collaborationPatch) {
-			try {
-				await ctx.ports.pageCollaboration.publishTaskBlockPatch(
-					collaborationPatch,
-				);
-			} catch (error) {
-				ctx.ports.logger.warn(
-					"Failed to propagate a completed task block to collaboration",
-					{
-						error,
-						notificationId: notification.id,
-						pageId: collaborationPatch.pageId,
-						taskId: task.id,
-					},
-				);
-			}
+		if (pagePatch) {
+			scheduleWorkspacePageEvent(ctx, {
+				type: "page.contentChanged",
+				workspaceId: task.workspaceId,
+				pageId: pagePatch.pageId,
+			});
 		}
+		scheduleWorkspaceTaskEvent(ctx, {
+			workspaceId: task.workspaceId,
+			taskId: task.id,
+		});
 
 		return {
 			action: "complete",
