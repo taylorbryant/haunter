@@ -62,6 +62,7 @@ import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-c
 import {
 	markPageLoad,
 	publishPageLoadTimings,
+	startPageLoadNavigation,
 } from "@/features/pages/client/page-load-performance";
 import {
 	getPageQueryOptions,
@@ -1095,6 +1096,7 @@ function MountedHaunterEditor({
 								onSubpageCreated: async (created) => {
 									await invalidatePages(queryClient);
 									focusTitleOnArrival(created.id);
+									startPageLoadNavigation(created.id);
 									router.push(`/w/${workspaceId}/p/${created.id}`);
 								},
 							})

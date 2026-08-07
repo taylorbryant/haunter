@@ -19,7 +19,6 @@ import {
 import {
 	beginPageLoadVisit,
 	markPageLoad,
-	startPageLoadLongTaskObserver,
 } from "@/features/pages/client/page-load-performance";
 import {
 	getPageQueryOptions,
@@ -46,7 +45,6 @@ import HaunterEditor from "./editor/haunter-editor";
 import { PageEditorSkeleton } from "./page-editor-skeleton";
 import { PageIconButton } from "./page-icon-picker";
 
-startPageLoadLongTaskObserver();
 markPageLoad("page-editor-module-evaluated");
 
 const TITLE_SAVE_DELAY_MS = 500;
