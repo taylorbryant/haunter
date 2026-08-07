@@ -10,7 +10,6 @@ import { DeviceTimeProvider } from "@/components/device-time-provider";
 import { HeaderBreadcrumbs } from "@/components/header-breadcrumbs";
 import { HeaderPageActions } from "@/components/header-page-actions";
 import { HeaderSaveIndicator } from "@/components/header-save-indicator";
-import { PageLoadPerformanceInstrumentation } from "@/components/page-load-performance-instrumentation";
 import { Separator } from "@/components/ui/separator";
 import {
 	SidebarInset,
@@ -83,7 +82,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 			>
 				<ActiveWorkspaceHintProvider value={activeWorkspaceId}>
 					<NotificationTimezoneInitializer />
-					<PageLoadPerformanceInstrumentation />
 					<CommandRegistryProvider>
 						<SidebarProvider defaultOpen={defaultOpen}>
 							<WaitlistDialogProvider enabled={isAdmin}>

@@ -15,7 +15,6 @@ import {
 	CommandList,
 	CommandShortcut,
 } from "@/components/ui/command";
-import { startPageLoadNavigation } from "@/features/pages/client/page-load-performance";
 import {
 	getPageNavigationQueryOptions,
 	searchPagesQueryOptions,
@@ -149,7 +148,6 @@ export function SearchCommandDialog({
 									value={item.id}
 									onSelect={() => {
 										close();
-										startPageLoadNavigation(item.id);
 										router.push(`/w/${item.workspaceId}/p/${item.id}`);
 									}}
 								>
@@ -191,7 +189,6 @@ export function SearchCommandDialog({
 									value={item.id}
 									onSelect={() => {
 										close();
-										startPageLoadNavigation(item.id);
 										router.push(`/w/${item.workspaceId}/p/${item.id}`);
 									}}
 								>

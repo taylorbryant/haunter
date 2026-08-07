@@ -8,7 +8,6 @@ import { userErrorMessage } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
-import { startPageLoadNavigation } from "@/features/pages/client/page-load-performance";
 import {
 	invalidatePageNavigation,
 	invalidatePages,
@@ -127,7 +126,6 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 											{
 												onSuccess: async (restored) => {
 													await refresh();
-													startPageLoadNavigation(restored.id);
 													router.push(`/w/${workspaceId}/p/${restored.id}`);
 												},
 											},

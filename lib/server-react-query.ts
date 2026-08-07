@@ -14,18 +14,8 @@ type QueryOptionsLike = {
 };
 
 export const getAppRequestContext = cache(async () => {
-	const startedAt = performance.now();
 	const server = await getServer();
-	const serverReadyAt = performance.now();
-	const ctx = await server.createContextFromNext();
-	if (process.env.HAUNTER_PERFORMANCE_LOGGING === "1") {
-		console.info("[page-load:context]", {
-			serverLoadMs: Math.round(serverReadyAt - startedAt),
-			requestContextMs: Math.round(performance.now() - serverReadyAt),
-			totalMs: Math.round(performance.now() - startedAt),
-		});
-	}
-	return ctx;
+	return server.createContextFromNext();
 });
 
 export function serverUseCaseQueryOptions<

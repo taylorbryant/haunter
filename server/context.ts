@@ -30,29 +30,13 @@ export type AppServiceContextInput =
 export const appContext = defineServerContext<AppContext, AppRuntimePorts>()({
 	gate: (ports) => ports.gate,
 	request: async ({ req, ports, requestId, trace }) => {
-		const contextStartedAt = performance.now();
-		const timingEnabled =
-			process.env.HAUNTER_PERFORMANCE_LOGGING === "1" ||
-			new URL(req.url).searchParams.get("perf") === "1";
-		const cookieHeader = timingEnabled ? (req.headers.get("cookie") ?? "") : "";
 		const auth = await ports.auth.getSession(req);
-		const authReadyAt = performance.now();
 		const tenant = resolveRequestTenant({ auth });
 		// The caller's role in the active workspace gates content-edit rights.
-		const membershipStartedAt = performance.now();
 		const role =
 			auth && tenant
 				? await ports.members.findRole(tenant.id, auth.user.id)
 				: null;
-		if (timingEnabled) {
-			console.info("[page-load:request-context]", {
-				hasSessionCacheCookie: /session_data(?:\.\d+)?=/.test(cookieHeader),
-				hasDontRememberCookie: cookieHeader.includes("dont_remember="),
-				authSessionMs: Math.round(authReadyAt - contextStartedAt),
-				membershipMs: Math.round(performance.now() - membershipStartedAt),
-				totalMs: Math.round(performance.now() - contextStartedAt),
-			});
-		}
 
 		return {
 			requestId,

@@ -26,7 +26,6 @@ import { Label } from "@/components/ui/label";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Textarea } from "@/components/ui/textarea";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
-import { startPageLoadNavigation } from "@/features/pages/client/page-load-performance";
 import {
 	createPageMutationOptions,
 	invalidatePageNavigation,
@@ -131,7 +130,6 @@ function CreatePageDialog({
 				invalidatePageNavigation(queryClient, workspaceId),
 			]).catch(() => undefined);
 			onOpenChange(false);
-			startPageLoadNavigation(page.id);
 			router.push(`/w/${workspaceId}/p/${page.id}`);
 		} catch (createError) {
 			setError(

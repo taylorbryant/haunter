@@ -21,7 +21,6 @@ import {
 	pageTitleFromMarkdownFilename,
 	parseMarkdownPage,
 } from "@/features/pages/client/markdown-files";
-import { startPageLoadNavigation } from "@/features/pages/client/page-load-performance";
 import {
 	createPageMutationOptions,
 	invalidatePages,
@@ -114,7 +113,6 @@ export function MarkdownImportDialog({
 					setSuppressMobileFinalFocus(true);
 					setOpenMobile(false);
 				}
-				startPageLoadNavigation(lastPageId);
 				router.push(`/w/${workspaceId}/p/${lastPageId}`);
 			}
 		} catch (importError) {

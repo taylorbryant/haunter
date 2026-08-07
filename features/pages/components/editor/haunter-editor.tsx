@@ -36,14 +36,7 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
-import {
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiClient } from "@/client";
 import { reportUserError, userErrorMessage } from "@/client/error-feedback";
 import {
@@ -59,11 +52,6 @@ import { createCanvas } from "@/features/canvases/contracts";
 import { invalidateNotifications } from "@/features/notifications/client/queries";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-content";
-import {
-	markPageLoad,
-	publishPageLoadTimings,
-	startPageLoadNavigation,
-} from "@/features/pages/client/page-load-performance";
 import {
 	getPageQueryOptions,
 	invalidateBacklinks,
@@ -106,8 +94,6 @@ import { editorSchema } from "./schema";
 import { TaskBlockCurrentUserContext } from "./task-block";
 
 const AUTOSAVE_DELAY_MS = 1000;
-
-markPageLoad("editor-module-evaluated");
 
 type HaunterBlockNoteEditor = BlockNoteEditor<
 	(typeof editorSchema)["blockSchema"],
@@ -391,9 +377,6 @@ function MountedHaunterEditor({
 	onSaveStateChange,
 	initialRecoveryDraft,
 }: MountedHaunterEditorProps) {
-	const editorCreateStartedAtRef = useRef(
-		typeof performance === "undefined" ? 0 : performance.now(),
-	);
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -463,20 +446,6 @@ function MountedHaunterEditor({
 				(editorInitialContent as never)
 			: undefined,
 	});
-	const editorCreatedAtRef = useRef(
-		typeof performance === "undefined" ? 0 : performance.now(),
-	);
-	useLayoutEffect(() => {
-		markPageLoad("editor-committed");
-		const frame = requestAnimationFrame(() => {
-			publishPageLoadTimings({
-				pageId,
-				editorCreateStartedAt: editorCreateStartedAtRef.current,
-				editorCreatedAt: editorCreatedAtRef.current,
-			});
-		});
-		return () => cancelAnimationFrame(frame);
-	}, [pageId]);
 	useSyncEditorCodeTheme(editor, resolvedTheme);
 
 	const appendSubpageLink = useCallback(
@@ -1096,7 +1065,6 @@ function MountedHaunterEditor({
 								onSubpageCreated: async (created) => {
 									await invalidatePages(queryClient);
 									focusTitleOnArrival(created.id);
-									startPageLoadNavigation(created.id);
 									router.push(`/w/${workspaceId}/p/${created.id}`);
 								},
 							})
