@@ -46,7 +46,7 @@ export function mcpCorsHeaders(request: Request) {
 	const origin = request.headers.get("origin");
 	const headers = new Headers({
 		"Access-Control-Allow-Headers":
-			"Authorization, Content-Type, Mcp-Protocol-Version, Mcp-Session-Id",
+			"Authorization, Content-Type, Mcp-Method, Mcp-Name, Mcp-Protocol-Version, Mcp-Session-Id",
 		"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
 		"Access-Control-Expose-Headers":
 			"Mcp-Session-Id, WWW-Authenticate, Retry-After",

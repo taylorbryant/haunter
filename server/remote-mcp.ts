@@ -1,16 +1,17 @@
 import "@beignet/core/server-only";
-import { isAppError } from "@beignet/core/errors";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { JWTPayload } from "jose";
-import type { ZodType } from "zod";
-import { APIError } from "better-auth/api";
-import type { McpConnectionRow } from "@/features/agents/ports";
-import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
-import { agentCapabilities } from "@/lib/agent-capability-registry";
 import { AgentCapabilityError } from "@beignet/core/agent-capabilities";
+import { isAppError } from "@beignet/core/errors";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { APIError } from "better-auth/api";
+import type { JWTPayload } from "jose";
+import { createMcpHandler } from "mcp-handler";
+import type { ZodType } from "zod";
+import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
+import type { McpConnectionRow } from "@/features/agents/ports";
+import { agentCapabilities } from "@/lib/agent-capability-registry";
 import {
-	executeRemoteMcpCapability,
 	type AgentCapabilityServer,
+	executeRemoteMcpCapability,
 } from "@/server/agent-capabilities";
 
 export const REMOTE_MCP_SCOPES = ["offline_access", "haunter:mcp"] as const;
@@ -133,4 +134,18 @@ export function registerRemoteMcpTools(
 			},
 		);
 	}
+}
+
+export function createRemoteMcpRequestHandler(input: {
+	connection: McpConnectionRow;
+	identity: RemoteMcpIdentity;
+	getServer: () => Promise<AgentCapabilityServer>;
+}) {
+	return createMcpHandler((server) => registerRemoteMcpTools(server, input), {
+		serverInfo: {
+			name: "haunter",
+			version: "1.0.0",
+		},
+		verboseLogs: false,
+	});
 }

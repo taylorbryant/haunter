@@ -1,5 +1,4 @@
 import { mcpHandler } from "@better-auth/oauth-provider";
-import { createMcpHandler } from "mcp-handler";
 import { mcpResourceUrl, oauthIssuerUrl } from "@/lib/better-auth";
 import {
 	isAllowedMcpOrigin,
@@ -9,8 +8,8 @@ import {
 } from "@/lib/mcp-http";
 import { getServer } from "@/server";
 import {
+	createRemoteMcpRequestHandler,
 	REMOTE_MCP_SCOPES,
-	registerRemoteMcpTools,
 	remoteMcpIdentityFromJwt,
 } from "@/server/remote-mcp";
 
@@ -98,26 +97,11 @@ const authenticatedHandler = mcpHandler(
 			);
 		}
 
-		return createMcpHandler(
-			(mcpServer) => {
-				registerRemoteMcpTools(mcpServer, {
-					connection,
-					identity,
-					getServer,
-				});
-			},
-			{
-				serverInfo: {
-					name: "haunter",
-					version: "1.0.0",
-				},
-			},
-			{
-				disableSse: true,
-				maxDuration: 55,
-				verboseLogs: false,
-			},
-		)(request);
+		return createRemoteMcpRequestHandler({
+			connection,
+			identity,
+			getServer,
+		})(request);
 	},
 );
 
