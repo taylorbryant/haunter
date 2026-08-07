@@ -53,6 +53,12 @@ function output(completed: boolean): ListTasksOutput {
 	};
 }
 
+test("does not remount-refetch hydrated task lists", () => {
+	const options = listTasksQueryOptions("workspace_1", "open", "mine");
+
+	expect(options.refetchOnMount).toBe(false);
+});
+
 test("task completion updates every cached task view and can roll back", async () => {
 	const queryClient = new QueryClient();
 	const openKey = listTasksQueryOptions("workspace_1", "open", "mine").queryKey;

@@ -140,6 +140,7 @@ export function listTasksQueryOptions(
 		}),
 		// Shared workspaces: pick up other members' changes without a manual
 		// reload. Paused automatically while the tab is in the background.
+		refetchOnMount: false,
 		refetchInterval: () => (taskWriteLock.hasPendingWrites() ? false : 30_000),
 		refetchOnWindowFocus: () => !taskWriteLock.hasPendingWrites(),
 		refetchOnReconnect: () => !taskWriteLock.hasPendingWrites(),

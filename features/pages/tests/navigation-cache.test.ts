@@ -49,6 +49,14 @@ describe("page navigation cache", () => {
 		const options = getPageQueryOptions("page-1");
 
 		expect(options.staleTime).toBe(30_000);
+		expect(options.refetchOnMount).toBe(false);
+		expect(options.refetchInterval).toBe(30_000);
+	});
+
+	it("does not remount-refetch hydrated page navigation", () => {
+		const options = getPageNavigationQueryOptions("workspace_test");
+
+		expect(options.refetchOnMount).toBe(false);
 		expect(options.refetchInterval).toBe(30_000);
 	});
 

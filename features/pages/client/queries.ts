@@ -41,6 +41,7 @@ export function getPageQueryOptions(id: string) {
 		// The server hydrates direct page loads. Treat that snapshot as fresh
 		// until the normal page poll so mounting does not fetch it twice.
 		staleTime: 30_000,
+		refetchOnMount: false,
 		// Liveblocks events accelerate this refresh, but polling remains the
 		// correctness fallback when live updates are disabled or missed.
 		refetchInterval: 30_000,
@@ -50,6 +51,7 @@ export function getPageQueryOptions(id: string) {
 export function getPageNavigationQueryOptions(workspaceId: string) {
 	return {
 		...rq(getPageNavigation).queryOptions({ path: { workspaceId } }),
+		refetchOnMount: false,
 		refetchInterval: 30_000,
 	};
 }
