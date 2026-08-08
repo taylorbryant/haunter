@@ -183,8 +183,8 @@ first signs in. Leave it unset on established installations.
   intended for development.
 - **Canvases:** Set `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` before using tldraw on a
   production domain.
-- **Scheduled notifications:** Set `CRON_SECRET` before enabling the
-  notification workflow described below.
+- **Scheduled jobs:** Set `CRON_SECRET` before enabling the Vercel Cron Jobs or
+  equivalent external scheduler described below.
 
 - **Live updates:** Set `LIVEBLOCKS_SECRET_KEY` and build with
   `NEXT_PUBLIC_LIVE_UPDATES=true` to notify other open clients after a page,
@@ -218,12 +218,24 @@ endpoint.
 
 ### Notifications
 
-The workflow in `.github/workflows/overdue-notifications.yml` calls the
-protected overdue-task schedule. Configure:
+Vercel registers the production schedules in `vercel.json`:
 
-- Repository secret `CRON_SECRET` with the same value used by the deployed app.
-- Repository variable `APP_URL` with the canonical deployed origin. Redirects
-  are treated as failures so authorization is never forwarded to another host.
+- `/api/cron/tasks/check-overdue` checks for due reminders and overdue tasks
+  every five minutes.
+- `/api/cron/agents/cleanup-oauth-clients` removes expired OAuth clients daily
+  at 03:00 UTC.
+
+The five-minute reminder schedule requires Vercel Pro or Enterprise. Vercel
+Hobby projects can run a cron job only once per day, so use another scheduler
+if reminders need to remain timely on that plan.
+
+Set `CRON_SECRET` to a random value of at least 16 characters in the Vercel
+project. Vercel automatically sends it to each route as an
+`Authorization: Bearer <CRON_SECRET>` header. Both routes fail closed when the
+secret is missing or does not match.
+
+On another hosting provider, configure equivalent authenticated `GET` requests
+using the schedules above.
 
 In-app notifications work without Web Push. To deliver notifications while
 Haunter is closed, generate VAPID keys:
