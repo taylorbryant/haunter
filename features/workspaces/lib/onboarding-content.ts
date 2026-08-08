@@ -1,4 +1,4 @@
-import type { BlockJson } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
 
 export type OnboardingPage = {
 	title: string;

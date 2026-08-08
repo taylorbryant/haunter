@@ -133,7 +133,7 @@ export async function processOverdueNotifications(ctx: AppContext, at: Date) {
 	if (assignmentItems.length > 0) {
 		try {
 			deliveryGroups += await deliverTaskAssignmentNotifications(
-				ctx,
+				ctx.ports,
 				assignmentItems,
 			);
 		} catch (error) {

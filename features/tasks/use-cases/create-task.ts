@@ -6,7 +6,6 @@ import { useCase } from "@/lib/use-case";
 import {
 	createTaskAssignmentNotification,
 	resolveTaskAssignmentActor,
-	scheduleTaskAssignmentDelivery,
 } from "../notifications/assigned";
 import { CreateTaskInputSchema, TaskSchema } from "../schemas";
 
@@ -63,8 +62,7 @@ export const createTaskUseCase = useCase
 				return { task, assignmentNotification };
 			},
 		);
-		scheduleTaskAssignmentDelivery(
-			ctx,
+		ctx.ports.taskAssignmentDelivery.schedule(
 			assignmentNotification ? [assignmentNotification] : [],
 		);
 		scheduleWorkspaceTaskEvent(ctx, {

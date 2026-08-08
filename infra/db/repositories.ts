@@ -13,12 +13,23 @@ import { createDrizzlePageRepository } from "@/infra/pages/drizzle-page-reposito
 import { createDrizzlePageVersionRepository } from "@/infra/pages/drizzle-page-version-repository";
 import { createDrizzleShareRepository } from "@/infra/shares/drizzle-share-repository";
 import { createDrizzleTaskRepository } from "@/infra/tasks/drizzle-task-repository";
+import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
 import type { AppTransactionPorts } from "@/ports";
 import type * as schema from "./schema";
 
 export function createRepositories(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): Omit<AppTransactionPorts, "idempotency"> {
+	const members = createDrizzleMemberRepository(db);
+	const notificationInbox = createDrizzleNotificationRepository(db);
+	const pages = createDrizzlePageRepository(db);
+	const tasks = createDrizzleTaskRepository(db);
+	const taskIntegration = createTaskIntegrationPorts({
+		documents: pages,
+		members,
+		notificationInbox,
+		tasks,
+	});
 	return {
 		adminUsers: createDrizzleAdminUserRepository(db),
 		agents: createDrizzleAgentAdminRepository(db),
@@ -26,13 +37,15 @@ export function createRepositories(
 		mcpOAuthClients: createDrizzleMcpOAuthClientRepository(db),
 		canvases: createDrizzleCanvasRepository(db),
 		changelogState: createDrizzleChangelogStateRepository(db),
-		members: createDrizzleMemberRepository(db),
-		notificationInbox: createDrizzleNotificationRepository(db),
+		members,
+		notificationInbox,
 		pageLinks: createDrizzlePageLinkRepository(db),
 		pageNavigation: createDrizzlePageNavigationRepository(db),
-		pages: createDrizzlePageRepository(db),
+		pages,
 		pageVersions: createDrizzlePageVersionRepository(db),
 		shares: createDrizzleShareRepository(db),
-		tasks: createDrizzleTaskRepository(db),
+		pageTaskProjection: taskIntegration.pageTaskProjection,
+		tasks,
+		taskSourceDocuments: taskIntegration.taskSourceDocuments,
 	};
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createBetterAuthAgentCapabilityTestContext } from "@beignet/agent-auth-better-auth/testing";
+import { AgentCapabilityError } from "@beignet/core/agent-capabilities";
 import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestContextFactory,
@@ -19,16 +20,16 @@ import {
 	createTestPageVersionRepository,
 	createTestWorkspaceEventPublisher,
 } from "@/features/pages/tests/helpers";
-import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
+import {
+	createTestTaskIntegration,
+	createTestTaskRepository,
+} from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import { createHaunterAgentAuthAdapter } from "@/lib/agent-auth-adapter";
 import { agentCapabilities } from "@/lib/agent-capability-registry";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
-import {
-	createHaunterAgentCapabilityExecutor,
-	executeAgentCapability,
-} from "@/server/agent-capabilities";
+import { createHaunterAgentCapabilityExecutor } from "@/server/agent-capabilities";
 
 async function createFixture() {
 	const userId = "user_agent";
@@ -71,6 +72,12 @@ async function createFixture() {
 		async resolveTaskNotifications() {},
 		async dismissScheduledForTasks() {},
 	} as unknown as NotificationRepository;
+	const taskIntegration = createTestTaskIntegration({
+		documents: pages,
+		members,
+		notificationInbox,
+		tasks,
+	});
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
@@ -82,6 +89,7 @@ async function createFixture() {
 			pageLinks,
 			pages,
 			pageVersions,
+			...taskIntegration,
 			tasks,
 			workspaceEvents,
 			devtools: createInMemoryDevtools(),
@@ -96,6 +104,7 @@ async function createFixture() {
 				pageLinks,
 				pages,
 				pageVersions,
+				...taskIntegration,
 				tasks,
 			}),
 		},
@@ -131,19 +140,27 @@ async function createFixture() {
 		getTimezone: async () => "UTC",
 		now: () => new Date("2026-07-15T12:00:00.000Z"),
 	};
-	const execute = (capability: string, args: Record<string, unknown>) =>
-		executeAgentCapability(
-			{
-				capability,
-				arguments: args,
-				agentSession: { agentId: "agent_test", userId },
-			},
-			dependencies,
-		);
+	const createExecutor = () =>
+		createHaunterAgentCapabilityExecutor(dependencies);
+	const executor = createExecutor();
+	const execute = async (capability: string, args: Record<string, unknown>) => {
+		try {
+			return await (await executor).executeDynamic({
+				name: capability,
+				principal: { agentId: "agent_test", userId },
+				input: args,
+			});
+		} catch (error) {
+			if (error instanceof AgentCapabilityError && error.cause) {
+				throw error.cause;
+			}
+			throw error;
+		}
+	};
 
 	return {
 		activities,
-		createExecutor: () => createHaunterAgentCapabilityExecutor(dependencies),
+		createExecutor,
 		execute,
 		pages,
 		scope: createTenantScope(createTestTenant(workspaceId)),
@@ -162,9 +179,22 @@ describe("Haunter agent capabilities", () => {
 		}
 
 		for (const capability of adapter.capabilities) {
-			expect(capability.requiredConstraints).toEqual(
-				capability.name === "list_workspaces" ? undefined : ["workspaceId"],
-			);
+			if (!capability.input) {
+				throw new Error(
+					`Expected ${capability.name} to define an input schema.`,
+				);
+			}
+			const requiredInputFields = Array.isArray(capability.input.required)
+				? capability.input.required
+				: [];
+			if (capability.name === "list_workspaces") {
+				expect(capability.requiredConstraints).toBeUndefined();
+				expect(requiredInputFields).not.toContain("workspaceId");
+				continue;
+			}
+
+			expect(capability.requiredConstraints).toEqual(["workspaceId"]);
+			expect(requiredInputFields).toContain("workspaceId");
 		}
 
 		const createPage = adapter.capabilities.find(

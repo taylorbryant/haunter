@@ -10,7 +10,10 @@ import { createInMemoryDevtools } from "@beignet/devtools";
 import { createTestApp, createTestRequester } from "@beignet/web/testing";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
-import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
+import {
+	createTestTaskIntegration,
+	createTestTaskRepository,
+} from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
 import {
@@ -67,7 +70,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	// Every signed-in test user is an owner of their active workspace.
 	const members = {
 		async findRole() {
-			return "owner";
+			return "owner" as const;
 		},
 		async listForUser() {
 			return [];
@@ -76,6 +79,11 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 			return [];
 		},
 	};
+	const taskIntegration = createTestTaskIntegration({
+		documents: pages,
+		members,
+		tasks,
+	});
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
@@ -85,6 +93,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 			pageNavigation,
 			pages,
 			pageVersions,
+			...taskIntegration,
 			tasks,
 			canvases,
 			workspaceEvents,
@@ -98,6 +107,7 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 			ports: (ports) => ({
 				...ports,
 				pageVersions,
+				...taskIntegration,
 				members,
 				pageLinks,
 				pageNavigation,

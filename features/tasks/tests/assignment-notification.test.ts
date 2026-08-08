@@ -10,9 +10,9 @@ import type {
 	StoredPushSubscription,
 } from "@/features/notifications/ports";
 import {
+	createTaskAssignmentDeliveryPort,
 	createTaskAssignmentNotification,
 	deliverTaskAssignmentNotifications,
-	scheduleTaskAssignmentDelivery,
 	TaskAssignedNotification,
 } from "@/features/tasks/notifications/assigned";
 import type { Task } from "@/features/tasks/schemas";
@@ -84,7 +84,7 @@ describe("task assignment push channel", () => {
 			},
 		} as unknown as AppContext;
 
-		scheduleTaskAssignmentDelivery(ctx, [notification]);
+		createTaskAssignmentDeliveryPort(ctx.ports).schedule([notification]);
 
 		expect(scheduled).toHaveLength(1);
 		expect(deliveries).toHaveLength(0);
@@ -138,7 +138,10 @@ describe("task assignment push channel", () => {
 
 		const retriedOnce = createPending(1);
 		const retriedTwice = createPending(2);
-		await deliverTaskAssignmentNotifications(ctx, [retriedOnce, retriedTwice]);
+		await deliverTaskAssignmentNotifications(ctx.ports, [
+			retriedOnce,
+			retriedTwice,
+		]);
 
 		expect(
 			deliveries.map(({ attempt, notificationIds }) => ({

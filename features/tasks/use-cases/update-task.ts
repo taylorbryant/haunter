@@ -9,10 +9,8 @@ import { useCase } from "@/lib/use-case";
 import {
 	createTaskAssignmentNotification,
 	resolveTaskAssignmentActor,
-	scheduleTaskAssignmentDelivery,
 } from "../notifications/assigned";
 import { TaskSchema, UpdateTaskInputSchema } from "../schemas";
-import { savePageTaskBlockPatch } from "./save-page-task-block-patch";
 
 export const updateTaskUseCase = useCase
 	.command("tasks.update")
@@ -112,7 +110,7 @@ export const updateTaskUseCase = useCase
 
 				// Write the change through to the source page so the doc agrees.
 				let pagePatch: Awaited<
-					ReturnType<typeof savePageTaskBlockPatch>
+					ReturnType<typeof tx.taskSourceDocuments.patchTaskBlock>
 				> | null = null;
 				if (
 					task.pageId !== null &&
@@ -123,7 +121,7 @@ export const updateTaskUseCase = useCase
 						input.reminderOffsetMinutes !== undefined ||
 						input.assigneeId !== undefined)
 				) {
-					pagePatch = await savePageTaskBlockPatch(tx.pages, scope, {
+					pagePatch = await tx.taskSourceDocuments.patchTaskBlock(scope, {
 						pageId: task.pageId,
 						blockId: task.sourceBlockId,
 						patch: {
@@ -161,8 +159,7 @@ export const updateTaskUseCase = useCase
 
 				return { updated, assignmentNotification, pagePatch };
 			});
-		scheduleTaskAssignmentDelivery(
-			ctx,
+		ctx.ports.taskAssignmentDelivery.schedule(
 			assignmentNotification ? [assignmentNotification] : [],
 		);
 		if (pagePatch) {

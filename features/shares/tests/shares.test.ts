@@ -3,12 +3,10 @@ import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestAnonymousActor,
-	createTestTenant,
-	createTestUserActor,
-} from "@beignet/core/testing";
-import {
 	createTestContextFactory,
 	createTestPorts,
+	createTestTenant,
+	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
@@ -16,14 +14,14 @@ import type { CanvasRepository } from "@/features/canvases/ports";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { PageRepository } from "@/features/pages/ports";
-import type { BlockJson } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
 import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
-import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
 import {
 	enforceSharedFileRateLimit,
 	enforceSharedFileTokenRateLimit,
 } from "@/features/shares/lib/shared-file-rate-limit";
+import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
 import type { ShareRepository } from "@/features/shares/ports";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
@@ -197,7 +195,7 @@ describe("page shares", () => {
 		).rejects.toThrow(/no longer available/);
 	});
 
-	it("does not expose task reminder configuration on public shares", async () => {
+	it("does not expose private task metadata on public shares", async () => {
 		const { pages, scope, page, tester, ctx, anonymous, anonymousCtx } =
 			await createFixture();
 		const content: BlockJson[] = [
@@ -215,6 +213,7 @@ describe("page shares", () => {
 							due: "2026-08-01",
 							dueTime: "14:00",
 							reminder: "60",
+							assignee: "user_private",
 						},
 						content: [{ type: "text", text: "Private reminder", styles: {} }],
 						children: [],

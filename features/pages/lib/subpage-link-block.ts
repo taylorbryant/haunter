@@ -1,4 +1,5 @@
-import type { BlockJson, PageMeta } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
+import type { PageMeta } from "@/features/pages/schemas";
 
 /**
  * The child id is also the block id so retries can address the same append

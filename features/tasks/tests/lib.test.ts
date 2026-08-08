@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { BlockJson } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
 import type { TaskWithPage } from "@/features/tasks/schemas";
 import { extractTaskBlocks } from "../lib/extract-task-blocks";
 import {

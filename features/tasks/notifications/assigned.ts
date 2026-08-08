@@ -1,6 +1,6 @@
-import type { TenantScope } from "@beignet/core/ports";
+import type { NotificationPort } from "@beignet/core/notifications";
+import type { LoggerPort, TenantScope } from "@beignet/core/ports";
 import { z } from "zod";
-import type { AppContext } from "@/app-context";
 import type { MemberRepository } from "@/features/members/ports";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import {
@@ -8,7 +8,7 @@ import {
 	TaskAssignedNotificationPayloadSchema,
 } from "@/features/notifications/schemas";
 import { defineNotification } from "@/lib/notifications";
-import type { AuthUser } from "@/ports/auth";
+import type { TaskAssignmentActor, TaskAssignmentDeliveryPort } from "../ports";
 import type { Task } from "../schemas";
 
 export const TaskAssignedDeliveryPayloadSchema = z.object({
@@ -19,15 +19,12 @@ export const TaskAssignedDeliveryPayloadSchema = z.object({
 	items: z.array(TaskAssignedNotificationPayloadSchema).min(1),
 });
 
-export type TaskAssignmentActor = {
-	userId: string;
-	name: string;
-};
+export type { TaskAssignmentActor } from "../ports";
 
 export async function resolveTaskAssignmentActor(
 	members: MemberRepository,
 	scope: TenantScope,
-	user: AuthUser,
+	user: { id: string; name?: string | null; email?: string | null },
 ): Promise<TaskAssignmentActor> {
 	const suppliedName = user.name?.trim() || user.email?.trim();
 	if (suppliedName) return { userId: user.id, name: suppliedName };
@@ -208,7 +205,7 @@ function groupAssignments(items: DeliverableAssignmentNotification[]) {
 }
 
 export async function deliverTaskAssignmentNotifications(
-	ctx: AppContext,
+	dependencies: { notifications: NotificationPort },
 	items: DeliverableAssignmentNotification[],
 ): Promise<number> {
 	let deliveryGroups = 0;
@@ -218,7 +215,7 @@ export async function deliverTaskAssignmentNotifications(
 		if (first?.kind !== "task.assigned") continue;
 		deliveryGroups += 1;
 		try {
-			await ctx.ports.notifications.send(TaskAssignedNotification, {
+			await dependencies.notifications.send(TaskAssignedNotification, {
 				userId: first.userId,
 				workspaceId: first.workspaceId,
 				notificationIds: group.map((item) => item.id),
@@ -240,32 +237,37 @@ export async function deliverTaskAssignmentNotifications(
 	return deliveryGroups;
 }
 
-export function scheduleTaskAssignmentDelivery(
-	ctx: AppContext,
-	items: Notification[],
-): void {
-	if (items.length === 0) return;
-	try {
-		ctx.ports.afterResponse.schedule(async () => {
+export function createTaskAssignmentDeliveryPort(dependencies: {
+	afterResponse: { schedule(work: () => Promise<void>): void };
+	logger: LoggerPort;
+	notifications: NotificationPort;
+}): TaskAssignmentDeliveryPort {
+	return {
+		schedule(items) {
+			if (items.length === 0) return;
 			try {
-				await deliverTaskAssignmentNotifications(ctx, items);
+				dependencies.afterResponse.schedule(async () => {
+					try {
+						await deliverTaskAssignmentNotifications(dependencies, items);
+					} catch (error) {
+						dependencies.logger.warn(
+							"Failed to deliver task assignment notifications after response",
+							{
+								error,
+								notificationIds: items.map((item) => item.id),
+							},
+						);
+					}
+				});
 			} catch (error) {
-				ctx.ports.logger.warn(
-					"Failed to deliver task assignment notifications after response",
+				dependencies.logger.warn(
+					"Failed to schedule task assignment notification delivery",
 					{
 						error,
 						notificationIds: items.map((item) => item.id),
 					},
 				);
 			}
-		});
-	} catch (error) {
-		ctx.ports.logger.warn(
-			"Failed to schedule task assignment notification delivery",
-			{
-				error,
-				notificationIds: items.map((item) => item.id),
-			},
-		);
-	}
+		},
+	};
 }

@@ -1,12 +1,8 @@
-import type { BlockJson } from "@/features/pages/schemas";
+import { mapBlocks } from "@/features/content/block-tree";
+import type { BlockJson } from "@/features/content/schemas";
+import type { TaskBlockPatch } from "@/features/tasks/ports";
 
-export type TaskBlockPatch = {
-	checked?: boolean;
-	due?: string | null;
-	dueTime?: string | null;
-	reminderOffsetMinutes?: number | null;
-	assignee?: string | null;
-};
+export type { TaskBlockPatch } from "@/features/tasks/ports";
 
 export type PatchResult = {
 	blocks: BlockJson[];
@@ -50,25 +46,10 @@ export function patchTaskBlock(
 	let found = false;
 	const props = toTaskBlockProps(patch);
 
-	function walk(nodes: BlockJson[]): BlockJson[] {
-		return nodes.map((block) => {
-			if (block.type === "task" && block.id === blockId) {
-				found = true;
-				return {
-					...block,
-					props: {
-						...block.props,
-						...props,
-					},
-				};
-			}
-			if (block.children.length > 0) {
-				return { ...block, children: walk(block.children) };
-			}
-			return block;
-		});
-	}
-
-	const patched = walk(blocks);
+	const patched = mapBlocks(blocks, (block) => {
+		if (block.type !== "task" || block.id !== blockId) return block;
+		found = true;
+		return { ...block, props: { ...block.props, ...props } };
+	});
 	return { blocks: patched, found };
 }

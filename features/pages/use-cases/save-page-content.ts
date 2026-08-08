@@ -1,10 +1,6 @@
 import "@beignet/core/server-only";
 import { scheduleWorkspacePageEvent } from "@/features/collab/server/workspace-events";
 import { appError } from "@/features/shared/errors";
-import {
-	resolveTaskAssignmentActor,
-	scheduleTaskAssignmentDelivery,
-} from "@/features/tasks/notifications/assigned";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { reconcilePageDerivations } from "../lib/apply-page-content";
@@ -85,18 +81,13 @@ export const savePageContentUseCase = useCase
 
 			// The saved document is the source of truth for its task blocks and
 			// outgoing page links.
-			const assignmentActor = await resolveTaskAssignmentActor(
-				tx.members,
-				scope,
-				user,
-			);
 			const derivations = await reconcilePageDerivations(
 				tx,
 				scope,
 				page,
 				input.content,
 				{
-					assignmentActor,
+					assignmentUser: user,
 					defaultTaskAssigneeId: user.id,
 				},
 			);
@@ -108,7 +99,7 @@ export const savePageContentUseCase = useCase
 				workspaceId: page.workspaceId,
 			};
 		});
-		scheduleTaskAssignmentDelivery(ctx, assignmentNotifications);
+		ctx.ports.taskAssignmentDelivery.schedule(assignmentNotifications);
 		scheduleWorkspacePageEvent(ctx, {
 			type: "page.contentChanged",
 			workspaceId,

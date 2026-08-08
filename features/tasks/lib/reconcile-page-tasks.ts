@@ -1,7 +1,7 @@
 import type { MemberRepository } from "@/features/members/ports";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import type { Notification } from "@/features/notifications/schemas";
-import type { BlockJson, PageMeta } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
 import { appError } from "@/features/shared/errors";
 import {
 	createTaskAssignmentNotification,
@@ -87,13 +87,13 @@ async function validateTaskBlock(
 export async function reconcilePageTasks(
 	ports: TaskReconciliationPorts,
 	scope: TenantScope,
-	page: PageMeta,
+	source: { id: string; userId: string },
 	content: BlockJson[],
 	options: ReconcilePageTasksOptions = {},
 ): Promise<{ changed: boolean; assignmentNotifications: Notification[] }> {
 	const now = new Date().toISOString();
 	const found = extractTaskBlocks(content);
-	const existing = await ports.tasks.listByPage(scope, page.id);
+	const existing = await ports.tasks.listByPage(scope, source.id);
 	const existingByBlockId = new Map(
 		existing
 			.filter((task) => task.sourceBlockId !== null)
@@ -142,8 +142,8 @@ export async function reconcilePageTasks(
 		if (!current) {
 			changed = true;
 			const created = await ports.tasks.create(scope, {
-				userId: page.userId,
-				pageId: page.id,
+				userId: source.userId,
+				pageId: source.id,
 				sourceBlockId: block.blockId,
 				title: block.title,
 				completed: block.checked,

@@ -1,16 +1,16 @@
 import type { TenantScope } from "@beignet/core/ports";
-import type { MemberRepository } from "@/features/members/ports";
-import type { NotificationRepository } from "@/features/notifications/ports";
+import { extractPageLinks } from "@/features/content/page-links";
+import type { BlockJson } from "@/features/content/schemas";
 import type { Notification } from "@/features/notifications/schemas";
 import type {
 	PageLinkRepository,
 	PageRepository,
 } from "@/features/pages/ports";
-import type { BlockJson, PageMeta } from "@/features/pages/schemas";
-import { reconcilePageTasks } from "@/features/tasks/lib/reconcile-page-tasks";
-import type { TaskAssignmentActor } from "@/features/tasks/notifications/assigned";
-import type { TaskRepository } from "@/features/tasks/ports";
-import { extractPageLinks } from "./extract-page-links";
+import type { PageMeta } from "@/features/pages/schemas";
+import type {
+	EmbeddedTaskProjectionPort,
+	TaskAssignmentActor,
+} from "@/features/tasks/ports";
 
 /** Keep the materialized backlink index in sync with a page document. */
 export async function reconcilePageLinks(
@@ -45,17 +45,20 @@ export async function reconcilePageLinks(
  */
 export async function reconcilePageDerivations(
 	tx: {
-		members: MemberRepository;
-		notificationInbox: NotificationRepository;
 		pages: Pick<PageRepository, "findMetaByIds">;
 		pageLinks: PageLinkRepository;
-		tasks: TaskRepository;
+		pageTaskProjection: EmbeddedTaskProjectionPort;
 	},
 	scope: TenantScope,
 	page: PageMeta,
 	content: BlockJson[],
 	options: {
 		assignmentActor?: TaskAssignmentActor;
+		assignmentUser?: {
+			id: string;
+			name?: string | null;
+			email?: string | null;
+		};
 		defaultTaskAssigneeId?: string | null;
 	} = {},
 ): Promise<{
@@ -63,17 +66,12 @@ export async function reconcilePageDerivations(
 	linksChanged: boolean;
 	assignmentNotifications: Notification[];
 }> {
-	const taskResult = await reconcilePageTasks(
-		{
-			members: tx.members,
-			notificationInbox: tx.notificationInbox,
-			tasks: tx.tasks,
-		},
+	const taskResult = await tx.pageTaskProjection.reconcile(
 		scope,
-		page,
-		content,
+		{ id: page.id, userId: page.userId, content },
 		{
 			assignmentActor: options.assignmentActor,
+			assignmentUser: options.assignmentUser,
 			defaultAssigneeId: options.defaultTaskAssigneeId,
 		},
 	);

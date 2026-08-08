@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CanvasSnapshotSchema } from "@/features/canvases/schemas";
-import { PageContentSchema } from "@/features/pages/schemas";
+import { DocumentContentSchema } from "@/features/content/schemas";
 
 export const PageShareSchema = z.object({
 	id: z.string().uuid(),
@@ -28,7 +28,7 @@ export const SharedTokenInputSchema = z.object({
 export const SharedPageSchema = z.object({
 	title: z.string(),
 	icon: z.string().nullable(),
-	content: PageContentSchema,
+	content: DocumentContentSchema,
 	updatedAt: z.string().datetime(),
 });
 

@@ -12,6 +12,7 @@
 		"format": "biome format --write .",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
+		"check:feature-boundaries": "bun scripts/check-feature-boundaries.ts",
 		"bootstrap-admin": "bun scripts/bootstrap-admin.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",

@@ -1,7 +1,12 @@
+import { tenantScopeId } from "@beignet/core/ports";
+import type { MemberRepository } from "@/features/members/ports";
+import type { NotificationRepository } from "@/features/notifications/ports";
 import type { PageRepository } from "@/features/pages/ports";
+import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
 import type {
 	ListTasksOptions,
 	NewTask,
+	TaskAssignmentDeliveryPort,
 	TaskRepository,
 	UpdateTaskData,
 } from "@/features/tasks/ports";
@@ -142,4 +147,48 @@ export function createTestTaskRepository(options?: {
 		},
 	};
 }
-import { tenantScopeId } from "@beignet/core/ports";
+
+export function createTestTaskIntegration(options: {
+	documents: PageRepository;
+	tasks: TaskRepository;
+	members?: MemberRepository;
+	notificationInbox?: NotificationRepository;
+}) {
+	const members =
+		options.members ??
+		({
+			async findRole() {
+				return "member";
+			},
+		} as unknown as MemberRepository);
+	const notificationInbox =
+		options.notificationInbox ??
+		({
+			async getPreferences() {
+				return {
+					overdueTasksEnabled: true,
+					taskAssignmentsEnabled: false,
+					timezone: "UTC",
+					timezoneConfigured: false,
+				};
+			},
+			async createTaskAssigned() {
+				return null;
+			},
+			async resolveTaskNotifications() {},
+			async dismissScheduledForTasks() {},
+		} as unknown as NotificationRepository);
+	const taskAssignmentDelivery = {
+		schedule() {},
+	} satisfies TaskAssignmentDeliveryPort;
+
+	return {
+		...createTaskIntegrationPorts({
+			documents: options.documents,
+			members,
+			notificationInbox,
+			tasks: options.tasks,
+		}),
+		taskAssignmentDelivery,
+	};
+}
