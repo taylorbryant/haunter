@@ -18,6 +18,7 @@ import { appPorts } from "@/infra/app-ports";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
 import {
 	ACCESS_STATUS_APPROVED,
+	ACCESS_STATUS_WAITLISTED,
 	type AuthRequest,
 	type AuthSessionMetadata,
 	type AuthUser,
@@ -46,20 +47,24 @@ import {
 function createSignedInAuth(
 	userId: string,
 	workspaceId: string,
+	accessStatus = ACCESS_STATUS_APPROVED,
 ): AppPorts["auth"] {
 	return createStaticAuth<AuthUser, AuthSessionMetadata, AuthRequest>({
 		user: {
 			id: userId,
 			email: `${userId}@example.com`,
 			name: "Test User",
-			accessStatus: ACCESS_STATUS_APPROVED,
+			accessStatus,
 		},
 		// The active organization is the request tenant.
 		session: { id: `session_${userId}`, activeOrganizationId: workspaceId },
 	});
 }
 
-async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
+async function createPagesTestApp(options: {
+	auth: AppPorts["auth"];
+	membershipRole?: string | null;
+}) {
 	const pages = createTestPageRepository();
 	const tasks = createTestTaskRepository();
 	const canvases = createTestCanvasRepository();
@@ -67,10 +72,11 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 	const pageNavigation = createTestPageNavigationRepository({ pages });
 	const pageVersions = createTestPageVersionRepository();
 	const workspaceEvents = createTestWorkspaceEventPublisher();
-	// Every signed-in test user is an owner of their active workspace.
+	const membershipRole =
+		options.membershipRole === undefined ? "owner" : options.membershipRole;
 	const members = {
 		async findRole() {
-			return "owner" as const;
+			return membershipRole;
 		},
 		async listForUser() {
 			return [];
@@ -136,6 +142,72 @@ async function createPagesTestApp(options: { auth: AppPorts["auth"] }) {
 }
 
 describe("pageRoutes", () => {
+	it("does not authorize a stale active organization without membership", async () => {
+		const workspaceId = crypto.randomUUID().replaceAll("-", "");
+		const { app } = await createPagesTestApp({
+			auth: createSignedInAuth("user_removed", workspaceId),
+			membershipRole: null,
+		});
+		const requester = createTestRequester(app, {});
+
+		const result = await requester.safeRequest(listPages, {
+			path: { workspaceId },
+		});
+
+		await app.stop();
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("Expected an error result.");
+		expect(result.status).toBe(403);
+		expect(result.error.message).toBe("Select a workspace before continuing.");
+	});
+
+	it("authorizes an accepted member who is still app-waitlisted", async () => {
+		const workspaceId = crypto.randomUUID().replaceAll("-", "");
+		const { app } = await createPagesTestApp({
+			auth: createSignedInAuth(
+				"user_invited",
+				workspaceId,
+				ACCESS_STATUS_WAITLISTED,
+			),
+			membershipRole: "member",
+		});
+		const requester = createTestRequester(app, {});
+
+		const created = await requester.request(createPage, {
+			body: { workspaceId, title: "Shared notes" },
+			idempotencyKey: "accepted-member-create",
+		});
+
+		await app.stop();
+
+		expect(created.title).toBe("Shared notes");
+	});
+
+	it("does not treat a pending invitation as membership", async () => {
+		const workspaceId = crypto.randomUUID().replaceAll("-", "");
+		const { app } = await createPagesTestApp({
+			auth: createSignedInAuth(
+				"user_pending_invite",
+				workspaceId,
+				ACCESS_STATUS_WAITLISTED,
+			),
+			membershipRole: null,
+		});
+		const requester = createTestRequester(app, {});
+
+		const result = await requester.safeRequest(listPages, {
+			path: { workspaceId },
+		});
+
+		await app.stop();
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("Expected an error result.");
+		expect(result.status).toBe(403);
+		expect(result.error.message).toBe("Your account is still on the waitlist.");
+	});
+
 	it("manages personal favorites and recent views over HTTP", async () => {
 		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
 		const { app } = await createPagesTestApp({

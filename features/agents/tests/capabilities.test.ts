@@ -30,6 +30,7 @@ import { agentCapabilities } from "@/lib/agent-capability-registry";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import { createHaunterAgentCapabilityExecutor } from "@/server/agent-capabilities";
+import type { AppServiceContextInput } from "@/server/context";
 
 async function createFixture() {
 	const userId = "user_agent";
@@ -42,10 +43,14 @@ async function createFixture() {
 	const workspaceEvents = createTestWorkspaceEventPublisher();
 	const activities: AgentActivityWrite[] = [];
 	const agents = createTestAgentAdminRepository([], activities);
+	let membershipRole: string | null = "owner";
+	let membershipReads = 0;
+	const serviceContextInputs: AppServiceContextInput[] = [];
 	const members = {
 		async findRole(candidateWorkspaceId: string, candidateUserId: string) {
+			membershipReads += 1;
 			return candidateWorkspaceId === workspaceId && candidateUserId === userId
-				? "owner"
+				? membershipRole
 				: null;
 		},
 		async listForUser() {
@@ -131,7 +136,8 @@ async function createFixture() {
 	const ctx = await createContext();
 	const server = {
 		ports: fixture.ports,
-		async createServiceContext() {
+		async createServiceContext(input?: AppServiceContextInput) {
+			serviceContextInputs.push(input);
 			return ctx;
 		},
 	};
@@ -164,9 +170,14 @@ async function createFixture() {
 		execute,
 		pages,
 		scope: createTenantScope(createTestTenant(workspaceId)),
+		serviceContextInputs,
+		setMembershipRole(role: string | null) {
+			membershipRole = role;
+		},
 		tasks,
 		userId,
 		workspaceId,
+		membershipReads: () => membershipReads,
 	};
 }
 
@@ -569,6 +580,40 @@ describe("Haunter agent capabilities", () => {
 				resourceLabel: "Unauthorized",
 			}),
 		]);
+	});
+
+	it("rechecks workspace membership for every agent execution", async () => {
+		const { execute, membershipReads, setMembershipRole, workspaceId } =
+			await createFixture();
+
+		await expect(execute("list_pages", { workspaceId })).resolves.toEqual({
+			pages: [],
+		});
+		setMembershipRole(null);
+		await expect(execute("list_pages", { workspaceId })).rejects.toMatchObject({
+			status: "FORBIDDEN",
+		});
+
+		expect(membershipReads()).toBe(2);
+	});
+
+	it("uses the user's current workspace role in agent context", async () => {
+		const { execute, serviceContextInputs, setMembershipRole, workspaceId } =
+			await createFixture();
+
+		setMembershipRole("viewer");
+		await execute("list_pages", { workspaceId });
+		expect(serviceContextInputs.at(-1)).toMatchObject({
+			asUser: { id: "user_agent", role: "viewer" },
+			tenantId: workspaceId,
+		});
+
+		setMembershipRole("member");
+		await execute("list_pages", { workspaceId });
+		expect(serviceContextInputs.at(-1)).toMatchObject({
+			asUser: { id: "user_agent", role: "member" },
+			tenantId: workspaceId,
+		});
 	});
 
 	it("creates, lists, updates, and completes a task as the acting user", async () => {

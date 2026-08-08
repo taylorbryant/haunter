@@ -31,12 +31,14 @@ export const appContext = defineServerContext<AppContext, AppRuntimePorts>()({
 	gate: (ports) => ports.gate,
 	request: async ({ req, ports, requestId, trace }) => {
 		const auth = await ports.auth.getSession(req);
-		const tenant = resolveRequestTenant({ auth });
-		// The caller's role in the active workspace gates content-edit rights.
+		const requestedTenant = resolveRequestTenant({ auth });
+		// The active organization is only a selector. A current Better Auth member
+		// row is the proof that lets request code receive tenant-scoped ports.
 		const role =
-			auth && tenant
-				? await ports.members.findRole(tenant.id, auth.user.id)
+			auth && requestedTenant
+				? await ports.members.findRole(requestedTenant.id, auth.user.id)
 				: null;
+		const tenant = role ? requestedTenant : undefined;
 
 		return {
 			requestId,

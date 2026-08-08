@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { WaitlistSignOutButton } from "@/components/auth/waitlist-sign-out-button";
 import { GhostLogo } from "@/components/ghost-logo";
@@ -10,15 +9,16 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { hasAppAccessSession } from "@/lib/auth";
-import { auth } from "@/lib/better-auth";
+import { hasAppAccess } from "@/lib/auth";
+import { getAppRequestContext } from "@/lib/server-react-query";
 
 export default async function WaitlistPage() {
-	const session = await auth.api.getSession({ headers: await headers() });
+	const ctx = await getAppRequestContext();
+	const session = ctx.auth;
 	if (!session) {
 		redirect("/sign-in?next=/waitlist");
 	}
-	if (hasAppAccessSession(session)) {
+	if (await hasAppAccess(ctx)) {
 		redirect("/");
 	}
 

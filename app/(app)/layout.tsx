@@ -19,7 +19,7 @@ import {
 import { WaitlistDialogProvider } from "@/features/admin/components/waitlist-dialog";
 import { loadChangelogReleases } from "@/features/changelog/content";
 import { NotificationTimezoneInitializer } from "@/features/notifications/components/notification-timezone-initializer";
-import { hasAppAccessSession } from "@/lib/auth";
+import { hasAppAccess } from "@/lib/auth";
 import {
 	DEVICE_TIMEZONE_COOKIE_NAME,
 	deviceTimeAt,
@@ -49,14 +49,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 				: "/sign-in",
 		);
 	}
-	if (!hasAppAccessSession(session)) {
+	if (!(await hasAppAccess(ctx))) {
 		redirect("/waitlist");
 	}
 
 	const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
 	const isAdmin = session.user.role === ADMIN_ROLE;
-	const activeWorkspaceId = session.session?.activeOrganizationId ?? null;
+	const activeWorkspaceId = ctx.tenant?.id ?? null;
 	const now = new Date();
 	const deviceTimezone = readDeviceTimezoneCookie(
 		cookieStore.get(DEVICE_TIMEZONE_COOKIE_NAME)?.value,

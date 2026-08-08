@@ -1,7 +1,7 @@
 import {
 	requireTenantScope,
-	tenantScopeId,
 	type TenantScope,
+	tenantScopeId,
 } from "@beignet/core/ports";
 import type { AppContext } from "@/app-context";
 import { appError } from "@/features/shared/errors";
@@ -26,19 +26,19 @@ export function isApprovedUser(
 	return user?.accessStatus === ACCESS_STATUS_APPROVED;
 }
 
-export function hasAppAccessSession(
-	session:
-		| {
-				user?: Pick<AuthUser, "accessStatus"> | null;
-				session?: { activeOrganizationId?: string | null } | null;
-		  }
-		| null
-		| undefined,
-): boolean {
-	return Boolean(
-		session &&
-			(isApprovedUser(session.user) || session.session?.activeOrganizationId),
-	);
+export async function hasAppAccess(
+	ctx: Pick<AppContext, "auth" | "membership"> & {
+		ports: Pick<AppContext["ports"], "members">;
+	},
+): Promise<boolean> {
+	if (!ctx.auth) return false;
+	if (isApprovedUser(ctx.auth.user) || ctx.membership) return true;
+
+	// A stale active organization must not lock an invited user out of another
+	// workspace they still belong to. This authoritative lookup grants app entry
+	// only; request context still withholds tenant scope until the active member
+	// row itself has been verified.
+	return (await ctx.ports.members.listForUser(ctx.auth.user.id)).length > 0;
 }
 
 /** True when the user holds the app-wide admin role. */
@@ -75,10 +75,9 @@ export function requireUser(ctx: AppContext): AuthUser {
 }
 
 /**
- * The signed-in user's active workspace (a Better Auth organization). Better
- * Auth only writes `activeOrganizationId` to an org the session is a verified
- * member of, so a present tenant id is proof of membership — the tenant is the
- * unit of access.
+ * The signed-in user's active workspace (a Better Auth organization). Request
+ * context exposes this tenant only after resolving a current member row, so a
+ * stale `activeOrganizationId` never becomes repository scope.
  */
 export function requireActiveWorkspaceId(ctx: AppContext): string {
 	return tenantScopeId(requireActiveWorkspaceScope(ctx));
