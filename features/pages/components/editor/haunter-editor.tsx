@@ -50,6 +50,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
 import { invalidateNotifications } from "@/features/notifications/client/queries";
+import {
+	createEditorPersistenceController,
+	type EditorPersistenceController,
+} from "@/features/pages/client/editor-persistence-controller";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-content";
 import {
@@ -416,11 +420,21 @@ function MountedHaunterEditor({
 	);
 	// Last document version this editor saw: metadata writes do not affect it.
 	const baseUpdatedAtRef = useRef<string | null>(contentUpdatedAt ?? null);
-	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const dirtyRef = useRef(initialQueuedConflict !== null);
-	const applyingRemoteRef = useRef(false);
-	const allowConflictSaveRef = useRef(false);
 	const saveRef = useRef<() => Promise<boolean>>(async () => true);
+	const persistenceControllerRef = useRef<EditorPersistenceController | null>(
+		null,
+	);
+	if (!persistenceControllerRef.current) {
+		persistenceControllerRef.current = createEditorPersistenceController({
+			initiallyDirty: initialQueuedConflict !== null,
+			initialConflict: initialQueuedConflict !== null,
+			autosaveDelayMs: AUTOSAVE_DELAY_MS,
+			onAutosave: () => {
+				void saveRef.current();
+			},
+		});
+	}
+	const persistence = persistenceControllerRef.current;
 
 	const advanceBaseUpdatedAt = useCallback(
 		(next: string | null | undefined) => {
@@ -492,12 +506,12 @@ function MountedHaunterEditor({
 				contentUpdatedAt,
 				baseUpdatedAtRef.current,
 			) ||
-			dirtyRef.current ||
+			persistence.dirty ||
 			documentSaveQueue.inFlight
 		) {
 			return;
 		}
-		applyingRemoteRef.current = true;
+		persistence.applyingRemote = true;
 		editor.replaceBlocks(
 			editor.document,
 			(normalizedRemoteContent.length > 0
@@ -505,7 +519,7 @@ function MountedHaunterEditor({
 				: [{ type: "paragraph" }]) as never,
 		);
 		requestAnimationFrame(() => {
-			applyingRemoteRef.current = false;
+			persistence.applyingRemote = false;
 		});
 		appliedRemoteVersionRef.current = contentUpdatedAt;
 		advanceBaseUpdatedAt(contentUpdatedAt);
@@ -515,6 +529,7 @@ function MountedHaunterEditor({
 		documentSaveQueue,
 		editor,
 		normalizedRemoteContent,
+		persistence,
 	]);
 
 	useEffect(() => {
@@ -601,6 +616,7 @@ function MountedHaunterEditor({
 			const snapshot = cloneDocument(content);
 			const conflict = { content: snapshot } satisfies PageContentConflict;
 			saveConflictRef.current = conflict;
+			persistence.hasConflict = true;
 			setHasSaveConflict(true);
 			documentSaveQueues.setLastResult(
 				documentSaveQueue,
@@ -610,17 +626,17 @@ function MountedHaunterEditor({
 				},
 				{ retainWhenIdle: true },
 			);
-			dirtyRef.current = true;
+			persistence.dirty = true;
 			setSaveError(null);
 			setPageContentInCache(queryClient, pageId, snapshot);
 			if (restoreEditor) {
-				applyingRemoteRef.current = true;
+				persistence.applyingRemote = true;
 				editor.replaceBlocks(
 					editor.document,
 					(snapshot.length > 0 ? snapshot : [{ type: "paragraph" }]) as never,
 				);
 				requestAnimationFrame(() => {
-					applyingRemoteRef.current = false;
+					persistence.applyingRemote = false;
 				});
 			}
 			reportState("error");
@@ -639,6 +655,7 @@ function MountedHaunterEditor({
 			documentSaveQueue,
 			editor,
 			pageId,
+			persistence,
 			persistRecoveryDraft,
 			queryClient,
 			reportState,
@@ -654,7 +671,7 @@ function MountedHaunterEditor({
 				staleTime: 0,
 			});
 			await clearRecoveryDraft().catch(() => undefined);
-			applyingRemoteRef.current = true;
+			persistence.applyingRemote = true;
 			editor.replaceBlocks(
 				editor.document,
 				(latest.content.length > 0
@@ -662,12 +679,13 @@ function MountedHaunterEditor({
 					: [{ type: "paragraph" }]) as never,
 			);
 			requestAnimationFrame(() => {
-				applyingRemoteRef.current = false;
+				persistence.applyingRemote = false;
 			});
 			baseUpdatedAtRef.current = latest.contentUpdatedAt;
 			appliedRemoteVersionRef.current = latest.contentUpdatedAt;
-			dirtyRef.current = false;
+			persistence.dirty = false;
 			saveConflictRef.current = null;
+			persistence.hasConflict = false;
 			setHasSaveConflict(false);
 			documentSaveQueues.clearLastResult(documentSaveQueue);
 			reportState("saved");
@@ -684,6 +702,7 @@ function MountedHaunterEditor({
 		documentSaveQueue,
 		editor,
 		pageId,
+		persistence,
 		queryClient,
 		reportState,
 	]);
@@ -700,23 +719,19 @@ function MountedHaunterEditor({
 				staleTime: 0,
 			});
 			baseUpdatedAtRef.current = latest.contentUpdatedAt;
-			allowConflictSaveRef.current = true;
-			dirtyRef.current = true;
+			persistence.allowConflictSave = true;
+			persistence.dirty = true;
 			reportState("pending");
 			const saved = await drainPageSaveQueue({
-				clearPendingTimer: () => {
-					if (timeoutRef.current) {
-						clearTimeout(timeoutRef.current);
-						timeoutRef.current = null;
-					}
-				},
+				clearPendingTimer: persistence.clearPendingTimer,
 				hasPendingChanges: () =>
-					dirtyRef.current || documentSaveQueue.inFlight !== null,
+					persistence.dirty || documentSaveQueue.inFlight !== null,
 				save: () => saveRef.current(),
 			});
 			if (saved) {
 				await clearRecoveryDraft().catch(() => undefined);
 				saveConflictRef.current = null;
+				persistence.hasConflict = false;
 				setHasSaveConflict(false);
 				documentSaveQueues.clearLastResult(documentSaveQueue);
 			} else if (saveConflictRef.current) {
@@ -736,7 +751,7 @@ function MountedHaunterEditor({
 				userErrorMessage(error, "Your page version could not be saved."),
 			);
 		} finally {
-			allowConflictSaveRef.current = false;
+			persistence.allowConflictSave = false;
 			setResolvingConflict(false);
 		}
 	}, [
@@ -744,6 +759,7 @@ function MountedHaunterEditor({
 		clearRecoveryDraft,
 		editor,
 		pageId,
+		persistence,
 		preserveConflict,
 		queryClient,
 		reportState,
@@ -755,11 +771,11 @@ function MountedHaunterEditor({
 			const outcome = await precedingSave;
 			if (outcome.status === "saved") {
 				advanceBaseUpdatedAt(outcome.contentUpdatedAt);
-				return dirtyRef.current ? saveRef.current() : true;
+				return persistence.dirty ? saveRef.current() : true;
 			}
 			if (outcome.status === "conflict") {
 				if (!saveConflictRef.current) {
-					const hasNewerLocalEdits = dirtyRef.current;
+					const hasNewerLocalEdits = persistence.dirty;
 					await preserveConflict(
 						hasNewerLocalEdits
 							? (editor.document as unknown as BlockJson[])
@@ -783,9 +799,7 @@ function MountedHaunterEditor({
 		}
 		// Conflicts require an explicit choice. Normal autosave and navigation
 		// flushes must not silently overwrite the newer server document.
-		if (saveConflictRef.current && !allowConflictSaveRef.current) return false;
-		if (!dirtyRef.current) return true;
-		dirtyRef.current = false;
+		if (!persistence.beginSave()) return !saveConflictRef.current;
 		reportState("saving");
 		const content = editor.document as unknown as BlockJson[];
 		// Mirror into the cache immediately: a remount between this save and
@@ -806,8 +820,8 @@ function MountedHaunterEditor({
 				(result) => {
 					setSaveError(null);
 					advanceBaseUpdatedAt(result.contentUpdatedAt);
-					saveAgainAfterSuccess = dirtyRef.current;
-					if (!dirtyRef.current) reportState("saved");
+					saveAgainAfterSuccess = persistence.dirty;
+					if (!persistence.dirty) reportState("saved");
 					setPageSavedAtInCache(
 						queryClient,
 						pageId,
@@ -840,8 +854,8 @@ function MountedHaunterEditor({
 							content: localContent,
 						} satisfies DocumentSaveOutcome;
 					}
-					const retryWithNewerContent = dirtyRef.current;
-					dirtyRef.current = true;
+					const retryWithNewerContent = persistence.dirty;
+					persistence.markSaveFailed();
 					setSaveError(
 						userErrorMessage(error, "Your page changes could not be saved."),
 					);
@@ -868,9 +882,9 @@ function MountedHaunterEditor({
 
 	const handleChange = useCallback(() => {
 		// Viewers must never autosave an editor initialized from read-only data.
-		if (!editable || applyingRemoteRef.current) return;
+		if (!editable || persistence.applyingRemote) return;
 		normalizeEditorCodeBlockLanguages(editor);
-		dirtyRef.current = true;
+		persistence.markChanged();
 		if (saveConflictRef.current) {
 			// Keep edits made while the conflict banner is open in the shared
 			// page queue as well, so a same-page remount restores the latest local
@@ -899,9 +913,15 @@ function MountedHaunterEditor({
 		}
 		setSaveError(null);
 		reportState("pending");
-		if (timeoutRef.current) clearTimeout(timeoutRef.current);
-		timeoutRef.current = setTimeout(() => saveRef.current(), AUTOSAVE_DELAY_MS);
-	}, [documentSaveQueue, editable, editor, persistRecoveryDraft, reportState]);
+		persistence.scheduleAutosave();
+	}, [
+		documentSaveQueue,
+		editable,
+		editor,
+		persistence,
+		persistRecoveryDraft,
+		reportState,
+	]);
 
 	// Retain the page-scoped coordinator through cleanup. If this editor is
 	// replaced while its save is running, the replacement adopts that exact
@@ -935,36 +955,32 @@ function MountedHaunterEditor({
 			});
 			return () => {
 				active = false;
-				if (timeoutRef.current) clearTimeout(timeoutRef.current);
+				persistence.clearPendingTimer();
 				void saveRef.current().finally(releaseQueue);
 			};
 		}
 		return () => {
-			if (timeoutRef.current) clearTimeout(timeoutRef.current);
+			persistence.clearPendingTimer();
 			void saveRef.current().finally(releaseQueue);
 		};
 	}, [
 		advanceBaseUpdatedAt,
 		documentSaveQueue,
 		initialRecoveryDraft,
+		persistence,
 		preserveConflict,
 	]);
 
 	useEffect(() => {
 		return registerPageSaveFlusher(pageId, async () => {
 			return drainPageSaveQueue({
-				clearPendingTimer: () => {
-					if (timeoutRef.current) {
-						clearTimeout(timeoutRef.current);
-						timeoutRef.current = null;
-					}
-				},
+				clearPendingTimer: persistence.clearPendingTimer,
 				hasPendingChanges: () =>
-					dirtyRef.current || documentSaveQueue.inFlight !== null,
+					persistence.dirty || documentSaveQueue.inFlight !== null,
 				save: () => saveRef.current(),
 			});
 		});
-	}, [documentSaveQueue, pageId]);
+	}, [documentSaveQueue, pageId, persistence]);
 
 	const [codeDialogBlockId, setCodeDialogBlockId] = useState<string | null>(
 		null,

@@ -18,7 +18,14 @@ import {
 	Table2Icon,
 	XIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	type ReactNode,
+	type SyntheticEvent,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { type TLComponents, useEditor } from "tldraw";
 import { Button } from "@/components/ui/button";
 import {
@@ -177,7 +184,7 @@ function DetailedWireframePreview({ id }: { id: string }) {
 	return null;
 }
 
-function LibraryPreview({ entry }: { entry: CanvasLibraryItem }) {
+export function LibraryPreview({ entry }: { entry: CanvasLibraryItem }) {
 	if (entry.kind === "template") {
 		if (entry.category === "architecture") {
 			return (
@@ -292,7 +299,7 @@ function LibraryPreview({ entry }: { entry: CanvasLibraryItem }) {
 	);
 }
 
-function LibraryItemButton({
+export function LibraryItemButton({
 	entry,
 	onInsert,
 }: {
@@ -312,6 +319,28 @@ function LibraryItemButton({
 				{entry.name}
 			</div>
 		</button>
+	);
+}
+
+export function CanvasLibraryInteractionBoundary({
+	onInteraction,
+	children,
+}: {
+	onInteraction: (event: SyntheticEvent) => void;
+	children: ReactNode;
+}) {
+	return (
+		<div
+			className="pointer-events-none absolute inset-0"
+			onPointerDown={onInteraction}
+			onPointerMove={onInteraction}
+			onPointerUp={onInteraction}
+			onTouchStart={onInteraction}
+			onTouchEnd={onInteraction}
+			onWheel={(event) => event.stopPropagation()}
+		>
+			{children}
+		</div>
 	);
 }
 
@@ -479,18 +508,11 @@ function CanvasLibraryOverlay() {
 	);
 
 	return (
-		<div
-			className="pointer-events-none absolute inset-0"
+		<CanvasLibraryInteractionBoundary
 			// tldraw prevents unclaimed canvas touch events by default, which also
 			// suppresses the synthetic click that iOS sends to the Library button.
-			// Mark every library interaction as handled without stopping normal DOM
-			// propagation so the button and portaled mobile drawer remain interactive.
-			onPointerDown={editor.markEventAsHandled}
-			onPointerMove={editor.markEventAsHandled}
-			onPointerUp={editor.markEventAsHandled}
-			onTouchStart={editor.markEventAsHandled}
-			onTouchEnd={editor.markEventAsHandled}
-			onWheel={(event) => event.stopPropagation()}
+			// Claim library interactions without blocking their normal DOM behavior.
+			onInteraction={editor.markEventAsHandled}
 		>
 			<Button
 				type="button"
@@ -555,7 +577,7 @@ function CanvasLibraryOverlay() {
 					<div className="flex min-h-0 flex-1 flex-col p-3">{body}</div>
 				</aside>
 			) : null}
-		</div>
+		</CanvasLibraryInteractionBoundary>
 	);
 }
 

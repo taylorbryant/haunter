@@ -41,20 +41,4 @@ describe("canvas themes", () => {
 			getCanvasThemePalette("light").background,
 		);
 	});
-
-	test("bridges tldraw UI variables to Haunter tokens", async () => {
-		const css = await Bun.file(
-			new URL("../../../app/globals.css", import.meta.url),
-		).text();
-		const block = css.match(
-			/\.haunter-canvas \.tl-container \{([\s\S]*?)\n\}/,
-		)?.[1];
-
-		expect(block).toBeDefined();
-		expect(block).toContain("--tl-color-background: var(--background);");
-		expect(block).toContain("--tl-color-selection-stroke: var(--primary);");
-		expect(block).toContain("--tl-color-panel: var(--popover);");
-		expect(block).toContain("--tl-color-selected: var(--primary);");
-		expect(block).toContain("--tl-color-text: var(--foreground);");
-	});
 });

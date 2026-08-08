@@ -74,6 +74,14 @@ import {
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
 import { appendSubpageLinkToOpenPage } from "@/features/pages/client/open-page-content";
+import {
+	buildPageTreeIndex,
+	canDropPage,
+	getPageDropPlacement,
+	getPageDropZone,
+	type PageDropZone,
+	type PageTreeNode,
+} from "@/features/pages/client/page-tree-controller";
 import { preloadHaunterEditor } from "@/features/pages/client/preload-editor";
 import {
 	createPageMutationOptions,
@@ -97,7 +105,6 @@ import { flushPendingPageSave } from "@/features/pages/client/save-state";
 import {
 	PAGE_TITLE_MAX_LENGTH,
 	PAGE_TITLE_TOO_LONG_MESSAGE,
-	type PageMeta,
 } from "@/features/pages/schemas";
 import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
@@ -122,55 +129,12 @@ const MarkdownImportDialog = dynamic(
 	{ ssr: false },
 );
 
-type TreeNode = PageMeta & { children: TreeNode[] };
 const PAGE_TREE_SKELETON_ROWS = [
 	"page-tree-a",
 	"page-tree-b",
 	"page-tree-c",
 	"page-tree-d",
 ];
-
-function buildTree(pages: PageMeta[]): TreeNode[] {
-	const nodes = new Map<string, TreeNode>(
-		pages.map((page) => [page.id, { ...page, children: [] }]),
-	);
-	const roots: TreeNode[] = [];
-
-	for (const node of nodes.values()) {
-		const parent = node.parentPageId ? nodes.get(node.parentPageId) : null;
-		if (parent) {
-			parent.children.push(node);
-		} else {
-			roots.push(node);
-		}
-	}
-
-	return roots;
-}
-
-function buildTreeIndex(pages: PageMeta[]) {
-	const tree = buildTree(pages);
-	const nodesById = new Map<string, TreeNode>();
-	const subtreeIdsById = new Map<string, Set<string>>();
-
-	function visit(node: TreeNode): Set<string> {
-		nodesById.set(node.id, node);
-		const ids = new Set<string>([node.id]);
-		for (const child of node.children) {
-			for (const id of visit(child)) {
-				ids.add(id);
-			}
-		}
-		subtreeIdsById.set(node.id, ids);
-		return ids;
-	}
-
-	for (const node of tree) {
-		visit(node);
-	}
-
-	return { tree, nodesById, subtreeIdsById };
-}
 
 function useExpandedState(workspaceId: string) {
 	const storageKey = `haunter.tree.${workspaceId}`;
@@ -251,11 +215,11 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [iconPageId, setIconPageId] = useState<string | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
-	const [pageToTrash, setPageToTrash] = useState<TreeNode | null>(null);
+	const [pageToTrash, setPageToTrash] = useState<PageTreeNode | null>(null);
 	const [dragId, setDragId] = useState<string | null>(null);
 	const [dropTarget, setDropTarget] = useState<{
 		id: string;
-		zone: "before" | "after" | "inside";
+		zone: PageDropZone;
 	} | null>(null);
 	const menuFocusTransferPageId = useRef<string | null>(null);
 	const pendingMovePageIds = useRef(new Set<string>());
@@ -276,7 +240,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 
 	const pages = pagesQuery.data?.items ?? [];
 	const { tree, nodesById, subtreeIdsById } = useMemo(
-		() => buildTreeIndex(pages),
+		() => buildPageTreeIndex(pages),
 		[pages],
 	);
 	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
@@ -413,14 +377,14 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		}
 	}
 
-	function startRename(node: TreeNode) {
+	function startRename(node: PageTreeNode) {
 		if (renameMutation.isPending) return;
 		setRenameError(null);
 		setRenamingId(node.id);
 		setRenameValue(node.title);
 	}
 
-	function startDesktopRename(node: TreeNode) {
+	function startDesktopRename(node: PageTreeNode) {
 		// The menu normally restores focus to its trigger after an item is
 		// selected. Renaming replaces the row with an autofocus input, so that
 		// restoration would immediately blur the input and end the rename.
@@ -428,12 +392,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		startRename(node);
 	}
 
-	function startTrash(node: TreeNode) {
+	function startTrash(node: PageTreeNode) {
 		setDeleteError(null);
 		setPageToTrash(node);
 	}
 
-	function toggleFavorite(node: TreeNode) {
+	function toggleFavorite(node: PageTreeNode) {
 		const navigation = navigationQuery.data;
 		if (!navigation || favoriteMutation.isPending) return;
 		const wasFavorite = navigation.favorites.some(
@@ -476,7 +440,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	}
 
 	// Soft delete: the subtree moves to the workspace trash (restorable).
-	function deletePage(node: TreeNode) {
+	function deletePage(node: PageTreeNode) {
 		setDeleteError(null);
 		const subtree = subtreeIdsById.get(node.id) ?? new Set([node.id]);
 		deleteMutation.mutate(
@@ -515,58 +479,28 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		[activePageId, router, workspaceId],
 	);
 
-	function siblingsOf(parentId: string | null): TreeNode[] {
-		return parentId === null ? tree : (nodesById.get(parentId)?.children ?? []);
-	}
-
 	function canDropOn(targetId: string): boolean {
-		if (!dragId || dragId === targetId) return false;
-		const dragged = nodesById.get(dragId);
-		// A page cannot be dropped into its own subtree.
-		return (
-			Boolean(dragged) &&
-			!(subtreeIdsById.get((dragged as TreeNode).id) ?? new Set()).has(targetId)
-		);
+		return canDropPage({ tree, nodesById, subtreeIdsById }, dragId, targetId);
 	}
 
 	async function performDrop(
 		draggedId: string,
 		targetId: string,
-		zone: "before" | "after" | "inside",
+		zone: PageDropZone,
 	) {
 		if (pendingMovePageIds.current.has(draggedId)) return;
 		const dragged = nodesById.get(draggedId);
 		const target = nodesById.get(targetId);
 		if (!dragged || !target || !canDropOn(targetId)) return;
 
-		let parentPageId: string | null;
-		let position: number;
-
-		if (zone === "inside") {
-			parentPageId = target.id;
-			position =
-				target.children
-					.filter((child) => child.id !== draggedId)
-					.reduce((max, child) => Math.max(max, child.position), 0) + 1;
-		} else {
-			parentPageId = target.parentPageId;
-			const siblings = siblingsOf(parentPageId).filter(
-				(sibling) => sibling.id !== draggedId,
-			);
-			const index = siblings.findIndex((sibling) => sibling.id === targetId);
-			if (index === -1) return;
-			if (zone === "before") {
-				const prev = siblings[index - 1];
-				position = prev
-					? (prev.position + target.position) / 2
-					: target.position - 1;
-			} else {
-				const next = siblings[index + 1];
-				position = next
-					? (target.position + next.position) / 2
-					: target.position + 1;
-			}
-		}
+		const placement = getPageDropPlacement({
+			index: { tree, nodesById, subtreeIdsById },
+			draggedId,
+			targetId,
+			zone,
+		});
+		if (!placement) return;
+		const { parentPageId, position } = placement;
 
 		if (
 			parentPageId === dragged.parentPageId &&
@@ -605,15 +539,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 
 	function zoneFromPointer(
 		event: React.DragEvent<HTMLLIElement>,
-	): "before" | "after" | "inside" {
+	): PageDropZone {
 		const rect = event.currentTarget.getBoundingClientRect();
-		const ratio = (event.clientY - rect.top) / rect.height;
-		if (ratio < 0.3) return "before";
-		if (ratio > 0.7) return "after";
-		return "inside";
+		return getPageDropZone(event.clientY, rect.top, rect.height);
 	}
 
-	function renderNode(node: TreeNode) {
+	function renderNode(node: PageTreeNode) {
 		const isExpanded = Boolean(expanded[node.id]);
 		const isActive = node.id === activePageId;
 		// Mobile renames happen in the drawer below, not inline in the row.

@@ -45,6 +45,7 @@ import {
 	type TaskScheduleCacheSnapshot,
 	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
+import { runOptimisticTaskWrite } from "@/features/tasks/client/task-list-controller";
 import {
 	TaskComposer,
 	type TaskSubmissionResult,
@@ -233,29 +234,19 @@ export function TaskList({
 	}
 
 	async function setTaskCompletion(task: TaskWithPage, completed: boolean) {
-		await taskWriteLock.run(task.id, async () => {
-			setPendingTaskIds((current) => new Set(current).add(task.id));
-			let snapshot: TaskCompletionCacheSnapshot | null = null;
-			try {
-				snapshot = await optimisticallySetTaskCompletion(
-					queryClient,
-					task.id,
-					completed,
-				);
-				await completionMutation.mutateAsync({
+		await runOptimisticTaskWrite<TaskCompletionCacheSnapshot>({
+			taskId: task.id,
+			setPendingTaskIds,
+			optimistic: () =>
+				optimisticallySetTaskCompletion(queryClient, task.id, completed),
+			commit: () =>
+				completionMutation.mutateAsync({
 					path: { id: task.id },
 					body: { completed },
-				});
-			} catch (error) {
-				if (snapshot) restoreTasksCache(queryClient, snapshot);
-				reportUserError(error, "Task could not be updated. Try again.");
-			} finally {
-				setPendingTaskIds((current) => {
-					const next = new Set(current);
-					next.delete(task.id);
-					return next;
-				});
-			}
+				}),
+			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
+			onError: (error) =>
+				reportUserError(error, "Task could not be updated. Try again."),
 		});
 		await Promise.allSettled([
 			invalidateTasksWhenIdle(queryClient),
@@ -273,32 +264,22 @@ export function TaskList({
 			"dueDate" | "dueTime" | "reminderOffsetMinutes"
 		>,
 	) {
-		await taskWriteLock.run(task.id, async () => {
-			setPendingTaskIds((current) => new Set(current).add(task.id));
-			let snapshot: TaskScheduleCacheSnapshot | null = null;
-			try {
-				snapshot = await optimisticallySetTaskSchedule(
-					queryClient,
-					task.id,
-					schedule,
-				);
-				await scheduleMutation.mutateAsync({
+		await runOptimisticTaskWrite<TaskScheduleCacheSnapshot>({
+			taskId: task.id,
+			setPendingTaskIds,
+			optimistic: () =>
+				optimisticallySetTaskSchedule(queryClient, task.id, schedule),
+			commit: () =>
+				scheduleMutation.mutateAsync({
 					path: { id: task.id },
 					body: schedule,
-				});
-			} catch (error) {
-				if (snapshot) restoreTasksCache(queryClient, snapshot);
+				}),
+			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
+			onError: (error) =>
 				reportUserError(
 					error,
 					"Task schedule could not be updated. Try again.",
-				);
-			} finally {
-				setPendingTaskIds((current) => {
-					const next = new Set(current);
-					next.delete(task.id);
-					return next;
-				});
-			}
+				),
 		});
 		await Promise.allSettled([
 			invalidateTasksWhenIdle(queryClient),
@@ -314,36 +295,27 @@ export function TaskList({
 		assigneeId: string | null,
 		assigneeName: string | null,
 	) {
-		await taskWriteLock.run(task.id, async () => {
-			setPendingTaskIds((current) => new Set(current).add(task.id));
-			let snapshot: TaskCacheSnapshot | null = null;
-			try {
-				snapshot = await optimisticallyPatchTask(
+		await runOptimisticTaskWrite<TaskCacheSnapshot>({
+			taskId: task.id,
+			setPendingTaskIds,
+			optimistic: () =>
+				optimisticallyPatchTask(
 					queryClient,
 					task.id,
-					{
-						assigneeId,
-						assigneeName,
-					},
+					{ assigneeId, assigneeName },
 					currentUser?.id,
-				);
-				await assigneeMutation.mutateAsync({
+				),
+			commit: () =>
+				assigneeMutation.mutateAsync({
 					path: { id: task.id },
 					body: { assigneeId },
-				});
-			} catch (error) {
-				if (snapshot) restoreTasksCache(queryClient, snapshot);
+				}),
+			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
+			onError: (error) =>
 				reportUserError(
 					error,
 					"Task assignee could not be updated. Try again.",
-				);
-			} finally {
-				setPendingTaskIds((current) => {
-					const next = new Set(current);
-					next.delete(task.id);
-					return next;
-				});
-			}
+				),
 		});
 		await refresh(task);
 	}
@@ -367,19 +339,18 @@ export function TaskList({
 		}
 		setEditError(null);
 		setEditingId((current) => (current === task.id ? null : current));
-		await taskWriteLock.run(task.id, async () => {
-			setPendingTaskIds((current) => new Set(current).add(task.id));
-			let snapshot: TaskCacheSnapshot | null = null;
-			try {
-				snapshot = await optimisticallyPatchTask(queryClient, task.id, {
-					title: trimmed,
-				});
-				await renameMutation.mutateAsync({
+		await runOptimisticTaskWrite<TaskCacheSnapshot>({
+			taskId: task.id,
+			setPendingTaskIds,
+			optimistic: () =>
+				optimisticallyPatchTask(queryClient, task.id, { title: trimmed }),
+			commit: () =>
+				renameMutation.mutateAsync({
 					path: { id: task.id },
 					body: { title: trimmed },
-				});
-			} catch (error) {
-				if (snapshot) restoreTasksCache(queryClient, snapshot);
+				}),
+			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
+			onError: (error) => {
 				setEditTitle(trimmed);
 				setEditingId(task.id);
 				setEditError({
@@ -389,13 +360,7 @@ export function TaskList({
 						"Task could not be renamed. Try again.",
 					),
 				});
-			} finally {
-				setPendingTaskIds((current) => {
-					const next = new Set(current);
-					next.delete(task.id);
-					return next;
-				});
-			}
+			},
 		});
 		await refresh(task);
 	}
@@ -490,31 +455,24 @@ export function TaskList({
 	async function confirmDeleteTask() {
 		if (!taskToDelete || deleteMutation.isPending) return;
 		const target = taskToDelete;
-		const deleted = await taskWriteLock.run(target.id, async () => {
-			setPendingTaskIds((current) => new Set(current).add(target.id));
-			setDeleteError(null);
-			setTaskToDelete(null);
-			let snapshot: TaskCacheSnapshot | null = null;
-			try {
-				snapshot = await optimisticallyRemoveTask(queryClient, target.id);
-				await deleteMutation.mutateAsync({ path: { id: target.id } });
-				return true;
-			} catch (error) {
-				if (snapshot) restoreTasksCache(queryClient, snapshot);
+		setDeleteError(null);
+		setTaskToDelete(null);
+		const deleted = await runOptimisticTaskWrite<TaskCacheSnapshot>({
+			taskId: target.id,
+			setPendingTaskIds,
+			optimistic: () => optimisticallyRemoveTask(queryClient, target.id),
+			commit: () => deleteMutation.mutateAsync({ path: { id: target.id } }),
+			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
+			onError: (error) => {
 				setTaskToDelete(target);
 				setDeleteError(
 					contractErrorMessage(error, "Task could not be deleted. Try again."),
 				);
-				return false;
-			} finally {
-				setPendingTaskIds((current) => {
-					const next = new Set(current);
-					next.delete(target.id);
-					return next;
-				});
-			}
+			},
 		});
-		if (deleted) await refresh(target);
+		if (deleted) {
+			await refresh(target);
+		}
 	}
 
 	function setTaskListParams(next: { filter?: TaskFilter; scope?: TaskScope }) {

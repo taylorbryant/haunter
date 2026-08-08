@@ -34,7 +34,7 @@ function formatReleaseDate(date: string) {
 	return dateFormatter.format(new Date(`${date}T00:00:00.000Z`));
 }
 
-function ReleaseList({
+export function ReleaseList({
 	releases,
 	onSelect,
 }: {

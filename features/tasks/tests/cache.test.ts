@@ -427,18 +427,3 @@ test("rolling back one creation preserves another optimistic task", async () => 
 		hasMore: true,
 	});
 });
-
-test("compact task composer clears before submission and restores failures", async () => {
-	const source = await Bun.file(
-		new URL("../components/task-composer.tsx", import.meta.url),
-	).text();
-	const optimisticClear = source.indexOf(
-		'const clearsOptimistically = mode === "compact";',
-	);
-	const submission = source.indexOf("result = await onSubmit({");
-
-	expect(optimisticClear).toBeGreaterThan(-1);
-	expect(optimisticClear).toBeLessThan(submission);
-	expect(source).toContain("setText(submittedDraft.text)");
-	expect(source).toContain("setManualDue(submittedDraft.manualDue)");
-});

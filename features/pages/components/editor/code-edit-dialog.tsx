@@ -1,20 +1,12 @@
 "use client";
 
 import type { BlockNoteEditor } from "@blocknote/core";
-import { XIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
-import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogTitle,
-} from "@/components/ui/dialog";
-import {
-	CODE_BLOCK_LANGUAGES,
-	normalizeCodeBlockLanguage,
-} from "@/features/pages/lib/code-block-language";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
 import { editCodeBlockIndentation } from "./code-block-indent";
+import { CodeEditDialogHeader } from "./code-edit-dialog-header";
 import { getCodeTheme, getHaunterHighlighter } from "./code-theme";
 import type { editorSchema } from "./schema";
 
@@ -109,35 +101,11 @@ export function CodeEditDialog({
 						className="bn-block-content code-edit-focus-ring relative flex h-full w-full flex-col overflow-hidden rounded-none! border-0 md:rounded-lg! md:border"
 						style={{ backgroundColor: theme.background }}
 					>
-						<div className="haunter-code-block-header">
-							<select
-								aria-label="Code language"
-								value={language}
-								disabled={!editable}
-								onChange={(event) => setLanguage(event.target.value)}
-							>
-								{CODE_BLOCK_LANGUAGES.map((option) => (
-									<option key={option.id} value={option.id}>
-										{option.label}
-									</option>
-								))}
-							</select>
-							<DialogClose
-								render={
-									<button
-										type="button"
-										aria-label="Close code editor"
-										className="haunter-code-block-expand keyboard-focus-ring relative"
-									/>
-								}
-							>
-								<span
-									aria-hidden="true"
-									className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2"
-								/>
-								<XIcon aria-hidden="true" className="size-4" />
-							</DialogClose>
-						</div>
+						<CodeEditDialogHeader
+							language={language}
+							editable={editable}
+							onLanguageChange={setLanguage}
+						/>
 						<div className="relative order-2 min-h-0 flex-1">
 							<div
 								ref={overlayRef}
