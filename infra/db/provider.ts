@@ -10,16 +10,16 @@ import { ensureDatabaseReady } from "./database-ready";
 import { createRepositories } from "./repositories";
 import type * as schema from "./schema";
 
-export const starterDatabaseProvider = createProvider<{
+export const appDatabaseProvider = createProvider<{
 	db: DbPort<typeof schema>;
 }>()({
-	name: "starter-database",
+	name: "app-database",
 
 	async setup({ ports }) {
 		const dbPort = ports.db;
 		if (!dbPort) {
 			throw new Error(
-				"starterDatabaseProvider requires a db port. Register createDrizzleSqliteProvider({ schema }) before it.",
+				"appDatabaseProvider requires a db port. Register createDrizzleSqliteProvider({ schema }) before it.",
 			);
 		}
 

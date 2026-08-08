@@ -1,16 +1,11 @@
 import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import { errors } from "@/features/shared/errors";
+import { ErrorResponseSchema } from "@/features/shared/schemas";
 import {
 	OnboardInputSchema,
 	OnboardOutputSchema,
 } from "@/features/workspaces/schemas";
-
-const ErrorResponseSchema = z.object({
-	code: z.string(),
-	message: z.string(),
-	requestId: z.string().optional(),
-});
 
 const workspaces = defineContractGroup()
 	.namespace("workspaces")

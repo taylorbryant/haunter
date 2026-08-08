@@ -6,6 +6,7 @@ import {
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
+import { hasTaskSchedulingChanged } from "../lib/task-scheduling";
 import {
 	createTaskAssignmentNotification,
 	resolveTaskAssignmentActor,
@@ -71,11 +72,12 @@ export const updateTaskUseCase = useCase
 				}
 				const assigneeId =
 					input.assigneeId !== undefined ? input.assigneeId : task.assigneeId;
-				const schedulingChanged =
-					dueDate !== task.dueDate ||
-					dueTime !== task.dueTime ||
-					reminderOffsetMinutes !== task.reminderOffsetMinutes ||
-					assigneeId !== task.assigneeId;
+				const schedulingChanged = hasTaskSchedulingChanged(task, {
+					dueDate,
+					dueTime,
+					reminderOffsetMinutes,
+					assigneeId,
+				});
 				const updated = await tx.tasks.update(scope, task.id, {
 					...(input.title !== undefined ? { title: input.title } : {}),
 					...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),

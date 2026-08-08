@@ -10,7 +10,7 @@ import { createLocalStorageProvider } from "@beignet/provider-storage-local";
 import { createVercelBlobStorageProvider } from "@beignet/provider-storage-vercel-blob";
 import { liveblocksWorkspaceEventProvider } from "@/infra/collab/liveblocks-workspace-event-provider";
 import { databaseClient } from "@/infra/db/client";
-import { starterDatabaseProvider } from "@/infra/db/provider";
+import { appDatabaseProvider } from "@/infra/db/provider";
 import * as schema from "@/infra/db/schema";
 import { webPushProvider } from "@/infra/notifications/web-push-provider";
 import { memoryRateLimitProvider } from "@/infra/rate-limit/memory-rate-limit-provider";
@@ -32,7 +32,7 @@ export const providers = [
 	createPinoLoggerProvider(),
 	nextAfterResponseProvider,
 	drizzleSqliteProvider,
-	starterDatabaseProvider,
+	appDatabaseProvider,
 	liveblocksWorkspaceEventProvider,
 	// Failed channel results must fail the schedule invocation so production
 	// monitoring sees delivery failures; the inbox still owns retry timing.

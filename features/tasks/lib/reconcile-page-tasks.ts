@@ -1,7 +1,8 @@
+import { type TenantScope, tenantScopeId } from "@beignet/core/ports";
+import type { BlockJson } from "@/features/content/schemas";
 import type { MemberRepository } from "@/features/members/ports";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import type { Notification } from "@/features/notifications/schemas";
-import type { BlockJson } from "@/features/content/schemas";
 import { appError } from "@/features/shared/errors";
 import {
 	createTaskAssignmentNotification,
@@ -10,6 +11,7 @@ import {
 import type { TaskRepository } from "@/features/tasks/ports";
 import type { Task } from "@/features/tasks/schemas";
 import { extractTaskBlocks } from "./extract-task-blocks";
+import { hasTaskSchedulingChanged } from "./task-scheduling";
 
 const DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DUE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -165,13 +167,17 @@ export async function reconcilePageTasks(
 			continue;
 		}
 
+		const schedulingChanged = hasTaskSchedulingChanged(current, {
+			dueDate: block.due,
+			dueTime: block.dueTime,
+			reminderOffsetMinutes:
+				block.reminderOffsetMinutes as Task["reminderOffsetMinutes"],
+			assigneeId: block.resolvedAssigneeId,
+		});
 		const rowChanged =
 			current.title !== block.title ||
 			current.completed !== block.checked ||
-			current.dueDate !== block.due ||
-			current.dueTime !== block.dueTime ||
-			current.reminderOffsetMinutes !== block.reminderOffsetMinutes ||
-			current.assigneeId !== block.resolvedAssigneeId;
+			schedulingChanged;
 
 		if (rowChanged) {
 			changed = true;
@@ -183,12 +189,7 @@ export async function reconcilePageTasks(
 				reminderOffsetMinutes:
 					block.reminderOffsetMinutes as Task["reminderOffsetMinutes"],
 				assigneeId: block.resolvedAssigneeId,
-				...(current.dueDate !== block.due ||
-				current.dueTime !== block.dueTime ||
-				current.reminderOffsetMinutes !== block.reminderOffsetMinutes ||
-				current.assigneeId !== block.resolvedAssigneeId
-					? { reminderConfiguredAt: now }
-					: {}),
+				...(schedulingChanged ? { reminderConfiguredAt: now } : {}),
 				// Stamp/clear completedAt only when the completed state flips.
 				...(current.completed !== block.checked
 					? { completedAt: block.checked ? now : null }
@@ -200,12 +201,7 @@ export async function reconcilePageTasks(
 					"completed",
 					now,
 				);
-			} else if (
-				current.dueDate !== block.due ||
-				current.dueTime !== block.dueTime ||
-				current.reminderOffsetMinutes !== block.reminderOffsetMinutes ||
-				current.assigneeId !== block.resolvedAssigneeId
-			) {
+			} else if (schedulingChanged) {
 				await ports.notificationInbox.dismissScheduledForTasks(
 					[current.id],
 					now,
@@ -237,5 +233,3 @@ export async function reconcilePageTasks(
 
 	return { changed, assignmentNotifications };
 }
-
-import { type TenantScope, tenantScopeId } from "@beignet/core/ports";

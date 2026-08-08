@@ -1,6 +1,7 @@
 import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import { errors } from "@/features/shared/errors";
+import { ErrorResponseSchema } from "@/features/shared/schemas";
 import {
 	CreateTaskInputSchema,
 	DueDateSchema,
@@ -13,12 +14,6 @@ import {
 	TaskScopeSchema,
 	UpdateTaskBodySchema,
 } from "@/features/tasks/schemas";
-
-const ErrorResponseSchema = z.object({
-	code: z.string(),
-	message: z.string(),
-	requestId: z.string().optional(),
-});
 
 const tasks = defineContractGroup()
 	.namespace("tasks")

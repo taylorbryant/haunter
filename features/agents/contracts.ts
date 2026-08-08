@@ -14,12 +14,7 @@ import {
 	PendingAgentSchema,
 } from "@/features/agents/schemas";
 import { errors } from "@/features/shared/errors";
-
-const ErrorResponseSchema = z.object({
-	code: z.string(),
-	message: z.string(),
-	requestId: z.string().optional(),
-});
+import { ErrorResponseSchema } from "@/features/shared/schemas";
 
 const agents = defineContractGroup()
 	.namespace("agents")

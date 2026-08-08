@@ -1,9 +1,9 @@
 import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import {
+	InitializeNotificationTimezoneSchema,
 	ListNotificationsInputSchema,
 	ListNotificationsOutputSchema,
-	InitializeNotificationTimezoneSchema,
 	MarkNotificationsReadOutputSchema,
 	NotificationIdInputSchema,
 	NotificationSettingsSchema,
@@ -14,12 +14,7 @@ import {
 	UpdateNotificationPreferencesSchema,
 } from "@/features/notifications/schemas";
 import { errors } from "@/features/shared/errors";
-
-const ErrorResponseSchema = z.object({
-	code: z.string(),
-	message: z.string(),
-	requestId: z.string().optional(),
-});
+import { ErrorResponseSchema } from "@/features/shared/schemas";
 
 const notifications = defineContractGroup()
 	.namespace("notifications")

@@ -23,12 +23,7 @@ import {
 	UpdatePageBodySchema,
 } from "@/features/pages/schemas";
 import { errors } from "@/features/shared/errors";
-
-const ErrorResponseSchema = z.object({
-	code: z.string(),
-	message: z.string(),
-	requestId: z.string().optional(),
-});
+import { ErrorResponseSchema } from "@/features/shared/schemas";
 
 const pages = defineContractGroup()
 	.namespace("pages")
