@@ -1,5 +1,5 @@
 import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
-import type { BlockJson } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
 
 /**
  * Lossy blocks ⇄ markdown conversion for agent access. Hand-rolled rather

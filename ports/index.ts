@@ -37,7 +37,12 @@ import type {
 import type { AuthorizationContext } from "@/features/shared/authorization";
 import type { ShareRepository } from "@/features/shares/ports";
 import type { taskPolicy } from "@/features/tasks/policy";
-import type { TaskRepository } from "@/features/tasks/ports";
+import type {
+	EmbeddedTaskProjectionPort,
+	TaskAssignmentDeliveryPort,
+	TaskRepository,
+	TaskSourceDocumentPort,
+} from "@/features/tasks/ports";
 import type { AuthPort } from "./auth";
 
 export type AppPolicies = [
@@ -60,8 +65,10 @@ export type AppTransactionPorts = {
 	pageNavigation: PageNavigationRepository;
 	pages: PageRepository;
 	pageVersions: PageVersionRepository;
+	pageTaskProjection: EmbeddedTaskProjectionPort;
 	shares: ShareRepository;
 	tasks: TaskRepository;
+	taskSourceDocuments: TaskSourceDocumentPort;
 };
 
 export type AppGate = BoundGate<AppPolicies>;
@@ -93,10 +100,13 @@ export type AppPorts = {
 	pageNavigation: PageNavigationRepository;
 	pages: PageRepository;
 	pageVersions: PageVersionRepository;
+	pageTaskProjection: EmbeddedTaskProjectionPort;
 	rateLimit: RateLimitPort;
 	resend: ResendMailEscapeHatch;
 	shares: ShareRepository;
 	tasks: TaskRepository;
+	taskAssignmentDelivery: TaskAssignmentDeliveryPort;
+	taskSourceDocuments: TaskSourceDocumentPort;
 	uow: UnitOfWorkPort<AppTransactionPorts>;
 	storage: StoragePort;
 	webPush: WebPushPort;

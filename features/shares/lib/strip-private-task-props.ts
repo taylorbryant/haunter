@@ -1,8 +1,7 @@
-import type { BlockJson } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
 
-/**
- * Reminder delivery is assignee-specific metadata. Public shares may render a
- * task's due date, but must not expose its reminder configuration.
+/** Public shares may render task state and scheduling, but not user-specific
+ * ownership or notification metadata.
  */
 export function stripPrivateTaskProps(blocks: BlockJson[]): BlockJson[] {
 	return blocks.map((block) => {
@@ -10,15 +9,19 @@ export function stripPrivateTaskProps(blocks: BlockJson[]): BlockJson[] {
 			block.children.length > 0
 				? stripPrivateTaskProps(block.children)
 				: block.children;
-		const hasReminder = block.type === "task" && "reminder" in block.props;
-		if (!hasReminder && children === block.children) return block;
+		const hasPrivateTaskProps =
+			block.type === "task" &&
+			("reminder" in block.props || "assignee" in block.props);
+		if (!hasPrivateTaskProps && children === block.children) return block;
 
 		return {
 			...block,
-			...(hasReminder
+			...(hasPrivateTaskProps
 				? {
 						props: Object.fromEntries(
-							Object.entries(block.props).filter(([key]) => key !== "reminder"),
+							Object.entries(block.props).filter(
+								([key]) => key !== "reminder" && key !== "assignee",
+							),
 						),
 					}
 				: {}),

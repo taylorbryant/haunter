@@ -1,4 +1,5 @@
-import type { BlockJson } from "@/features/pages/schemas";
+import { visitBlocks } from "@/features/content/block-tree";
+import type { BlockJson } from "@/features/content/schemas";
 
 type TaskProps = {
 	checked: boolean;
@@ -54,14 +55,11 @@ export function reconcileTaskBlockProps(
 	authoritative: BlockJson[],
 ): ReconcileTaskBlockPropsResult {
 	const authoritativeTasks = new Map<string, TaskProps>();
-	function collect(nodes: BlockJson[]) {
-		for (const block of nodes) {
-			if (block.type === "task" && !authoritativeTasks.has(block.id)) {
-				authoritativeTasks.set(block.id, taskProps(block));
-			}
-			if (block.children.length > 0) collect(block.children);
+	const collect = (block: BlockJson) => {
+		if (block.type === "task" && !authoritativeTasks.has(block.id)) {
+			authoritativeTasks.set(block.id, taskProps(block));
 		}
-	}
+	};
 
 	function apply(nodes: BlockJson[]): ReconcileTaskBlockPropsResult {
 		let changed = false;
@@ -102,6 +100,6 @@ export function reconcileTaskBlockProps(
 		return { blocks: changed ? blocks : nodes, changed };
 	}
 
-	collect(authoritative);
+	visitBlocks(authoritative, collect);
 	return apply(current);
 }

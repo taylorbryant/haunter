@@ -10,11 +10,14 @@ import {
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import type { MemberRepository } from "@/features/members/ports";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import type {
 	PageNavigationRepository,
 	PageRepository,
 } from "@/features/pages/ports";
+import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
+import type { TaskAssignmentDeliveryPort } from "@/features/tasks/ports";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
@@ -71,6 +74,20 @@ function createTester(
 		async resolveTaskNotifications() {},
 		async dismissScheduledForTasks() {},
 	} as unknown as NotificationRepository;
+	const members = {
+		async findRole() {
+			return "member";
+		},
+	} as unknown as MemberRepository;
+	const taskIntegration = createTaskIntegrationPorts({
+		documents: pages,
+		members,
+		notificationInbox,
+		tasks,
+	});
+	const taskAssignmentDelivery = {
+		schedule() {},
+	} satisfies TaskAssignmentDeliveryPort;
 	const testFixture = createTestPorts<AppContext["ports"], AppTransactionPorts>(
 		{
 			base: appPorts,
@@ -82,11 +99,14 @@ function createTester(
 				},
 				gate: appPorts.gate,
 				canvases,
+				members,
 				notificationInbox,
 				pageLinks,
 				pageNavigation,
 				pages,
 				pageVersions,
+				...taskIntegration,
+				taskAssignmentDelivery,
 				tasks,
 				workspaceEvents,
 				devtools: createInMemoryDevtools(),
@@ -95,11 +115,13 @@ function createTester(
 				ports: (ports) => ({
 					...ports,
 					canvases,
+					members,
 					notificationInbox,
 					pageLinks,
 					pageNavigation,
 					pages,
 					pageVersions,
+					...taskIntegration,
 					tasks,
 				}),
 			},

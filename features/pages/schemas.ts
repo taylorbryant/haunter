@@ -1,31 +1,16 @@
 import { z } from "zod";
+import {
+	type BlockJson,
+	DocumentContentSchema,
+} from "@/features/content/schemas";
+
+export type { BlockJson } from "@/features/content/schemas";
+export { BlockJsonSchema } from "@/features/content/schemas";
 
 export const PAGE_TITLE_MAX_LENGTH = 300;
 export const PAGE_TITLE_TOO_LONG_MESSAGE = `Page titles must be ${PAGE_TITLE_MAX_LENGTH} characters or fewer.`;
 
-/**
- * Permissive shape check for a BlockNote block. The editor owns the real
- * schema; the server validates structure only and stores content verbatim.
- */
-export type BlockJson = {
-	id: string;
-	type: string;
-	props: Record<string, unknown>;
-	content?: unknown;
-	children: BlockJson[];
-};
-
-export const BlockJsonSchema: z.ZodType<BlockJson> = z.lazy(() =>
-	z.object({
-		id: z.string(),
-		type: z.string(),
-		props: z.record(z.string(), z.unknown()).default({}),
-		content: z.unknown().optional(),
-		children: z.array(BlockJsonSchema).default([]),
-	}),
-);
-
-export const PageContentSchema = z.array(BlockJsonSchema);
+export const PageContentSchema = DocumentContentSchema;
 
 export const MAX_INITIAL_PAGE_CONTENT_BYTES = 5_000_000;
 export const MAX_INITIAL_PAGE_CONTENT_BLOCKS = 10_000;

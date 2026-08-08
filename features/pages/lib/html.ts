@@ -3,7 +3,7 @@ import {
 	CODE_BLOCK_LANGUAGES,
 	normalizeCodeBlockLanguage,
 } from "@/features/pages/lib/code-block-language";
-import type { BlockJson } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
 
 type InlineNode = {
 	type?: string;

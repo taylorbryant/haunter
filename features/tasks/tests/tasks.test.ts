@@ -9,13 +9,13 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
+import type { BlockJson } from "@/features/content/schemas";
 import type {
 	NotificationRepository,
 	TaskAssignmentCandidate,
 } from "@/features/notifications/ports";
 import type { Notification } from "@/features/notifications/schemas";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
-import type { BlockJson } from "@/features/pages/schemas";
 import {
 	createTestPageLinkRepository,
 	createTestPageRepository,
@@ -30,6 +30,8 @@ import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
+import { createTaskIntegrationPorts } from "../lib/task-integration-ports";
+import { createTaskAssignmentDeliveryPort } from "../notifications/assigned";
 import type { UpdateTaskData } from "../ports";
 import { TASK_TITLE_MAX_LENGTH, TASK_TITLE_TOO_LONG_MESSAGE } from "../schemas";
 import {
@@ -213,6 +215,17 @@ async function createFixture(
 			];
 		},
 	};
+	const taskIntegration = createTaskIntegrationPorts({
+		documents: pages,
+		members,
+		notificationInbox,
+		tasks,
+	});
+	const taskAssignmentDelivery = createTaskAssignmentDeliveryPort({
+		afterResponse,
+		logger: { warn() {} } as unknown as AppContext["ports"]["logger"],
+		notifications,
+	});
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
@@ -224,12 +237,21 @@ async function createFixture(
 			pageLinks,
 			pages,
 			pageVersions,
+			...taskIntegration,
+			taskAssignmentDelivery,
 			tasks,
 			workspaceEvents,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, members, pages, pageVersions, tasks }),
+			ports: (ports) => ({
+				...ports,
+				members,
+				pages,
+				pageVersions,
+				...taskIntegration,
+				tasks,
+			}),
 		},
 	});
 	const createTestContext = createTestContextFactory<

@@ -2,20 +2,22 @@ import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
 import {
-	createTestTenant,
-	createTestUserActor,
-} from "@beignet/core/testing";
-import {
 	createTestContextFactory,
 	createTestPorts,
+	createTestTenant,
+	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import type { MemberRepository } from "@/features/members/ports";
+import type { NotificationRepository } from "@/features/notifications/ports";
 import {
 	createTestPageLinkRepository,
 	createTestPageRepository,
 } from "@/features/pages/tests/helpers";
+import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
+import type { TaskAssignmentDeliveryPort } from "@/features/tasks/ports";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/app-ports";
 import type { AppTransactionPorts } from "@/ports";
@@ -49,18 +51,49 @@ async function createFixture(
 	};
 	const canvases = createTestCanvasRepository();
 	const pageLinks = createTestPageLinkRepository({ pages });
+	const members = {
+		async findRole() {
+			return "member";
+		},
+	} as unknown as MemberRepository;
+	const notificationInbox = {
+		async resolveTaskNotifications() {},
+		async dismissScheduledForTasks() {},
+	} as unknown as NotificationRepository;
+	const taskIntegration = createTaskIntegrationPorts({
+		documents: pages,
+		members,
+		notificationInbox,
+		tasks,
+	});
+	const taskAssignmentDelivery = {
+		schedule() {},
+	} satisfies TaskAssignmentDeliveryPort;
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
 			gate: appPorts.gate,
 			canvases,
+			members,
+			notificationInbox,
 			pageLinks,
 			pages,
+			...taskIntegration,
+			taskAssignmentDelivery,
 			tasks,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {
-			ports: (ports) => ({ ...ports, canvases, pageLinks, pages, tasks }),
+			ports: (ports) => ({
+				...ports,
+				canvases,
+				members,
+				notificationInbox,
+				pageLinks,
+				pages,
+				...taskIntegration,
+				tasks,
+			}),
 		},
 	});
 	const createTestContext = createTestContextFactory<

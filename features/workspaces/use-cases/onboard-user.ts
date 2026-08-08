@@ -1,6 +1,6 @@
 import "@beignet/core/server-only";
+import { extractDocumentSearchText } from "@/features/content/document-text";
 import { reconcilePageDerivations } from "@/features/pages/lib/apply-page-content";
-import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { canEditContent } from "@/lib/org-access";
 import { useCase } from "@/lib/use-case";
@@ -60,7 +60,7 @@ export const onboardUserUseCase = useCase
 					scope,
 					created.id,
 					JSON.stringify(page.content),
-					extractPageSearchText(page.content),
+					extractDocumentSearchText(page.content),
 				);
 				await reconcilePageDerivations(tx, scope, created, page.content, {
 					defaultTaskAssigneeId: user.id,

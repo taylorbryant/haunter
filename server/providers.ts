@@ -15,6 +15,7 @@ import * as schema from "@/infra/db/schema";
 import { webPushProvider } from "@/infra/notifications/web-push-provider";
 import { memoryRateLimitProvider } from "@/infra/rate-limit/memory-rate-limit-provider";
 import { nextAfterResponseProvider } from "@/infra/runtime/next-after-response-provider";
+import { taskAssignmentDeliveryProvider } from "@/infra/tasks/task-assignment-delivery-provider";
 import { auth } from "@/lib/better-auth";
 import { env } from "@/lib/env";
 import type { AuthSessionMetadata, AuthUser } from "@/ports/auth";
@@ -40,6 +41,7 @@ export const providers = [
 		preferences: notificationPreferences,
 	}),
 	webPushProvider,
+	taskAssignmentDeliveryProvider,
 	// Vercel Blob in deployed environments (local disk doesn't survive
 	// serverless); the local provider keeps dev working with zero setup.
 	env.BLOB_READ_WRITE_TOKEN

@@ -14,7 +14,6 @@ import {
 	TaskNotificationActionInputSchema,
 	TaskNotificationActionOutputSchema,
 } from "../schemas";
-import { savePageTaskBlockPatch } from "./save-page-task-block-patch";
 
 const MINUTE_MS = 60_000;
 
@@ -171,10 +170,11 @@ export const actOnTaskNotificationUseCase = useCase
 				completed: true,
 				completedAt: actionAt,
 			});
-			let pagePatch: Awaited<ReturnType<typeof savePageTaskBlockPatch>> | null =
-				null;
+			let pagePatch: Awaited<
+				ReturnType<typeof tx.taskSourceDocuments.patchTaskBlock>
+			> | null = null;
 			if (currentTask.pageId && currentTask.sourceBlockId) {
-				pagePatch = await savePageTaskBlockPatch(tx.pages, scope, {
+				pagePatch = await tx.taskSourceDocuments.patchTaskBlock(scope, {
 					pageId: currentTask.pageId,
 					blockId: currentTask.sourceBlockId,
 					patch: { checked: true },

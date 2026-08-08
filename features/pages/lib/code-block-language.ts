@@ -1,4 +1,4 @@
-import type { BlockJson } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
 
 export const CODE_BLOCK_LANGUAGES = [
 	{ id: "text", label: "Plain Text", aliases: ["txt", "plain", "plaintext"] },

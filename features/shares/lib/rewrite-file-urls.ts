@@ -1,4 +1,4 @@
-import type { BlockJson } from "@/features/pages/schemas";
+import type { BlockJson } from "@/features/content/schemas";
 
 const FILE_URL_PREFIX = "/api/files/";
 

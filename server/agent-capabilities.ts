@@ -188,33 +188,3 @@ export async function executeRemoteMcpCapability(
 		throw executionError(error);
 	}
 }
-
-export async function executeAgentCapability(
-	input: {
-		capability: string;
-		arguments?: Record<string, unknown>;
-		agentSession: { agentId: string; userId: string | null };
-	},
-	dependencies: AgentCapabilityDependencies,
-): Promise<unknown> {
-	if (!input.agentSession.userId) {
-		throw new APIError("FORBIDDEN", {
-			message: "This capability requires a delegated agent acting for a user.",
-		});
-	}
-
-	try {
-		return await (
-			await createHaunterAgentCapabilityExecutor(dependencies)
-		).executeDynamic({
-			name: input.capability,
-			principal: {
-				agentId: input.agentSession.agentId,
-				userId: input.agentSession.userId,
-			},
-			input: input.arguments ?? {},
-		});
-	} catch (error) {
-		throw executionError(error);
-	}
-}

@@ -9,10 +9,6 @@ import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
 import type { BlockJson, Page } from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
-import {
-	resolveTaskAssignmentActor,
-	scheduleTaskAssignmentDelivery,
-} from "@/features/tasks/notifications/assigned";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { CreatePageInputSchema, CreatePageOutputSchema } from "../schemas";
@@ -59,18 +55,13 @@ export const createPageUseCase = useCase
 						JSON.stringify(input.initialContent),
 						extractPageSearchText(input.initialContent),
 					);
-					const assignmentActor = await resolveTaskAssignmentActor(
-						tx.members,
-						scope,
-						user,
-					);
 					const derivations = await reconcilePageDerivations(
 						tx,
 						scope,
 						created,
 						input.initialContent,
 						{
-							assignmentActor,
+							assignmentUser: user,
 							defaultTaskAssigneeId: user.id,
 						},
 					);
@@ -123,7 +114,7 @@ export const createPageUseCase = useCase
 				};
 			});
 
-		scheduleTaskAssignmentDelivery(ctx, assignmentNotifications);
+		ctx.ports.taskAssignmentDelivery.schedule(assignmentNotifications);
 
 		scheduleWorkspacePageEvent(ctx, {
 			type: "page.created",
