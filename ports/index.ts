@@ -21,7 +21,11 @@ import type {
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
-import type { WorkspaceEventPublisherPort } from "@/features/collab/workspace-events";
+import type {
+	WorkspaceEventPublisherPort,
+	WorkspaceEventStreamLeasePort,
+	WorkspaceEventSubscriberPort,
+} from "@/features/collab/workspace-events";
 import type { MemberRepository } from "@/features/members/ports";
 import type {
 	NotificationRepository,
@@ -111,4 +115,6 @@ export type AppPorts = {
 	storage: StoragePort;
 	webPush: WebPushPort;
 	workspaceEvents: WorkspaceEventPublisherPort;
+	workspaceEventStreamLeases: WorkspaceEventStreamLeasePort;
+	workspaceEventSubscriptions: WorkspaceEventSubscriberPort;
 };

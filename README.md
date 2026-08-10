@@ -178,21 +178,22 @@ first signs in. Leave it unset on established installations.
 
 - **Uploads:** Set `BLOB_READ_WRITE_TOKEN` to use Vercel Blob. Local filesystem
   storage does not survive serverless deployments.
-- **Distributed rate limiting:** Set `UPSTASH_REDIS_REST_URL` and
-  `UPSTASH_REDIS_REST_TOKEN`. Without them, Haunter uses an in-process limiter
-  intended for development.
+- **Distributed rate limiting and live updates:** Set
+  `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Without them,
+  Haunter uses an in-process rate limiter and polling for client refreshes.
 - **Canvases:** Set `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` before using tldraw on a
   production domain.
 - **Scheduled jobs:** Set `CRON_SECRET` before enabling the Vercel Cron Jobs or
   equivalent external scheduler described below.
-
-- **Live updates:** Set `LIVEBLOCKS_SECRET_KEY` and build with
+- **Live updates:** With Upstash configured, build with
   `NEXT_PUBLIC_LIVE_UPDATES=true` to notify other open clients after a page,
   task, or canvas changes. SQLite remains the source of truth, and polling
-  keeps the app functional without Liveblocks. Because `NEXT_PUBLIC_` values
-  are embedded at build time, changing them requires a new deployment. The
-  previous `NEXT_PUBLIC_LIVEBLOCKS_AUTH` name remains accepted as a deprecated
-  compatibility alias.
+  keeps the app functional without the stream. Set a distinct
+  `UPSTASH_WORKSPACE_EVENT_PREFIX` for deployments that share one Redis
+  database. Active streams are capped at eight per signed-in user by default;
+  adjust `UPSTASH_WORKSPACE_EVENT_MAX_CONNECTIONS_PER_USER` if needed. Because
+  `NEXT_PUBLIC_` values are embedded at build time, changing them requires a
+  new deployment.
 
 ### Authentication origins
 

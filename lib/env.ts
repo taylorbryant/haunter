@@ -95,17 +95,25 @@ export const env = createEnv({
 		// otherwise the local ./storage directory is used (dev only — it does
 		// not survive serverless deploys).
 		BLOB_READ_WRITE_TOKEN: z.string().optional(),
-		// Upstash Redis for durable rate limiting. When unset, an in-process
-		// limiter is used (dev only — per-instance, not durable).
+		// Upstash Redis powers durable rate limiting and optional live-update
+		// signals. Rate limiting falls back to memory when it is unset.
 		UPSTASH_REDIS_REST_URL: z.string().optional(),
 		UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 		// Key prefix shared with @beignet/provider-rate-limit-upstash (which
 		// reads it directly); the default mirrors that provider's default.
 		UPSTASH_PREFIX: z.string().default("beignet:ratelimit"),
-		// Optional Liveblocks workspace events. SQLite remains authoritative;
-		// Liveblocks only tells other open clients which projections to refetch.
-		// Set this together with NEXT_PUBLIC_LIVE_UPDATES=true at build time.
-		LIVEBLOCKS_SECRET_KEY: z.string().optional(),
+		// Keep this unique when multiple deployments share one Redis database.
+		UPSTASH_WORKSPACE_EVENT_PREFIX: z
+			.string()
+			.trim()
+			.min(1)
+			.default("haunter:workspace-events"),
+		UPSTASH_WORKSPACE_EVENT_MAX_CONNECTIONS_PER_USER: z.coerce
+			.number()
+			.int()
+			.min(1)
+			.max(100)
+			.default(8),
 		LOG_LEVEL: z
 			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 			.default("info"),

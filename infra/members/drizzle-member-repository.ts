@@ -11,7 +11,7 @@ export function createDrizzleMemberRepository(
 ): MemberRepository {
 	return {
 		// Memoized per request: context creation resolves the caller's role for
-		// the active workspace, and routes like liveblocks-auth look it up again
+		// the active workspace, and specialized realtime routes look it up again
 		// for the same (workspace, user) — one Turso round trip instead of two.
 		// Role writes go through Better Auth's organization plugin, never this
 		// repository, so there is no same-request mutation to invalidate for.

@@ -4,7 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useCurrentUser } from "@/components/app-session-provider";
-import { workspaceRoomId } from "@/features/collab/lib/room";
 import {
 	isWorkspaceCanvasEvent,
 	isWorkspaceEvent,
@@ -14,17 +13,12 @@ import {
 } from "@/features/collab/workspace-events";
 import {
 	invalidateWorkspaceCanvasProjection,
-	invalidateWorkspacePageDocument,
 	invalidateWorkspacePageProjections,
 	invalidateWorkspaceTaskProjections,
-	pageIsMissingFromWorkspaceProjection,
+	reconcileWorkspaceEventConnection,
 } from "./workspace-event-cache";
 
-const liveUpdatesEnabled =
-	process.env.NEXT_PUBLIC_LIVE_UPDATES === "true" ||
-	// Compatibility for deployments configured before workspace events replaced
-	// document collaboration. New installations should use NEXT_PUBLIC_LIVE_UPDATES.
-	process.env.NEXT_PUBLIC_LIVEBLOCKS_AUTH === "true";
+const liveUpdatesEnabled = process.env.NEXT_PUBLIC_LIVE_UPDATES === "true";
 
 export function WorkspaceEventSubscriber({
 	workspaceId,
@@ -48,7 +42,6 @@ export function WorkspaceEventSubscriber({
 		}
 		let disposed = false;
 		let unbind: (() => void) | null = null;
-		let hasConnected = false;
 		let flushTimer: ReturnType<typeof setTimeout> | null = null;
 		let taskChanged = false;
 		const pageIds = new Set<string>();
@@ -81,72 +74,52 @@ export function WorkspaceEventSubscriber({
 			flushTimer = setTimeout(flush, 50);
 		};
 
-		void import("./liveblocks").then(({ bindWorkspaceEvents }) => {
+		void import("./sse").then(({ bindWorkspaceEvents }) => {
 			if (disposed) return;
-			unbind = bindWorkspaceEvents(
-				workspaceRoomId(workspaceId),
-				currentUserId,
-				{
-					onEvent(event) {
-						if (!isWorkspaceEvent(event) || event.workspaceId !== workspaceId) {
-							return;
-						}
-						if (isWorkspaceTaskEvent(event)) {
-							taskChanged = true;
-							scheduleFlush();
-							return;
-						}
-						if (isWorkspaceCanvasEvent(event)) {
-							canvasIds.add(event.canvasId);
-							scheduleFlush();
-							return;
-						}
-						const currentPageId = activePageIdRef.current;
+			unbind = bindWorkspaceEvents(workspaceId, {
+				onEvent(event) {
+					if (!isWorkspaceEvent(event) || event.workspaceId !== workspaceId) {
+						return;
+					}
+					if (isWorkspaceTaskEvent(event)) {
+						taskChanged = true;
+						scheduleFlush();
+						return;
+					}
+					if (isWorkspaceCanvasEvent(event)) {
+						canvasIds.add(event.canvasId);
+						scheduleFlush();
+						return;
+					}
+					const currentPageId = activePageIdRef.current;
+					if (
+						currentPageId &&
+						workspaceEventRemovesPage(event, currentPageId)
+					) {
+						router.replace(`/w/${workspaceId}/home`);
+					}
+					for (const pageId of workspaceEventAffectedPageIds(event)) {
+						pageIds.add(pageId);
+					}
+					scheduleFlush();
+				},
+				onConnected() {
+					const currentPageId = activePageIdRef.current;
+					void reconcileWorkspaceEventConnection(
+						queryClient,
+						workspaceId,
+						currentPageId,
+					).then(({ currentPageMissing }) => {
 						if (
-							currentPageId &&
-							workspaceEventRemovesPage(event, currentPageId)
+							currentPageMissing &&
+							!disposed &&
+							activePageIdRef.current === currentPageId
 						) {
 							router.replace(`/w/${workspaceId}/home`);
 						}
-						for (const pageId of workspaceEventAffectedPageIds(event)) {
-							pageIds.add(pageId);
-						}
-						scheduleFlush();
-					},
-					onConnected() {
-						if (!hasConnected) {
-							hasConnected = true;
-							return;
-						}
-						void Promise.all([
-							invalidateWorkspacePageProjections(queryClient, workspaceId, [], {
-								skipPageDetails: true,
-							}),
-							invalidateWorkspaceTaskProjections(queryClient),
-							invalidateWorkspaceCanvasProjection(queryClient),
-						]).then(() => {
-							const currentPageId = activePageIdRef.current;
-							if (
-								currentPageId &&
-								pageIsMissingFromWorkspaceProjection(
-									queryClient,
-									workspaceId,
-									currentPageId,
-								)
-							) {
-								if (!disposed && activePageIdRef.current === currentPageId) {
-									router.replace(`/w/${workspaceId}/home`);
-								}
-							} else if (currentPageId) {
-								void invalidateWorkspacePageDocument(
-									queryClient,
-									currentPageId,
-								);
-							}
-						});
-					},
+					});
 				},
-			);
+			});
 		});
 		return () => {
 			disposed = true;
