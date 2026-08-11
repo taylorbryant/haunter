@@ -48,7 +48,6 @@ export async function invalidateWorkspacePageProjections(
 	queryClient: QueryClient,
 	workspaceId: string,
 	pageIds: readonly string[] = [],
-	options?: { skipPageDetails?: boolean },
 ) {
 	await waitForMutationsToSettle(queryClient);
 	const affectedPageIds = [...new Set(pageIds)];
@@ -60,7 +59,7 @@ export async function invalidateWorkspacePageProjections(
 		invalidatePageSearch(queryClient),
 		invalidateTasksWhenIdle(queryClient),
 		invalidateNotifications(queryClient),
-		...(affectedPageIds.length === 0 && !options?.skipPageDetails
+		...(affectedPageIds.length === 0
 			? [invalidatePageDetails(queryClient)]
 			: []),
 		...affectedPageIds.map((pageId) => invalidatePage(queryClient, pageId)),
@@ -93,4 +92,30 @@ export async function invalidateWorkspaceCanvasProjection(
 	await (canvasId
 		? invalidateCanvas(queryClient, canvasId)
 		: invalidateCanvases(queryClient));
+}
+
+export async function reconcileWorkspaceEventConnection(
+	queryClient: QueryClient,
+	workspaceId: string,
+	currentPageId?: string,
+): Promise<{ currentPageMissing: boolean }> {
+	await Promise.all([
+		invalidateWorkspacePageProjections(queryClient, workspaceId),
+		invalidateWorkspaceTaskProjections(queryClient),
+		invalidateWorkspaceCanvasProjection(queryClient),
+	]);
+
+	if (!currentPageId) return { currentPageMissing: false };
+	if (
+		pageIsMissingFromWorkspaceProjection(
+			queryClient,
+			workspaceId,
+			currentPageId,
+		)
+	) {
+		return { currentPageMissing: true };
+	}
+
+	await invalidateWorkspacePageDocument(queryClient, currentPageId);
+	return { currentPageMissing: false };
 }

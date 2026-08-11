@@ -65,5 +65,7 @@ export const appPorts = definePorts<AppPorts>()({
 		"storage",
 		"webPush",
 		"workspaceEvents",
+		"workspaceEventStreamLeases",
+		"workspaceEventSubscriptions",
 	],
 });

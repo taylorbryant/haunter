@@ -1348,12 +1348,6 @@ html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
 	user-select: none;
 }
 
-/* Liveblocks injects a "Powered by Liveblocks" badge on free-plan rooms;
-   it floats over app UI (e.g. the mobile drawers), so hide it. */
-#liveblocks-badge {
-	display: none;
-}
-
 /* Base UI's modal dropdowns lock document scrolling, but Haunter also has
    independent app scroll roots such as the desktop sidebar. Lock those roots
    while a dropdown is open so background content cannot move behind the menu.

@@ -12,6 +12,7 @@ import {
 	invalidateWorkspacePageProjections,
 	invalidateWorkspaceTaskProjections,
 	pageIsMissingFromWorkspaceProjection,
+	reconcileWorkspaceEventConnection,
 } from "../client/workspace-event-cache";
 
 describe("workspace event cache reconciliation", () => {
@@ -64,7 +65,7 @@ describe("workspace event cache reconciliation", () => {
 		);
 	});
 
-	it("invalidates every open page after reconnecting", async () => {
+	it("invalidates every open page after connecting", async () => {
 		const queryClient = new QueryClient();
 		const firstQuery = getPageQueryOptions("first");
 		const secondQuery = getPageQueryOptions("second");
@@ -81,12 +82,53 @@ describe("workspace event cache reconciliation", () => {
 		);
 	});
 
+	it("reconciles all projections on the first confirmed connection", async () => {
+		const queryClient = new QueryClient();
+		const pageQuery = getPageQueryOptions("page_1");
+		const otherPageQuery = getPageQueryOptions("page_2");
+		const tasksQuery = listTasksQueryOptions("workspace_1", "open");
+		const canvasQuery = getCanvasQueryOptions("canvas_1");
+		queryClient.setQueryData(pageQuery.queryKey, { id: "page_1" });
+		queryClient.setQueryData(otherPageQuery.queryKey, { id: "page_2" });
+		queryClient.setQueryData(tasksQuery.queryKey, {
+			items: [],
+			hasMore: false,
+		});
+		queryClient.setQueryData(canvasQuery.queryKey, { id: "canvas_1" });
+		queryClient.setQueryData(listPagesQueryOptions("workspace_1").queryKey, {
+			items: [{ id: "page_1" }],
+		});
+
+		const result = await reconcileWorkspaceEventConnection(
+			queryClient,
+			"workspace_1",
+			"page_1",
+		);
+
+		expect(result).toEqual({ currentPageMissing: false });
+		expect(queryClient.getQueryState(pageQuery.queryKey)?.isInvalidated).toBe(
+			true,
+		);
+		expect(
+			queryClient.getQueryState(otherPageQuery.queryKey)?.isInvalidated,
+		).toBe(true);
+		expect(queryClient.getQueryState(tasksQuery.queryKey)?.isInvalidated).toBe(
+			true,
+		);
+		expect(queryClient.getQueryState(canvasQuery.queryKey)?.isInvalidated).toBe(
+			true,
+		);
+	});
+
 	it("invalidates task, notification, and canvas projections", async () => {
 		const queryClient = new QueryClient();
 		const tasksQuery = listTasksQueryOptions("workspace_1", "open");
 		const notificationsQuery = listNotificationsQueryOptions();
 		const canvasQuery = getCanvasQueryOptions("canvas_1");
-		queryClient.setQueryData(tasksQuery.queryKey, { items: [], hasMore: false });
+		queryClient.setQueryData(tasksQuery.queryKey, {
+			items: [],
+			hasMore: false,
+		});
 		queryClient.setQueryData(notificationsQuery.queryKey, {
 			items: [],
 			unreadCount: 0,

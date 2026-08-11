@@ -45,6 +45,35 @@ export type WorkspaceEventPublisherPort = {
 	publish(event: WorkspaceEvent): Promise<void>;
 };
 
+export type WorkspaceEventSubscription = {
+	unsubscribe(): Promise<void>;
+};
+
+/** Server-side subscription used by the authenticated SSE transport. */
+export type WorkspaceEventSubscriberPort = {
+	isConfigured(): boolean;
+	subscribe(input: {
+		workspaceId: string;
+		onReady(): void;
+		onEvent(event: WorkspaceEvent): void;
+		onError(error: unknown): void;
+	}): WorkspaceEventSubscription | null;
+};
+
+export type WorkspaceEventStreamLease = {
+	release(): Promise<void>;
+};
+
+/** Bounds active SSE streams across every instance serving the same user. */
+export type WorkspaceEventStreamLeasePort = {
+	isConfigured(): boolean;
+	acquire(input: {
+		userId: string;
+		maxConnections: number;
+		ttlMs: number;
+	}): Promise<WorkspaceEventStreamLease | null>;
+};
+
 export function createWorkspacePageEvent(input: {
 	type: WorkspacePageEvent["type"];
 	workspaceId: string;

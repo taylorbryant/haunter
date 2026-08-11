@@ -54,8 +54,6 @@
 		"@blocknote/shadcn": "0.52.1",
 		"@hookform/resolvers": "5.5.0",
 		"@libsql/client": "0.17.4",
-		"@liveblocks/client": "3.23.0",
-		"@liveblocks/node": "3.23.0",
 		"@modelcontextprotocol/server": "2.0.0",
 		"@shikijs/core": "4.4.1",
 		"@shikijs/engine-javascript": "4.4.1",

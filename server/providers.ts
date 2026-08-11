@@ -8,7 +8,7 @@ import { createResendMailProvider } from "@beignet/provider-mail-resend";
 import { createUpstashRateLimitProvider } from "@beignet/provider-rate-limit-upstash";
 import { createLocalStorageProvider } from "@beignet/provider-storage-local";
 import { createVercelBlobStorageProvider } from "@beignet/provider-storage-vercel-blob";
-import { liveblocksWorkspaceEventProvider } from "@/infra/collab/liveblocks-workspace-event-provider";
+import { upstashWorkspaceEventProvider } from "@/infra/collab/upstash-workspace-event-provider";
 import { databaseClient } from "@/infra/db/client";
 import { appDatabaseProvider } from "@/infra/db/provider";
 import * as schema from "@/infra/db/schema";
@@ -33,7 +33,7 @@ export const providers = [
 	nextAfterResponseProvider,
 	drizzleSqliteProvider,
 	appDatabaseProvider,
-	liveblocksWorkspaceEventProvider,
+	upstashWorkspaceEventProvider,
 	// Failed channel results must fail the schedule invocation so production
 	// monitoring sees delivery failures; the inbox still owns retry timing.
 	createInlineNotificationsProvider({
