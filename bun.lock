@@ -17,7 +17,7 @@
         "@beignet/provider-rate-limit-upstash": "0.0.48",
         "@beignet/provider-storage-local": "0.0.48",
         "@beignet/provider-storage-vercel-blob": "0.0.48",
-        "@beignet/react-hook-form": "0.0.48",
+        "@beignet/react-hook-form": "0.0.49",
         "@beignet/react-query": "0.0.48",
         "@better-auth/agent-auth": "0.6.2",
         "@better-auth/core": "1.6.25",
@@ -173,7 +173,7 @@
 
     "@beignet/provider-storage-vercel-blob": ["@beignet/provider-storage-vercel-blob@0.0.48", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@vercel/blob": "^2.0.0" } }, "sha512-q/jBfQ/xxtnG9TZ9DMlbNZf/3tcTOffck+H6CVScdg2at6nTcRpsNyASG1G/iWmHF+RaSssxENUqZj4asNCi2A=="],
 
-    "@beignet/react-hook-form": ["@beignet/react-hook-form@0.0.48", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@hookform/resolvers": "^5.0.0", "react": "^18.0.0 || ^19.0.0", "react-hook-form": "^7.0.0" } }, "sha512-CVYQ6xIEtNCVmHY9miEpuWhWMBxurvL8HU0Bs4BzKBMQjavOh+Ak5EAO8jplDefIl5U4wiQWFGeSGtw3l4PDDQ=="],
+    "@beignet/react-hook-form": ["@beignet/react-hook-form@0.0.49", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@hookform/resolvers": "^5.0.0", "react": "^18.0.0 || ^19.0.0", "react-hook-form": "^7.0.0" } }, "sha512-DPcCjYCAVZfDW1bFtr0J6xKUh8LfUBQk1wQzsRYc1b3R4PQG0lHmeFKLxEw6tZARnU0mAId+S/7ZXMISDUstJQ=="],
 
     "@beignet/react-query": ["@beignet/react-query@0.0.48", "", { "peerDependencies": { "@beignet/core": ">=0.0.3 <1.0.0", "@tanstack/react-query": "^5.0.0", "react": "^18.0.0 || ^19.0.0" } }, "sha512-4Z75rHtQrMyJ8I48Sk6nIUNSwWyIsOGb24xjUz4ckUtFhaKMc/V6WXna6aLl9OOs/hEvu1F1TmaqjtA0EXaTmg=="],
 
