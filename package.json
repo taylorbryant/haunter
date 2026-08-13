@@ -49,7 +49,7 @@
 		"@better-auth/core": "1.6.25",
 		"@better-auth/oauth-provider": "1.6.25",
 		"@blocknote/code-block": "0.52.1",
-		"@blocknote/core": "0.52.1",
+		"@blocknote/core": "0.53.0",
 		"@blocknote/react": "0.52.1",
 		"@blocknote/shadcn": "0.52.1",
 		"@hookform/resolvers": "5.5.0",
