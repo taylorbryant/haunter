@@ -14,7 +14,7 @@ import {
 	updateTaskUseCase,
 } from "@/features/tasks/use-cases";
 import { defineRouteGroup } from "@/lib/routes";
-import { routeAuth } from "@/server/auth-hooks";
+import { routeAuth } from "@/lib/route-auth";
 
 export const taskRoutes = defineRouteGroup({
 	name: "tasks",

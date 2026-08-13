@@ -38,7 +38,7 @@ import {
 	updatePageUseCase,
 } from "@/features/pages/use-cases";
 import { defineRouteGroup } from "@/lib/routes";
-import { routeAuth } from "@/server/auth-hooks";
+import { routeAuth } from "@/lib/route-auth";
 
 export const pageRoutes = defineRouteGroup({
 	name: "pages",
