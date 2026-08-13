@@ -581,13 +581,17 @@ function MountedHaunterEditor({
 		meta: { errorMode: "inline" },
 	});
 
-	const reportState = useCallback(
-		(state: SaveState) => {
-			setSaveState(state);
-			onSaveStateChange?.(state);
-		},
-		[onSaveStateChange],
-	);
+	const reportState = useCallback((state: SaveState) => {
+		setSaveState(state);
+	}, []);
+
+	// BlockNote may report a document change while React is still rendering its
+	// editor tree. Keep that callback local, then notify the layout-level store
+	// after the render commits so HeaderSaveIndicator is never updated during a
+	// different component's render phase.
+	useEffect(() => {
+		onSaveStateChange?.(saveState);
+	}, [onSaveStateChange, saveState]);
 
 	const persistRecoveryDraft = useCallback(
 		async (content: BlockJson[]) => {
