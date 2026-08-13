@@ -6,7 +6,7 @@ import { useCase } from "@/lib/use-case";
 import {
 	createTaskAssignmentNotification,
 	resolveTaskAssignmentActor,
-} from "../notifications/assigned";
+} from "../lib/task-assignment-notifications";
 import { CreateTaskInputSchema, TaskSchema } from "../schemas";
 
 /** Quick-add from the Tasks view: a standalone task not attached to any page. */

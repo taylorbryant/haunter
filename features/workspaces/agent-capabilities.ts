@@ -1,12 +1,12 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
+import { AGENT_CAPABILITY_DESCRIPTIONS } from "@/features/agents/capability-catalog";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
 
 export const listWorkspacesCapability = defineAgentCapability(
 	"list_workspaces",
 	{
-		description:
-			"List the workspaces the acting user belongs to, with their role in each. Call this first to get workspaceId values for the other capabilities.",
+		description: AGENT_CAPABILITY_DESCRIPTIONS.list_workspaces,
 		input: z.object({}),
 		output: z.object({
 			workspaces: z.array(

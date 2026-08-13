@@ -5,7 +5,7 @@ import {
 	listWaitlistUseCase,
 } from "@/features/admin/use-cases";
 import { defineRouteGroup } from "@/lib/routes";
-import { routeAuth } from "@/server/auth-hooks";
+import { routeAuth } from "@/lib/route-auth";
 
 export const adminRoutes = defineRouteGroup({
 	name: "admin",

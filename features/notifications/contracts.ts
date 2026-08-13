@@ -1,4 +1,8 @@
-import { defineContractGroup } from "@beignet/core/contracts";
+import {
+	defineContractGroup,
+	defineQueryTransport,
+	query,
+} from "@beignet/core/contracts";
 import { z } from "zod";
 import {
 	InitializeNotificationTimezoneSchema,
@@ -24,7 +28,13 @@ const notifications = defineContractGroup()
 
 export const listNotifications = notifications
 	.get("/api/notifications")
-	.query(ListNotificationsInputSchema)
+	.query(
+		ListNotificationsInputSchema,
+		defineQueryTransport({
+			cursor: query.string(),
+			limit: query.integer(),
+		}),
+	)
 	.responses({ 200: ListNotificationsOutputSchema });
 
 export const markNotificationRead = notifications

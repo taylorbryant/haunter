@@ -9,9 +9,9 @@ import type {
 	PendingPushNotification,
 	StoredPushSubscription,
 } from "@/features/notifications/ports";
+import { createTaskAssignmentNotification } from "@/features/tasks/lib/task-assignment-notifications";
 import {
 	createTaskAssignmentDeliveryPort,
-	createTaskAssignmentNotification,
 	deliverTaskAssignmentNotifications,
 	TaskAssignedNotification,
 } from "@/features/tasks/notifications/assigned";

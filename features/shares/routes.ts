@@ -14,7 +14,7 @@ import {
 	revokePageShareUseCase,
 } from "@/features/shares/use-cases";
 import { defineRouteGroup } from "@/lib/routes";
-import { routeAuth } from "@/server/auth-hooks";
+import { routeAuth } from "@/lib/route-auth";
 
 export const shareRoutes = defineRouteGroup({
 	name: "shares",

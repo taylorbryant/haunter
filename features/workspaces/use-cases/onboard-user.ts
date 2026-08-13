@@ -2,7 +2,7 @@ import "@beignet/core/server-only";
 import { extractDocumentSearchText } from "@/features/content/document-text";
 import { reconcilePageDerivations } from "@/features/pages/lib/apply-page-content";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
-import { canEditContent } from "@/lib/org-access";
+import { canEditContent } from "@/lib/org-roles";
 import { useCase } from "@/lib/use-case";
 import { buildOnboardingPages } from "../lib/onboarding-content";
 import { OnboardInputSchema, OnboardOutputSchema } from "../schemas";
