@@ -3,7 +3,7 @@ import {
 	type ActivityTenant,
 	deny,
 } from "@beignet/core/ports";
-import { canEditContent } from "@/lib/org-roles";
+import { canEditContent } from "@/lib/org-access";
 import type { AuthSession } from "@/ports/auth";
 
 export type AuthorizationContext = {

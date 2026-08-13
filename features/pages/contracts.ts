@@ -1,8 +1,4 @@
-import {
-	defineContractGroup,
-	defineQueryTransport,
-	query,
-} from "@beignet/core/contracts";
+import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import {
 	CreatePageInputSchema,
@@ -160,7 +156,7 @@ export const listBacklinks = pages
 export const searchPages = pages
 	.get("/api/search")
 	.meta({ rateLimit: { max: 60, windowSec: 60, scope: "user" } })
-	.query(SearchPagesInputSchema, defineQueryTransport({ q: query.string() }))
+	.query(SearchPagesInputSchema)
 	.responses({
 		200: SearchPagesOutputSchema,
 	});

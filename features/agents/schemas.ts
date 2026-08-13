@@ -89,7 +89,7 @@ export const DisconnectMcpConnectionOutputSchema = z.object({
 });
 
 export const ListAgentActivityInputSchema = z.object({
-	limit: z.number().int().min(1).max(50).default(25),
+	limit: z.coerce.number().int().min(1).max(50).default(25),
 });
 
 export const AgentActivitySchema = z.object({

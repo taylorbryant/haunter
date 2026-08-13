@@ -1,6 +1,5 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
-import { AGENT_CAPABILITY_DESCRIPTIONS } from "@/features/agents/capability-catalog";
 import {
 	type BlockJson,
 	MAX_INITIAL_PAGE_CONTENT_BLOCKS,
@@ -37,7 +36,8 @@ async function parseAgentMarkdown(markdown: string): Promise<BlockJson[]> {
 }
 
 export const listPagesCapability = defineAgentCapability("list_pages", {
-	description: AGENT_CAPABILITY_DESCRIPTIONS.list_pages,
+	description:
+		"List every active page in one workspace as lightweight metadata, including hierarchy. Call list_workspaces first to get a workspaceId.",
 	input: WorkspaceInput,
 	output: z.object({ pages: z.array(PageMetadataOutput) }),
 	async handle({ ctx, input }) {
@@ -59,7 +59,8 @@ export const listPagesCapability = defineAgentCapability("list_pages", {
 });
 
 export const searchPagesCapability = defineAgentCapability("search_pages", {
-	description: AGENT_CAPABILITY_DESCRIPTIONS.search_pages,
+	description:
+		"Full-text search across the pages of one workspace. Returns page ids and titles.",
 	input: WorkspaceInput.extend({ query: z.string().min(1).max(200) }),
 	output: z.object({
 		pages: z.array(z.object({ pageId: z.string().uuid(), title: z.string() })),
@@ -80,7 +81,7 @@ export const searchPagesCapability = defineAgentCapability("search_pages", {
 });
 
 export const readPageCapability = defineAgentCapability("read_page", {
-	description: AGENT_CAPABILITY_DESCRIPTIONS.read_page,
+	description: "Read a page as markdown.",
 	input: PageInput,
 	output: z.object({
 		pageId: z.string().uuid(),
@@ -107,7 +108,8 @@ export const readPageCapability = defineAgentCapability("read_page", {
 });
 
 export const createPageCapability = defineAgentCapability("create_page", {
-	description: AGENT_CAPABILITY_DESCRIPTIONS.create_page,
+	description:
+		"Create a page in a workspace, optionally nested under another page and initialized from markdown. The page title is rendered separately above the body, so the markdown must contain body content only and must not repeat the page title as an opening heading. Call list_workspaces first to get a workspaceId.",
 	input: WorkspaceInput.extend({
 		title: z
 			.string()
@@ -159,7 +161,8 @@ export const createPageCapability = defineAgentCapability("create_page", {
 });
 
 export const appendToPageCapability = defineAgentCapability("append_to_page", {
-	description: AGENT_CAPABILITY_DESCRIPTIONS.append_to_page,
+	description:
+		"Append markdown content to the end of a page. Supports headings, paragraphs, bullet/numbered lists, task items (- [ ] title, optionally with a '(due: YYYY-MM-DD)' or '(due: YYYY-MM-DD HH:mm)' suffix), code fences, blockquotes (rendered as callouts), and dividers.",
 	input: PageInput.extend({ markdown: z.string().min(1).max(100_000) }),
 	output: z.object({
 		pageId: z.string().uuid(),
@@ -198,7 +201,8 @@ export const appendToPageCapability = defineAgentCapability("append_to_page", {
 });
 
 export const updatePageCapability = defineAgentCapability("update_page", {
-	description: AGENT_CAPABILITY_DESCRIPTIONS.update_page,
+	description:
+		"Update a page's title, icon, or parent. Set icon to null to remove it or parentPageId to null to move the page to the workspace root.",
 	input: PageInput.extend({
 		title: z
 			.string()
@@ -240,7 +244,8 @@ export const updatePageCapability = defineAgentCapability("update_page", {
 });
 
 export const archivePageCapability = defineAgentCapability("archive_page", {
-	description: AGENT_CAPABILITY_DESCRIPTIONS.archive_page,
+	description:
+		"Move a page and its descendants to the workspace trash. This is reversible and does not permanently delete content.",
 	input: PageInput,
 	output: z.object({
 		pageId: z.string().uuid(),
@@ -261,7 +266,8 @@ export const archivePageCapability = defineAgentCapability("archive_page", {
 });
 
 export const restorePageCapability = defineAgentCapability("restore_page", {
-	description: AGENT_CAPABILITY_DESCRIPTIONS.restore_page,
+	description:
+		"Restore an archived page and its descendants. If its former parent is unavailable, the page is restored at the workspace root.",
 	input: PageInput,
 	output: PageMetadataOutput.extend({ restored: z.literal(true) }),
 	async handle({ ctx, input }) {

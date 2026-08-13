@@ -845,6 +845,29 @@
 	display: none;
 }
 
+/* BlockNote's Radix tooltip arrow is already a triangular SVG, but its shadcn
+   wrapper also sizes and rotates it like a square. Restore the SVG's intended
+   geometry; the Radix arrow wrapper handles positioning and direction. */
+[data-radix-popper-content-wrapper]
+	> [data-slot="tooltip-content"]
+	> span
+	> svg[class~="rotate-45"] {
+	width: 10px;
+	height: 5px;
+	border-radius: 0;
+	background-color: transparent;
+	fill: var(--primary);
+	rotate: 0deg;
+}
+
+/* BlockNote's checked color option relies on a Tailwind padding utility that
+   is absent from its packaged menu CSS. Reserve room for the check indicator
+   so it cannot overlap the color swatch. */
+.bn-color-picker-dropdown
+[data-slot="dropdown-menu-checkbox-item"][data-state="checked"] {
+	padding-left: 2rem;
+}
+
 /* Placeholder ("Enter text or type '/' …"): BlockNote styles it italic and
    near-invisible; make it upright and readable. */
 .bn-shadcn .bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after {
