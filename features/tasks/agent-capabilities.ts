@@ -1,6 +1,5 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
-import { AGENT_CAPABILITY_DESCRIPTIONS } from "@/features/agents/capability-catalog";
 import {
 	TASK_TITLE_MAX_LENGTH,
 	TASK_TITLE_TOO_LONG_MESSAGE,
@@ -35,7 +34,8 @@ export function createTaskAgentCapabilities(
 	dependencies: TaskAgentCapabilityDependencies = {},
 ) {
 	const listTasksCapability = defineAgentCapability("list_tasks", {
-		description: AGENT_CAPABILITY_DESCRIPTIONS.list_tasks,
+		description:
+			"List tasks in one workspace. Defaults to open tasks assigned to the acting user; supports completion/scope filters, explicit due-date ranges, and timezone-aware overdue, today, or upcoming presets.",
 		input: WorkspaceInput.extend({
 			filter: z.enum(["open", "completed", "all"]).default("open"),
 			scope: z.enum(["mine", "everyone"]).default("mine"),
@@ -147,7 +147,8 @@ export function createTaskAgentCapabilities(
 	});
 
 	const createTaskCapability = defineAgentCapability("create_task", {
-		description: AGENT_CAPABILITY_DESCRIPTIONS.create_task,
+		description:
+			"Create a standalone task in a workspace. The task is assigned to the acting user by default; dueDate uses YYYY-MM-DD, optional dueTime uses HH:mm, and reminderOffsetMinutes may be 0, 15, 60, or 1440.",
 		input: WorkspaceInput.extend({
 			title: z.string().trim().min(1).max(TASK_TITLE_MAX_LENGTH, {
 				message: TASK_TITLE_TOO_LONG_MESSAGE,
@@ -206,7 +207,8 @@ export function createTaskAgentCapabilities(
 	});
 
 	const updateTaskCapability = defineAgentCapability("update_task", {
-		description: AGENT_CAPABILITY_DESCRIPTIONS.update_task,
+		description:
+			"Update a task's title, due date/time, reminder, or assignee. Set dueDate to null to clear the date, time, and reminder; set dueTime to null to keep the date without a time; set reminderOffsetMinutes to null to disable reminders. Page-backed task titles must still be edited in their page.",
 		input: TaskInput.extend({
 			title: z
 				.string()
@@ -273,7 +275,8 @@ export function createTaskAgentCapabilities(
 	});
 
 	const completeTaskCapability = defineAgentCapability("complete_task", {
-		description: AGENT_CAPABILITY_DESCRIPTIONS.complete_task,
+		description:
+			"Mark a task complete. For a page-backed task, the source task block is checked too.",
 		input: TaskInput,
 		output: z.object({
 			taskId: z.string().uuid(),
@@ -299,7 +302,8 @@ export function createTaskAgentCapabilities(
 	});
 
 	const reopenTaskCapability = defineAgentCapability("reopen_task", {
-		description: AGENT_CAPABILITY_DESCRIPTIONS.reopen_task,
+		description:
+			"Reopen a completed task. For a page-backed task, the source task block is unchecked too.",
 		input: TaskInput,
 		output: z.object({
 			taskId: z.string().uuid(),
@@ -325,7 +329,8 @@ export function createTaskAgentCapabilities(
 	});
 
 	const deleteTaskCapability = defineAgentCapability("delete_task", {
-		description: AGENT_CAPABILITY_DESCRIPTIONS.delete_task,
+		description:
+			"Permanently delete a standalone task. Page-backed tasks must be removed from their source page instead.",
 		input: TaskInput,
 		output: z.object({ taskId: z.string().uuid(), deleted: z.literal(true) }),
 		async handle({ ctx, input }) {

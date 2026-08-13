@@ -16,7 +16,7 @@ import {
 	listAgentsUseCase,
 } from "@/features/agents/use-cases";
 import { defineRouteGroup } from "@/lib/routes";
-import { routeAuth } from "@/lib/route-auth";
+import { routeAuth } from "@/server/auth-hooks";
 
 export const agentRoutes = defineRouteGroup({
 	name: "agents",

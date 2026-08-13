@@ -9,7 +9,7 @@ import type {
 } from "@/features/tasks/ports";
 import { patchTaskBlock } from "./patch-task-block";
 import { reconcilePageTasks } from "./reconcile-page-tasks";
-import { resolveTaskAssignmentActor } from "./task-assignment-notifications";
+import { resolveTaskAssignmentActor } from "../notifications/assigned";
 
 const TASK_BLOCK_PATCH_ATTEMPTS = 3;
 

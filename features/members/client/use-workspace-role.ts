@@ -1,7 +1,7 @@
 "use client";
 
 import { useAppSession } from "@/components/app-session-provider";
-import { canEditContent } from "@/lib/org-roles";
+import { canEditContent } from "@/lib/org-access";
 
 /**
  * Whether the current member may edit content in the active workspace.

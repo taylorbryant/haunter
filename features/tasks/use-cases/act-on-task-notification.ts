@@ -7,7 +7,7 @@ import {
 import { appError } from "@/features/shared/errors";
 import { zonedDateTimeToUtc } from "@/features/tasks/lib/reminder-time";
 import { requireUser } from "@/lib/auth";
-import { canEditContent } from "@/lib/org-roles";
+import { canEditContent } from "@/lib/org-access";
 import { localDateAndTime } from "@/lib/timezone";
 import { useCase } from "@/lib/use-case";
 import {

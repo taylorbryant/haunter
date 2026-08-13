@@ -1,8 +1,4 @@
-import {
-	defineContractGroup,
-	defineQueryTransport,
-	query,
-} from "@beignet/core/contracts";
+import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import {
 	AuthorizeMcpConnectionInputSchema,
@@ -39,10 +35,7 @@ export const listAgents = agents
 
 export const listAgentActivity = agents
 	.get("/api/agents/activity")
-	.query(
-		ListAgentActivityInputSchema,
-		defineQueryTransport({ limit: query.integer() }),
-	)
+	.query(ListAgentActivityInputSchema)
 	.meta({ rateLimit: { max: 120, windowSec: 60, scope: "user" } })
 	.errors({
 		Unauthorized: errors.Unauthorized,

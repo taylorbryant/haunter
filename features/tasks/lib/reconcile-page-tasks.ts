@@ -4,13 +4,13 @@ import type { MemberRepository } from "@/features/members/ports";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import type { Notification } from "@/features/notifications/schemas";
 import { appError } from "@/features/shared/errors";
-import type {
-	TaskAssignmentActor,
-	TaskRepository,
-} from "@/features/tasks/ports";
+import {
+	createTaskAssignmentNotification,
+	type TaskAssignmentActor,
+} from "@/features/tasks/notifications/assigned";
+import type { TaskRepository } from "@/features/tasks/ports";
 import type { Task } from "@/features/tasks/schemas";
 import { extractTaskBlocks } from "./extract-task-blocks";
-import { createTaskAssignmentNotification } from "./task-assignment-notifications";
 import { hasTaskSchedulingChanged } from "./task-scheduling";
 
 const DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;

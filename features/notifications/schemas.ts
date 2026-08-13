@@ -111,7 +111,7 @@ export type Notification = z.infer<typeof NotificationSchema>;
 
 export const ListNotificationsInputSchema = z.object({
 	cursor: z.string().optional(),
-	limit: z.number().int().min(1).max(100).default(30),
+	limit: z.coerce.number().int().min(1).max(100).default(30),
 });
 
 export const ListNotificationsOutputSchema = z.object({

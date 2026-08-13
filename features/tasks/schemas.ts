@@ -63,7 +63,7 @@ export const ListTasksInputSchema = z
 		scope: TaskScopeSchema,
 		dueOnOrAfter: DueDateSchema.optional(),
 		dueOnOrBefore: DueDateSchema.optional(),
-		limit: z.number().int().min(1).max(200).default(50),
+		limit: z.coerce.number().int().min(1).max(200).default(50),
 	})
 	.refine(
 		(input) =>

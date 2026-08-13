@@ -10,7 +10,7 @@ import {
 	saveCanvasSnapshotUseCase,
 } from "@/features/canvases/use-cases";
 import { defineRouteGroup } from "@/lib/routes";
-import { routeAuth } from "@/lib/route-auth";
+import { routeAuth } from "@/server/auth-hooks";
 
 export const canvasRoutes = defineRouteGroup({
 	name: "canvases",
