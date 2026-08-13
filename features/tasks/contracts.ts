@@ -1,4 +1,8 @@
-import { defineContractGroup } from "@beignet/core/contracts";
+import {
+	defineContractGroup,
+	defineQueryTransport,
+	query,
+} from "@beignet/core/contracts";
 import { z } from "zod";
 import { errors } from "@/features/shared/errors";
 import { ErrorResponseSchema } from "@/features/shared/schemas";
@@ -32,7 +36,14 @@ export const listTasks = tasks
 			scope: TaskScopeSchema.optional(),
 			dueOnOrAfter: DueDateSchema.optional(),
 			dueOnOrBefore: DueDateSchema.optional(),
-			limit: z.coerce.number().int().min(1).max(200).optional(),
+			limit: z.number().int().min(1).max(200).optional(),
+		}),
+		defineQueryTransport({
+			filter: query.string(),
+			scope: query.string(),
+			dueOnOrAfter: query.string(),
+			dueOnOrBefore: query.string(),
+			limit: query.integer(),
 		}),
 	)
 	.errors({

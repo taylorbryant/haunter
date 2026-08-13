@@ -53,7 +53,7 @@ import {
 	useSidebar,
 } from "@/components/ui/sidebar";
 import { useWorkspaces } from "@/features/workspaces/client/use-workspaces";
-import { canManageMembers } from "@/lib/org-access";
+import { canManageMembers } from "@/lib/org-roles";
 
 const MembersDialog = dynamic(
 	() =>

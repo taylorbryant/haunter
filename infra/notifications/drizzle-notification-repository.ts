@@ -35,7 +35,7 @@ import {
 	shouldCreateTaskReminder,
 } from "@/features/tasks/lib/reminder-time";
 import * as schema from "@/infra/db/schema";
-import { canEditContent } from "@/lib/org-access";
+import { canEditContent } from "@/lib/org-roles";
 
 type NotificationRow = typeof schema.notifications.$inferSelect;
 const notificationColumns = getTableColumns(schema.notifications);

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { canManageMembers } from "@/lib/org-access";
+import { canManageMembers } from "@/lib/org-roles";
 
 // Roles an admin/owner can assign. Ownership transfer is separate, so owner is
 // not offered here.

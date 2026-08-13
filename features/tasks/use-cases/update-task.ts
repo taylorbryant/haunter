@@ -10,7 +10,7 @@ import { hasTaskSchedulingChanged } from "../lib/task-scheduling";
 import {
 	createTaskAssignmentNotification,
 	resolveTaskAssignmentActor,
-} from "../notifications/assigned";
+} from "../lib/task-assignment-notifications";
 import { TaskSchema, UpdateTaskInputSchema } from "../schemas";
 
 export const updateTaskUseCase = useCase
