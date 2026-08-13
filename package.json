@@ -55,7 +55,7 @@
 		"@hookform/resolvers": "5.5.0",
 		"@libsql/client": "0.17.4",
 		"@modelcontextprotocol/server": "2.0.0",
-		"@shikijs/core": "4.4.1",
+		"@shikijs/core": "4.4.2",
 		"@shikijs/engine-javascript": "4.4.1",
 		"@shikijs/langs-precompiled": "4.4.1",
 		"@shikijs/themes": "4.4.1",
