@@ -12,7 +12,7 @@ import {
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
 import { LATEST_CHANGELOG_VERSION } from "@/features/changelog/releases";
 import { changelogRoutes } from "@/features/changelog/routes";
-import { appPorts } from "@/infra/app-ports";
+import { appPorts } from "@/infra/port-wiring";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
 import {
 	ACCESS_STATUS_APPROVED,

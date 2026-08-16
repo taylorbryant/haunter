@@ -9,7 +9,7 @@ import {
 import { enforceUploadRateLimit } from "@/app/api/uploads/upload-rate-limit";
 import type { AppContext } from "@/app-context";
 import { AttachmentUpload } from "@/features/pages/uploads";
-import { appPorts } from "@/infra/app-ports";
+import { appPorts } from "@/infra/port-wiring";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import { createTestPageRepository } from "./helpers";

@@ -26,7 +26,7 @@ import {
 	createPageUseCase,
 	savePageContentUseCase,
 } from "@/features/pages/use-cases";
-import { appPorts } from "@/infra/app-ports";
+import { appPorts } from "@/infra/port-wiring";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";

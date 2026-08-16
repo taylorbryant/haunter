@@ -19,7 +19,7 @@ import type {
 import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
 import type { TaskAssignmentDeliveryPort } from "@/features/tasks/ports";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
-import { appPorts } from "@/infra/app-ports";
+import { appPorts } from "@/infra/port-wiring";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import {

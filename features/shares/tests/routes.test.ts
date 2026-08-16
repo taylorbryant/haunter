@@ -17,7 +17,7 @@ import { createTestApp, createTestRequester } from "@beignet/web/testing";
 import type { AppContext } from "@/app-context";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
-import { appPorts } from "@/infra/app-ports";
+import { appPorts } from "@/infra/port-wiring";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
 import {
 	ACCESS_STATUS_APPROVED,

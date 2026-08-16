@@ -24,7 +24,7 @@ import {
 	createTestTaskIntegration,
 	createTestTaskRepository,
 } from "@/features/tasks/tests/helpers";
-import { appPorts } from "@/infra/app-ports";
+import { appPorts } from "@/infra/port-wiring";
 import { createHaunterAgentAuthAdapter } from "@/lib/agent-auth-adapter";
 import { agentCapabilities } from "@/lib/agent-capability-registry";
 import type { AppTransactionPorts } from "@/ports";
