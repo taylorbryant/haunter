@@ -45,10 +45,21 @@ Run after every change:
 bun beignet check
 ```
 
-One command for the whole loop: `beignet lint` (dependency-direction),
+One command runs the whole loop: `beignet lint` (dependency direction),
 `beignet doctor --strict`, then the app's `lint` (Biome), `typecheck`, and
-`test` scripts — every step runs even if an earlier one fails. Use
+`test` scripts. Every step runs even if an earlier one fails. Use
 `bun run format` to apply Biome formatting.
+
+Before handing off a change, inspect its source-backed impact:
+
+```bash
+bun beignet map --changed --json
+bun beignet map --changed --base origin/main --json
+```
+
+The first command covers staged, unstaged, and untracked work. The second also
+includes branch commits since the merge base with the existing local
+`origin/main` ref; it does not fetch.
 
 ## Package skills
 
@@ -85,7 +96,14 @@ skill-loading block.
 ## MCP server
 
 `.mcp.json` registers the app-local `@beignet/cli` bin at
-`./node_modules/.bin/beignet mcp`, which exposes routes/doctor/lint/make as
-structured tools named exactly: `routes`, `doctor`, `doctor_fix`,
-`lint`, `make`. Clients that do not read `.mcp.json` can use the same
+`./node_modules/.bin/beignet mcp`. It exposes these structured tools:
+`app_map`, `explain`, `check`, `db`, `db_status`, `db_schema_sync`, `task_run`,
+`schedule_run`, `outbox_inspect`, `outbox_run`, `routes`, `doctor`,
+`doctor_fix_plan`, `doctor_fix`, `lint`, `make`, and `provider_add`.
+
+Use `app_map` with `{ "changed": true }` for the MCP equivalent of
+`beignet map --changed --json`. Add `base` to include committed branch changes.
+Plan guarded repairs with `doctor_fix_plan` before calling `doctor_fix`, and
+finish edits with `check`. The server also publishes app guidance and focused
+feature-map resources. Clients that do not read `.mcp.json` can use the same
 command from the app root; use `bun beignet mcp` only for terminal debugging.
