@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
 import {
+	createRecordingBestEffortWork,
 	createTestContextFactory,
 	createTestPorts,
 	createTestTenant,
@@ -92,13 +93,12 @@ async function createFixture(
 	const workspaceEvents = createTestWorkspaceEventPublisher();
 	const assignmentNotifications: Notification[] = [];
 	const dismissedScheduledTaskIds: string[] = [];
-	const afterResponseTasks: Array<() => Promise<void>> = [];
+	const {
+		bestEffortWork,
+		pending: pendingBestEffortWork,
+		flush: flushBestEffortWork,
+	} = createRecordingBestEffortWork();
 	const pushDeliveries: unknown[] = [];
-	const afterResponse = {
-		schedule(work: () => Promise<void>) {
-			afterResponseTasks.push(work);
-		},
-	};
 	const notificationInbox = {
 		async findByUser(candidateUserId: string, id: string) {
 			const notification = assignmentNotifications.find(
@@ -222,14 +222,14 @@ async function createFixture(
 		tasks,
 	});
 	const taskAssignmentDelivery = createTaskAssignmentDeliveryPort({
-		afterResponse,
+		bestEffortWork,
 		logger: { warn() {} } as unknown as AppContext["ports"]["logger"],
 		notifications,
 	});
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
-			afterResponse,
+			bestEffortWork,
 			gate: appPorts.gate,
 			members,
 			notificationInbox,
@@ -268,12 +268,13 @@ async function createFixture(
 	const ctx = await tester.ctx();
 
 	return {
-		afterResponseTasks,
+		flushBestEffortWork,
 		assignmentNotifications,
 		dismissedScheduledTaskIds,
 		notificationInbox,
 		page,
 		pages,
+		pendingBestEffortWork,
 		pushDeliveries,
 		scope,
 		tasks,
@@ -819,8 +820,9 @@ describe("tasks use cases", () => {
 
 	it("commits an assignment when its best-effort push delivery fails", async () => {
 		const {
-			afterResponseTasks,
 			assignmentNotifications,
+			flushBestEffortWork,
+			pendingBestEffortWork,
 			scope,
 			tasks,
 			tester,
@@ -843,8 +845,8 @@ describe("tasks use cases", () => {
 			title: "Review the launch plan",
 		});
 		expect(assignmentNotifications).toHaveLength(1);
-		expect(afterResponseTasks).toHaveLength(2);
-		await Promise.all(afterResponseTasks.map((work) => work()));
+		expect(pendingBestEffortWork).toHaveLength(2);
+		await flushBestEffortWork();
 	});
 
 	it("accepts detailed task titles and rejects only genuinely excessive ones", async () => {

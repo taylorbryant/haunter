@@ -1,5 +1,5 @@
 import type { NotificationPort } from "@beignet/core/notifications";
-import type { LoggerPort } from "@beignet/core/ports";
+import type { BestEffortWorkPort, LoggerPort } from "@beignet/core/ports";
 import { z } from "zod";
 import {
 	type Notification,
@@ -181,36 +181,26 @@ export async function deliverTaskAssignmentNotifications(
 }
 
 export function createTaskAssignmentDeliveryPort(dependencies: {
-	afterResponse: { schedule(work: () => Promise<void>): void };
+	bestEffortWork: BestEffortWorkPort;
 	logger: LoggerPort;
 	notifications: NotificationPort;
 }): TaskAssignmentDeliveryPort {
 	return {
 		schedule(items) {
 			if (items.length === 0) return;
-			try {
-				dependencies.afterResponse.schedule(async () => {
-					try {
-						await deliverTaskAssignmentNotifications(dependencies, items);
-					} catch (error) {
-						dependencies.logger.warn(
-							"Failed to deliver task assignment notifications after response",
-							{
-								error,
-								notificationIds: items.map((item) => item.id),
-							},
-						);
-					}
-				});
-			} catch (error) {
-				dependencies.logger.warn(
-					"Failed to schedule task assignment notification delivery",
-					{
-						error,
-						notificationIds: items.map((item) => item.id),
-					},
-				);
-			}
+			dependencies.bestEffortWork.defer(async () => {
+				try {
+					await deliverTaskAssignmentNotifications(dependencies, items);
+				} catch (error) {
+					dependencies.logger.warn(
+						"Failed to deliver best-effort task assignment notifications",
+						{
+							error,
+							notificationIds: items.map((item) => item.id),
+						},
+					);
+				}
+			});
 		},
 	};
 }

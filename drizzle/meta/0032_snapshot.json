@@ -1,8 +1,8 @@
 {
 	"version": "6",
 	"dialect": "sqlite",
-	"id": "5df7f84e-cee7-4e35-aed5-a2e29ae382e1",
-	"prevId": "48ebea0b-7b81-44c4-a886-68cbf1093707",
+	"id": "48ebea0b-7b81-44c4-a886-68cbf1093707",
+	"prevId": "2aeebd39-4337-4bfd-8a57-76d6b9aefde2",
 	"tables": {
 		"account": {
 			"name": "account",
@@ -1568,27 +1568,6 @@
 					"notNull": true,
 					"autoincrement": false
 				},
-				"action_state": {
-					"name": "action_state",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false,
-					"autoincrement": false
-				},
-				"action_at": {
-					"name": "action_at",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false,
-					"autoincrement": false
-				},
-				"snoozed_until": {
-					"name": "snoozed_until",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false,
-					"autoincrement": false
-				},
 				"push_state": {
 					"name": "push_state",
 					"type": "text",
@@ -1646,11 +1625,6 @@
 				"notifications_push_pending_idx": {
 					"name": "notifications_push_pending_idx",
 					"columns": ["push_state", "push_next_attempt_at", "push_lease_until"],
-					"isUnique": false
-				},
-				"notifications_snoozed_idx": {
-					"name": "notifications_snoozed_idx",
-					"columns": ["action_state", "snoozed_until"],
 					"isUnique": false
 				}
 			},

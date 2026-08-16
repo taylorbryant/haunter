@@ -25,15 +25,7 @@ async function publishSafely(
 }
 
 function schedule(ctx: AppContext, event: Parameters<typeof publishSafely>[1]) {
-	try {
-		ctx.ports.afterResponse.schedule(() => publishSafely(ctx, event));
-	} catch (error) {
-		ctx.ports.logger.warn("Failed to schedule a workspace event", {
-			error,
-			type: event.type,
-			workspaceId: event.workspaceId,
-		});
-	}
+	ctx.ports.bestEffortWork.defer(() => publishSafely(ctx, event));
 }
 
 export function scheduleWorkspacePageEvent(

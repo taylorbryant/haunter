@@ -92,8 +92,8 @@ function createTester(
 		{
 			base: appPorts,
 			overrides: {
-				afterResponse: {
-					schedule(work) {
+				bestEffortWork: {
+					defer(work) {
 						void work();
 					},
 				},
