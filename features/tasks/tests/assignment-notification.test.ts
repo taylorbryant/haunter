@@ -3,6 +3,7 @@ import {
 	createInlineNotificationDispatcher,
 	type NotificationPreferencesPort,
 } from "@beignet/core/notifications";
+import { createRecordingBestEffortWork } from "@beignet/core/testing";
 import type { AppContext } from "@/app-context";
 import type {
 	NotificationRepository,
@@ -41,7 +42,7 @@ function payload() {
 
 describe("task assignment push channel", () => {
 	it("defers immediate delivery until after the response", async () => {
-		const scheduled: Array<() => Promise<void>> = [];
+		const { bestEffortWork, pending, flush } = createRecordingBestEffortWork();
 		const deliveries: unknown[] = [];
 		const taskId = crypto.randomUUID();
 		const notification = {
@@ -64,11 +65,7 @@ describe("task assignment push channel", () => {
 		} as const;
 		const ctx = {
 			ports: {
-				afterResponse: {
-					schedule(work: () => Promise<void>) {
-						scheduled.push(work);
-					},
-				},
+				bestEffortWork,
 				logger: { warn() {} },
 				notifications: {
 					async send(_definition: unknown, delivery: unknown) {
@@ -86,9 +83,9 @@ describe("task assignment push channel", () => {
 
 		createTaskAssignmentDeliveryPort(ctx.ports).schedule([notification]);
 
-		expect(scheduled).toHaveLength(1);
+		expect(pending).toHaveLength(1);
 		expect(deliveries).toHaveLength(0);
-		await scheduled[0]?.();
+		await flush();
 		expect(deliveries).toHaveLength(1);
 	});
 

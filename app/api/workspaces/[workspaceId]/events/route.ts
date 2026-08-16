@@ -2,7 +2,7 @@ import { tenantScopeId } from "@beignet/core/ports";
 import {
 	createWorkspaceEventStream,
 	WORKSPACE_EVENT_STREAM_LEASE_TTL_MS,
-} from "@/features/collab/server/workspace-event-stream";
+} from "@/infra/collab/workspace-event-stream";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { getServer } from "@/server";

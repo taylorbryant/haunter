@@ -37,9 +37,9 @@ export const appPorts = definePorts<AppPorts>()({
 	},
 	deferred: [
 		"adminUsers",
-		"afterResponse",
 		"agents",
 		"auth",
+		"bestEffortWork",
 		"canvases",
 		"changelogState",
 		"idempotency",

@@ -2,6 +2,7 @@ import type { ErrorReporterPort } from "@beignet/core/error-reporting";
 import type { IdempotencyPort } from "@beignet/core/idempotency";
 import type { MailerPort } from "@beignet/core/mail";
 import type {
+	BestEffortWorkPort,
 	BoundGate,
 	GatePort,
 	LoggerPort,
@@ -77,19 +78,15 @@ export type AppTransactionPorts = {
 
 export type AppGate = BoundGate<AppPolicies>;
 
-export type AfterResponsePort = {
-	schedule(work: () => Promise<void>): void;
-};
-
 export type AppPorts = {
 	adminUsers: AdminUserRepository;
-	afterResponse: AfterResponsePort;
 	agents: AgentAdminRepository;
 	mcpConnections: McpConnectionRepository;
 	mcpOAuthClients: McpOAuthClientRepository;
 	mcpOAuthRequests: McpOAuthRequestVerifier;
 	mcpServerConfiguration: McpServerConfigurationPort;
 	auth: AuthPort;
+	bestEffortWork: BestEffortWorkPort;
 	canvases: CanvasRepository;
 	changelogState: ChangelogStateRepository;
 	errorReporter: ErrorReporterPort;
