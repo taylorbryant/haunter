@@ -15,7 +15,7 @@ import {
 	createTestTaskIntegration,
 	createTestTaskRepository,
 } from "@/features/tasks/tests/helpers";
-import { appPorts } from "@/infra/app-ports";
+import { appPorts } from "@/infra/port-wiring";
 import type { AppPorts, AppTransactionPorts } from "@/ports";
 import {
 	ACCESS_STATUS_APPROVED,

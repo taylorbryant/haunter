@@ -8,8 +8,8 @@ import {
 } from "@beignet/core/server";
 import { createNextServer, createNextServerLoader } from "@beignet/next";
 import type { AppContext } from "@/app-context";
-import { appPorts } from "@/infra/app-ports";
 import { closeDatabaseClient } from "@/infra/db/client";
+import { appPorts } from "@/infra/port-wiring";
 import { env } from "@/lib/env";
 import { appContext } from "./context";
 import { routes } from "./routes";

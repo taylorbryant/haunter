@@ -1,5 +1,6 @@
 import { createDevtoolsRoute } from "@beignet/devtools";
 import { env } from "@/lib/env";
+import { ADMIN_ROLE } from "@/ports/auth";
 import { getServer } from "@/server";
 
 // Build the devtools route on first request so importing this module during
@@ -12,6 +13,10 @@ async function buildRoute() {
 	return createDevtoolsRoute(server.ports.devtools, {
 		basePath: "/api/devtools",
 		enabled: env.DEVTOOLS_ENABLED,
+		authorize: async (request) => {
+			const session = await server.ports.auth.getSession(request);
+			return session?.user.role === ADMIN_ROLE;
+		},
 	});
 }
 

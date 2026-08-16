@@ -1,12 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import {
-	createTestTenant,
-	createTestUserActor,
-} from "@beignet/core/testing";
-import {
 	createTestContextFactory,
 	createTestPorts,
+	createTestTenant,
+	createTestUserActor,
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
@@ -15,7 +13,7 @@ import {
 	bootstrapAdminUseCase,
 	listWaitlistUseCase,
 } from "@/features/admin/use-cases";
-import { appPorts } from "@/infra/app-ports";
+import { appPorts } from "@/infra/port-wiring";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED, ADMIN_ROLE } from "@/ports/auth";
 import { createTestAdminUserRepository, type SeedUser } from "./helpers";

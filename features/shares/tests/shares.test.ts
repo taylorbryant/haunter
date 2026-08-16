@@ -12,9 +12,9 @@ import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
+import type { BlockJson } from "@/features/content/schemas";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { PageRepository } from "@/features/pages/ports";
-import type { BlockJson } from "@/features/content/schemas";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
 import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
 import {
@@ -23,7 +23,7 @@ import {
 } from "@/features/shares/lib/shared-file-rate-limit";
 import { sharedFileHeaders } from "@/features/shares/lib/shared-file-response";
 import type { ShareRepository } from "@/features/shares/ports";
-import { appPorts } from "@/infra/app-ports";
+import { appPorts } from "@/infra/port-wiring";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import {
