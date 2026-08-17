@@ -72,11 +72,11 @@ function ResolvedAssigneeChip({ value }: { value: string | null }) {
 }
 
 function AssigneePickerContent({
-	value,
+	showUnassign,
 	onChange,
 	onClose,
 }: {
-	value: string | null;
+	showUnassign: boolean;
 	onChange: (next: string | null, label: string | null) => void;
 	onClose: () => void;
 }) {
@@ -110,7 +110,7 @@ function AssigneePickerContent({
 					</DropdownMenuItem>
 				);
 			})}
-			{value !== null ? (
+			{showUnassign ? (
 				<>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem
@@ -138,12 +138,14 @@ export function AssigneePicker({
 	label,
 	onChange,
 	disabled = false,
+	showUnassign = value !== null,
 	className,
 }: {
 	value: string | null;
 	label?: string | null;
 	onChange: (next: string | null, label?: string | null) => void;
 	disabled?: boolean;
+	showUnassign?: boolean;
 	className?: string;
 }) {
 	const [open, setOpen] = useState(false);
@@ -198,7 +200,7 @@ export function AssigneePicker({
 			</DropdownMenuTrigger>
 			{open ? (
 				<AssigneePickerContent
-					value={value}
+					showUnassign={showUnassign}
 					onChange={onChange}
 					onClose={() => setOpen(false)}
 				/>

@@ -60,3 +60,26 @@ test("task write lock reports idle only after every task write settles", async (
 	await waitForIdle;
 	expect(idle).toBe(true);
 });
+
+test("bulk writes wait for every selected task lock", async () => {
+	const lock = createTaskWriteLock();
+	const calls: string[] = [];
+	let releaseSingle: (() => void) | undefined;
+	const single = lock.run("task_2", async () => {
+		calls.push("single");
+		await new Promise<void>((resolve) => {
+			releaseSingle = resolve;
+		});
+	});
+	const bulk = lock.runMany(["task_2", "task_1", "task_1"], async () => {
+		calls.push("bulk");
+	});
+
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(calls).toEqual(["single"]);
+	expect(lock.isPending("task_1")).toBe(true);
+	releaseSingle?.();
+	await Promise.all([single, bulk]);
+	expect(calls).toEqual(["single", "bulk"]);
+	expect(lock.hasPendingWrites()).toBe(false);
+});

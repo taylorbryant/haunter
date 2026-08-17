@@ -5,9 +5,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	BellIcon,
 	CalendarIcon,
+	CheckIcon,
 	FileTextIcon,
+	ListChecksIcon,
 	PlusIcon,
+	RotateCcwIcon,
 	Trash2Icon,
+	XIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -25,6 +29,7 @@ import { invalidateNotifications } from "@/features/notifications/client/queries
 import { invalidatePage } from "@/features/pages/client/queries";
 import { taskWriteLock } from "@/features/tasks/client/completion-lock";
 import {
+	bulkUpdateTasksMutationOptions,
 	createOptimisticTaskId,
 	createTaskMutationOptions,
 	deleteTaskMutationOptions,
@@ -33,9 +38,12 @@ import {
 	listTasksQueryOptions,
 	optimisticallyAddTask,
 	optimisticallyPatchTask,
+	optimisticallyPatchTasks,
 	optimisticallyRemoveTask,
 	optimisticallySetTaskCompletion,
 	optimisticallySetTaskSchedule,
+	optimisticallySetTasksCompletion,
+	optimisticallySetTasksSchedule,
 	replaceOptimisticTask,
 	restoreTaskCreationCache,
 	restoreTasksCache,
@@ -45,7 +53,10 @@ import {
 	type TaskScheduleCacheSnapshot,
 	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
-import { runOptimisticTaskWrite } from "@/features/tasks/client/task-list-controller";
+import {
+	runOptimisticTaskWrite,
+	runOptimisticTaskWrites,
+} from "@/features/tasks/client/task-list-controller";
 import {
 	TaskComposer,
 	type TaskSubmissionResult,
@@ -57,6 +68,7 @@ import {
 } from "@/features/tasks/lib/group-tasks-by-due-date";
 import type { TaskReminderOffsetMinutes } from "@/features/tasks/lib/reminder-options";
 import {
+	type BulkUpdateTaskPatch,
 	TASK_TITLE_MAX_LENGTH,
 	TASK_TITLE_TOO_LONG_MESSAGE,
 	type TaskFilter,
@@ -145,6 +157,11 @@ export function TaskList({
 	} | null>(null);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [taskToDelete, setTaskToDelete] = useState<TaskWithPage | null>(null);
+	const [isSelecting, setIsSelecting] = useState(false);
+	const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(
+		() => new Set(),
+	);
+	const [bulkError, setBulkError] = useState<string | null>(null);
 	// Every write for one task shares a lock. Separate locks per field allow an
 	// older failed mutation to roll back after a newer completion or deletion.
 	const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(
@@ -184,6 +201,10 @@ export function TaskList({
 		...updateTaskMutationOptions(),
 		meta: { errorMode: "silent" },
 	});
+	const bulkUpdateMutation = useMutation({
+		...bulkUpdateTasksMutationOptions(),
+		meta: { errorMode: "silent" },
+	});
 	const renameMutation = useMutation({
 		...updateTaskMutationOptions(),
 		meta: { errorMode: "inline" },
@@ -195,6 +216,46 @@ export function TaskList({
 
 	const tasks = tasksQuery.data?.items ?? [];
 	const hasMore = tasksQuery.data?.hasMore ?? false;
+	const selectableTasks = isHomeView
+		? []
+		: tasks.filter((task) => !isOptimisticTaskId(task.id));
+	const selectedTasks = selectableTasks.filter((task) =>
+		selectedTaskIds.has(task.id),
+	);
+	const allSelectableTasksSelected =
+		selectableTasks.length > 0 &&
+		selectableTasks.every((task) => selectedTaskIds.has(task.id));
+	const firstSelectedTask = selectedTasks[0] ?? null;
+	const hasCommonAssignee = Boolean(
+		firstSelectedTask &&
+			selectedTasks.every(
+				(task) => task.assigneeId === firstSelectedTask.assigneeId,
+			),
+	);
+	const bulkAssigneeId = hasCommonAssignee
+		? (firstSelectedTask?.assigneeId ?? null)
+		: null;
+	const bulkAssigneeLabel =
+		hasCommonAssignee && firstSelectedTask?.assigneeId
+			? (firstSelectedTask.assigneeName ?? "Assigned")
+			: undefined;
+	const hasCommonSchedule = Boolean(
+		firstSelectedTask &&
+			selectedTasks.every(
+				(task) =>
+					task.dueDate === firstSelectedTask.dueDate &&
+					task.dueTime === firstSelectedTask.dueTime &&
+					task.reminderOffsetMinutes ===
+						firstSelectedTask.reminderOffsetMinutes,
+			),
+	);
+	const bulkSchedule = {
+		dueDate: hasCommonSchedule ? (firstSelectedTask?.dueDate ?? null) : null,
+		dueTime: hasCommonSchedule ? (firstSelectedTask?.dueTime ?? null) : null,
+		reminderOffsetMinutes: hasCommonSchedule
+			? (firstSelectedTask?.reminderOffsetMinutes ?? null)
+			: null,
+	};
 	const overdueTasks = isTodayView
 		? tasks.filter((task) =>
 				isOverdue(task, resolvedTodayDate, resolvedCurrentTime),
@@ -222,15 +283,86 @@ export function TaskList({
 		});
 	}, [searchParams, router, pathname, canEdit, isHomeView, openCreateTask]);
 
-	async function refresh(task?: TaskWithPage) {
+	useEffect(() => {
+		if (pendingTaskIds.size > 0) return;
+		const selectableIds = new Set(
+			(isHomeView ? [] : tasks)
+				.filter((task) => !isOptimisticTaskId(task.id))
+				.map((task) => task.id),
+		);
+		setSelectedTaskIds((current) => {
+			const next = new Set(
+				[...current].filter((taskId) => selectableIds.has(taskId)),
+			);
+			return next.size === current.size ? current : next;
+		});
+	}, [tasks, isHomeView, pendingTaskIds]);
+
+	async function refreshTasks(targets: TaskWithPage[] = []) {
+		const pageIds = new Set(
+			targets.flatMap((task) => (task.pageId ? [task.pageId] : [])),
+		);
 		await Promise.all([
 			invalidateTasksWhenIdle(queryClient),
 			invalidateNotifications(queryClient),
+			...[...pageIds].map((pageId) => invalidatePage(queryClient, pageId)),
 		]);
-		// Keep an open editor for the source page consistent.
-		if (task?.pageId) {
-			await invalidatePage(queryClient, task.pageId);
-		}
+	}
+
+	async function refresh(task?: TaskWithPage) {
+		await refreshTasks(task ? [task] : []);
+	}
+
+	function exitSelectionMode() {
+		setIsSelecting(false);
+		setSelectedTaskIds(new Set());
+		setBulkError(null);
+	}
+
+	function toggleTaskSelection(taskId: string, selected: boolean) {
+		setSelectedTaskIds((current) => {
+			const next = new Set(current);
+			if (selected) next.add(taskId);
+			else next.delete(taskId);
+			return next;
+		});
+		setBulkError(null);
+	}
+
+	function toggleAllTasks() {
+		setSelectedTaskIds(
+			allSelectableTasksSelected
+				? new Set()
+				: new Set(selectableTasks.map((task) => task.id)),
+		);
+		setBulkError(null);
+	}
+
+	async function bulkUpdateSelectedTasks(
+		patch: BulkUpdateTaskPatch,
+		optimistic: (taskIds: string[]) => Promise<TaskCacheSnapshot>,
+		fallback: string,
+	) {
+		const targets = selectedTasks;
+		const taskIds = targets.map((task) => task.id);
+		if (taskIds.length === 0 || bulkUpdateMutation.isPending) return;
+		setBulkError(null);
+		await runOptimisticTaskWrites<TaskCacheSnapshot>({
+			taskIds,
+			setPendingTaskIds,
+			optimistic: () => optimistic(taskIds),
+			commit: () =>
+				bulkUpdateMutation.mutateAsync({
+					body: { taskIds, patch },
+				}),
+			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
+			onError: (error) => {
+				const message = contractErrorMessage(error, fallback);
+				setBulkError(message);
+				reportUserError(message);
+			},
+		});
+		await refreshTasks(targets);
 	}
 
 	async function setTaskCompletion(task: TaskWithPage, completed: boolean) {
@@ -477,6 +609,7 @@ export function TaskList({
 
 	function setTaskListParams(next: { filter?: TaskFilter; scope?: TaskScope }) {
 		setLimit(TASK_PAGE_SIZE);
+		exitSelectionMode();
 		const params = new URLSearchParams(searchParams.toString());
 		const nextFilter = next.filter ?? filter;
 		const nextScope = next.scope ?? scope;
@@ -501,32 +634,49 @@ export function TaskList({
 
 	function renderTaskRows(visibleTasks: TaskWithPage[]) {
 		return (
-			<ul className="flex flex-col divide-y">
+			// biome-ignore lint/a11y/noRedundantRoles: keep explicit list semantics after CSS resets
+			<ul role="list" className="flex flex-col divide-y">
 				{visibleTasks.map((task) => (
 					<li
 						key={task.id}
 						className="group flex items-start gap-3 py-2 [contain-intrinsic-size:0_52px] [content-visibility:auto]"
 					>
-						<input
-							type="checkbox"
-							checked={task.completed}
-							disabled={
-								!canEdit ||
-								isOptimisticTaskId(task.id) ||
-								pendingTaskIds.has(task.id)
-							}
-							className={cn(
-								"mt-0.5 size-4 shrink-0 accent-primary",
-								canEdit &&
-									!isOptimisticTaskId(task.id) &&
-									!pendingTaskIds.has(task.id) &&
-									"cursor-pointer",
-							)}
-							aria-label={task.completed ? "Mark task open" : "Mark task done"}
-							onChange={(event) =>
-								void setTaskCompletion(task, event.target.checked)
-							}
-						/>
+						<span className="flex h-lh shrink-0 items-center text-base sm:text-sm">
+							<input
+								type="checkbox"
+								name={isSelecting ? "selectedTaskIds" : `task-${task.id}`}
+								value={task.id}
+								checked={
+									isSelecting ? selectedTaskIds.has(task.id) : task.completed
+								}
+								disabled={
+									!canEdit ||
+									isOptimisticTaskId(task.id) ||
+									pendingTaskIds.has(task.id)
+								}
+								className={cn(
+									"size-5 shrink-0 accent-primary sm:size-4",
+									canEdit &&
+										!isOptimisticTaskId(task.id) &&
+										!pendingTaskIds.has(task.id) &&
+										"cursor-pointer",
+								)}
+								aria-label={
+									isSelecting
+										? `Select ${task.title || "Untitled task"}`
+										: task.completed
+											? "Mark task open"
+											: "Mark task done"
+								}
+								onChange={(event) => {
+									if (isSelecting) {
+										toggleTaskSelection(task.id, event.target.checked);
+										return;
+									}
+									void setTaskCompletion(task, event.target.checked);
+								}}
+							/>
+						</span>
 						{/* Stacks title over the chips on mobile; sm+ lays them out
 					    side by side on one line. */}
 						<div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
@@ -718,36 +868,228 @@ export function TaskList({
 				</Button>
 			)}
 			{isHomeView ? null : (
-				<div className="flex flex-wrap items-center gap-1">
-					{FILTERS.map(({ value, label }) => (
-						<Button
-							key={value}
-							type="button"
-							size="sm"
-							variant={filter === value ? "secondary" : "ghost"}
-							onClick={() => setTaskListParams({ filter: value })}
-						>
-							{label}
-						</Button>
-					))}
-					<div className="mx-1 h-4 w-px bg-border" />
-					{(
-						[
-							{ value: "everyone", label: "Everyone" },
-							{ value: "mine", label: "Mine" },
-						] as const
-					).map(({ value, label }) => (
-						<Button
-							key={value}
-							type="button"
-							size="sm"
-							variant={scope === value ? "secondary" : "ghost"}
-							onClick={() => setTaskListParams({ scope: value })}
-						>
-							{label}
-						</Button>
-					))}
-				</div>
+				<>
+					<div className="flex flex-wrap items-center justify-between gap-2">
+						<div className="flex flex-wrap items-center gap-1">
+							{FILTERS.map(({ value, label }) => (
+								<Button
+									key={value}
+									type="button"
+									size="sm"
+									variant={filter === value ? "secondary" : "ghost"}
+									onClick={() => setTaskListParams({ filter: value })}
+								>
+									{label}
+								</Button>
+							))}
+							<div className="h-4 w-px bg-border" />
+							{(
+								[
+									{ value: "everyone", label: "Everyone" },
+									{ value: "mine", label: "Mine" },
+								] as const
+							).map(({ value, label }) => (
+								<Button
+									key={value}
+									type="button"
+									size="sm"
+									variant={scope === value ? "secondary" : "ghost"}
+									onClick={() => setTaskListParams({ scope: value })}
+								>
+									{label}
+								</Button>
+							))}
+						</div>
+						{canEdit && tasks.length > 0 ? (
+							<Button
+								type="button"
+								size="sm"
+								variant={isSelecting ? "secondary" : "ghost"}
+								className="h-9 text-base sm:h-7 sm:text-[0.8rem]"
+								disabled={bulkUpdateMutation.isPending}
+								onClick={() => {
+									if (isSelecting) exitSelectionMode();
+									else setIsSelecting(true);
+								}}
+							>
+								{isSelecting ? (
+									<XIcon className="size-4 shrink-0" />
+								) : (
+									<ListChecksIcon className="size-4 shrink-0" />
+								)}
+								{isSelecting ? "Cancel" : "Select"}
+							</Button>
+						) : null}
+					</div>
+					{isSelecting ? (
+						<div className="flex flex-col gap-2 border-y py-2">
+							<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+								<div className="flex items-center gap-2">
+									<p
+										aria-live="polite"
+										className="text-base tabular-nums sm:text-sm"
+									>
+										{selectedTaskIds.size} selected
+									</p>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										className="h-9 text-base sm:h-7 sm:text-[0.8rem]"
+										disabled={
+											selectableTasks.length === 0 ||
+											bulkUpdateMutation.isPending
+										}
+										onClick={toggleAllTasks}
+									>
+										{allSelectableTasksSelected ? "Clear all" : "Select all"}
+									</Button>
+								</div>
+								<div
+									className="flex flex-wrap items-center gap-1"
+									role="toolbar"
+									aria-label="Bulk task actions"
+								>
+									{bulkUpdateMutation.isPending ? (
+										<p className="text-muted-foreground text-base sm:text-sm">
+											Updating…
+										</p>
+									) : (
+										<>
+											{selectedTasks.some((task) => !task.completed) ? (
+												<Button
+													type="button"
+													variant="secondary"
+													size="sm"
+													className="h-9 text-base sm:h-7 sm:text-[0.8rem]"
+													disabled={bulkUpdateMutation.isPending}
+													onClick={() =>
+														void bulkUpdateSelectedTasks(
+															{ completed: true },
+															(taskIds) =>
+																optimisticallySetTasksCompletion(
+																	queryClient,
+																	taskIds,
+																	true,
+																),
+															"Selected tasks could not be completed. Try again.",
+														)
+													}
+												>
+													<CheckIcon className="size-4 shrink-0" />
+													Complete
+												</Button>
+											) : null}
+											{selectedTasks.some((task) => task.completed) ? (
+												<Button
+													type="button"
+													variant="secondary"
+													size="sm"
+													className="h-9 text-base sm:h-7 sm:text-[0.8rem]"
+													disabled={bulkUpdateMutation.isPending}
+													onClick={() =>
+														void bulkUpdateSelectedTasks(
+															{ completed: false },
+															(taskIds) =>
+																optimisticallySetTasksCompletion(
+																	queryClient,
+																	taskIds,
+																	false,
+																),
+															"Selected tasks could not be reopened. Try again.",
+														)
+													}
+												>
+													<RotateCcwIcon className="size-4 shrink-0" />
+													Reopen
+												</Button>
+											) : null}
+											{selectedTasks.length === 0 ||
+											bulkUpdateMutation.isPending ? (
+												<Button
+													type="button"
+													variant="secondary"
+													size="sm"
+													className="h-9 text-base sm:h-7 sm:text-[0.8rem]"
+													disabled
+												>
+													Assign
+												</Button>
+											) : (
+												<AssigneePicker
+													value={bulkAssigneeId}
+													label={bulkAssigneeLabel}
+													showUnassign={selectedTasks.some(
+														(task) => task.assigneeId !== null,
+													)}
+												className="h-9 bg-secondary px-2.5 text-base text-secondary-foreground opacity-100 hover:bg-muted focus-visible:opacity-100 sm:h-7 sm:text-[0.8rem]"
+													onChange={(assigneeId, assigneeName) =>
+														void bulkUpdateSelectedTasks(
+															{ assigneeId },
+															(taskIds) =>
+																optimisticallyPatchTasks(
+																	queryClient,
+																	taskIds,
+																	{
+																		assigneeId,
+																		assigneeName: assigneeName ?? null,
+																	},
+																	currentUser?.id,
+																),
+															"Selected tasks could not be reassigned. Try again.",
+														)
+													}
+												/>
+											)}
+											<DueDatePicker
+												value={bulkSchedule.dueDate}
+												time={bulkSchedule.dueTime}
+												reminderOffsetMinutes={
+													bulkSchedule.reminderOffsetMinutes
+												}
+												disabled={
+													selectedTasks.length === 0 ||
+													bulkUpdateMutation.isPending
+												}
+												ariaLabel="Set due date, time, and reminder for selected tasks"
+											className="flex h-9 items-center gap-1 rounded-lg bg-secondary py-0 pr-2 pl-1.5 text-base text-secondary-foreground hover:bg-muted sm:h-7 sm:text-[0.8rem]"
+												onChange={(next) =>
+													void bulkUpdateSelectedTasks(
+														{
+															dueDate: next.date,
+															dueTime: next.time,
+															reminderOffsetMinutes: next.reminderOffsetMinutes,
+														},
+														(taskIds) =>
+															optimisticallySetTasksSchedule(
+																queryClient,
+																taskIds,
+																{
+																	dueDate: next.date,
+																	dueTime: next.time,
+																	reminderOffsetMinutes:
+																		next.reminderOffsetMinutes,
+																},
+															),
+														"Selected task dates could not be updated. Try again.",
+													)
+												}
+											/>
+										</>
+									)}
+								</div>
+							</div>
+							{bulkError ? (
+								<p
+									role="alert"
+									className="text-destructive text-base sm:text-sm"
+								>
+									{bulkError}
+								</p>
+							) : null}
+						</div>
+					) : null}
+				</>
 			)}
 			{tasksQuery.isPending ? (
 				<p className="text-muted-foreground text-sm">Loading…</p>

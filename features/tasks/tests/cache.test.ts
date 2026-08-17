@@ -9,6 +9,7 @@ import {
 	optimisticallyRemoveTask,
 	optimisticallySetTaskCompletion,
 	optimisticallySetTaskSchedule,
+	optimisticallySetTasksCompletion,
 	replaceOptimisticTask,
 	restoreTaskCreationCache,
 	restoreTasksCache,
@@ -135,6 +136,34 @@ test("rolling back one task preserves another optimistic completion", async () =
 	expect(queryClient.getQueryData<ListTasksOutput>(openKey)?.items).toEqual([
 		task,
 	]);
+});
+
+test("bulk completion updates and restores every selected task", async () => {
+	const queryClient = new QueryClient();
+	const allKey = listTasksQueryOptions(
+		"workspace_1",
+		"all",
+		"everyone",
+	).queryKey;
+	const previous: ListTasksOutput = {
+		items: [task, otherTask],
+		hasMore: false,
+	};
+	queryClient.setQueryData(allKey, previous);
+
+	const snapshot = await optimisticallySetTasksCompletion(
+		queryClient,
+		[task.id, otherTask.id],
+		true,
+	);
+	expect(
+		queryClient
+			.getQueryData<ListTasksOutput>(allKey)
+			?.items.every((item) => item.completed),
+	).toBe(true);
+
+	restoreTasksCache(queryClient, snapshot);
+	expect(queryClient.getQueryData<ListTasksOutput>(allKey)).toEqual(previous);
 });
 
 test("task schedule updates cached dates immediately and can roll back", async () => {

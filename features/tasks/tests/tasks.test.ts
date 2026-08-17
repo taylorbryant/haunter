@@ -37,6 +37,7 @@ import type { UpdateTaskData } from "../ports";
 import { TASK_TITLE_MAX_LENGTH, TASK_TITLE_TOO_LONG_MESSAGE } from "../schemas";
 import {
 	actOnTaskNotificationUseCase,
+	bulkUpdateTasksUseCase,
 	createTaskUseCase,
 	deleteTaskUseCase,
 	listTasksUseCase,
@@ -816,6 +817,87 @@ describe("tasks use cases", () => {
 			{ ctx },
 		);
 		expect(all.items).toHaveLength(0);
+	});
+
+	it("bulk-updates standalone and page-sourced tasks with write-through", async () => {
+		const {
+			assignmentNotifications,
+			page,
+			pages,
+			scope,
+			tasks,
+			tester,
+			workspace,
+			ctx,
+		} = await createFixture();
+		await tester.run(
+			savePageContentUseCase,
+			{ id: page.id, content: [taskBlock("bulk-page", "Page task")] },
+			{ ctx },
+		);
+		const [pageTask] = await tasks.listByPage(scope, page.id);
+		const standaloneTask = await tester.run(
+			createTaskUseCase,
+			{
+				workspaceId: workspace.id,
+				title: "Standalone task",
+				assigneeId: null,
+			},
+			{ ctx },
+		);
+
+		const assigned = await tester.run(
+			bulkUpdateTasksUseCase,
+			{
+				taskIds: [pageTask.id, standaloneTask.id],
+				patch: {
+					assigneeId: "user_teammate",
+					dueDate: "2026-08-20",
+					dueTime: "14:00",
+				},
+			},
+			{ ctx },
+		);
+
+		expect(assigned).toHaveLength(2);
+		expect(assigned).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: pageTask.id,
+					assigneeId: "user_teammate",
+					dueDate: "2026-08-20",
+					dueTime: "14:00",
+				}),
+				expect.objectContaining({
+					id: standaloneTask.id,
+					assigneeId: "user_teammate",
+					dueDate: "2026-08-20",
+					dueTime: "14:00",
+				}),
+			]),
+		);
+		expect(assignmentNotifications).toHaveLength(2);
+		const savedPage = await pages.findById(scope, page.id);
+		expect(savedPage?.content[0]?.props).toEqual(
+			expect.objectContaining({
+				assignee: "user_teammate",
+				due: "2026-08-20",
+				dueTime: "14:00",
+			}),
+		);
+
+		const completed = await tester.run(
+			bulkUpdateTasksUseCase,
+			{
+				taskIds: [pageTask.id, standaloneTask.id],
+				patch: { completed: true },
+			},
+			{ ctx },
+		);
+		expect(completed.every((task) => task.completed)).toBe(true);
+		expect((await pages.findById(scope, page.id))?.content[0]?.props).toEqual(
+			expect.objectContaining({ checked: true }),
+		);
 	});
 
 	it("commits an assignment when its best-effort push delivery fails", async () => {

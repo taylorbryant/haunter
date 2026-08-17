@@ -7,6 +7,8 @@ import { z } from "zod";
 import { errors } from "@/features/shared/errors";
 import { ErrorResponseSchema } from "@/features/shared/schemas";
 import {
+	BulkUpdateTasksInputSchema,
+	BulkUpdateTasksOutputSchema,
 	CreateTaskInputSchema,
 	DueDateSchema,
 	ListTasksOutputSchema,
@@ -79,6 +81,19 @@ export const updateTask = tasks
 	})
 	.responses({
 		200: TaskSchema,
+	});
+
+export const bulkUpdateTasks = tasks
+	.patch("/api/tasks/bulk")
+	.body(BulkUpdateTasksInputSchema)
+	.errors({
+		Forbidden: errors.Forbidden,
+		InvalidTaskDue: errors.InvalidTaskDue,
+		StaleWrite: errors.StaleWrite,
+		TaskNotFound: errors.TaskNotFound,
+	})
+	.responses({
+		200: BulkUpdateTasksOutputSchema,
 	});
 
 export const deleteTask = tasks

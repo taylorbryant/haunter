@@ -124,6 +124,25 @@ export const UpdateTaskBodySchema = z.object({
 export const UpdateTaskInputSchema =
 	TaskIdInputSchema.merge(UpdateTaskBodySchema);
 
+export const BulkUpdateTaskPatchSchema = UpdateTaskBodySchema.omit({
+	title: true,
+}).refine((patch) => Object.keys(patch).length > 0, {
+	message: "Choose at least one task change",
+});
+
+export const BulkUpdateTasksInputSchema = z.object({
+	taskIds: z
+		.array(z.string().uuid())
+		.min(1)
+		.max(200)
+		.refine((taskIds) => new Set(taskIds).size === taskIds.length, {
+			message: "Task ids must be unique",
+		}),
+	patch: BulkUpdateTaskPatchSchema,
+});
+
+export const BulkUpdateTasksOutputSchema = z.array(TaskSchema);
+
 export const DeleteTaskOutputSchema = z.void();
 
 export const TaskNotificationActionBodySchema = z.discriminatedUnion("action", [
@@ -163,3 +182,5 @@ export type TaskFilter = z.infer<typeof TaskFilterSchema>;
 export type TaskScope = z.infer<typeof TaskScopeSchema>;
 export type CreateTaskInput = z.infer<typeof CreateTaskInputSchema>;
 export type UpdateTaskInput = z.infer<typeof UpdateTaskInputSchema>;
+export type BulkUpdateTaskPatch = z.infer<typeof BulkUpdateTaskPatchSchema>;
+export type BulkUpdateTasksInput = z.infer<typeof BulkUpdateTasksInputSchema>;

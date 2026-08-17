@@ -3,6 +3,7 @@ import { rq } from "@/client";
 import { taskWriteLock } from "@/features/tasks/client/completion-lock";
 import {
 	actOnTaskNotification,
+	bulkUpdateTasks,
 	createTask,
 	deleteTask,
 	listTasks,
@@ -157,6 +158,10 @@ export function actOnTaskNotificationMutationOptions() {
 
 export function updateTaskMutationOptions() {
 	return rq(updateTask).mutationOptions();
+}
+
+export function bulkUpdateTasksMutationOptions() {
+	return rq(bulkUpdateTasks).mutationOptions();
 }
 
 export function deleteTaskMutationOptions() {
@@ -317,6 +322,24 @@ export async function optimisticallySetTaskCompletion(
 	return snapshot;
 }
 
+export async function optimisticallySetTasksCompletion(
+	queryClient: QueryClient,
+	taskIds: string[],
+	completed: boolean,
+): Promise<TaskCompletionCacheSnapshot> {
+	const snapshot: TaskCompletionCacheSnapshot = [];
+	for (const taskId of taskIds) {
+		snapshot.push(
+			...(await optimisticallySetTaskCompletion(
+				queryClient,
+				taskId,
+				completed,
+			)),
+		);
+	}
+	return snapshot;
+}
+
 export async function optimisticallySetTaskSchedule(
 	queryClient: QueryClient,
 	taskId: string,
@@ -375,6 +398,20 @@ export async function optimisticallySetTaskSchedule(
 	return snapshot;
 }
 
+export async function optimisticallySetTasksSchedule(
+	queryClient: QueryClient,
+	taskIds: string[],
+	schedule: Pick<TaskWithPage, "dueDate" | "dueTime" | "reminderOffsetMinutes">,
+): Promise<TaskScheduleCacheSnapshot> {
+	const snapshot: TaskScheduleCacheSnapshot = [];
+	for (const taskId of taskIds) {
+		snapshot.push(
+			...(await optimisticallySetTaskSchedule(queryClient, taskId, schedule)),
+		);
+	}
+	return snapshot;
+}
+
 export async function optimisticallyPatchTask(
 	queryClient: QueryClient,
 	taskId: string,
@@ -428,6 +465,26 @@ export async function optimisticallyPatchTask(
 		});
 	}
 
+	return snapshot;
+}
+
+export async function optimisticallyPatchTasks(
+	queryClient: QueryClient,
+	taskIds: string[],
+	patch: Partial<TaskWithPage>,
+	currentUserId?: string,
+): Promise<TaskCacheSnapshot> {
+	const snapshot: TaskCacheSnapshot = [];
+	for (const taskId of taskIds) {
+		snapshot.push(
+			...(await optimisticallyPatchTask(
+				queryClient,
+				taskId,
+				patch,
+				currentUserId,
+			)),
+		);
+	}
 	return snapshot;
 }
 

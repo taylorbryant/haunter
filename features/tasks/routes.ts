@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
 import {
 	actOnTaskNotification,
+	bulkUpdateTasks,
 	createTask,
 	deleteTask,
 	listTasks,
@@ -8,13 +9,14 @@ import {
 } from "@/features/tasks/contracts";
 import {
 	actOnTaskNotificationUseCase,
+	bulkUpdateTasksUseCase,
 	createTaskUseCase,
 	deleteTaskUseCase,
 	listTasksUseCase,
 	updateTaskUseCase,
 } from "@/features/tasks/use-cases";
-import { defineRouteGroup } from "@/lib/routes";
 import { routeAuth } from "@/lib/route-auth";
+import { defineRouteGroup } from "@/lib/routes";
 
 export const taskRoutes = defineRouteGroup({
 	name: "tasks",
@@ -26,6 +28,7 @@ export const taskRoutes = defineRouteGroup({
 		},
 		{ contract: listTasks, useCase: listTasksUseCase },
 		{ contract: createTask, useCase: createTaskUseCase },
+		{ contract: bulkUpdateTasks, useCase: bulkUpdateTasksUseCase },
 		{ contract: updateTask, useCase: updateTaskUseCase },
 		{ contract: deleteTask, useCase: deleteTaskUseCase },
 	],

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { runOptimisticTaskWrite } from "@/features/tasks/client/task-list-controller";
+import {
+	runOptimisticTaskWrite,
+	runOptimisticTaskWrites,
+} from "@/features/tasks/client/task-list-controller";
 
 function pendingHarness() {
 	let pending = new Set<string>();
@@ -125,5 +128,28 @@ describe("task list optimistic write controller", () => {
 			"second optimistic",
 			"second committed",
 		]);
+	});
+
+	test("rolls back a bulk write once and clears every pending task", async () => {
+		const pending = pendingHarness();
+		const snapshots: string[] = [];
+
+		const saved = await runOptimisticTaskWrites({
+			taskIds: ["task_1", "task_2", "task_1"],
+			setPendingTaskIds: pending.update,
+			optimistic: async () => {
+				expect([...pending.value].sort()).toEqual(["task_1", "task_2"]);
+				return "bulk_before";
+			},
+			commit: async () => {
+				throw new Error("bulk failed");
+			},
+			rollback: (snapshot) => snapshots.push(snapshot),
+			onError: () => {},
+		});
+
+		expect(saved).toBe(false);
+		expect(snapshots).toEqual(["bulk_before"]);
+		expect(pending.value.size).toBe(0);
 	});
 });
