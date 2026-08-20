@@ -9,10 +9,17 @@ describe("remote MCP authorization", () => {
 		expect(
 			remoteMcpIdentityFromJwt({
 				sub: "user_test",
-				azp: "client_test",
+				client_id: "client_test",
 				scope: "openid haunter:mcp",
 			}),
 		).toEqual({ userId: "user_test", clientId: "client_test" });
+		expect(
+			remoteMcpIdentityFromJwt({
+				sub: "user_test",
+				azp: "legacy_client_test",
+				scope: "haunter:mcp",
+			}),
+		).toEqual({ userId: "user_test", clientId: "legacy_client_test" });
 		expect(
 			remoteMcpIdentityFromJwt({
 				sub: "user_test",

@@ -50,13 +50,5 @@ export function createAuthRateLimitStorage(): AuthRateLimitStorage | null {
 			}
 			return { allowed: false, retryAfter: ttl > 0 ? ttl : rule.window };
 		},
-		// get/set satisfy the storage interface but are dead code: Better Auth
-		// takes the atomic `consume` path whenever it is present.
-		async get(key) {
-			return await redis.get(prefixed(key));
-		},
-		async set(key, value) {
-			await redis.set(prefixed(key), value, { ex: 120 });
-		},
 	};
 }

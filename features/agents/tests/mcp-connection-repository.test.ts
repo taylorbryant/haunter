@@ -28,7 +28,7 @@ describe("hosted MCP connection repository", () => {
 				id: "oauth_row",
 				clientId: "oauth_client",
 				name: "Codex",
-				redirectUris: JSON.stringify(["http://127.0.0.1/callback"]),
+				redirectUris: ["http://127.0.0.1/callback"],
 			});
 
 			const repository = database.repositories.mcpConnections;
@@ -56,7 +56,9 @@ describe("hosted MCP connection repository", () => {
 				id: "consent_test",
 				clientId: "oauth_client",
 				userId: "user_mcp",
-				scopes: JSON.stringify(["openid", "haunter:mcp"]),
+				scopes: ["openid", "haunter:mcp"],
+				createdAt: now,
+				updatedAt: now,
 			});
 			expect(
 				await repository.findActive("user_mcp", "oauth_client"),
@@ -103,7 +105,9 @@ describe("hosted MCP connection repository", () => {
 				token: "refresh-token",
 				clientId: "oauth_client",
 				userId: "user_mcp",
-				scopes: JSON.stringify(["openid", "haunter:mcp"]),
+				scopes: ["openid", "haunter:mcp"],
+				expiresAt: new Date(now.getTime() + 60_000),
+				createdAt: now,
 			});
 			await database.db.insert(schema.oauthAccessToken).values({
 				id: "access_test",
@@ -111,7 +115,9 @@ describe("hosted MCP connection repository", () => {
 				clientId: "oauth_client",
 				userId: "user_mcp",
 				refreshId: "refresh_test",
-				scopes: JSON.stringify(["openid", "haunter:mcp"]),
+				scopes: ["openid", "haunter:mcp"],
+				expiresAt: new Date(now.getTime() + 60_000),
+				createdAt: now,
 			});
 
 			await expect(

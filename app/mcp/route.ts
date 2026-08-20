@@ -1,4 +1,4 @@
-import { mcpHandler } from "@better-auth/oauth-provider";
+import { createMcpProtectedRequestHandler } from "@better-auth/mcp";
 import { mcpResourceUrl, oauthIssuerUrl } from "@/lib/better-auth";
 import {
 	isAllowedMcpOrigin,
@@ -55,13 +55,13 @@ async function readBoundedMcpRequest(
 	});
 }
 
-const authenticatedHandler = mcpHandler(
+const authenticatedHandler = createMcpProtectedRequestHandler(
 	{
+		issuer: oauthIssuerUrl,
+		audience: mcpResourceUrl,
 		jwksUrl: `${oauthIssuerUrl}/jwks`,
-		verifyOptions: {
-			issuer: oauthIssuerUrl,
-			audience: mcpResourceUrl,
-		},
+		requiredScopes: ["haunter:mcp"],
+		challengeScopes: REMOTE_MCP_SCOPES,
 	},
 	async (request, jwt) => {
 		const identity = remoteMcpIdentityFromJwt(jwt);

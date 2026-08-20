@@ -24,13 +24,19 @@ export type RemoteMcpIdentity = {
 export function remoteMcpIdentityFromJwt(
 	jwt: JWTPayload,
 ): RemoteMcpIdentity | null {
-	if (typeof jwt.sub !== "string" || typeof jwt.azp !== "string") return null;
+	const clientId =
+		typeof jwt.client_id === "string"
+			? jwt.client_id
+			: typeof jwt.azp === "string"
+				? jwt.azp
+				: null;
+	if (typeof jwt.sub !== "string" || !clientId) return null;
 	const scopes =
 		typeof jwt.scope === "string"
 			? new Set(jwt.scope.split(/\s+/).filter(Boolean))
 			: new Set<string>();
 	if (!scopes.has("haunter:mcp")) return null;
-	return { userId: jwt.sub, clientId: jwt.azp };
+	return { userId: jwt.sub, clientId };
 }
 
 export function allowedRemoteMcpCapabilities(

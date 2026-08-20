@@ -178,7 +178,7 @@ export const auth = betterAuth({
 	databaseHooks,
 	plugins: [
 		// OAuth 2.1 authorization server for Haunter's hosted MCP endpoint.
-		// Tokens are audience-bound to the canonical MCP URL; application-level
+		// Tokens are resource-bound to the canonical MCP URL; application-level
 		// permission profiles and workspace access are still checked per call.
 		jwt({
 			jwt: {
@@ -188,7 +188,17 @@ export const auth = betterAuth({
 		oauthProvider({
 			loginPage: "/sign-in",
 			consentPage: "/oauth/consent",
-			validAudiences: [mcpResourceUrl],
+			resources: [
+				{
+					identifier: mcpResourceUrl,
+					name: "Haunter MCP",
+					allowedScopes: ["openid", "offline_access", "haunter:mcp"],
+				},
+			],
+			// Every registered client in Haunter exists solely to access this MCP
+			// resource. Keeping resource access implicit preserves existing DCR
+			// clients while still binding every issued token to the requested URL.
+			enforcePerClientResources: false,
 			scopes: ["openid", "offline_access", "haunter:mcp"],
 			clientRegistrationDefaultScopes: [
 				"openid",

@@ -1,7 +1,7 @@
 import "@beignet/core/server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHmac } from "node:crypto";
-import { getIp } from "@better-auth/core/utils/ip";
+import { getIP } from "@better-auth/core/utils/ip";
 import { z } from "zod";
 import { env } from "@/lib/env";
 
@@ -192,7 +192,7 @@ export async function validateOAuthDcrRequest(
 		};
 	}
 
-	const sourceIp = getIp(request, {}) ?? "no-trusted-ip";
+	const sourceIp = getIP(request, {}) ?? "no-trusted-ip";
 	const allocationKey = createHmac("sha256", env.BETTER_AUTH_SECRET)
 		.update(`haunter:oauth-dcr:v1:${sourceIp}`)
 		.digest("base64url");

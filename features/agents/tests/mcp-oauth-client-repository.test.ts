@@ -20,12 +20,11 @@ function dynamicClient(
 		id: `oauth_row_${index}`,
 		clientId: `oauth_client_${index}`,
 		name: `Client ${index}`,
-		redirectUris: JSON.stringify([redirectUri]),
+		redirectUris: [redirectUri],
 		tokenEndpointAuthMethod: "none",
-		public: true,
-		metadata: JSON.stringify({
+		metadata: {
 			[OAUTH_DCR_ALLOCATION_METADATA_KEY]: `${OAUTH_DCR_ALLOCATION_MARKER_PREFIX}${allocationKey}`,
-		}),
+		},
 		createdAt,
 		updatedAt: createdAt,
 	};
@@ -47,8 +46,9 @@ describe("hosted MCP OAuth client repository", () => {
 			await database.db.insert(schema.oauthConsent).values({
 				id: "consent_old",
 				clientId: oldConsented.clientId,
-				scopes: JSON.stringify(["openid", "haunter:mcp"]),
+				scopes: ["openid", "haunter:mcp"],
 				createdAt: new Date("2026-07-23T12:05:00.000Z"),
+				updatedAt: new Date("2026-07-23T12:05:00.000Z"),
 			});
 
 			const repository = database.repositories.mcpOAuthClients;
@@ -68,7 +68,7 @@ describe("hosted MCP OAuth client repository", () => {
 			await database.db
 				.update(schema.oauthClient)
 				.set({
-					redirectUris: JSON.stringify(["http://127.0.0.1/callback"]),
+					redirectUris: ["http://127.0.0.1/callback"],
 				})
 				.where(eq(schema.oauthClient.clientId, oldUnused.clientId));
 			await expect(
@@ -238,7 +238,9 @@ describe("hosted MCP OAuth client repository", () => {
 			await database.db.insert(schema.oauthConsent).values({
 				id: "consent_capacity",
 				clientId: "oauth_client_0",
-				scopes: JSON.stringify(["openid", "haunter:mcp"]),
+				scopes: ["openid", "haunter:mcp"],
+				createdAt: new Date("2026-07-23T12:05:00.000Z"),
+				updatedAt: new Date("2026-07-23T12:05:00.000Z"),
 			});
 			await expect(
 				(async () => {
