@@ -34,7 +34,7 @@ export async function GET(
 				background: "#ffffff",
 			}}
 		>
-			{/* biome-ignore lint/a11y/useAltText: satori img, not DOM */}
+			{/* biome-ignore lint/a11y/useAltText lint/performance/noImgElement: satori image markup, not browser DOM */}
 			<img width={inner} height={inner} src={ghostSvgDataUri(inner)} />
 		</div>,
 		{ width: spec.size, height: spec.size },

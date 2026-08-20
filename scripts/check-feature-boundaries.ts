@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 const FEATURE_ROOT = path.join(process.cwd(), "features");
 const PEER_FEATURES = new Set(["pages", "tasks"]);
