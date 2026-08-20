@@ -90,16 +90,12 @@ is reflected in the browser session.
 Run the full validation loop after making changes:
 
 ```bash
-bun run lint
-bun beignet lint
-bun beignet doctor --strict
-bun run test
-bun run typecheck
+bun beignet check
 ```
 
-Biome handles code linting and formatting (`bun run format`). Beignet's lint
-checks dependency direction, while `doctor --strict` detects registration,
-OpenAPI, and resource drift.
+The command runs Beignet's dependency-direction lint and strict doctor checks,
+then the app's Biome lint, type check, and tests. Every check runs even when an
+earlier check fails. Use `bun run format` to apply Biome formatting.
 
 ### Generate a feature
 
@@ -168,8 +164,11 @@ bun run start
   sign-in and workspace invitations.
 - Remove `DEVTOOLS_ENABLED=true` unless the production devtools route is
   protected appropriately.
-- Review the authorization and workspace-role policies before exposing
-  user-owned data.
+- Confirm that the default workspace roles match the deployment's needs:
+  `viewer` is read-only; `member`, `admin`, and `owner` can edit workspace
+  content; and `admin` and `owner` can manage members and invitations. See
+  [Workspace membership authorization](docs/membership-authorization.md) for
+  the authorization boundaries.
 
 On a fresh installation, also set `BOOTSTRAP_ADMIN_EMAIL` before the owner
 first signs in. Leave it unset on established installations.
@@ -223,8 +222,8 @@ Vercel registers the production schedules in `vercel.json`:
 
 - `/api/cron/tasks/check-overdue` checks for due reminders and overdue tasks
   every five minutes.
-- `/api/cron/agents/cleanup-oauth-clients` removes expired OAuth clients daily
-  at 03:00 UTC.
+- `/api/cron/agents/cleanup-oauth-clients` removes up to 500 unused dynamic
+  OAuth client registrations older than 24 hours daily at 03:00 UTC.
 
 The five-minute reminder schedule requires Vercel Pro or Enterprise. Vercel
 Hobby projects can run a cron job only once per day, so use another scheduler
