@@ -20,7 +20,7 @@ export default function AppleIcon() {
 				background: "#171717",
 			}}
 		>
-			{/* biome-ignore lint/a11y/useAltText: satori img, not DOM */}
+			{/* biome-ignore lint/a11y/useAltText lint/performance/noImgElement: satori image markup, not browser DOM */}
 			<img
 				width={inner}
 				height={inner}

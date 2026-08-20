@@ -94,7 +94,7 @@ import {
 import { CodeEditDialog } from "./code-edit-dialog";
 import { useSyncEditorCodeTheme } from "./code-theme";
 import { removeBlockFromSideMenu } from "./remove-block-from-side-menu";
-import { editorSchema } from "./schema";
+import { editorSchema, syntaxHighlightingExtension } from "./schema";
 import { TaskBlockCurrentUserContext } from "./task-block";
 
 const AUTOSAVE_DELAY_MS = 1000;
@@ -447,6 +447,7 @@ function MountedHaunterEditor({
 
 	const editor = useCreateBlockNote({
 		schema: editorSchema,
+		extensions: [syntaxHighlightingExtension],
 		uploadFile: async (file: File) => {
 			try {
 				return await uploadPageImage(pageId, file);

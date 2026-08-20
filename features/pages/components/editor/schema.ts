@@ -6,6 +6,7 @@ import {
 	createHeadingBlockSpec,
 	defaultBlockSpecs,
 	defaultInlineContentSpecs,
+	SyntaxHighlightingExtension,
 } from "@blocknote/core";
 import {
 	CODE_BLOCK_LANGUAGES,
@@ -102,7 +103,10 @@ const baseCodeBlockSpec = createCodeBlockSpec({
 	...codeBlockOptions,
 	defaultLanguage: "sql",
 	supportedLanguages,
-	// Shared app highlighter, paired with the resolved appearance theme.
+});
+
+/** Shared app highlighter, paired with the resolved appearance theme. */
+export const syntaxHighlightingExtension = SyntaxHighlightingExtension({
 	createHighlighter: () => getHaunterHighlighter(),
 });
 

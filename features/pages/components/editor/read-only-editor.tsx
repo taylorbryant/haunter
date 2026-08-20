@@ -10,7 +10,7 @@ import type { BlockJson } from "@/features/pages/schemas";
 import { SharedPageTokenProvider } from "@/features/shares/components/shared-page-context";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
 import { useSyncEditorCodeTheme } from "./code-theme";
-import { editorSchema } from "./schema";
+import { editorSchema, syntaxHighlightingExtension } from "./schema";
 
 /**
  * Render a page document read-only, outside the app shell — used by the
@@ -28,6 +28,7 @@ export default function ReadOnlyEditor({
 
 	const editor = useCreateBlockNote({
 		schema: editorSchema,
+		extensions: [syntaxHighlightingExtension],
 		// BlockNote rejects an empty initialContent array.
 		initialContent: content.length ? (content as never) : undefined,
 	});
