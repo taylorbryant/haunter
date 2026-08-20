@@ -46,7 +46,7 @@
         "frimousse": "0.3.0",
         "input-otp": "1.4.2",
         "lucide-react": "1.27.0",
-        "mcp-handler": "2.1.0",
+        "mcp-handler": "2.1.1",
         "next": "16.3.0",
         "next-themes": "0.4.6",
         "pino": "10.3.1",
@@ -1245,7 +1245,7 @@
 
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
 
-    "mcp-handler": ["mcp-handler@2.1.0", "", { "dependencies": { "chalk": "^5.3.0", "commander": "^11.1.0" }, "peerDependencies": { "@modelcontextprotocol/server": "^2.0.0", "next": ">=13.0.0" }, "optionalPeers": ["next"], "bin": { "create-mcp-route": "dist/cli/index.js", "mcp-handler": "dist/cli/index.js", "mcp-adapter": "dist/cli/index.js" } }, "sha512-mhnUpkgWrXMwwhdbJ5Uq43uUV23Emxfq3fRfsFwt8Kjc35cGUiKuYeX9wjwnvsdTiKsmjXnQ4tO4awWa3ZM4LQ=="],
+    "mcp-handler": ["mcp-handler@2.1.1", "", { "dependencies": { "chalk": "^5.3.0", "commander": "^11.1.0" }, "peerDependencies": { "@modelcontextprotocol/server": "^2.0.0", "next": ">=13.0.0" }, "optionalPeers": ["next"], "bin": { "create-mcp-route": "dist/cli/index.js", "mcp-handler": "dist/cli/index.js", "mcp-adapter": "dist/cli/index.js" } }, "sha512-D/PAwxF9TexmixJY+FZMgYq9SSbGm3vtcUjwUHZ8tYYuOtGT3/KgAKBjO3UJZoXgW8nHDtv8ySOICMEZPD0b/Q=="],
 
     "mdast-util-to-hast": ["mdast-util-to-hast@13.2.1", "", { "dependencies": { "@types/hast": "^3.0.0", "@types/mdast": "^4.0.0", "@ungap/structured-clone": "^1.0.0", "devlop": "^1.0.0", "micromark-util-sanitize-uri": "^2.0.0", "trim-lines": "^3.0.0", "unist-util-position": "^5.0.0", "unist-util-visit": "^5.0.0", "vfile": "^6.0.0" } }, "sha512-cctsq2wp5vTsLIcaymblUriiTcZd0CwWtCbLvrOzYCDZoWyMNV8sZ7krj09FSnsiJi3WVsHLM4k6Dq/yaPyCXA=="],
 
