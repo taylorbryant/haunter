@@ -20,7 +20,10 @@ import type {
 	McpServerConfigurationPort,
 } from "@/features/agents/ports";
 import type { canvasPolicy } from "@/features/canvases/policy";
-import type { CanvasRepository } from "@/features/canvases/ports";
+import type {
+	CanvasNavigationRepository,
+	CanvasRepository,
+} from "@/features/canvases/ports";
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
 import type {
 	WorkspaceEventPublisherPort,
@@ -61,6 +64,7 @@ export type AppTransactionPorts = {
 	agents: AgentAdminRepository;
 	mcpConnections: McpConnectionRepository;
 	mcpOAuthClients: McpOAuthClientRepository;
+	canvasNavigation: CanvasNavigationRepository;
 	canvases: CanvasRepository;
 	changelogState: ChangelogStateRepository;
 	idempotency: IdempotencyPort;
@@ -87,6 +91,7 @@ export type AppPorts = {
 	mcpServerConfiguration: McpServerConfigurationPort;
 	auth: AuthPort;
 	bestEffortWork: BestEffortWorkPort;
+	canvasNavigation: CanvasNavigationRepository;
 	canvases: CanvasRepository;
 	changelogState: ChangelogStateRepository;
 	errorReporter: ErrorReporterPort;

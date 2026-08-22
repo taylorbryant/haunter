@@ -1,3 +1,9 @@
 export { createCanvasUseCase } from "./create-canvas";
+export { deleteCanvasUseCase } from "./delete-canvas";
 export { getCanvasUseCase } from "./get-canvas";
+export { getCanvasNavigationUseCase } from "./get-canvas-navigation";
+export { listCanvasesUseCase } from "./list-canvases";
+export { recordCanvasViewUseCase } from "./record-canvas-view";
 export { saveCanvasSnapshotUseCase } from "./save-canvas-snapshot";
+export { setCanvasFavoriteUseCase } from "./set-canvas-favorite";
+export { updateCanvasUseCase } from "./update-canvas";

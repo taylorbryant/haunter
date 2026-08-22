@@ -2,7 +2,7 @@
 
 import { contractErrorMessage } from "@beignet/core/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2Icon, ListTodoIcon } from "lucide-react";
+import { FilePlus2Icon, ListTodoIcon, ShapesIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
 	createContext,
@@ -25,6 +25,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Textarea } from "@/components/ui/textarea";
+import {
+	createCanvasMutationOptions,
+	invalidateCanvases,
+} from "@/features/canvases/client/queries";
+import { CANVAS_TITLE_MAX_LENGTH } from "@/features/canvases/schemas";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	createPageMutationOptions,
@@ -46,6 +51,7 @@ import type { TaskReminderOffsetMinutes } from "@/features/tasks/lib/reminder-op
 const PAGE_DETAILS_MAX_LENGTH = 20_000;
 
 type CreateDialogContextValue = {
+	openCreateCanvas: () => void;
 	openCreatePage: () => void;
 	openCreateTask: () => void;
 };
@@ -305,6 +311,119 @@ function CreateTaskDialog({
 	);
 }
 
+function CreateCanvasDialog({
+	open,
+	onOpenChange,
+	onPendingChange,
+	workspaceId,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	onPendingChange: (pending: boolean) => void;
+	workspaceId: string;
+}) {
+	const queryClient = useQueryClient();
+	const router = useRouter();
+	const mutation = useMutation({
+		...createCanvasMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
+	const [title, setTitle] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const normalizedTitle = title.trim();
+
+	useEffect(() => {
+		if (!open) return;
+		setTitle("");
+		setError(null);
+	}, [open]);
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (!normalizedTitle || mutation.isPending) return;
+		setError(null);
+		onPendingChange(true);
+
+		try {
+			const canvas = await mutation.mutateAsync({
+				body: { workspaceId, title: normalizedTitle },
+			});
+			void invalidateCanvases(queryClient).catch(() => undefined);
+			onOpenChange(false);
+			router.push(`/w/${workspaceId}/c/${canvas.id}`);
+		} catch (createError) {
+			setError(
+				contractErrorMessage(
+					createError,
+					"The canvas could not be created. Try again.",
+				),
+			);
+		} finally {
+			onPendingChange(false);
+		}
+	}
+
+	return (
+		<ResponsiveDialog
+			open={open}
+			onOpenChange={(next) => {
+				if (!mutation.isPending) onOpenChange(next);
+			}}
+			title="Create canvas"
+			description="Add a new canvas to this workspace."
+			className="sm:max-w-md"
+		>
+			<form className="flex flex-col gap-5" onSubmit={submit}>
+				<div className="flex flex-col gap-2">
+					<Label htmlFor="create-canvas-title">Title</Label>
+					<Input
+						id="create-canvas-title"
+						name="title"
+						autoFocus
+						autoComplete="off"
+						maxLength={CANVAS_TITLE_MAX_LENGTH}
+						value={title}
+						placeholder="Canvas title"
+						aria-invalid={Boolean(error)}
+						aria-describedby={error ? "create-canvas-error" : undefined}
+						onChange={(event) => {
+							setTitle(event.target.value);
+							if (error) setError(null);
+						}}
+					/>
+					{error ? (
+						<p
+							id="create-canvas-error"
+							role="alert"
+							className="text-destructive text-sm"
+						>
+							{error}
+						</p>
+					) : null}
+				</div>
+
+				<ResponsiveDialogFooter>
+					<Button
+						type="button"
+						variant="outline"
+						disabled={mutation.isPending}
+						onClick={() => onOpenChange(false)}
+					>
+						Cancel
+					</Button>
+					<Button
+						type="submit"
+						disabled={!normalizedTitle || mutation.isPending}
+					>
+						<ShapesIcon data-icon="inline-start" />
+						{mutation.isPending ? "Creating…" : "Create canvas"}
+					</Button>
+				</ResponsiveDialogFooter>
+			</form>
+		</ResponsiveDialog>
+	);
+}
+
 export function CreateDialogProvider({
 	workspaceId,
 	children,
@@ -314,7 +433,7 @@ export function CreateDialogProvider({
 }) {
 	const canEdit = useCanEditWorkspace();
 	const { isMobile, setOpenMobile } = useSidebar();
-	const [dialog, setDialog] = useState<"page" | "task" | null>(null);
+	const [dialog, setDialog] = useState<"canvas" | "page" | "task" | null>(null);
 	const [pending, setPending] = useState(false);
 
 	const openCreatePage = useCallback(() => {
@@ -326,6 +445,11 @@ export function CreateDialogProvider({
 		if (!canEdit || dialog !== null || pending) return;
 		if (isMobile) setOpenMobile(false);
 		setDialog("task");
+	}, [canEdit, dialog, isMobile, pending, setOpenMobile]);
+	const openCreateCanvas = useCallback(() => {
+		if (!canEdit || dialog !== null || pending) return;
+		if (isMobile) setOpenMobile(false);
+		setDialog("canvas");
 	}, [canEdit, dialog, isMobile, pending, setOpenMobile]);
 
 	useCommand(
@@ -339,6 +463,19 @@ export function CreateDialogProvider({
 					shortcut: "⌘⇧C",
 					weight: -10,
 					run: openCreatePage,
+				}
+			: null,
+	);
+
+	useCommand(
+		canEdit
+			? {
+					id: "canvas.create",
+					title: "Create canvas",
+					group: "Create",
+					keywords: "new draw drawing sketch",
+					icon: ShapesIcon,
+					run: openCreateCanvas,
 				}
 			: null,
 	);
@@ -383,13 +520,19 @@ export function CreateDialogProvider({
 	}, [canEdit, dialog, openCreatePage, openCreateTask, pending]);
 
 	const contextValue = useMemo(
-		() => ({ openCreatePage, openCreateTask }),
-		[openCreatePage, openCreateTask],
+		() => ({ openCreateCanvas, openCreatePage, openCreateTask }),
+		[openCreateCanvas, openCreatePage, openCreateTask],
 	);
 
 	return (
 		<CreateDialogContext.Provider value={contextValue}>
 			{children}
+			<CreateCanvasDialog
+				open={dialog === "canvas"}
+				onOpenChange={(open) => setDialog(open ? "canvas" : null)}
+				onPendingChange={setPending}
+				workspaceId={workspaceId}
+			/>
 			<CreatePageDialog
 				open={dialog === "page"}
 				onOpenChange={(open) => setDialog(open ? "page" : null)}

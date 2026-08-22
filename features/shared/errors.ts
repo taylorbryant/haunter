@@ -71,6 +71,11 @@ export const errors = defineErrors({
 		status: 404,
 		message: "Canvas not found",
 	},
+	CanvasNotEditable: {
+		code: "CANVAS_NOT_EDITABLE",
+		status: 422,
+		message: "This canvas lives in a page; edit it in the editor",
+	},
 	ShareNotFound: {
 		code: "SHARE_NOT_FOUND",
 		status: 404,

@@ -14,4 +14,6 @@ export const canvasPolicy = definePolicy({
 		authorizeTenant(ctx, canvas, "read", "canvas"),
 	"canvases.update": (ctx: AuthorizationContext, canvas: Canvas) =>
 		authorizeTenantWrite(ctx, canvas, "update", "canvas"),
+	"canvases.delete": (ctx: AuthorizationContext, canvas: Canvas) =>
+		authorizeTenantWrite(ctx, canvas, "delete", "canvas"),
 });

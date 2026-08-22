@@ -1,7 +1,7 @@
 import "@beignet/core/server-only";
 import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { CanvasRepository, NewCanvas } from "@/features/canvases/ports";
 import type { Canvas, CanvasSnapshot } from "@/features/canvases/schemas";
 import * as schema from "@/infra/db/schema";
@@ -15,6 +15,7 @@ function toCanvas(row: CanvasRow): Canvas {
 		userId: row.userId,
 		workspaceId: row.workspaceId,
 		pageId: row.pageId,
+		title: row.title,
 		snapshot: JSON.parse(row.snapshot) as CanvasSnapshot,
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
@@ -25,6 +26,28 @@ export function createDrizzleCanvasRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): CanvasRepository {
 	return {
+		async listStandalone(scope) {
+			const rows = await db
+				.select({
+					id: schema.canvases.id,
+					userId: schema.canvases.userId,
+					workspaceId: schema.canvases.workspaceId,
+					pageId: schema.canvases.pageId,
+					title: schema.canvases.title,
+					createdAt: schema.canvases.createdAt,
+					updatedAt: schema.canvases.updatedAt,
+				})
+				.from(schema.canvases)
+				.where(
+					and(
+						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
+						isNull(schema.canvases.pageId),
+					),
+				)
+				.orderBy(desc(schema.canvases.updatedAt));
+
+			return rows;
+		},
 		async findById(scope, id: string) {
 			const [row] = await db
 				.select()
@@ -40,13 +63,16 @@ export function createDrizzleCanvasRepository(
 			return row ? toCanvas(row) : null;
 		},
 		async create(scope, input: NewCanvas) {
-			await assertPageInScope(db, scope, input.pageId);
+			if (input.pageId !== null) {
+				await assertPageInScope(db, scope, input.pageId);
+			}
 			const now = new Date().toISOString();
 			const canvas = {
 				id: crypto.randomUUID(),
 				userId: input.userId,
 				workspaceId: tenantScopeId(scope),
 				pageId: input.pageId,
+				title: input.title,
 				snapshot: "{}",
 				createdAt: now,
 				updatedAt: now,
@@ -55,6 +81,26 @@ export function createDrizzleCanvasRepository(
 
 			if (!row) {
 				throw new Error("Failed to create canvas");
+			}
+
+			return toCanvas(row);
+		},
+		async updateTitle(scope, id: string, title: string) {
+			const updatedAt = new Date().toISOString();
+			const [row] = await db
+				.update(schema.canvases)
+				.set({ title, updatedAt })
+				.where(
+					and(
+						eq(schema.canvases.id, id),
+						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
+						isNull(schema.canvases.pageId),
+					),
+				)
+				.returning();
+
+			if (!row) {
+				throw new Error(`Failed to update canvas ${id}`);
 			}
 
 			return toCanvas(row);
@@ -103,6 +149,17 @@ export function createDrizzleCanvasRepository(
 				.returning({ id: schema.canvases.id });
 
 			return row ? { updatedAt } : null;
+		},
+		async delete(scope, id: string) {
+			await db
+				.delete(schema.canvases)
+				.where(
+					and(
+						eq(schema.canvases.id, id),
+						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
+						isNull(schema.canvases.pageId),
+					),
+				);
 		},
 		async deleteByPageIds(scope, pageIds: string[]) {
 			if (pageIds.length === 0) return;

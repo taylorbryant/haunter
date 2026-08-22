@@ -1,6 +1,6 @@
 "use client";
 
-import { HouseIcon, ListTodoIcon, Trash2Icon } from "lucide-react";
+import { HouseIcon, ListTodoIcon, ShapesIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NavUser } from "@/components/nav-user";
@@ -21,7 +21,7 @@ import {
 import { WaitlistDialogTrigger } from "@/features/admin/components/waitlist-dialog";
 import type { ChangelogRelease } from "@/features/changelog/releases";
 import { NotificationCenter } from "@/features/notifications/components/notification-center";
-import { FavoritePages } from "@/features/pages/components/favorite-pages";
+import { FavoriteItems } from "@/features/pages/components/favorite-pages";
 import { PageTree } from "@/features/pages/components/page-tree";
 import { WorkspaceSwitcher } from "@/features/workspaces/components/workspace-switcher";
 
@@ -96,12 +96,33 @@ export function AppSidebar({
 							<span>Tasks</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							render={
+								<Link
+									href={
+										activeWorkspaceId ? `/w/${activeWorkspaceId}/canvases` : "/"
+									}
+									onClick={closeSheetOnMobile}
+								/>
+							}
+							isActive={
+								activeWorkspaceId !== null &&
+								(pathname === `/w/${activeWorkspaceId}/canvases` ||
+									pathname.startsWith(`/w/${activeWorkspaceId}/c/`))
+							}
+							tooltip="Canvases"
+						>
+							<ShapesIcon />
+							<span>Canvases</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
 				</SidebarMenu>
 			</SidebarHeader>
 			<SidebarContent>
 				{activeWorkspaceId ? (
 					<>
-						<FavoritePages workspaceId={activeWorkspaceId} />
+						<FavoriteItems workspaceId={activeWorkspaceId} />
 						<PageTree workspaceId={activeWorkspaceId} />
 					</>
 				) : null}

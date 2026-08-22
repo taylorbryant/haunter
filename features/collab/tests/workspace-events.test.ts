@@ -56,6 +56,15 @@ describe("workspace events", () => {
 
 		expect(isWorkspaceTaskEvent(task)).toBe(true);
 		expect(isWorkspaceCanvasEvent(canvas)).toBe(true);
+		expect(
+			isWorkspaceCanvasEvent(
+				createWorkspaceCanvasEvent({
+					workspaceId: "workspace_1",
+					canvasId: "canvas_standalone",
+					pageId: null,
+				}),
+			),
+		).toBe(true);
 		expect(isWorkspaceEvent(task)).toBe(true);
 		expect(isWorkspaceEvent(canvas)).toBe(true);
 	});

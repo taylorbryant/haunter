@@ -1,6 +1,8 @@
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { cookies } from "next/headers";
 import { makeQueryClient } from "@/client";
+import { getCanvasNavigationQueryOptions } from "@/features/canvases/client/queries";
+import { getCanvasNavigationUseCase } from "@/features/canvases/use-cases";
 import { HomeView } from "@/features/home/components/home-view";
 import { getHomeUpcomingRange } from "@/features/home/lib/home";
 import { getPageNavigationQueryOptions } from "@/features/pages/client/queries";
@@ -91,6 +93,14 @@ export default async function HomePage({
 			serverUseCaseQueryOptions(
 				getPageNavigationQueryOptions(workspaceId),
 				getPageNavigationUseCase,
+				ctx,
+				{ workspaceId },
+			),
+		),
+		queryClient.prefetchQuery(
+			serverUseCaseQueryOptions(
+				getCanvasNavigationQueryOptions(workspaceId),
+				getCanvasNavigationUseCase,
 				ctx,
 				{ workspaceId },
 			),

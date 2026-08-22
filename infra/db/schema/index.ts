@@ -863,15 +863,55 @@ export const canvases = sqliteTable(
 		workspaceId: text("workspace_id")
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
-		pageId: text("page_id")
-			.notNull()
-			.references(() => pages.id, { onDelete: "cascade" }),
+		pageId: text("page_id").references(() => pages.id, {
+			onDelete: "cascade",
+		}),
+		title: text("title"),
 		snapshot: text("snapshot").notNull().default("{}"),
 		createdAt: text("created_at").notNull(),
 		updatedAt: text("updated_at").notNull(),
 	},
 	(table) => ({
 		pageIdx: index("canvases_page_idx").on(table.pageId),
+		workspaceUpdatedIdx: index("canvases_workspace_updated_idx").on(
+			table.workspaceId,
+			table.updatedAt,
+		),
+	}),
+);
+
+export const canvasUserState = sqliteTable(
+	"canvas_user_state",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		canvasId: text("canvas_id")
+			.notNull()
+			.references(() => canvases.id, { onDelete: "cascade" }),
+		favoritedAt: text("favorited_at"),
+		lastViewedAt: text("last_viewed_at"),
+	},
+	(table) => ({
+		pk: primaryKey({ columns: [table.userId, table.canvasId] }),
+		membershipFk: foreignKey({
+			columns: [table.workspaceId, table.userId],
+			foreignColumns: [member.organizationId, member.userId],
+			name: "canvas_user_state_membership_fk",
+		}).onDelete("cascade"),
+		favoritesIdx: index("canvas_user_state_favorites_idx").on(
+			table.workspaceId,
+			table.userId,
+			table.favoritedAt,
+		),
+		recentsIdx: index("canvas_user_state_recents_idx").on(
+			table.workspaceId,
+			table.userId,
+			table.lastViewedAt,
+		),
 	}),
 );
 

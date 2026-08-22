@@ -23,9 +23,11 @@ export const saveCanvasSnapshotUseCase = useCase
 				}
 
 				await ctx.gate.authorize("canvases.update", canvas);
-				const page = await tx.pages.findMetaById(scope, canvas.pageId);
-				if (!page || page.deletedAt !== null) {
-					throw appError("CanvasNotFound", { details: { id: input.id } });
+				if (canvas.pageId !== null) {
+					const page = await tx.pages.findMetaById(scope, canvas.pageId);
+					if (!page || page.deletedAt !== null) {
+						throw appError("CanvasNotFound", { details: { id: input.id } });
+					}
 				}
 
 				// Refuse to clobber a newer snapshot when the client provides its

@@ -9,7 +9,10 @@ import {
 } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import type { AppContext } from "@/app-context";
-import type { CanvasRepository } from "@/features/canvases/ports";
+import type {
+	CanvasNavigationRepository,
+	CanvasRepository,
+} from "@/features/canvases/ports";
 import type { PageRepository } from "@/features/pages/ports";
 import {
 	createTestPageLinkRepository,
@@ -22,14 +25,24 @@ import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import {
 	createCanvasUseCase,
+	deleteCanvasUseCase,
+	getCanvasNavigationUseCase,
 	getCanvasUseCase,
+	listCanvasesUseCase,
+	recordCanvasViewUseCase,
 	saveCanvasSnapshotUseCase,
+	setCanvasFavoriteUseCase,
+	updateCanvasUseCase,
 } from "../use-cases";
-import { createTestCanvasRepository } from "./helpers";
+import {
+	createTestCanvasNavigationRepository,
+	createTestCanvasRepository,
+} from "./helpers";
 
 function createTester(
 	userId: string,
 	repos: {
+		canvasNavigation: CanvasNavigationRepository;
 		canvases: CanvasRepository;
 		pages: PageRepository;
 	},
@@ -75,6 +88,7 @@ function createTester(
 
 async function createFixture(userId = "user_test") {
 	const canvases = createTestCanvasRepository();
+	const canvasNavigation = createTestCanvasNavigationRepository({ canvases });
 	const pages = createTestPageRepository();
 	// Better Auth org ids are nanoid-style, not UUIDs.
 	const workspace = {
@@ -88,10 +102,23 @@ async function createFixture(userId = "user_test") {
 		title: "Diagrams",
 		position: 1,
 	});
-	const tester = createTester(userId, { canvases, pages }, workspace.id);
+	const tester = createTester(
+		userId,
+		{ canvasNavigation, canvases, pages },
+		workspace.id,
+	);
 	const ctx = await tester.ctx();
 
-	return { canvases, pages, workspace, scope, page, tester, ctx };
+	return {
+		canvasNavigation,
+		canvases,
+		pages,
+		workspace,
+		scope,
+		page,
+		tester,
+		ctx,
+	};
 }
 
 describe("canvases use cases", () => {
@@ -104,6 +131,8 @@ describe("canvases use cases", () => {
 			{ ctx },
 		);
 		expect(canvas.snapshot).toEqual({});
+		expect(canvas.pageId).toBe(page.id);
+		expect(canvas.title).toBeNull();
 
 		const snapshot = {
 			store: { "shape:abc": { type: "geo", x: 10, y: 20 } },
@@ -122,6 +151,122 @@ describe("canvases use cases", () => {
 			{ ctx },
 		);
 		expect(fetched.snapshot).toEqual(snapshot);
+	});
+
+	it("creates, lists, renames, saves, and deletes standalone canvases", async () => {
+		const { workspace, page, tester, ctx } = await createFixture();
+		await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, pageId: page.id },
+			{ ctx },
+		);
+
+		const canvas = await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, title: "System map" },
+			{ ctx },
+		);
+		expect(canvas.pageId).toBeNull();
+		expect(canvas.title).toBe("System map");
+
+		const listed = await tester.run(
+			listCanvasesUseCase,
+			{ workspaceId: workspace.id },
+			{ ctx },
+		);
+		expect(listed.items).toHaveLength(1);
+		expect(listed.items[0]?.id).toBe(canvas.id);
+		expect(listed.items[0]).not.toHaveProperty("snapshot");
+
+		const renamed = await tester.run(
+			updateCanvasUseCase,
+			{ id: canvas.id, title: "Architecture map" },
+			{ ctx },
+		);
+		expect(renamed.title).toBe("Architecture map");
+
+		await tester.run(
+			saveCanvasSnapshotUseCase,
+			{ id: canvas.id, snapshot: { standalone: true } },
+			{ ctx },
+		);
+		expect(
+			(await tester.run(getCanvasUseCase, { id: canvas.id }, { ctx })).snapshot,
+		).toEqual({ standalone: true });
+
+		await tester.run(deleteCanvasUseCase, { id: canvas.id }, { ctx });
+		await expect(
+			tester.run(getCanvasUseCase, { id: canvas.id }, { ctx }),
+		).rejects.toThrow("Canvas not found");
+	});
+
+	it("keeps standalone canvas favorites personal and records recent views", async () => {
+		const { canvasNavigation, canvases, pages, workspace, tester, ctx } =
+			await createFixture();
+		const canvas = await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, title: "System map" },
+			{ ctx },
+		);
+
+		await tester.run(
+			setCanvasFavoriteUseCase,
+			{ id: canvas.id, favorite: true },
+			{ ctx },
+		);
+		await tester.run(recordCanvasViewUseCase, { id: canvas.id }, { ctx });
+
+		const navigation = await tester.run(
+			getCanvasNavigationUseCase,
+			{ workspaceId: workspace.id },
+			{ ctx },
+		);
+		expect(navigation.favorites.map((item) => item.id)).toEqual([canvas.id]);
+		expect(navigation.recents.map((item) => item.id)).toEqual([canvas.id]);
+
+		const viewer = createTester(
+			"user_viewer",
+			{ canvasNavigation, canvases, pages },
+			workspace.id,
+		);
+		const viewerCtx = await viewer.ctx();
+		expect(
+			await viewer.run(
+				getCanvasNavigationUseCase,
+				{ workspaceId: workspace.id },
+				{ ctx: viewerCtx },
+			),
+		).toEqual({ favorites: [], recents: [] });
+	});
+
+	it("keeps page-owned canvases managed by their page", async () => {
+		const { workspace, page, tester, ctx } = await createFixture();
+		const canvas = await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, pageId: page.id },
+			{ ctx },
+		);
+
+		await expect(
+			tester.run(
+				updateCanvasUseCase,
+				{ id: canvas.id, title: "Detached" },
+				{ ctx },
+			),
+		).rejects.toThrow("lives in a page");
+		await expect(
+			tester.run(deleteCanvasUseCase, { id: canvas.id }, { ctx }),
+		).rejects.toThrow("lives in a page");
+		await expect(
+			tester.run(
+				setCanvasFavoriteUseCase,
+				{ id: canvas.id, favorite: true },
+				{ ctx },
+			),
+		).rejects.toThrow("lives in a page");
+		await expect(
+			tester.run(recordCanvasViewUseCase, { id: canvas.id }, { ctx }),
+		).rejects.toThrow("lives in a page");
 	});
 
 	it("rejects a stale snapshot save and accepts a rebased one", async () => {
@@ -170,12 +315,12 @@ describe("canvases use cases", () => {
 	});
 
 	it("rejects creating a canvas on a page in another workspace", async () => {
-		const { canvases, pages, workspace, page } =
+		const { canvasNavigation, canvases, pages, workspace, page } =
 			await createFixture("user_owner");
 
 		const intruder = createTester(
 			"user_intruder",
-			{ canvases, pages },
+			{ canvasNavigation, canvases, pages },
 			crypto.randomUUID(),
 		);
 		const intruderCtx = await intruder.ctx();
@@ -190,7 +335,7 @@ describe("canvases use cases", () => {
 	});
 
 	it("treats a canvas in another workspace as not found", async () => {
-		const { canvases, pages, workspace, page, tester, ctx } =
+		const { canvasNavigation, canvases, pages, workspace, page, tester, ctx } =
 			await createFixture("user_owner");
 
 		const canvas = await tester.run(
@@ -201,7 +346,7 @@ describe("canvases use cases", () => {
 
 		const intruder = createTester(
 			"user_intruder",
-			{ canvases, pages },
+			{ canvasNavigation, canvases, pages },
 			crypto.randomUUID(),
 		);
 		const intruderCtx = await intruder.ctx();
