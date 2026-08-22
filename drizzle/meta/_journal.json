@@ -267,6 +267,13 @@
       "when": 1787375701784,
       "tag": "0037_motionless_proemial_gods",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1787413961444,
+      "tag": "0038_lying_wild_child",
+      "breakpoints": true
     }
   ]
 }

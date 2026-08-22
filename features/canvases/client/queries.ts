@@ -191,9 +191,12 @@ export function setCanvasTitleInCache(
 	queryClient: QueryClient,
 	id: string,
 	title: string,
+	updatedAt?: string,
 ) {
 	queryClient.setQueryData<Canvas>(canvasQueryKey(id), (current) =>
-		current ? { ...current, title } : current,
+		current
+			? { ...current, title, ...(updatedAt ? { updatedAt } : {}) }
+			: current,
 	);
 }
 
@@ -209,14 +212,14 @@ export async function refreshCanvasQuery(queryClient: QueryClient, id: string) {
 /**
  * Mirror the current local snapshot into the cache so remounting the surface
  * (e.g. switching between the inline block and the expanded dialog) never
- * restores a stale drawing. Pass updatedAt after persistence succeeds so the
- * next mount also uses the matching optimistic-concurrency version.
+ * restores a stale drawing. Pass both server versions after persistence
+ * succeeds so the next mount also uses the matching concurrency token.
  */
 export async function setCanvasSnapshotInCache(
 	queryClient: QueryClient,
 	id: string,
 	snapshot: CanvasSnapshot,
-	updatedAt?: string,
+	versions?: Pick<Canvas, "updatedAt" | "snapshotUpdatedAt">,
 ) {
 	await cancelCanvasQuery(queryClient, id);
 	queryClient.setQueryData<Canvas>(canvasQueryKey(id), (current) =>
@@ -224,7 +227,7 @@ export async function setCanvasSnapshotInCache(
 			? {
 					...current,
 					snapshot,
-					...(updatedAt ? { updatedAt } : {}),
+					...versions,
 				}
 			: current,
 	);

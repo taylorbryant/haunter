@@ -23,6 +23,8 @@ export const CanvasSchema = z.object({
 	pageId: z.string().uuid().nullable(),
 	title: z.string().nullable(),
 	snapshot: CanvasSnapshotSchema,
+	/** Optimistic-concurrency token for the drawing only. */
+	snapshotUpdatedAt: z.string().datetime(),
 	createdAt: z.string().datetime(),
 	updatedAt: z.string().datetime(),
 });
@@ -42,7 +44,10 @@ export const CreateCanvasInputSchema = z
 		path: ["title"],
 	});
 
-export const CanvasListItemSchema = CanvasSchema.omit({ snapshot: true });
+export const CanvasListItemSchema = CanvasSchema.omit({
+	snapshot: true,
+	snapshotUpdatedAt: true,
+});
 
 export const CanvasNavigationItemSchema = CanvasListItemSchema.extend({
 	favoritedAt: z.string().datetime().nullable(),
@@ -97,7 +102,10 @@ export const SaveCanvasSnapshotInputSchema = CanvasIdInputSchema.merge(
 );
 
 export const SaveCanvasSnapshotOutputSchema = z.object({
+	/** General last-edited timestamp for display and sorting. */
 	updatedAt: z.string().datetime(),
+	/** Drawing-only optimistic-concurrency token. */
+	snapshotUpdatedAt: z.string().datetime(),
 });
 
 export type Canvas = z.infer<typeof CanvasSchema>;

@@ -868,6 +868,7 @@ export const canvases = sqliteTable(
 		}),
 		title: text("title"),
 		snapshot: text("snapshot").notNull().default("{}"),
+		snapshotUpdatedAt: text("snapshot_updated_at").notNull(),
 		createdAt: text("created_at").notNull(),
 		updatedAt: text("updated_at").notNull(),
 	},

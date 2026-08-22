@@ -20,14 +20,14 @@ export interface CanvasRepository {
 		scope: TenantScope,
 		id: string,
 		snapshotJson: string,
-	): Promise<{ updatedAt: string }>;
-	/** Compare-and-set variant; null when the row moved on (stale write). */
+	): Promise<{ updatedAt: string; snapshotUpdatedAt: string }>;
+	/** Compare-and-set variant; null when the drawing moved on (stale write). */
 	saveSnapshotIf(
 		scope: TenantScope,
 		id: string,
 		snapshotJson: string,
 		baseUpdatedAt: string,
-	): Promise<{ updatedAt: string } | null>;
+	): Promise<{ updatedAt: string; snapshotUpdatedAt: string } | null>;
 	delete(scope: TenantScope, id: string): Promise<void>;
 	deleteByPageIds(scope: TenantScope, pageIds: string[]): Promise<void>;
 }

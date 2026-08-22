@@ -109,7 +109,12 @@ export function HeaderCanvasActions() {
 				path: { id: activeCanvasId },
 				body: { title: normalizedTitle },
 			});
-			setCanvasTitleInCache(queryClient, activeCanvasId, normalizedTitle);
+			setCanvasTitleInCache(
+				queryClient,
+				activeCanvasId,
+				canvas.title ?? normalizedTitle,
+				canvas.updatedAt,
+			);
 			await Promise.all([
 				invalidateCanvasList(queryClient),
 				invalidateCanvasNavigation(queryClient, canvas.workspaceId),

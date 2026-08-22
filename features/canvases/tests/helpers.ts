@@ -18,7 +18,10 @@ export function createTestCanvasRepository(): CanvasRepository {
 						canvas.pageId === null,
 				)
 				.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-				.map(({ snapshot: _snapshot, ...canvas }) => canvas);
+				.map(
+					({ snapshot: _snapshot, snapshotUpdatedAt: _version, ...canvas }) =>
+						canvas,
+				);
 		},
 		async findById(scope, id: string) {
 			const canvas = canvases.get(id);
@@ -33,6 +36,7 @@ export function createTestCanvasRepository(): CanvasRepository {
 				pageId: input.pageId,
 				title: input.title,
 				snapshot: {},
+				snapshotUpdatedAt: now,
 				createdAt: now,
 				updatedAt: now,
 			};
@@ -62,13 +66,20 @@ export function createTestCanvasRepository(): CanvasRepository {
 				throw new Error(`Canvas not found: ${id}`);
 			}
 
-			const updatedAt = new Date().toISOString();
+			const snapshotUpdatedAt = new Date(
+				Math.max(
+					Date.now(),
+					Date.parse(canvas.updatedAt) + 1,
+					Date.parse(canvas.snapshotUpdatedAt) + 1,
+				),
+			).toISOString();
 			canvases.set(id, {
 				...canvas,
 				snapshot: JSON.parse(snapshotJson),
-				updatedAt,
+				snapshotUpdatedAt,
+				updatedAt: snapshotUpdatedAt,
 			});
-			return { updatedAt };
+			return { updatedAt: snapshotUpdatedAt, snapshotUpdatedAt };
 		},
 		async saveSnapshotIf(
 			scope,
@@ -80,20 +91,30 @@ export function createTestCanvasRepository(): CanvasRepository {
 			if (!canvas || canvas.workspaceId !== tenantScopeId(scope)) {
 				throw new Error(`Canvas not found: ${id}`);
 			}
-			if (canvas.updatedAt !== baseUpdatedAt) {
+			if (canvas.snapshotUpdatedAt !== baseUpdatedAt) {
 				return null;
 			}
 
 			// Strictly after the base version, mirroring the drizzle repo.
-			const updatedAt = new Date(
+			const snapshotUpdatedAt = new Date(
 				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
 			).toISOString();
 			canvases.set(id, {
 				...canvas,
 				snapshot: JSON.parse(snapshotJson),
-				updatedAt,
+				snapshotUpdatedAt,
+				updatedAt:
+					canvas.updatedAt > snapshotUpdatedAt
+						? canvas.updatedAt
+						: snapshotUpdatedAt,
 			});
-			return { updatedAt };
+			return {
+				updatedAt:
+					canvas.updatedAt > snapshotUpdatedAt
+						? canvas.updatedAt
+						: snapshotUpdatedAt,
+				snapshotUpdatedAt,
+			};
 		},
 		async delete(scope, id: string) {
 			const canvas = canvases.get(id);

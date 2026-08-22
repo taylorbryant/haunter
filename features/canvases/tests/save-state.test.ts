@@ -91,6 +91,7 @@ describe("canvas snapshot cache", () => {
 			pageId: "30e7a4bf-a661-438e-bbc2-35f4b71a5ee2",
 			title: null,
 			snapshot: { version: 1 },
+			snapshotUpdatedAt: initialUpdatedAt,
 			createdAt: initialUpdatedAt,
 			updatedAt: initialUpdatedAt,
 		};
@@ -101,13 +102,17 @@ describe("canvas snapshot cache", () => {
 			queryClient,
 			id,
 			{ version: 2 },
-			savedUpdatedAt,
+			{
+				updatedAt: savedUpdatedAt,
+				snapshotUpdatedAt: savedUpdatedAt,
+			},
 		);
 
 		expect(queryClient.getQueryData<Canvas>(options.queryKey)).toEqual({
 			...canvas,
 			snapshot: { version: 2 },
 			updatedAt: savedUpdatedAt,
+			snapshotUpdatedAt: savedUpdatedAt,
 		});
 	});
 
@@ -124,6 +129,7 @@ describe("canvas snapshot cache", () => {
 			pageId: "a0df810a-e1e3-4857-aa44-d8f909fa5563",
 			title: null,
 			snapshot: { version: 1 },
+			snapshotUpdatedAt: updatedAt,
 			createdAt: updatedAt,
 			updatedAt,
 		};

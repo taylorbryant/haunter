@@ -144,6 +144,7 @@ describe("canvases use cases", () => {
 			{ ctx },
 		);
 		expect(saved.updatedAt >= canvas.updatedAt).toBe(true);
+		expect(saved.snapshotUpdatedAt > canvas.snapshotUpdatedAt).toBe(true);
 
 		const fetched = await tester.run(
 			getCanvasUseCase,
@@ -283,7 +284,7 @@ describe("canvases use cases", () => {
 			{
 				id: canvas.id,
 				snapshot: { v: 1 },
-				baseUpdatedAt: canvas.updatedAt,
+				baseUpdatedAt: canvas.snapshotUpdatedAt,
 			},
 			{ ctx },
 		);
@@ -295,7 +296,7 @@ describe("canvases use cases", () => {
 				{
 					id: canvas.id,
 					snapshot: { v: 2 },
-					baseUpdatedAt: canvas.updatedAt,
+					baseUpdatedAt: canvas.snapshotUpdatedAt,
 				},
 				{ ctx },
 			),
@@ -307,11 +308,43 @@ describe("canvases use cases", () => {
 			{
 				id: canvas.id,
 				snapshot: { v: 3 },
-				baseUpdatedAt: first.updatedAt,
+				baseUpdatedAt: first.snapshotUpdatedAt,
 			},
 			{ ctx },
 		);
-		expect(rebased.updatedAt > first.updatedAt).toBe(true);
+		expect(rebased.snapshotUpdatedAt > first.snapshotUpdatedAt).toBe(true);
+	});
+
+	it("keeps a drawing save valid after standalone canvas metadata changes", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+		const canvas = await tester.run(
+			createCanvasUseCase,
+			{ workspaceId: workspace.id, title: "System map" },
+			{ ctx },
+		);
+
+		const renamed = await tester.run(
+			updateCanvasUseCase,
+			{ id: canvas.id, title: "Architecture map" },
+			{ ctx },
+		);
+		expect(renamed.snapshotUpdatedAt).toBe(canvas.snapshotUpdatedAt);
+
+		await expect(
+			tester.run(
+				saveCanvasSnapshotUseCase,
+				{
+					id: canvas.id,
+					snapshot: { afterRename: true },
+					baseUpdatedAt: canvas.snapshotUpdatedAt,
+				},
+				{ ctx },
+			),
+		).resolves.toEqual(
+			expect.objectContaining({
+				snapshotUpdatedAt: expect.any(String),
+			}),
+		);
 	});
 
 	it("rejects creating a canvas on a page in another workspace", async () => {

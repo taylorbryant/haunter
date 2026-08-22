@@ -31,7 +31,7 @@ export const saveCanvasSnapshotUseCase = useCase
 				}
 
 				// Refuse to clobber a newer snapshot when the client provides its
-				// last-seen updatedAt (another member or tab drew since).
+				// last-seen drawing version (another member or tab drew since).
 				const snapshotJson = JSON.stringify(input.snapshot);
 				const result = input.baseUpdatedAt
 					? await tx.canvases.saveSnapshotIf(
