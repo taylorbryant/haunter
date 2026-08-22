@@ -32,7 +32,12 @@ export function createCanvasMutationOptions() {
 }
 
 export function listCanvasesQueryOptions(workspaceId: string) {
-	return rq(listCanvases).queryOptions({ path: { workspaceId } });
+	return {
+		...rq(listCanvases).queryOptions({ path: { workspaceId } }),
+		// Workspace events accelerate this refresh, while polling covers disabled
+		// live updates and broadcasts missed during a connection gap.
+		refetchInterval: 30_000,
+	};
 }
 
 export function getCanvasNavigationQueryOptions(workspaceId: string) {
@@ -175,8 +180,13 @@ export function invalidateCanvas(queryClient: QueryClient, id: string) {
 	return rq(getCanvas).invalidate(queryClient, { path: { id } });
 }
 
-export function invalidateCanvasList(queryClient: QueryClient) {
-	return rq(listCanvases).invalidate(queryClient);
+export function invalidateCanvasList(
+	queryClient: QueryClient,
+	workspaceId?: string,
+) {
+	return workspaceId
+		? rq(listCanvases).invalidate(queryClient, { path: { workspaceId } })
+		: rq(listCanvases).invalidate(queryClient);
 }
 
 export function invalidateCanvases(queryClient: QueryClient) {

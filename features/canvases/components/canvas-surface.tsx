@@ -35,7 +35,9 @@ import {
 	clearPendingCanvasSave,
 	drainCanvasSaveQueue,
 	getPendingCanvasSave,
+	isCanvasRecoveryResolved,
 	type PendingCanvasSave,
+	rebasePendingCanvasSaveForRetry,
 	registerCanvasSaveFlusher,
 	rememberPendingCanvasSave,
 } from "@/features/canvases/client/save-state";
@@ -142,6 +144,17 @@ function MemberCanvasSurface({
 		recoveryDraft.workspaceId === canvasQuery.data.workspaceId
 			? recoveryDraft
 			: null;
+	const resolvedRecoveryDraft =
+		matchingRecoveryDraft &&
+		canvasQuery.data &&
+		isCanvasRecoveryResolved({
+			recoverySnapshot: matchingRecoveryDraft.payload,
+			recoveryBaseVersion: matchingRecoveryDraft.baseVersion,
+			serverSnapshot: canvasQuery.data.snapshot,
+			serverVersion: canvasQuery.data.snapshotUpdatedAt,
+		})
+			? matchingRecoveryDraft
+			: null;
 	useEffect(() => {
 		if (
 			!recoveryKey ||
@@ -153,9 +166,21 @@ function MemberCanvasSurface({
 		}
 		void deleteLocalDraft(recoveryKey).catch(() => undefined);
 	}, [canvasQuery.data, recoveryDraft, recoveryKey]);
+	useEffect(() => {
+		if (!recoveryKey || !resolvedRecoveryDraft) return;
+		void deleteLocalDraft(recoveryKey)
+			.catch(() => undefined)
+			.then(() => {
+				setRecoveryState((current) =>
+					current.key === recoveryKey
+						? { key: recoveryKey, draft: null }
+						: current,
+				);
+			});
+	}, [recoveryKey, resolvedRecoveryDraft]);
 	const recoveredPendingSave = useMemo<PendingCanvasSave | null>(
 		() =>
-			matchingRecoveryDraft
+			matchingRecoveryDraft && !resolvedRecoveryDraft
 				? {
 						snapshot: matchingRecoveryDraft.payload,
 						baseUpdatedAt:
@@ -165,7 +190,11 @@ function MemberCanvasSurface({
 						requiresConfirmation: true,
 					}
 				: null,
-		[canvasQuery.data?.snapshotUpdatedAt, matchingRecoveryDraft],
+		[
+			canvasQuery.data?.snapshotUpdatedAt,
+			matchingRecoveryDraft,
+			resolvedRecoveryDraft,
+		],
 	);
 	const pendingSaveAtRender =
 		getPendingCanvasSave(pendingSaveKey) ?? recoveredPendingSave;
@@ -349,6 +378,7 @@ function MemberCanvasSurface({
 		let revision = pendingSave ? 1 : 0;
 		let savedRevision = 0;
 		let saveInFlight: Promise<boolean> | null = null;
+		let retryInFlight: Promise<boolean> | null = null;
 		let conflictPending = pendingSave !== null;
 		let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 		const activatePendingSave = (recovered: PendingCanvasSave) => {
@@ -379,16 +409,6 @@ function MemberCanvasSurface({
 			>;
 			const request = (async () => {
 				try {
-					try {
-						await persistRecovery(
-							snapshot,
-							baseVersionRef.current?.snapshotUpdatedAt ??
-								initialSnapshotUpdatedAt,
-						);
-					} catch {
-						// The mounted tldraw store still protects the drawing for this
-						// session; the server save must not be blocked by local storage.
-					}
 					// Cancel an older GET before staging the local value. Otherwise its
 					// response can land later and make a remount restore stale shapes.
 					await setCanvasSnapshotInCache(queryClient, canvasId, snapshot);
@@ -503,9 +523,48 @@ function MemberCanvasSurface({
 				save,
 			});
 		flushRef.current = flush;
-		retryRef.current = () => {
-			conflictPending = false;
-			return flush();
+		retryRef.current = async () => {
+			if (retryInFlight) return retryInFlight;
+			const retry = (async () => {
+				setSaveError(null);
+				setSaveState("saving");
+				try {
+					const rebased = await rebasePendingCanvasSaveForRetry({
+						refresh: () => refreshCanvasQuery(queryClient, canvasId),
+						readSnapshot: () =>
+							editor.store.getStoreSnapshot() as unknown as Record<
+								string,
+								unknown
+							>,
+					});
+					baseVersionRef.current = {
+						canvasId,
+						snapshotUpdatedAt: rebased.baseUpdatedAt,
+					};
+					pendingSave = rememberPendingCanvasSave(pendingSaveKey, rebased);
+					try {
+						await persistRecovery(rebased.snapshot, rebased.baseUpdatedAt);
+					} catch {
+						// The mounted store still protects the drawing for this session;
+						// local recovery must not block the confirmed server overwrite.
+					}
+					conflictPending = false;
+					return flush();
+				} catch (error) {
+					setSaveError(
+						userErrorMessage(
+							error,
+							"The latest canvas version could not be checked. Your drawing is still here.",
+						),
+					);
+					setSaveState("error");
+					return false;
+				}
+			})();
+			retryInFlight = retry;
+			const saved = await retry;
+			if (retryInFlight === retry) retryInFlight = null;
+			return saved;
 		};
 		const unregisterFlusher = registerCanvasSaveFlusher(canvasId, flush);
 

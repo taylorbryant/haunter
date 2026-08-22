@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
-import { getCanvasQueryOptions } from "@/features/canvases/client/queries";
+import {
+	getCanvasNavigationQueryOptions,
+	getCanvasQueryOptions,
+	listCanvasesQueryOptions,
+} from "@/features/canvases/client/queries";
 import { listNotificationsQueryOptions } from "@/features/notifications/client/queries";
 import {
 	getPageQueryOptions,
@@ -125,6 +129,10 @@ describe("workspace event cache reconciliation", () => {
 		const tasksQuery = listTasksQueryOptions("workspace_1", "open");
 		const notificationsQuery = listNotificationsQueryOptions();
 		const canvasQuery = getCanvasQueryOptions("canvas_1");
+		const canvasListQuery = listCanvasesQueryOptions("workspace_1");
+		const otherCanvasListQuery = listCanvasesQueryOptions("workspace_2");
+		const canvasNavigationQuery =
+			getCanvasNavigationQueryOptions("workspace_1");
 		queryClient.setQueryData(tasksQuery.queryKey, {
 			items: [],
 			hasMore: false,
@@ -135,9 +143,19 @@ describe("workspace event cache reconciliation", () => {
 			nextCursor: null,
 		});
 		queryClient.setQueryData(canvasQuery.queryKey, { id: "canvas_1" });
+		queryClient.setQueryData(canvasListQuery.queryKey, { items: [] });
+		queryClient.setQueryData(otherCanvasListQuery.queryKey, { items: [] });
+		queryClient.setQueryData(canvasNavigationQuery.queryKey, {
+			favorites: [],
+			recents: [],
+		});
 
 		await invalidateWorkspaceTaskProjections(queryClient);
-		await invalidateWorkspaceCanvasProjection(queryClient, "canvas_1");
+		await invalidateWorkspaceCanvasProjection(
+			queryClient,
+			"workspace_1",
+			"canvas_1",
+		);
 
 		expect(queryClient.getQueryState(tasksQuery.queryKey)?.isInvalidated).toBe(
 			true,
@@ -148,6 +166,15 @@ describe("workspace event cache reconciliation", () => {
 		expect(queryClient.getQueryState(canvasQuery.queryKey)?.isInvalidated).toBe(
 			true,
 		);
+		expect(
+			queryClient.getQueryState(canvasListQuery.queryKey)?.isInvalidated,
+		).toBe(true);
+		expect(
+			queryClient.getQueryState(canvasNavigationQuery.queryKey)?.isInvalidated,
+		).toBe(true);
+		expect(
+			queryClient.getQueryState(otherCanvasListQuery.queryKey)?.isInvalidated,
+		).toBe(false);
 	});
 
 	it("detects an open page removed while broadcasts were missed", () => {

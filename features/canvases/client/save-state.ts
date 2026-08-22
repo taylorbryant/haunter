@@ -16,6 +16,46 @@ export type PendingCanvasSave = {
 	requiresConfirmation: true;
 };
 
+function serializeCanvasSnapshot(snapshot: CanvasSnapshot) {
+	return JSON.stringify(snapshot, (_key, value: unknown) => {
+		if (!value || typeof value !== "object" || Array.isArray(value)) {
+			return value;
+		}
+		return Object.fromEntries(
+			Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
+				left.localeCompare(right),
+			),
+		);
+	});
+}
+
+/** A recovery record is resolved once a newer server version has its snapshot. */
+export function isCanvasRecoveryResolved(input: {
+	recoverySnapshot: CanvasSnapshot;
+	recoveryBaseVersion: string | null;
+	serverSnapshot: CanvasSnapshot;
+	serverVersion: string;
+}) {
+	return (
+		input.recoveryBaseVersion !== null &&
+		input.recoveryBaseVersion !== input.serverVersion &&
+		serializeCanvasSnapshot(input.recoverySnapshot) ===
+			serializeCanvasSnapshot(input.serverSnapshot)
+	);
+}
+
+export async function rebasePendingCanvasSaveForRetry(input: {
+	refresh: () => Promise<{ snapshotUpdatedAt: string }>;
+	readSnapshot: () => CanvasSnapshot;
+}): Promise<PendingCanvasSave> {
+	const fresh = await input.refresh();
+	return {
+		snapshot: input.readSnapshot(),
+		baseUpdatedAt: fresh.snapshotUpdatedAt,
+		requiresConfirmation: true,
+	};
+}
+
 export function setCanvasSaveState(canvasId: string, next: CanvasSaveState) {
 	if ((saveStates.get(canvasId) ?? "saved") === next) return;
 	saveStates.set(canvasId, next);

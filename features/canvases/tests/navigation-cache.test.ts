@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import {
 	getCanvasNavigationQueryOptions,
+	listCanvasesQueryOptions,
 	setFavoriteInCanvasNavigationCache,
 	setViewedInCanvasNavigationCache,
 } from "@/features/canvases/client/queries";
@@ -38,6 +39,12 @@ describe("canvas navigation cache", () => {
 
 		expect(options.refetchOnMount).toBe(false);
 		expect(options.refetchInterval).toBe(30_000);
+	});
+
+	it("polls the standalone canvas list as a live-update fallback", () => {
+		expect(listCanvasesQueryOptions("workspace_test").refetchInterval).toBe(
+			30_000,
+		);
 	});
 
 	it("adds and removes canvas favorites at the front", () => {
