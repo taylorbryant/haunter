@@ -30,6 +30,7 @@ import {
 	setCanvasSnapshotInCache,
 } from "@/features/canvases/client/queries";
 import {
+	type CanvasSaveState,
 	canvasPendingSaveKey,
 	clearPendingCanvasSave,
 	drainCanvasSaveQueue,
@@ -53,7 +54,7 @@ const SNAPSHOT_SAVE_DELAY_MS = 1500;
 const CANVAS_CONFLICT_MESSAGE =
 	"Canvas changed elsewhere. Your drawing is still here. Retry to keep this version.";
 
-export type CanvasSaveState = "saved" | "saving" | "error";
+export type { CanvasSaveState } from "@/features/canvases/client/save-state";
 
 export default function CanvasSurface({
 	canvasId,

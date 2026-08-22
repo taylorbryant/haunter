@@ -1,15 +1,48 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import type { CanvasSnapshot } from "@/features/canvases/schemas";
 
 const flushers = new Map<string, () => Promise<boolean>>();
 const pendingSaves = new Map<string, PendingCanvasSave>();
+const saveStates = new Map<string, CanvasSaveState>();
+const saveStateListeners = new Map<string, Set<() => void>>();
+
+export type CanvasSaveState = "saved" | "saving" | "error";
 
 export type PendingCanvasSave = {
 	snapshot: CanvasSnapshot;
 	baseUpdatedAt: string;
 	requiresConfirmation: true;
 };
+
+export function setCanvasSaveState(canvasId: string, next: CanvasSaveState) {
+	if ((saveStates.get(canvasId) ?? "saved") === next) return;
+	saveStates.set(canvasId, next);
+	for (const listener of saveStateListeners.get(canvasId) ?? []) {
+		listener();
+	}
+}
+
+export function useCanvasSaveState(canvasId: string | null): CanvasSaveState {
+	return useSyncExternalStore(
+		(listener) => {
+			if (!canvasId) return () => undefined;
+			let listeners = saveStateListeners.get(canvasId);
+			if (!listeners) {
+				listeners = new Set();
+				saveStateListeners.set(canvasId, listeners);
+			}
+			listeners.add(listener);
+			return () => {
+				listeners?.delete(listener);
+				if (listeners?.size === 0) saveStateListeners.delete(canvasId);
+			};
+		},
+		() => (canvasId ? (saveStates.get(canvasId) ?? "saved") : "saved"),
+		() => "saved",
+	);
+}
 
 export function canvasPendingSaveKey(
 	canvasId: string,
