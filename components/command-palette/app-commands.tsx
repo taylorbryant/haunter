@@ -1,6 +1,6 @@
 "use client";
 
-import { HouseIcon, ListTodoIcon, Trash2Icon } from "lucide-react";
+import { HouseIcon, ListTodoIcon, ShapesIcon, Trash2Icon } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCommand } from "@/components/command-palette/registry";
 
@@ -22,6 +22,18 @@ export function AppCommands() {
 					group: "Go to",
 					icon: HouseIcon,
 					run: () => router.push(`/w/${workspaceId}/home`),
+				}
+			: null,
+	);
+
+	useCommand(
+		workspaceId
+			? {
+					id: "nav.canvases",
+					title: "Go to Canvases",
+					group: "Go to",
+					icon: ShapesIcon,
+					run: () => router.push(`/w/${workspaceId}/canvases`),
 				}
 			: null,
 	);

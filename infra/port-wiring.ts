@@ -40,6 +40,7 @@ export const appPorts = definePorts<AppPorts>()({
 		"agents",
 		"auth",
 		"bestEffortWork",
+		"canvasNavigation",
 		"canvases",
 		"changelogState",
 		"idempotency",

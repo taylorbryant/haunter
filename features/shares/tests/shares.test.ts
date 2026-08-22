@@ -351,6 +351,7 @@ describe("page shares", () => {
 		const onSharedPage = await canvases.create(scope, {
 			userId: "user_test",
 			pageId: page.id,
+			title: null,
 		});
 		await canvases.saveSnapshot(
 			scope,
@@ -366,6 +367,7 @@ describe("page shares", () => {
 		const elsewhere = await canvases.create(scope, {
 			userId: "user_test",
 			pageId: otherPage.id,
+			title: null,
 		});
 
 		const share = await tester.run(

@@ -1,8 +1,10 @@
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
+import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
 import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
 import { createDrizzleAgentAdminRepository } from "@/infra/agents/drizzle-agent-admin-repository";
 import { createDrizzleMcpConnectionRepository } from "@/infra/agents/drizzle-mcp-connection-repository";
 import { createDrizzleMcpOAuthClientRepository } from "@/infra/agents/drizzle-mcp-oauth-client-repository";
+import { createDrizzleCanvasNavigationRepository } from "@/infra/canvases/drizzle-canvas-navigation-repository";
 import { createDrizzleCanvasRepository } from "@/infra/canvases/drizzle-canvas-repository";
 import { createDrizzleChangelogStateRepository } from "@/infra/changelog/drizzle-changelog-state-repository";
 import { createDrizzleMemberRepository } from "@/infra/members/drizzle-member-repository";
@@ -13,7 +15,6 @@ import { createDrizzlePageRepository } from "@/infra/pages/drizzle-page-reposito
 import { createDrizzlePageVersionRepository } from "@/infra/pages/drizzle-page-version-repository";
 import { createDrizzleShareRepository } from "@/infra/shares/drizzle-share-repository";
 import { createDrizzleTaskRepository } from "@/infra/tasks/drizzle-task-repository";
-import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
 import type { AppTransactionPorts } from "@/ports";
 import type * as schema from "./schema";
 
@@ -35,6 +36,7 @@ export function createRepositories(
 		agents: createDrizzleAgentAdminRepository(db),
 		mcpConnections: createDrizzleMcpConnectionRepository(db),
 		mcpOAuthClients: createDrizzleMcpOAuthClientRepository(db),
+		canvasNavigation: createDrizzleCanvasNavigationRepository(db),
 		canvases: createDrizzleCanvasRepository(db),
 		changelogState: createDrizzleChangelogStateRepository(db),
 		members,

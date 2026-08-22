@@ -66,7 +66,11 @@ export function WorkspaceEventSubscriber({
 				void invalidateWorkspaceTaskProjections(queryClient);
 			}
 			for (const canvasId of pendingCanvasIds) {
-				void invalidateWorkspaceCanvasProjection(queryClient, canvasId);
+				void invalidateWorkspaceCanvasProjection(
+					queryClient,
+					workspaceId,
+					canvasId,
+				);
 			}
 		};
 		const scheduleFlush = () => {

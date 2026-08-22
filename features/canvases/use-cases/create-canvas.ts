@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { scheduleWorkspaceCanvasEvent } from "@/features/collab/server/workspace-events";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -13,18 +14,27 @@ export const createCanvasUseCase = useCase
 		await ctx.gate.authorize("canvases.create");
 		const scope = requireActiveWorkspaceScope(ctx, input.workspaceId);
 
-		return ctx.ports.uow.transaction(async (tx) => {
-			const page = await tx.pages.findMetaById(scope, input.pageId);
-			if (!page || page.deletedAt !== null) {
-				throw appError("PageNotFound", { details: { id: input.pageId } });
-			}
+		const canvas = await ctx.ports.uow.transaction(async (tx) => {
+			if (input.pageId !== undefined) {
+				const page = await tx.pages.findMetaById(scope, input.pageId);
+				if (!page || page.deletedAt !== null) {
+					throw appError("PageNotFound", { details: { id: input.pageId } });
+				}
 
-			// The canvas belongs to the page's owner; creating one is a page edit.
-			await ctx.gate.authorize("pages.update", page);
+				// The canvas belongs to the page's owner; creating one is a page edit.
+				await ctx.gate.authorize("pages.update", page);
+			}
 
 			return tx.canvases.create(scope, {
 				userId: user.id,
-				pageId: input.pageId,
+				pageId: input.pageId ?? null,
+				title: input.pageId === undefined ? (input.title ?? null) : null,
 			});
 		});
+		scheduleWorkspaceCanvasEvent(ctx, {
+			workspaceId: canvas.workspaceId,
+			canvasId: canvas.id,
+			pageId: canvas.pageId,
+		});
+		return canvas;
 	});

@@ -77,6 +77,12 @@ describe("tenant-scoped repositories", () => {
 			const canvas = await repositories.canvases.create(scopeA, {
 				userId: "user_scope_test",
 				pageId: pageA.id,
+				title: null,
+			});
+			const standaloneCanvas = await repositories.canvases.create(scopeA, {
+				userId: "user_scope_test",
+				pageId: null,
+				title: "Workspace A canvas",
 			});
 			const share = await repositories.shares.create(scopeA, {
 				pageId: pageA.id,
@@ -133,6 +139,37 @@ describe("tenant-scoped repositories", () => {
 					pageA.id,
 				),
 			).rejects.toThrow("outside the tenant scope");
+			await repositories.canvasNavigation.setFavorite(
+				scopeA,
+				"user_scope_test",
+				standaloneCanvas.id,
+				true,
+			);
+			expect(
+				(
+					await repositories.canvasNavigation.listForUser(
+						scopeA,
+						"user_scope_test",
+						10,
+					)
+				).favorites.map((item) => item.id),
+			).toEqual([standaloneCanvas.id]);
+			expect(
+				(
+					await repositories.canvasNavigation.listForUser(
+						scopeB,
+						"user_scope_test",
+						10,
+					)
+				).favorites,
+			).toEqual([]);
+			await expect(
+				repositories.canvasNavigation.recordView(
+					scopeB,
+					"user_scope_test",
+					standaloneCanvas.id,
+				),
+			).rejects.toThrow("outside the tenant scope");
 
 			await expect(
 				repositories.pages.create(scopeA, {
@@ -164,6 +201,7 @@ describe("tenant-scoped repositories", () => {
 				repositories.canvases.create(scopeA, {
 					userId: "user_scope_test",
 					pageId: pageB.id,
+					title: null,
 				}),
 			).rejects.toThrow("outside the tenant scope");
 			await expect(
@@ -230,11 +268,23 @@ describe("tenant-scoped repositories", () => {
 				"user_scope_test",
 				pageA.id,
 			);
+			await repositories.canvasNavigation.recordView(
+				scopeA,
+				"user_scope_test",
+				standaloneCanvas.id,
+			);
 			await testDatabase.db
 				.delete(schema.member)
 				.where(eq(schema.member.id, "member_scope_a"));
 			expect(
 				await repositories.pageNavigation.listForUser(
+					scopeA,
+					"user_scope_test",
+					10,
+				),
+			).toEqual({ favorites: [], recents: [] });
+			expect(
+				await repositories.canvasNavigation.listForUser(
 					scopeA,
 					"user_scope_test",
 					10,

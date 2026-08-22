@@ -1,15 +1,88 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import type { CanvasSnapshot } from "@/features/canvases/schemas";
 
 const flushers = new Map<string, () => Promise<boolean>>();
 const pendingSaves = new Map<string, PendingCanvasSave>();
+const saveStates = new Map<string, CanvasSaveState>();
+const saveStateListeners = new Map<string, Set<() => void>>();
+
+export type CanvasSaveState = "saved" | "saving" | "error";
 
 export type PendingCanvasSave = {
 	snapshot: CanvasSnapshot;
 	baseUpdatedAt: string;
 	requiresConfirmation: true;
 };
+
+function serializeCanvasSnapshot(snapshot: CanvasSnapshot) {
+	return JSON.stringify(snapshot, (_key, value: unknown) => {
+		if (!value || typeof value !== "object" || Array.isArray(value)) {
+			return value;
+		}
+		return Object.fromEntries(
+			Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
+				left.localeCompare(right),
+			),
+		);
+	});
+}
+
+/** A recovery record is resolved once a newer server version has its snapshot. */
+export function isCanvasRecoveryResolved(input: {
+	recoverySnapshot: CanvasSnapshot;
+	recoveryBaseVersion: string | null;
+	serverSnapshot: CanvasSnapshot;
+	serverVersion: string;
+}) {
+	return (
+		input.recoveryBaseVersion !== null &&
+		input.recoveryBaseVersion !== input.serverVersion &&
+		serializeCanvasSnapshot(input.recoverySnapshot) ===
+			serializeCanvasSnapshot(input.serverSnapshot)
+	);
+}
+
+export async function rebasePendingCanvasSaveForRetry(input: {
+	refresh: () => Promise<{ snapshotUpdatedAt: string }>;
+	readSnapshot: () => CanvasSnapshot;
+}): Promise<PendingCanvasSave> {
+	const fresh = await input.refresh();
+	return {
+		snapshot: input.readSnapshot(),
+		baseUpdatedAt: fresh.snapshotUpdatedAt,
+		requiresConfirmation: true,
+	};
+}
+
+export function setCanvasSaveState(canvasId: string, next: CanvasSaveState) {
+	if ((saveStates.get(canvasId) ?? "saved") === next) return;
+	saveStates.set(canvasId, next);
+	for (const listener of saveStateListeners.get(canvasId) ?? []) {
+		listener();
+	}
+}
+
+export function useCanvasSaveState(canvasId: string | null): CanvasSaveState {
+	return useSyncExternalStore(
+		(listener) => {
+			if (!canvasId) return () => undefined;
+			let listeners = saveStateListeners.get(canvasId);
+			if (!listeners) {
+				listeners = new Set();
+				saveStateListeners.set(canvasId, listeners);
+			}
+			listeners.add(listener);
+			return () => {
+				listeners?.delete(listener);
+				if (listeners?.size === 0) saveStateListeners.delete(canvasId);
+			};
+		},
+		() => (canvasId ? (saveStates.get(canvasId) ?? "saved") : "saved"),
+		() => "saved",
+	);
+}
 
 export function canvasPendingSaveKey(
 	canvasId: string,

@@ -2,6 +2,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
 	invalidateCanvas,
 	invalidateCanvases,
+	invalidateCanvasList,
+	invalidateCanvasNavigation,
 } from "@/features/canvases/client/queries";
 import { invalidateNotifications } from "@/features/notifications/client/queries";
 import {
@@ -86,11 +88,16 @@ export async function invalidateWorkspaceTaskProjections(
 
 export async function invalidateWorkspaceCanvasProjection(
 	queryClient: QueryClient,
+	workspaceId: string,
 	canvasId?: string,
 ) {
 	await waitForMutationsToSettle(queryClient);
 	await (canvasId
-		? invalidateCanvas(queryClient, canvasId)
+		? Promise.all([
+				invalidateCanvas(queryClient, canvasId),
+				invalidateCanvasList(queryClient, workspaceId),
+				invalidateCanvasNavigation(queryClient, workspaceId),
+			])
 		: invalidateCanvases(queryClient));
 }
 
@@ -102,7 +109,7 @@ export async function reconcileWorkspaceEventConnection(
 	await Promise.all([
 		invalidateWorkspacePageProjections(queryClient, workspaceId),
 		invalidateWorkspaceTaskProjections(queryClient),
-		invalidateWorkspaceCanvasProjection(queryClient),
+		invalidateWorkspaceCanvasProjection(queryClient, workspaceId),
 	]);
 
 	if (!currentPageId) return { currentPageMissing: false };

@@ -19,6 +19,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getCanvasQueryOptions } from "@/features/canvases/client/queries";
 import { listPagesQueryOptions } from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
@@ -42,11 +43,16 @@ export function HeaderBreadcrumbs() {
 	const pathname = usePathname();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
+	const canvasId = pathname.match(/\/c\/([^/]+)/)?.[1] ?? null;
 	const { synced } = useWorkspaceRouteSync(workspaceId);
 
 	const pagesQuery = useQuery({
 		...listPagesQueryOptions(workspaceId ?? ""),
 		enabled: workspaceId !== null && synced,
+	});
+	const canvasQuery = useQuery({
+		...getCanvasQueryOptions(canvasId ?? ""),
+		enabled: canvasId !== null && synced,
 	});
 
 	if (!workspaceId || !synced) {
@@ -57,9 +63,11 @@ export function HeaderBreadcrumbs() {
 		? "Home"
 		: pathname.endsWith("/tasks")
 			? "Tasks"
-			: pathname.endsWith("/trash")
-				? "Trash"
-				: null;
+			: pathname.endsWith("/canvases")
+				? "Canvases"
+				: pathname.endsWith("/trash")
+					? "Trash"
+					: null;
 	const trail = pageId ? pageTrail(pagesQuery.data?.items ?? [], pageId) : [];
 	const leafId = section ?? trail[trail.length - 1]?.id ?? null;
 
@@ -85,6 +93,19 @@ export function HeaderBreadcrumbs() {
 		crumbs.push(
 			<BreadcrumbItem key="section">
 				<BreadcrumbPage>{section}</BreadcrumbPage>
+			</BreadcrumbItem>,
+		);
+	} else if (canvasId) {
+		crumbs.push(
+			<BreadcrumbItem key="canvases">
+				<BreadcrumbLink render={<Link href={`/w/${workspaceId}/canvases`} />}>
+					Canvases
+				</BreadcrumbLink>
+			</BreadcrumbItem>,
+			<BreadcrumbItem key={canvasId} className="min-w-0">
+				<BreadcrumbPage className="truncate">
+					{canvasQuery.data?.title || "Untitled"}
+				</BreadcrumbPage>
 			</BreadcrumbItem>,
 		);
 	} else {

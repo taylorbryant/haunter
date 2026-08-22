@@ -32,7 +32,7 @@ export type WorkspaceTaskEvent = WorkspaceEventBase & {
 export type WorkspaceCanvasEvent = WorkspaceEventBase & {
 	type: "canvas.changed";
 	canvasId: string;
-	pageId: string;
+	pageId: string | null;
 };
 
 export type WorkspaceEvent =
@@ -111,7 +111,7 @@ export function createWorkspaceTaskEvent(input: {
 export function createWorkspaceCanvasEvent(input: {
 	workspaceId: string;
 	canvasId: string;
-	pageId: string;
+	pageId: string | null;
 	occurredAt?: string;
 }): WorkspaceCanvasEvent {
 	return {
@@ -200,8 +200,8 @@ export function isWorkspaceCanvasEvent(
 		event.type === "canvas.changed" &&
 		typeof event.canvasId === "string" &&
 		event.canvasId.length > 0 &&
-		typeof event.pageId === "string" &&
-		event.pageId.length > 0
+		(event.pageId === null ||
+			(typeof event.pageId === "string" && event.pageId.length > 0))
 	);
 }
 
