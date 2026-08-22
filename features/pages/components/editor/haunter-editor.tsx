@@ -11,6 +11,7 @@ import {
 } from "@blocknote/core";
 import { SideMenuExtension } from "@blocknote/core/extensions";
 import {
+	AddBlockButton,
 	DragHandleMenu,
 	FormattingToolbar,
 	FormattingToolbarController,
@@ -31,6 +32,7 @@ import {
 	CheckSquareIcon,
 	FilePlusIcon,
 	FileTextIcon,
+	GripVerticalIcon,
 	LightbulbIcon,
 	PenToolIcon,
 } from "lucide-react";
@@ -87,6 +89,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import { EditorBodySkeleton } from "../page-editor-skeleton";
+import { finishBlockDrag } from "./block-drag";
 import {
 	OPEN_CODE_BLOCK_DIALOG_EVENT,
 	type OpenCodeBlockDialogDetail,
@@ -130,6 +133,54 @@ function RemoveBlockMenuItem() {
 		>
 			Delete
 		</Components.Generic.Menu.Item>
+	);
+}
+
+function StableDragHandleButton() {
+	const Components = useComponentsContext();
+	const editor = useBlockNoteEditor(editorSchema);
+	const sideMenu = useExtension(SideMenuExtension, { editor });
+	const hoveredBlock = useExtensionState(SideMenuExtension, {
+		editor,
+		selector: (state) => state?.block,
+	});
+
+	if (!Components || !hoveredBlock) return null;
+
+	return (
+		<Components.Generic.Menu.Root
+			onOpenChange={(open) => {
+				if (open) {
+					sideMenu.freezeMenu();
+				} else {
+					sideMenu.unfreezeMenu();
+				}
+			}}
+			position="left"
+		>
+			<Components.Generic.Menu.Trigger>
+				<Components.SideMenu.Button
+					label="Drag block"
+					draggable
+					onDragStart={(event) => sideMenu.blockDragStart(event, hoveredBlock)}
+					onDragEnd={() => finishBlockDrag(sideMenu)}
+					className="bn-button"
+					icon={<GripVerticalIcon data-test="dragHandle" />}
+				/>
+			</Components.Generic.Menu.Trigger>
+			<DragHandleMenu>
+				<RemoveBlockMenuItem />
+			</DragHandleMenu>
+		</Components.Generic.Menu.Root>
+	);
+}
+
+function StableSideMenu() {
+	return (
+		<SideMenu>
+			<AddBlockButton />
+			<StableDragHandleButton />
+		</SideMenu>
 	);
 }
 
@@ -1122,20 +1173,7 @@ function MountedHaunterEditor({
 					/>
 					{/* The +/drag block controls are hidden on mobile: they're hard
 				    to use on touch and their gutter is reclaimed for content. */}
-					{!isMobile ? (
-						<SideMenuController
-							sideMenu={(props) => (
-								<SideMenu
-									{...props}
-									dragHandleMenu={() => (
-										<DragHandleMenu>
-											<RemoveBlockMenuItem />
-										</DragHandleMenu>
-									)}
-								/>
-							)}
-						/>
-					) : null}
+					{!isMobile ? <SideMenuController sideMenu={StableSideMenu} /> : null}
 				</BlockNoteView>
 			</TaskBlockCurrentUserContext.Provider>
 			{codeDialogBlockId ? (
