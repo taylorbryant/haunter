@@ -6,6 +6,7 @@ import "@blocknote/shadcn/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useTheme } from "next-themes";
+import { normalizeCodeBlockLanguages } from "@/features/pages/lib/code-block-language";
 import type { BlockJson } from "@/features/pages/schemas";
 import { SharedPageTokenProvider } from "@/features/shares/components/shared-page-context";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
@@ -25,12 +26,15 @@ export default function ReadOnlyEditor({
 	shareToken?: string;
 }) {
 	const { resolvedTheme } = useTheme();
+	const normalizedContent = normalizeCodeBlockLanguages(content);
 
 	const editor = useCreateBlockNote({
 		schema: editorSchema,
 		extensions: [syntaxHighlightingExtension],
 		// BlockNote rejects an empty initialContent array.
-		initialContent: content.length ? (content as never) : undefined,
+		initialContent: normalizedContent.length
+			? (normalizedContent as never)
+			: undefined,
 	});
 	useSyncEditorCodeTheme(editor, resolvedTheme);
 

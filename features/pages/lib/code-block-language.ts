@@ -19,12 +19,12 @@ export const CODE_BLOCK_LANGUAGES = [
 
 export const PLAINTEXT_CODE_BLOCK_LANGUAGE = "text";
 
-/** Resolve supported ids and aliases; unknown non-empty labels use plain text. */
+/** Resolve supported ids and aliases; blank or unknown labels use plain text. */
 export function normalizeCodeBlockLanguage(language: unknown): string {
-	if (typeof language !== "string") return "";
+	if (typeof language !== "string") return PLAINTEXT_CODE_BLOCK_LANGUAGE;
 
 	const candidate = language.trim().toLowerCase();
-	if (candidate.length === 0) return "";
+	if (candidate.length === 0) return PLAINTEXT_CODE_BLOCK_LANGUAGE;
 
 	for (const supported of CODE_BLOCK_LANGUAGES) {
 		if (

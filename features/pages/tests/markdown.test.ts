@@ -206,6 +206,15 @@ describe("markdownToBlocks", () => {
 		});
 	});
 
+	it("uses plain text for code fences without a language", () => {
+		const [block] = markdownToBlocks("```\nunlabelled code\n```");
+
+		expect(block).toMatchObject({
+			type: "codeBlock",
+			props: { language: "text" },
+		});
+	});
+
 	it.each([
 		["two", "- Parent\n  - Child\n    - Grandchild\n- Sibling"],
 		["four", "- Parent\n    - Child\n        - Grandchild\n- Sibling"],
