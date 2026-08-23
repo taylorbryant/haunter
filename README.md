@@ -2,10 +2,10 @@
 
 # Haunter
 
-Haunter brings notes and tasks into one workspace, then lets approved AI
-clients work with them using only the permissions and workspaces you choose.
-Organize ideas in nested pages, keep tasks close to their source, and return to
-what matters from a focused Home dashboard.
+Haunter brings notes, tasks, and visual canvases into one workspace, then lets
+approved AI clients work with them using only the permissions and workspaces
+you choose. Organize ideas in nested pages, keep tasks close to their source,
+and return to what matters from a focused Home dashboard.
 
 [Open Haunter](https://haunter.app) ·
 [View the changelog](https://haunter.app/changelog)
@@ -17,10 +17,13 @@ what matters from a focused Home dashboard.
 ## Highlights
 
 - **Home** brings together overdue and due-today tasks, the next seven days,
-  favorite pages, and recently viewed notes.
+  favorite pages and canvases, and recently viewed pages and canvases.
 - **Pages** support nested navigation, search, backlinks, history, attachments,
   public sharing, and a block editor with rich text, callouts, task blocks,
-  code, and embedded tldraw canvases.
+  code, and embedded canvases.
+- **Canvases** can live inside a page or stand alone in the workspace Canvases
+  view. Start from diagram and wireframe templates, add editable building
+  blocks, and favorite canvases you want to keep close.
 - **Tasks** can live inside a page or stand alone. Assign them to workspace
   members, use natural-language due dates, add due times, and manage them from
   the workspace task list.
@@ -36,9 +39,10 @@ what matters from a focused Home dashboard.
 
 ## Run Haunter locally
 
-Haunter uses [Bun](https://bun.sh) for dependency management, scripts, and
-tests. The default development configuration uses a local libSQL database and
-prints passwordless sign-in codes to the server console.
+Haunter requires Bun 1.4.x for dependency management, scripts, and tests. The
+default development configuration uses a local libSQL database and prints
+passwordless sign-in codes to the server console, so local sign-in does not
+require an email provider account.
 
 ### 1. Install the project
 
@@ -146,7 +150,7 @@ to catch registration drift.
 
 ## Deploy Haunter
 
-Apply the checked-in migrations before starting a production release:
+Apply the checked-in migrations before starting each production release:
 
 ```bash
 bun beignet db migrate
@@ -154,10 +158,11 @@ bun run build
 bun run start
 ```
 
-### Required configuration
+Use [`.env.example`](.env.example) as the complete configuration reference.
+Set these values before the production server starts:
 
-- Set `APP_URL` to the canonical public origin and generate a strong
-  `BETTER_AUTH_SECRET`.
+- Set `APP_URL` to the canonical public origin and set `BETTER_AUTH_SECRET` to
+  a unique secret of at least 32 characters.
 - Point `SQLITE_DB_URL` and, when required, `SQLITE_DB_AUTH_TOKEN` at a
   persistent libSQL database such as Turso.
 - Set `RESEND_API_KEY` and `RESEND_FROM` to a verified sender for passwordless
@@ -177,14 +182,14 @@ first signs in. Leave it unset on established installations.
 
 - **Uploads:** Set `BLOB_READ_WRITE_TOKEN` to use Vercel Blob. Local filesystem
   storage does not survive serverless deployments.
-- **Distributed rate limiting and live updates:** Set
-  `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Without them,
-  Haunter uses an in-process rate limiter and polling for client refreshes.
+- **Distributed rate limiting:** Set `UPSTASH_REDIS_REST_URL` and
+  `UPSTASH_REDIS_REST_TOKEN`. Without them, each app process keeps its own
+  rate-limit state in memory.
 - **Canvases:** Set `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` before using tldraw on a
   production domain.
 - **Scheduled jobs:** Set `CRON_SECRET` before enabling the Vercel Cron Jobs or
   equivalent external scheduler described below.
-- **Live updates:** With Upstash configured, build with
+- **Live updates:** With the Upstash variables configured, build with
   `NEXT_PUBLIC_LIVE_UPDATES=true` to notify other open clients after a page,
   task, or canvas changes. SQLite remains the source of truth, and polling
   keeps the app functional without the stream. Set a distinct
@@ -216,7 +221,7 @@ Browser-based MCP clients with a separate origin must be listed in
 `Origin` header. Apply the checked-in OAuth/MCP migrations before enabling the
 endpoint.
 
-### Notifications
+### Task reminders and push notifications
 
 Vercel registers the production schedules in `vercel.json`:
 
