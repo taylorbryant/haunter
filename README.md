@@ -2,10 +2,12 @@
 
 # Haunter
 
-Haunter brings notes, tasks, and visual canvases into one workspace, then lets
-approved AI clients work with them using only the permissions and workspaces
-you choose. Organize ideas in nested pages, keep tasks close to their source,
-and return to what matters from a focused Home dashboard.
+Haunter keeps notes, tasks, and canvases together. Write in nested pages, keep
+tasks next to the thinking behind them, and sketch ideas without switching
+tools.
+
+Let an AI client help without opening up your entire account. You decide what
+each client can do and which workspaces it can reach.
 
 [Open Haunter](https://haunter.app) ·
 [View the changelog](https://haunter.app/changelog)
@@ -14,37 +16,36 @@ and return to what matters from a focused Home dashboard.
 
 ![Haunter — a populated page with rich text, task blocks, a callout, and syntax-highlighted SQL](docs/page-screenshot.png)
 
-## Highlights
+## What you can do
 
-- **Home** brings together overdue and due-today tasks, the next seven days,
-  favorite pages and canvases, and recently viewed pages and canvases.
-- **Pages** support nested navigation, search, backlinks, history, attachments,
-  public sharing, and a block editor with rich text, callouts, task blocks,
-  code, and embedded canvases.
-- **Canvases** can live inside a page or stand alone in the workspace Canvases
-  view. Start from diagram and wireframe templates, add editable building
-  blocks, and favorite canvases you want to keep close.
-- **Tasks** can live inside a page or stand alone. Assign them to workspace
-  members, use natural-language due dates, add due times, and manage them from
-  the workspace task list.
-- **Team workspaces** include roles, task assignment, optional live refreshes
-  across open clients, and read-only public page links.
-- **Import and export** move pages in and out as Markdown or create standalone
-  HTML files that preserve the selected Haunter theme.
-- **Themes and installation** provide coordinated light and dark app and code
-  themes. Install Haunter on a phone or computer for an app-like experience.
-- **AI clients** connect through Haunter's hosted OAuth-authenticated MCP
-  server or a local Agent Auth bridge. Users choose a permission profile and
-  workspaces, review activity, and can disconnect a client at any time.
+- **Start with what matters.** Home gives you one view of overdue tasks, tasks
+  due today or in the next seven days, favorites, and recently viewed pages and
+  canvases.
+- **Build connected notes.** Use nested pages, search, and backlinks to keep
+  ideas connected. Attach files, revisit page history, and publish read-only
+  links.
+- **Think visually.** Keep a canvas inside the page it belongs to or give it a
+  place of its own. Start from a diagram or wireframe template, then arrange
+  fully editable building blocks.
+- **Keep tasks in context.** Tasks can live inside a page or on their own.
+  Assign them to workspace members, write due dates in natural language, add
+  due times, and manage them from the workspace task list.
+- **Work together with clear boundaries.** Workspace roles separate viewing,
+  editing, and member management. Optional live updates bring changes from
+  other open clients into view sooner.
+- **Take your pages with you.** Move pages in or out as Markdown, or create
+  standalone HTML in your chosen Haunter theme.
+- **Connect AI on your terms.** Use Haunter's hosted MCP server or a local Agent
+  Auth bridge with supported AI clients. Choose a permission profile and
+  workspaces, review recent activity, and disconnect a client at any time.
 
 ## Run Haunter locally
 
-Haunter requires Bun 1.4.x for dependency management, scripts, and tests. The
-default development configuration uses a local libSQL database and prints
-passwordless sign-in codes to the server console, so local sign-in does not
-require an email provider account.
+To run Haunter locally, install Bun 1.4.x. The default setup stores data in a
+local libSQL database and prints passwordless sign-in codes in the terminal,
+so you can sign in without configuring an email provider.
 
-### 1. Install the project
+### 1. Clone and install Haunter
 
 ```bash
 git clone https://github.com/taylorbryant/haunter.git
@@ -53,10 +54,10 @@ bun install
 cp .env.example .env.local
 ```
 
-### 2. Configure the first administrator
+### 2. Choose the first administrator
 
-Set `BOOTSTRAP_ADMIN_EMAIL` in `.env.local` to the email address that should own
-the installation:
+Add `BOOTSTRAP_ADMIN_EMAIL` to `.env.local` with the email address for the first
+app administrator:
 
 ```env
 BOOTSTRAP_ADMIN_EMAIL=owner@example.com
@@ -66,7 +67,7 @@ On a fresh installation, the first verified account matching that address
 becomes the app-wide administrator. The setting is ignored after an
 administrator has been approved.
 
-### 3. Prepare the database and start Haunter
+### 3. Create the database and sign in
 
 ```bash
 bun beignet db migrate
