@@ -13,6 +13,9 @@ import {
 
 type CodeThemeEditor = Pick<BlockNoteEditor, "_tiptapEditor">;
 
+export const CODE_HIGHLIGHT_COMPOSITION_META =
+	"haunter-code-highlight-composition";
+
 function getDocumentResolvedTheme(): string {
 	if (typeof document === "undefined") return "light";
 
@@ -139,17 +142,22 @@ function isHighlightPluginState(value: unknown): value is HighlightPluginState {
 	);
 }
 
-/** Invalidate only code decorations, leaving editor content and history alone. */
-export function refreshEditorCodeHighlighting(editor: CodeThemeEditor) {
+function getHighlightPluginState(editor: CodeThemeEditor) {
 	const tiptapEditor = editor._tiptapEditor;
-	if (tiptapEditor.isDestroyed) return;
+	if (tiptapEditor.isDestroyed) return null;
 
 	const state = tiptapEditor.state;
 	const pluginState = state.plugins
 		.map((plugin) => plugin.getState(state))
 		.find(isHighlightPluginState);
-	if (!pluginState?.cache) return;
 
+	return pluginState ? { pluginState, state, tiptapEditor } : null;
+}
+
+function clearCodeHighlightCache(
+	state: CodeThemeEditor["_tiptapEditor"]["state"],
+	pluginState: HighlightPluginState,
+) {
 	let hasCodeBlocks = false;
 	state.doc.descendants((node, position) => {
 		if (node.type.name !== "codeBlock") return;
@@ -157,11 +165,38 @@ export function refreshEditorCodeHighlighting(editor: CodeThemeEditor) {
 		pluginState.cache?.remove(position);
 		return false;
 	});
-	if (!hasCodeBlocks) return;
+	return hasCodeBlocks;
+}
+
+/** Invalidate only code decorations, leaving editor content and history alone. */
+export function refreshEditorCodeHighlighting(editor: CodeThemeEditor) {
+	const highlighting = getHighlightPluginState(editor);
+	if (!highlighting) return;
+	const { pluginState, state, tiptapEditor } = highlighting;
+	if (!clearCodeHighlightCache(state, pluginState)) return;
 
 	tiptapEditor.view.dispatch(
 		state.tr.setMeta("prosemirror-highlight-refresh", true),
 	);
+}
+
+/** Freeze decoration ranges during composition, then refresh exact tokens. */
+export function setEditorCodeHighlightingComposition(
+	editor: CodeThemeEditor,
+	composing: boolean,
+) {
+	const highlighting = getHighlightPluginState(editor);
+	if (!highlighting) return;
+	const { state, tiptapEditor } = highlighting;
+
+	let transaction = state.tr.setMeta(
+		CODE_HIGHLIGHT_COMPOSITION_META,
+		composing,
+	);
+	if (!composing) {
+		transaction = transaction.setMeta("prosemirror-highlight-refresh", true);
+	}
+	tiptapEditor.view.dispatch(transaction);
 }
 
 /** Keep existing code blocks paired with the active appearance theme. */

@@ -1,0 +1,48 @@
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -87,22 +87,33 @@
+ 				return {
+ 					cache,
+ 					decorations,
+-					promises
++					promises,
++					compositionActive: false
+ 				};
+ 			},
+ 			apply: (tr, data) => {
+ 				const cache = data.cache.invalidate(tr);
+ 				const refresh = !!tr.getMeta("prosemirror-highlight-refresh");
++				const compositionMeta = tr.getMeta("haunter-code-highlight-composition");
++				const compositionActive = typeof compositionMeta === "boolean" ? compositionMeta : data.compositionActive;
++				if (compositionActive) return {
++					cache,
++					decorations: data.decorations?.map(tr.mapping, tr.doc),
++					promises: [],
++					compositionActive
++				};
+ 				if (!tr.docChanged && !refresh) return {
+ 					cache,
+ 					decorations: data.decorations?.map(tr.mapping, tr.doc),
+-					promises: data.promises
++					promises: data.promises,
++					compositionActive
+ 				};
+ 				const [decorations, promises] = calculateDecoration(tr.doc, parser, nodeTypes, languageExtractor, cache);
+ 				return {
+ 					cache,
+ 					decorations,
+-					promises
++					promises,
++					compositionActive
+ 				};
+ 			}
+ 		},
+@@ -116,6 +127,7 @@
+ 			const check = () => {
+ 				const state = key.getState(view.state);
+ 				for (const promise of state?.promises ?? []) {
++					if (promises.has(promise)) continue;
+ 					promises.add(promise);
+ 					promise.then(() => {
+ 						promises.delete(promise);

@@ -122,6 +122,7 @@
 	},
 	"patchedDependencies": {
 		"@tiptap/core@3.27.1": "patches/@tiptap%2Fcore@3.27.1.patch",
-		"@tiptap/core@3.30.0": "patches/@tiptap%2Fcore@3.30.0.patch"
+		"@tiptap/core@3.30.0": "patches/@tiptap%2Fcore@3.30.0.patch",
+		"prosemirror-highlight@0.15.3": "patches/prosemirror-highlight@0.15.3.patch"
 	}
 }

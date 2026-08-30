@@ -15,6 +15,7 @@ import {
 import { calloutBlockSpec } from "./callout-block";
 import { canvasBlockSpec } from "./canvas-block";
 import { OPEN_CODE_BLOCK_DIALOG_EVENT } from "./code-block-dialog-event";
+import { codeBlockCompositionHighlightingExtension } from "./code-block-highlighting";
 import {
 	getCodeBlockIndentPositions,
 	getCodeBlockUnindentRanges,
@@ -169,6 +170,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 	extensions: [
 		...(baseCodeBlockSpec.extensions ?? []),
 		codeBlockUnindentExtension,
+		codeBlockCompositionHighlightingExtension,
 	],
 	implementation: {
 		...baseCodeBlockSpec.implementation,
