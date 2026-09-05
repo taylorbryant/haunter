@@ -310,13 +310,15 @@ function MountedCanvasSurface({
 		}),
 	);
 	const saveState: CanvasSaveState =
-		draft.status === "saved"
-			? "saved"
-			: draft.status === "saving-local" ||
-					draft.status === "pending" ||
-					draft.status === "syncing"
-				? "saving"
-				: "error";
+		draft.status === "paused"
+			? "paused"
+			: draft.status === "saved"
+				? "saved"
+				: draft.status === "saving-local" ||
+						draft.status === "pending" ||
+						draft.status === "syncing"
+					? "saving"
+					: "error";
 	const isBusy =
 		draft.status === "saving-local" ||
 		draft.status === "syncing" ||
@@ -330,7 +332,7 @@ function MountedCanvasSurface({
 					draft.error,
 					"Your drawing could not be saved in this browser.",
 				)
-			: draft.status === "sync-error"
+			: draft.status === "sync-error" && !draft.remotePaused
 				? "Your drawing is saved in this browser but could not be synced."
 				: draft.status === "conflict" && draft.error
 					? userErrorMessage(

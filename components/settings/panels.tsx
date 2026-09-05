@@ -1,7 +1,7 @@
 "use client";
 
 import { rootFormError } from "@beignet/react-hook-form";
-import { useRouter } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { authClient } from "@/client/auth-client";

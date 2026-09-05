@@ -1,3 +1,4 @@
+import { protectedRefetchInterval } from "@/client/session-recovery";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
@@ -54,7 +55,7 @@ function addOptimisticReadOperation(
 export function listNotificationsQueryOptions(limit = 30) {
 	return {
 		...rq(listNotifications).queryOptions({ query: { limit } }),
-		refetchInterval: 30_000,
+		refetchInterval: protectedRefetchInterval,
 	};
 }
 

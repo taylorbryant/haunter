@@ -1,3 +1,4 @@
+import { protectedRefetchInterval } from "@/client/session-recovery";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
@@ -31,7 +32,7 @@ export function listPagesQueryOptions(workspaceId: string) {
 		...rq(listPages).queryOptions({ path: { workspaceId } }),
 		// Shared workspaces: pick up other members' changes without a manual
 		// reload. Paused automatically while the tab is in the background.
-		refetchInterval: 30_000,
+		refetchInterval: protectedRefetchInterval,
 	};
 }
 
@@ -44,7 +45,7 @@ export function getPageQueryOptions(id: string) {
 		refetchOnMount: false,
 		// Liveblocks events accelerate this refresh, but polling remains the
 		// correctness fallback when live updates are disabled or missed.
-		refetchInterval: 30_000,
+		refetchInterval: protectedRefetchInterval,
 	};
 }
 
@@ -52,7 +53,7 @@ export function getPageNavigationQueryOptions(workspaceId: string) {
 	return {
 		...rq(getPageNavigation).queryOptions({ path: { workspaceId } }),
 		refetchOnMount: false,
-		refetchInterval: 30_000,
+		refetchInterval: protectedRefetchInterval,
 	};
 }
 

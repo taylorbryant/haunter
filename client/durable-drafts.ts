@@ -1,5 +1,7 @@
 "use client";
 
+import { draftRegistry } from "./draft-registry";
+import { isAuthenticationError } from "./session-recovery";
 import {
 	type AnyActorRef,
 	assign,
@@ -58,9 +60,12 @@ export type DurableDraftStatus =
 	| "resolving"
 	| "invalid"
 	| "storage-error"
-	| "sync-error";
+	| "sync-error"
+	| "paused";
 
 export type DurableDraftSnapshot<T> = {
+	locallySaved?: boolean;
+	remotePaused?: boolean;
 	status: DurableDraftStatus;
 	value: T;
 	serverValue: T;
@@ -96,6 +101,8 @@ type DraftEvent<T> =
 	| { type: "KEEP_MINE"; revision: number }
 	| { type: "BEGIN_USE_SERVER" }
 	| { type: "USE_SERVER" }
+	| { type: "PAUSE" }
+	| { type: "RESUME" }
 	| { type: "RETRY" }
 	| { type: "SYNC_NOW" }
 	| { type: "ADOPT_SERVER"; value: T; version: string | null }
@@ -197,6 +204,9 @@ export class DurableDraftController<T, Metadata = never> {
 	private writeBaseVersion: string | null;
 	private pendingServerRefresh: { value: T; version: string | null } | null =
 		null;
+	private remotePaused = false;
+	private localDeadline: ReturnType<typeof setTimeout> | null = null;
+	private unregisterDraft: (() => void) | null = null;
 	private started = false;
 	private stopped = false;
 	private view: DurableDraftSnapshot<T>;
@@ -241,6 +251,7 @@ export class DurableDraftController<T, Metadata = never> {
 				remoteDebounce: options.debounceMs ?? 500,
 			},
 			guards: {
+				isPaused: () => this.remotePaused,
 				noStoredDraft: ({ event }) =>
 					invocationOutput<LocalDraft<T> | null>(event) === null,
 				storedDraftIsResumable: ({ event, context }) => {
@@ -431,6 +442,8 @@ export class DurableDraftController<T, Metadata = never> {
 				error: null,
 			}),
 			on: {
+				PAUSE: {},
+				RESUME: {},
 				ADOPT_SERVER: { actions: "adoptServerValue" },
 				REBASE_SERVER: { actions: "rebaseServerValue" },
 				SERVER_CONFLICT: {
@@ -474,7 +487,22 @@ export class DurableDraftController<T, Metadata = never> {
 						},
 					},
 				},
+				paused: {
+					on: {
+						EDIT: { actions: "applyEdit" },
+						LOCAL_COMMITTED: { actions: "applyLocalCommit" },
+						LOCAL_FAILED: {
+							target: "storageError",
+							actions: "applyLocalFailure",
+						},
+						RESUME: [
+							{ guard: "hasPendingDurableDraft", target: "scheduled" },
+							{ target: "clean" },
+						],
+					},
+				},
 				scheduled: {
+					always: { guard: "isPaused", target: "paused" },
 					after: {
 						remoteDebounce: [
 							{ guard: "valueIsInvalid", target: "invalid" },
@@ -482,6 +510,7 @@ export class DurableDraftController<T, Metadata = never> {
 						],
 					},
 					on: {
+						PAUSE: { target: "paused" },
 						EDIT: { actions: "applyEdit" },
 						LOCAL_COMMITTED: {
 							target: "scheduled",
@@ -528,6 +557,7 @@ export class DurableDraftController<T, Metadata = never> {
 						],
 					},
 					on: {
+						PAUSE: { target: "paused" },
 						EDIT: { actions: "applyEdit" },
 						LOCAL_COMMITTED: { actions: "applyLocalCommit" },
 						LOCAL_FAILED: {
@@ -594,6 +624,7 @@ export class DurableDraftController<T, Metadata = never> {
 				},
 				syncError: {
 					on: {
+						PAUSE: { target: "paused" },
 						EDIT: { actions: "applyEdit" },
 						LOCAL_COMMITTED: {
 							target: "scheduled",
@@ -624,6 +655,7 @@ export class DurableDraftController<T, Metadata = never> {
 		if (this.started || this.stopped) return;
 		this.started = true;
 		this.actor.start();
+		this.unregisterDraft = draftRegistry.register(this);
 	}
 
 	stop() {
@@ -631,6 +663,8 @@ export class DurableDraftController<T, Metadata = never> {
 		this.commitPendingLocal();
 		this.stopped = true;
 		this.actor.stop();
+		this.unregisterDraft?.();
+		this.unregisterDraft = null;
 		this.listeners.clear();
 	}
 
@@ -656,11 +690,29 @@ export class DurableDraftController<T, Metadata = never> {
 		this.scheduleLocalRevision(value, revision, writeId, status);
 	}
 
+	get identity() {
+		return this.options.identity;
+	}
+
+	pause() {
+		if (this.remotePaused) return;
+		this.remotePaused = true;
+		this.actor.send({ type: "PAUSE" });
+	}
+
+	resume() {
+		if (!this.remotePaused) return;
+		this.remotePaused = false;
+		this.actor.send({ type: "RESUME" });
+		if (this.view.status === "sync-error") this.retry();
+	}
+
 	retry() {
 		if (this.view.status === "storage-error") {
 			this.edit(this.view.value);
 			return;
 		}
+		if (this.remotePaused) return;
 		this.actor.send({ type: "RETRY" });
 	}
 
@@ -741,6 +793,7 @@ export class DurableDraftController<T, Metadata = never> {
 	}
 
 	async flushServer() {
+		if (this.remotePaused) return false;
 		try {
 			await this.flushLocal();
 		} catch {
@@ -755,6 +808,7 @@ export class DurableDraftController<T, Metadata = never> {
 				});
 			});
 		}
+		if (this.remotePaused) return false;
 		if (this.view.status === "saved") return true;
 		if (
 			this.view.status === "conflict" ||
@@ -776,7 +830,8 @@ export class DurableDraftController<T, Metadata = never> {
 					this.view.status === "conflict" ||
 					this.view.status === "invalid" ||
 					this.view.status === "storage-error" ||
-					this.view.status === "sync-error"
+					this.view.status === "sync-error" ||
+					this.view.remotePaused
 				) {
 					unsubscribe();
 					resolve(false);
@@ -870,11 +925,19 @@ export class DurableDraftController<T, Metadata = never> {
 			return;
 		}
 		this.pendingLocal = { value, revision, writeId, status };
+		this.localDeadline ??= setTimeout(
+			() => this.commitPendingLocal(),
+			Math.max(delay, 500),
+		);
 		if (this.localTimer) clearTimeout(this.localTimer);
 		this.localTimer = setTimeout(() => this.commitPendingLocal(), delay);
 	}
 
 	private commitPendingLocal() {
+		if (this.localDeadline) {
+			clearTimeout(this.localDeadline);
+			this.localDeadline = null;
+		}
 		if (this.localTimer) {
 			clearTimeout(this.localTimer);
 			this.localTimer = null;
@@ -907,6 +970,10 @@ export class DurableDraftController<T, Metadata = never> {
 				baseVersion: input.baseVersion,
 			});
 		} catch (error) {
+			// A cancelled save can reject after recovery has started a newer one.
+			// Its failure must not pause that save or start conflict recovery.
+			if (signal.aborted) throw error;
+			if (isAuthenticationError(error)) this.pause();
 			if (this.options.isConflictError?.(error) && this.options.loadServer) {
 				const latest = await this.options.loadServer();
 				const areValuesEqual = this.options.areValuesEqual ?? Object.is;
@@ -922,13 +989,14 @@ export class DurableDraftController<T, Metadata = never> {
 		// XState aborts an invocation when an external server refresh moves the
 		// actor into conflict (or the owner stops). The HTTP write may be too late
 		// to cancel, but its obsolete completion must never delete the local draft.
-		if (signal.aborted) {
+		if (signal.aborted || this.remotePaused) {
 			return { ...result, revision: input.revision, writeId: input.writeId };
 		}
 		// Advance the base synchronously before another browser event can enqueue a
 		// write, then serialize the durable acknowledgement behind older writes.
 		this.writeBaseVersion = result.version;
 		await this.enqueueLocal(async () => {
+			if (signal.aborted || this.remotePaused) return;
 			await this.storage.acknowledge(
 				this.options.identity.key,
 				input.writeId,
@@ -953,12 +1021,17 @@ export class DurableDraftController<T, Metadata = never> {
 		else if (machineState === "invalid" || validationError) status = "invalid";
 		else if (context.revision > context.durableRevision)
 			status = "saving-local";
+		else if (machineState === "paused") status = "paused";
 		else if (machineState === "syncing") status = "syncing";
 		else if (machineState === "scheduled") status = "pending";
 		else status = "saved";
 
 		const nextView = {
 			status,
+			locallySaved:
+				context.revision <= context.durableRevision &&
+				machineState !== "storageError",
+			remotePaused: this.remotePaused,
 			value: context.value,
 			serverValue: context.serverValue,
 			serverVersion: context.serverVersion,
@@ -971,6 +1044,8 @@ export class DurableDraftController<T, Metadata = never> {
 		const previousUncontrolled = this.uncontrolledView;
 		if (
 			previousUncontrolled.status !== nextView.status ||
+			previousUncontrolled.locallySaved !== nextView.locallySaved ||
+			previousUncontrolled.remotePaused !== nextView.remotePaused ||
 			previousUncontrolled.serverValue !== nextView.serverValue ||
 			previousUncontrolled.serverVersion !== nextView.serverVersion ||
 			previousUncontrolled.error !== nextView.error ||

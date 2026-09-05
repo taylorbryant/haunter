@@ -36,7 +36,8 @@ import {
 	LightbulbIcon,
 	PenToolIcon,
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useTheme } from "next-themes";
 import {
 	useCallback,
@@ -330,7 +331,7 @@ function getSlashMenuItems(
 	return Promise.resolve(filterSuggestionItems(items, query));
 }
 
-export type SaveState = "saved" | "pending" | "saving" | "error";
+export type SaveState = "saved" | "pending" | "saving" | "error" | "paused";
 
 function cloneDocument(content: BlockJson[]): BlockJson[] {
 	return structuredClone(content);
@@ -665,13 +666,15 @@ function MountedHaunterEditor({
 	}, [editor, editable, notificationBlockId]);
 
 	const saveState: SaveState =
-		draft.status === "saved"
-			? "saved"
-			: draft.status === "saving-local" || draft.status === "pending"
-				? "pending"
-				: draft.status === "syncing"
-					? "saving"
-					: "error";
+		draft.status === "paused"
+			? "paused"
+			: draft.status === "saved"
+				? "saved"
+				: draft.status === "saving-local" || draft.status === "pending"
+					? "pending"
+					: draft.status === "syncing"
+						? "saving"
+						: "error";
 	const isBusy =
 		draft.status === "saving-local" ||
 		draft.status === "syncing" ||
@@ -687,7 +690,7 @@ function MountedHaunterEditor({
 					draft.error,
 					"Your page changes could not be saved in this browser.",
 				)
-			: draft.status === "sync-error"
+			: draft.status === "sync-error" && !draft.remotePaused
 				? "Your changes are saved in this browser but could not be synced."
 				: draft.status === "conflict" && draft.error
 					? userErrorMessage(draft.error, "The conflict could not be resolved.")
@@ -860,9 +863,11 @@ function MountedHaunterEditor({
 			<span className="sr-only" aria-live="polite">
 				{saveState === "saving" || saveState === "pending"
 					? "Saving"
-					: saveState === "error"
-						? "Save failed"
-						: "Saved"}
+					: saveState === "paused"
+						? "Saved in this browser"
+						: saveState === "error"
+							? "Save failed"
+							: "Saved"}
 			</span>
 		</div>
 	);

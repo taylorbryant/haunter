@@ -3,7 +3,7 @@
 import { contractErrorMessage } from "@beignet/core/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FilePlus2Icon, ListTodoIcon, ShapesIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import {
 	createContext,
 	type FormEvent,

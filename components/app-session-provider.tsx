@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, type ReactNode, useContext } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useState,
+	useEffect,
+	useCallback,
+} from "react";
+
+import { SessionRecoveryProvider } from "./session-recovery-provider";
 
 export type AppSessionUser = {
 	id: string;
@@ -25,9 +34,31 @@ export function AppSessionProvider({
 	value: AppSessionValue;
 	children: ReactNode;
 }) {
+	const [session, setSession] = useState(value);
+	useEffect(() => setSession(value), [value]);
+	const onVerified = useCallback(
+		(verified: {
+			activeWorkspaceId: string | null;
+			workspaceRole: string | null;
+		}) => {
+			setSession((current) =>
+				current.activeWorkspaceId === verified.activeWorkspaceId &&
+				current.workspaceRole === verified.workspaceRole
+					? current
+					: { ...current, ...verified },
+			);
+		},
+		[],
+	);
 	return (
-		<AppSessionContext.Provider value={value}>
-			{children}
+		<AppSessionContext.Provider value={session}>
+			<SessionRecoveryProvider
+				key={value.user.id}
+				initial={value}
+				onVerified={onVerified}
+			>
+				{children}
+			</SessionRecoveryProvider>
 		</AppSessionContext.Provider>
 	);
 }

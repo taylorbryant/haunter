@@ -11,6 +11,7 @@ import {
 	SunIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { draftRegistry } from "@/client/draft-registry";
 import { authClient } from "@/client/auth-client";
 import { authErrorMessage, reportUserError } from "@/client/error-feedback";
 import { useCommand } from "@/components/command-palette/registry";
@@ -144,6 +145,12 @@ export function NavUser({
 
 	async function signOut() {
 		try {
+			if (!(await draftRegistry.flushLocal())) {
+				reportUserError(
+					"Download your draft before signing out. Your latest changes could not be saved in this browser.",
+				);
+				return;
+			}
 			const result = await authClient.signOut();
 			if (result.error) throw result.error;
 			// Hard navigation: forces the server to re-evaluate the now-cleared

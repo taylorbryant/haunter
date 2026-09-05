@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FileTextIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useState } from "react";
 import { userErrorMessage } from "@/client/error-feedback";
 import {

@@ -224,7 +224,7 @@ function EditablePageTitleField({
 		draft.validationError ??
 		(draft.status === "storage-error"
 			? "The page title could not be saved in this browser. Keep this tab open and try again."
-			: draft.status === "sync-error"
+			: draft.status === "sync-error" && !draft.remotePaused
 				? userErrorMessage(
 						draft.error,
 						"Your title is saved in this browser and will sync when the connection returns.",

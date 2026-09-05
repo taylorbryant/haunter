@@ -1,8 +1,11 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useEffect, useRef } from "react";
+import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
+import { getBrowserSessionRecovery } from "@/client/session-recovery";
 import { useCurrentUser } from "@/components/app-session-provider";
 import {
 	isWorkspaceCanvasEvent,
@@ -26,6 +29,7 @@ export function WorkspaceEventSubscriber({
 	workspaceId: string;
 }) {
 	const queryClient = useQueryClient();
+	const requestsEnabled = useProtectedRequestsEnabled();
 	const currentUser = useCurrentUser();
 	const currentUserId = currentUser?.id;
 	const router = useRouter();
@@ -37,7 +41,7 @@ export function WorkspaceEventSubscriber({
 	activePageIdRef.current = activePageId;
 
 	useEffect(() => {
-		if (!currentUserId || !liveUpdatesEnabled) {
+		if (!requestsEnabled || !currentUserId || !liveUpdatesEnabled) {
 			return;
 		}
 		let disposed = false;
@@ -81,6 +85,9 @@ export function WorkspaceEventSubscriber({
 		void import("./sse").then(({ bindWorkspaceEvents }) => {
 			if (disposed) return;
 			unbind = bindWorkspaceEvents(workspaceId, {
+				onConnectionError() {
+					void getBrowserSessionRecovery()?.check();
+				},
 				onEvent(event) {
 					if (!isWorkspaceEvent(event) || event.workspaceId !== workspaceId) {
 						return;
@@ -130,7 +137,7 @@ export function WorkspaceEventSubscriber({
 			if (flushTimer) clearTimeout(flushTimer);
 			unbind?.();
 		};
-	}, [currentUserId, queryClient, router, workspaceId]);
+	}, [requestsEnabled, currentUserId, queryClient, router, workspaceId]);
 
 	return null;
 }

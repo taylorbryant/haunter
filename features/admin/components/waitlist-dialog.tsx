@@ -2,7 +2,8 @@
 
 import { ShieldCheckIcon } from "lucide-react";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import {
 	createContext,
 	type ReactNode,

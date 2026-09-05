@@ -1,5 +1,7 @@
 "use client";
 
+import { protectedRefetchInterval } from "@/client/session-recovery";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	BellIcon,
@@ -10,7 +12,7 @@ import {
 	TimerIcon,
 	UserRoundCheckIcon,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useEffect, useRef, useState } from "react";
 import { reportUserError } from "@/client/error-feedback";
 import { useDeviceTime } from "@/components/device-time-provider";
@@ -336,7 +338,7 @@ export function NotificationCenter() {
 	const query = useQuery({
 		...listNotificationsQueryOptions(),
 		enabled: open || afterFirstPaint,
-		refetchInterval: open ? 30_000 : false,
+		refetchInterval: open ? protectedRefetchInterval : false,
 		meta: { errorMode: "inline" },
 	});
 	const markRead = useMutation({

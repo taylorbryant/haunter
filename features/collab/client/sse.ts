@@ -11,6 +11,7 @@ export function bindWorkspaceEvents(
 	input: {
 		onEvent(event: WorkspaceEvent): void;
 		onConnected(): void;
+		onConnectionError?(): void;
 	},
 ): () => void {
 	let disposed = false;
@@ -36,6 +37,7 @@ export function bindWorkspaceEvents(
 			}
 		});
 		source.addEventListener("error", () => {
+			input.onConnectionError?.();
 			source?.close();
 			source = null;
 			if (disposed || reconnectTimer) return;

@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDownIcon, XIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { authErrorMessage } from "@/client/error-feedback";

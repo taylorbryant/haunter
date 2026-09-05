@@ -10,7 +10,8 @@ import {
 	Trash2Icon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { reportUserError, userErrorMessage } from "@/client/error-feedback";
