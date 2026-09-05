@@ -10,7 +10,6 @@ import {
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentType } from "react";
-import { durableDraftCoordinator } from "@/client/durable-draft-coordinator";
 import { DurableDraftStorageProvider } from "@/client/durable-draft-storage-provider";
 import type { DurableDraftStorage } from "@/client/durable-drafts";
 import type { LocalDraft } from "@/client/local-drafts";
@@ -115,14 +114,6 @@ const storage: DurableDraftStorage<string> = {
 	},
 };
 
-mock.module("@/client/session-expiration", () => ({
-	SESSION_EXPIRED_MESSAGE:
-		"Your session expired. Sign in again to continue syncing.",
-	getSessionExpiredSnapshot: () => false,
-	isSessionExpiredError: () => false,
-	reportSessionExpired: () => false,
-}));
-
 mock.module("../components/editor/haunter-editor", () => ({
 	default: () => null,
 }));
@@ -202,9 +193,14 @@ test("flushes a title safely when the editor unmounts before the debounce", asyn
 	});
 	await user.clear(input);
 	await user.type(input, "Survives navigation");
+	await waitFor(() => {
+		expect(draftWrites.at(-1)?.payload).toBe("Survives navigation");
+	});
 	await act(async () => {
 		first.unmount();
-		await durableDraftCoordinator.flushAllLocal();
+		await waitFor(() => {
+			expect(titleUpdates).toHaveLength(1);
+		});
 	});
 
 	await waitFor(() => {
@@ -216,16 +212,16 @@ test("flushes a title safely when the editor unmounts before the debounce", asyn
 	expect(storedDraft).toBeNull();
 
 	const remounted = renderPageEditor();
-	expect(
-		(
-			remounted.getByRole("textbox", {
-				name: "Page title",
-			}) as HTMLTextAreaElement
-		).value,
-	).toBe("Survives navigation");
+	await waitFor(() => {
+		const remountedInput = remounted.getByRole("textbox", {
+			name: "Page title",
+		}) as HTMLTextAreaElement;
+		expect(remountedInput.value).toBe("Survives navigation");
+		expect(remountedInput.readOnly).toBe(false);
+	});
 });
 
-test("restores and syncs a title saved before reauthentication", async () => {
+test("restores and syncs a same-version title draft after remount", async () => {
 	storedDraft = {
 		key: JSON.stringify(["user_1", "page-title", page.id]),
 		userId: "user_1",
@@ -233,7 +229,7 @@ test("restores and syncs a title saved before reauthentication", async () => {
 		resourceType: "page-title",
 		resourceId: page.id,
 		baseVersion: page.updatedAt,
-		payload: "Recovered after sign-in",
+		payload: "Recovered after reload",
 		status: "unsaved",
 		updatedAt: "2026-09-03T00:00:00.000Z",
 	};
@@ -243,7 +239,7 @@ test("restores and syncs a title saved before reauthentication", async () => {
 	await waitFor(() => {
 		expect(titleUpdates).toContainEqual({
 			path: { id: page.id },
-			body: { title: "Recovered after sign-in", baseTitle: "Server title" },
+			body: { title: "Recovered after reload", baseTitle: "Server title" },
 		});
 	});
 	expect(storedDraft).toBeNull();

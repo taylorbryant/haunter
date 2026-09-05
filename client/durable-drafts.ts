@@ -54,7 +54,6 @@ export type DurableDraftStatus =
 	| "saving-local"
 	| "pending"
 	| "syncing"
-	| "paused-auth"
 	| "conflict"
 	| "resolving"
 	| "invalid"
@@ -98,7 +97,6 @@ type DraftEvent<T> =
 	| { type: "BEGIN_USE_SERVER" }
 	| { type: "USE_SERVER" }
 	| { type: "RETRY" }
-	| { type: "AUTH_RESTORED" }
 	| { type: "SYNC_NOW" }
 	| { type: "ADOPT_SERVER"; value: T; version: string | null }
 	| { type: "REBASE_SERVER"; value: T; version: string | null }
@@ -137,9 +135,6 @@ export type DurableDraftControllerOptions<T, Metadata = never> = {
 	) => boolean;
 	areValuesEqual?: (left: T, right: T) => boolean;
 	validate?: (value: T) => string | null;
-	isAuthError?: (error: unknown) => boolean;
-	isAuthExpired?: () => boolean;
-	onAuthError?: (error: unknown) => void;
 	isConflictError?: (error: unknown) => boolean;
 	loadServer?: () => Promise<DurableDraftServerSave<T, Metadata>>;
 	onServerSaved?: (result: DurableDraftServerSave<T, Metadata>) => void;
@@ -262,7 +257,6 @@ export class DurableDraftController<T, Metadata = never> {
 						draft.baseVersion === context.serverVersion
 					);
 				},
-				authIsExpired: () => options.isAuthExpired?.() ?? false,
 				valueIsInvalid: ({ context }) =>
 					Boolean(options.validate?.(context.durableValue)),
 				hasPendingDurableDraft: ({ context }) =>
@@ -272,8 +266,6 @@ export class DurableDraftController<T, Metadata = never> {
 					invocationOutput<SyncOutput<T, Metadata>>(event).revision,
 				isServerConflict: ({ event }) =>
 					invocationError(event) instanceof ServerConflict,
-				isAuthFailure: ({ event }) =>
-					options.isAuthError?.(invocationError(event)) ?? false,
 			},
 			actions: {
 				restoreResumableDraft: assign(({ context, event }) => {
@@ -359,8 +351,6 @@ export class DurableDraftController<T, Metadata = never> {
 					...context,
 					error: invocationError(event),
 				})),
-				reportAuthFailure: ({ event }) =>
-					options.onAuthError?.(invocationError(event)),
 				prepareKeepMine: assign(({ context, event }) =>
 					event.type === "KEEP_MINE"
 						? {
@@ -488,7 +478,6 @@ export class DurableDraftController<T, Metadata = never> {
 					after: {
 						remoteDebounce: [
 							{ guard: "valueIsInvalid", target: "invalid" },
-							{ guard: "authIsExpired", target: "pausedAuth" },
 							{ target: "syncing" },
 						],
 					},
@@ -505,7 +494,6 @@ export class DurableDraftController<T, Metadata = never> {
 						},
 						SYNC_NOW: [
 							{ guard: "valueIsInvalid", target: "invalid" },
-							{ guard: "authIsExpired", target: "pausedAuth" },
 							{ target: "syncing" },
 						],
 					},
@@ -534,11 +522,6 @@ export class DurableDraftController<T, Metadata = never> {
 								actions: "captureInvocationConflict",
 							},
 							{
-								guard: "isAuthFailure",
-								target: "pausedAuth",
-								actions: ["applyInvocationFailure", "reportAuthFailure"],
-							},
-							{
 								target: "syncError",
 								actions: "applyInvocationFailure",
 							},
@@ -551,23 +534,6 @@ export class DurableDraftController<T, Metadata = never> {
 							target: "storageError",
 							actions: "applyLocalFailure",
 						},
-					},
-				},
-				pausedAuth: {
-					on: {
-						EDIT: { actions: "applyEdit" },
-						LOCAL_COMMITTED: { actions: "applyLocalCommit" },
-						LOCAL_FAILED: {
-							target: "storageError",
-							actions: "applyLocalFailure",
-						},
-						AUTH_RESTORED: [
-							{
-								guard: "hasPendingDurableDraft",
-								target: "scheduled",
-							},
-							{ target: "clean" },
-						],
 					},
 				},
 				conflict: {
@@ -637,10 +603,7 @@ export class DurableDraftController<T, Metadata = never> {
 							target: "storageError",
 							actions: "applyLocalFailure",
 						},
-						RETRY: [
-							{ guard: "authIsExpired", target: "pausedAuth" },
-							{ target: "syncing" },
-						],
+						RETRY: { target: "syncing" },
 					},
 				},
 			},
@@ -696,12 +659,6 @@ export class DurableDraftController<T, Metadata = never> {
 	retry() {
 		if (this.view.status === "storage-error") {
 			this.edit(this.view.value);
-			return;
-		}
-		if (this.view.status === "paused-auth") {
-			if (!(this.options.isAuthExpired?.() ?? false)) {
-				this.actor.send({ type: "AUTH_RESTORED" });
-			}
 			return;
 		}
 		this.actor.send({ type: "RETRY" });
@@ -802,7 +759,6 @@ export class DurableDraftController<T, Metadata = never> {
 		if (
 			this.view.status === "conflict" ||
 			this.view.status === "resolving" ||
-			this.view.status === "paused-auth" ||
 			this.view.status === "invalid" ||
 			this.view.status === "storage-error"
 		) {
@@ -818,7 +774,6 @@ export class DurableDraftController<T, Metadata = never> {
 					resolve(true);
 				} else if (
 					this.view.status === "conflict" ||
-					this.view.status === "paused-auth" ||
 					this.view.status === "invalid" ||
 					this.view.status === "storage-error" ||
 					this.view.status === "sync-error"
@@ -993,7 +948,6 @@ export class DurableDraftController<T, Metadata = never> {
 		if (machineState === "loading") status = "loading";
 		else if (machineState === "conflict") status = "conflict";
 		else if (machineState === "resolving") status = "resolving";
-		else if (machineState === "pausedAuth") status = "paused-auth";
 		else if (machineState === "storageError") status = "storage-error";
 		else if (machineState === "syncError") status = "sync-error";
 		else if (machineState === "invalid" || validationError) status = "invalid";

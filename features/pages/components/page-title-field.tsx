@@ -10,16 +10,10 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { durableDraftCoordinator } from "@/client/durable-draft-coordinator";
 import { useDurableDraftStorage } from "@/client/durable-draft-storage-provider";
 import { DurableDraftController } from "@/client/durable-drafts";
 import { userErrorMessage } from "@/client/error-feedback";
 import { localDraftKey } from "@/client/local-drafts";
-import {
-	getSessionExpiredSnapshot,
-	isSessionExpiredError,
-	reportSessionExpired,
-} from "@/client/session-expiration";
 import { Button } from "@/components/ui/button";
 import {
 	consumeTitleFocus,
@@ -133,9 +127,6 @@ function EditablePageTitleField({
 					value.length > PAGE_TITLE_MAX_LENGTH
 						? PAGE_TITLE_TOO_LONG_MESSAGE
 						: null,
-				isAuthError: isSessionExpiredError,
-				isAuthExpired: getSessionExpiredSnapshot,
-				onAuthError: reportSessionExpired,
 				isConflictError: (error) =>
 					error instanceof ContractError && error.status === 409,
 				loadServer: async () => {
@@ -182,13 +173,12 @@ function EditablePageTitleField({
 	useEffect(() => {
 		const generation = ++lifecycleGeneration.current;
 		controller.start();
-		const unregisterDraft = durableDraftCoordinator.register(controller);
 		const unregisterFlusher = registerPageSaveFlusher(page.id, () =>
 			controller.flushServer(),
 		);
 		return () => {
 			unregisterFlusher();
-			unregisterDraft();
+			void controller.flushLocal().catch(() => undefined);
 			queueMicrotask(() => {
 				if (lifecycleGeneration.current !== generation) return;
 				void controller.flushServer().finally(() => {

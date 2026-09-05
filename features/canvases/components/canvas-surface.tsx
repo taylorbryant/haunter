@@ -12,7 +12,6 @@ import {
 	type Editor,
 	loadSnapshot,
 } from "tldraw";
-import { durableDraftCoordinator } from "@/client/durable-draft-coordinator";
 import { useDurableDraftStorage } from "@/client/durable-draft-storage-provider";
 import {
 	DurableDraftController,
@@ -20,11 +19,6 @@ import {
 } from "@/client/durable-drafts";
 import { userErrorMessage } from "@/client/error-feedback";
 import { localDraftKey } from "@/client/local-drafts";
-import {
-	getSessionExpiredSnapshot,
-	isSessionExpiredError,
-	reportSessionExpired,
-} from "@/client/session-expiration";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -217,9 +211,6 @@ function DurableCanvasSurface({
 					CanvasSnapshotSchema.safeParse(value).success,
 				areValuesEqual: (left, right) =>
 					serializeCanvasSnapshot(left) === serializeCanvasSnapshot(right),
-				isAuthError: isSessionExpiredError,
-				isAuthExpired: getSessionExpiredSnapshot,
-				onAuthError: reportSessionExpired,
 				isConflictError: (error) =>
 					error instanceof ContractError && error.status === 409,
 				loadServer: async () => {
@@ -261,13 +252,12 @@ function DurableCanvasSurface({
 	useEffect(() => {
 		const generation = ++lifecycleGeneration.current;
 		controller.start();
-		const unregisterDraft = durableDraftCoordinator.register(controller);
 		const unregisterFlusher = registerCanvasSaveFlusher(canvas.id, () =>
 			controller.flushServer(),
 		);
 		return () => {
 			unregisterFlusher();
-			unregisterDraft();
+			void controller.flushLocal().catch(() => undefined);
 			queueMicrotask(() => {
 				if (lifecycleGeneration.current !== generation) return;
 				void controller.flushServer().finally(() => {
@@ -322,13 +312,11 @@ function MountedCanvasSurface({
 	const saveState: CanvasSaveState =
 		draft.status === "saved"
 			? "saved"
-			: draft.status === "paused-auth"
-				? "local"
-				: draft.status === "saving-local" ||
-						draft.status === "pending" ||
-						draft.status === "syncing"
-					? "saving"
-					: "error";
+			: draft.status === "saving-local" ||
+					draft.status === "pending" ||
+					draft.status === "syncing"
+				? "saving"
+				: "error";
 	const isBusy =
 		draft.status === "saving-local" ||
 		draft.status === "syncing" ||

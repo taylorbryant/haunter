@@ -1,9 +1,4 @@
 import { contractErrorMessage } from "@beignet/core/client";
-import {
-	isSessionExpiredError,
-	reportSessionExpired,
-	SESSION_EXPIRED_MESSAGE,
-} from "@/client/session-expiration";
 
 export type ErrorFeedbackMode = "global" | "inline" | "silent";
 
@@ -20,7 +15,6 @@ export function userErrorMessage(
 	error: unknown,
 	fallback = "Something went wrong. Please try again.",
 ) {
-	if (isSessionExpiredError(error)) return SESSION_EXPIRED_MESSAGE;
 	return contractErrorMessage(error, fallback);
 }
 
@@ -46,17 +40,10 @@ export function reportUserError(
 	error: unknown,
 	fallback = "Something went wrong. Please try again.",
 ) {
-	if (reportSessionExpired(error)) return SESSION_EXPIRED_MESSAGE;
 	const message =
 		typeof error === "string" ? error : userErrorMessage(error, fallback);
 	for (const listener of listeners) listener(message);
 	return message;
-}
-
-/** Report an authenticated Better Auth failure without duplicating a 401 toast. */
-export function reportAuthError(error: unknown, fallback: string) {
-	if (reportSessionExpired(error)) return SESSION_EXPIRED_MESSAGE;
-	return reportUserError(authErrorMessage(error, fallback));
 }
 
 export function subscribeUserErrors(listener: ErrorListener) {

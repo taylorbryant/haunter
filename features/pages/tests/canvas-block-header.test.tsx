@@ -38,15 +38,4 @@ test("canvas header announces saving and exposes the correct fullscreen action",
 	);
 	expect(view.getByRole("button", { name: "Close canvas" })).not.toBeNull();
 	expect(view.queryByText("Saving…")).toBeNull();
-
-	view.rerender(
-		<CanvasBlockHeader
-			expanded
-			saveState="local"
-			onToggle={() => {
-				toggles += 1;
-			}}
-		/>,
-	);
-	expect(view.getByText("Saved locally")).not.toBeNull();
 });

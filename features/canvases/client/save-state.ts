@@ -6,7 +6,7 @@ const flushers = new Map<string, () => Promise<boolean>>();
 const saveStates = new Map<string, CanvasSaveState>();
 const saveStateListeners = new Map<string, Set<() => void>>();
 
-export type CanvasSaveState = "saved" | "local" | "saving" | "error";
+export type CanvasSaveState = "saved" | "saving" | "error";
 
 export function setCanvasSaveState(canvasId: string, next: CanvasSaveState) {
 	if ((saveStates.get(canvasId) ?? "saved") === next) return;

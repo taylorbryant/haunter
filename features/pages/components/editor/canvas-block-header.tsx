@@ -20,11 +20,7 @@ export function CanvasBlockHeader({
 				aria-live="polite"
 				className="min-w-0 truncate px-1 text-muted-foreground text-xs"
 			>
-				{saveState === "saving"
-					? "Saving…"
-					: saveState === "local"
-						? "Saved locally"
-						: null}
+				{saveState === "saving" ? "Saving…" : null}
 			</span>
 			<button
 				ref={buttonRef}

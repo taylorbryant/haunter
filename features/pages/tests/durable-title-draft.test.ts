@@ -126,33 +126,29 @@ describe("durable title draft actor", () => {
 		controller.stop();
 	});
 
-	test("pauses on authorization expiry and leaves the durable draft intact", async () => {
+	test("keeps a failed server save recoverable and retries it", async () => {
 		const memory = createMemoryStorage();
-		let reported = false;
+		let offline = true;
 		const controller = createTitleController(memory.storage, {
-			isAuthError: (error) =>
-				typeof error === "object" &&
-				error !== null &&
-				"status" in error &&
-				error.status === 401,
-			onAuthError: () => {
-				reported = true;
-			},
-			saveServer: async () => {
-				throw { status: 401 };
+			saveServer: async ({ value }) => {
+				if (offline) throw new Error("offline");
+				return { value, version: "v2" };
 			},
 		});
 		controller.start();
 		await waitForDraft(controller, (draft) => draft.status === "saved");
 
 		controller.edit("Keep this sentence");
-		await waitForDraft(controller, (draft) => draft.status === "paused-auth");
-
-		expect(reported).toBe(true);
+		await waitForDraft(controller, (draft) => draft.status === "sync-error");
 		expect(memory.stored).toMatchObject({
 			payload: "Keep this sentence",
 			status: "unsaved",
 		});
+
+		offline = false;
+		controller.retry();
+		await waitForDraft(controller, (draft) => draft.status === "saved");
+		expect(memory.stored).toBeNull();
 		controller.stop();
 	});
 

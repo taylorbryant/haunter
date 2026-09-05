@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authClient } from "@/client/auth-client";
-import { reportAuthError } from "@/client/error-feedback";
+import { authErrorMessage, reportUserError } from "@/client/error-feedback";
 import { useAppSession } from "@/components/app-session-provider";
 
 export function useWorkspaceRouteSync(
@@ -43,7 +43,9 @@ export function useWorkspaceRouteSync(
 				router.refresh();
 			} catch (error) {
 				setPendingWorkspaceId(null);
-				reportAuthError(error, "The workspace could not be activated.");
+				reportUserError(
+					authErrorMessage(error, "The workspace could not be activated."),
+				);
 			}
 		})();
 	}, [options.syncActive, activeId, pendingWorkspaceId, workspaceId, router]);

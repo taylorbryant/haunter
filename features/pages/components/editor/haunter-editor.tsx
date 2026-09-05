@@ -47,7 +47,6 @@ import {
 	useSyncExternalStore,
 } from "react";
 import { apiClient } from "@/client";
-import { durableDraftCoordinator } from "@/client/durable-draft-coordinator";
 import { useDurableDraftStorage } from "@/client/durable-draft-storage-provider";
 import {
 	DurableDraftController,
@@ -55,11 +54,6 @@ import {
 } from "@/client/durable-drafts";
 import { reportUserError, userErrorMessage } from "@/client/error-feedback";
 import { localDraftKey } from "@/client/local-drafts";
-import {
-	getSessionExpiredSnapshot,
-	isSessionExpiredError,
-	reportSessionExpired,
-} from "@/client/session-expiration";
 import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
 import { invalidateNotifications } from "@/features/notifications/client/queries";
@@ -336,7 +330,7 @@ function getSlashMenuItems(
 	return Promise.resolve(filterSuggestionItems(items, query));
 }
 
-export type SaveState = "saved" | "local" | "pending" | "saving" | "error";
+export type SaveState = "saved" | "pending" | "saving" | "error";
 
 function cloneDocument(content: BlockJson[]): BlockJson[] {
 	return structuredClone(content);
@@ -442,9 +436,6 @@ function DurablePageBody(
 					PageContentSchema.safeParse(value).success,
 				areValuesEqual: (left, right) =>
 					JSON.stringify(left) === JSON.stringify(right),
-				isAuthError: isSessionExpiredError,
-				isAuthExpired: getSessionExpiredSnapshot,
-				onAuthError: reportSessionExpired,
 				isConflictError: (error) =>
 					error instanceof ContractError && error.status === 409,
 				loadServer: async () => {
@@ -503,13 +494,12 @@ function DurablePageBody(
 	useEffect(() => {
 		const generation = ++lifecycleGeneration.current;
 		controller.start();
-		const unregisterDraft = durableDraftCoordinator.register(controller);
 		const unregisterFlusher = registerPageSaveFlusher(props.pageId, () =>
 			controller.flushServer(),
 		);
 		return () => {
 			unregisterFlusher();
-			unregisterDraft();
+			void controller.flushLocal().catch(() => undefined);
 			queueMicrotask(() => {
 				if (lifecycleGeneration.current !== generation) return;
 				void controller.flushServer().finally(() => {
@@ -677,13 +667,11 @@ function MountedHaunterEditor({
 	const saveState: SaveState =
 		draft.status === "saved"
 			? "saved"
-			: draft.status === "paused-auth"
-				? "local"
-				: draft.status === "saving-local" || draft.status === "pending"
-					? "pending"
-					: draft.status === "syncing"
-						? "saving"
-						: "error";
+			: draft.status === "saving-local" || draft.status === "pending"
+				? "pending"
+				: draft.status === "syncing"
+					? "saving"
+					: "error";
 	const isBusy =
 		draft.status === "saving-local" ||
 		draft.status === "syncing" ||
@@ -872,11 +860,9 @@ function MountedHaunterEditor({
 			<span className="sr-only" aria-live="polite">
 				{saveState === "saving" || saveState === "pending"
 					? "Saving"
-					: saveState === "local"
-						? "Saved locally"
-						: saveState === "error"
-							? "Save failed"
-							: "Saved"}
+					: saveState === "error"
+						? "Save failed"
+						: "Saved"}
 			</span>
 		</div>
 	);

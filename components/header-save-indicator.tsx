@@ -44,8 +44,6 @@ export function HeaderSaveIndicator() {
 	let label: string | null;
 	if (state === "saving" || state === "pending") {
 		label = "Saving…";
-	} else if (state === "local") {
-		label = "Saved locally";
 	} else if (state === "error") {
 		label = "Save failed";
 	} else if (page) {
