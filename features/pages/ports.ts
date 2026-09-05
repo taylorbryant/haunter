@@ -78,6 +78,13 @@ export interface PageRepository {
 		id: string,
 		input: UpdatePageData,
 	): Promise<PageMeta>;
+	/** Apply metadata only while the persisted title still equals the caller's base. */
+	updateIfTitle(
+		scope: TenantScope,
+		id: string,
+		input: UpdatePageData,
+		baseTitle: string,
+	): Promise<PageMeta | null>;
 	saveContent(
 		scope: TenantScope,
 		id: string,

@@ -225,6 +225,11 @@ export const UpdatePageBodySchema = z.object({
 		.string()
 		.max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE)
 		.optional(),
+	/** Optional title-specific optimistic-concurrency precondition. */
+	baseTitle: z
+		.string()
+		.max(PAGE_TITLE_MAX_LENGTH, PAGE_TITLE_TOO_LONG_MESSAGE)
+		.optional(),
 	icon: z.string().max(16).nullable().optional(),
 	parentPageId: z.string().uuid().nullable().optional(),
 	position: z.number().optional(),

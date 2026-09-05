@@ -271,6 +271,23 @@ export function createDrizzlePageRepository(
 
 			return toPageMeta(row);
 		},
+		async updateIfTitle(scope, id, input, baseTitle) {
+			if (input.parentPageId !== undefined && input.parentPageId !== null) {
+				await assertPageInScope(db, scope, input.parentPageId);
+			}
+			const [row] = await db
+				.update(schema.pages)
+				.set({ ...input, updatedAt: new Date().toISOString() })
+				.where(
+					and(
+						eq(schema.pages.id, id),
+						eq(schema.pages.workspaceId, tenantScopeId(scope)),
+						eq(schema.pages.title, baseTitle),
+					),
+				)
+				.returning(metaColumns);
+			return row ? toPageMeta(row) : null;
+		},
 		async saveContent(
 			scope,
 			id: string,

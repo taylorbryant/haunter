@@ -572,6 +572,31 @@ describe("pages use cases", () => {
 		expect(fetched.contentUpdatedAt).toBe(saved.contentUpdatedAt);
 	});
 
+	it("rejects a title write based on a stale title", async () => {
+		const { workspace, tester, ctx } = await createFixture();
+		const page = await tester.run(
+			createPageUseCase,
+			{ workspaceId: workspace.id, title: "Original" },
+			{ ctx },
+		);
+
+		await tester.run(
+			updatePageUseCase,
+			{ id: page.id, title: "Writer A", baseTitle: "Original" },
+			{ ctx },
+		);
+		await expect(
+			tester.run(
+				updatePageUseCase,
+				{ id: page.id, title: "Writer B", baseTitle: "Original" },
+				{ ctx },
+			),
+		).rejects.toThrow(/changed since/i);
+
+		const fetched = await tester.run(getPageUseCase, { id: page.id }, { ctx });
+		expect(fetched.title).toBe("Writer A");
+	});
+
 	it("rejects moving a page under one of its descendants", async () => {
 		const { workspace, tester, ctx } = await createFixture();
 

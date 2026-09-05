@@ -269,6 +269,16 @@ export function createTestPageRepository(): PageRepository {
 			pages.set(id, next);
 			return toMeta(next);
 		},
+		async updateIfTitle(scope, id, input, baseTitle) {
+			const page = pages.get(id);
+			if (!page || page.workspaceId !== tenantScopeId(scope)) {
+				throw new Error(`Page not found: ${id}`);
+			}
+			if (page.title !== baseTitle) return null;
+			const next = { ...page, ...input, updatedAt: new Date().toISOString() };
+			pages.set(id, next);
+			return toMeta(next);
+		},
 		async saveContent(
 			scope,
 			id: string,
