@@ -1,11 +1,13 @@
 "use client";
 
+import Dexie, { type Table } from "dexie";
+
 const DATABASE_NAME = "haunter-local-drafts";
 const DATABASE_VERSION = 1;
 const STORE_NAME = "drafts";
 const HINT_PREFIX = "haunter:local-draft:";
 
-export type LocalDraftResourceType = "page" | "canvas";
+export type LocalDraftResourceType = "page" | "page-title" | "canvas";
 
 export type LocalDraft<T> = {
 	key: string;
@@ -15,21 +17,33 @@ export type LocalDraft<T> = {
 	resourceId: string;
 	baseVersion: string | null;
 	payload: T;
-	status: "conflict";
+	status: "conflict" | "unsaved";
 	updatedAt: string;
+	/** Monotonic per-resource revision used to reconcile overlapping saves. */
+	revision?: number;
+	/** Globally unique token for the exact browser write represented by this row. */
+	writeId?: string;
 };
 
 export type LocalDraftBackend = {
 	get<T>(key: string): Promise<LocalDraft<T> | null>;
 	put<T>(draft: LocalDraft<T>): Promise<void>;
 	delete(key: string): Promise<void>;
+	acknowledgeSaved?<T>(
+		key: string,
+		savedWriteId: string,
+		serverVersion: string | null,
+	): Promise<LocalDraft<T> | null>;
 };
 
 type DraftHints = {
 	has(key: string): boolean;
-	set(key: string): void;
+	set(key: string): boolean;
 	delete(key: string): void;
 };
+
+const LOCAL_DRAFT_STORAGE_UNAVAILABLE_MESSAGE =
+	"Local recovery storage is unavailable.";
 
 export function localDraftKey(
 	userId: string,
@@ -39,91 +53,58 @@ export function localDraftKey(
 	return JSON.stringify([userId, resourceType, resourceId]);
 }
 
-function requestResult<T>(request: IDBRequest<T>) {
-	return new Promise<T>((resolve, reject) => {
-		request.addEventListener("success", () => resolve(request.result), {
-			once: true,
-		});
-		request.addEventListener(
-			"error",
-			() => reject(request.error ?? new Error("IndexedDB request failed.")),
-			{ once: true },
-		);
-	});
+class LocalDraftDatabase extends Dexie {
+	drafts!: Table<LocalDraft<unknown>, string>;
+
+	constructor() {
+		super(DATABASE_NAME);
+		// This describes the existing v1 database, so adopting Dexie does not
+		// invalidate recovery copies written by the previous native-IDB adapter.
+		this.version(DATABASE_VERSION).stores({ [STORE_NAME]: "key" });
+	}
 }
 
-function transactionFinished(transaction: IDBTransaction) {
-	return new Promise<void>((resolve, reject) => {
-		transaction.addEventListener("complete", () => resolve(), { once: true });
-		transaction.addEventListener(
-			"abort",
-			() =>
-				reject(
-					transaction.error ?? new Error("IndexedDB transaction aborted."),
-				),
-			{ once: true },
-		);
-		transaction.addEventListener(
-			"error",
-			() =>
-				reject(transaction.error ?? new Error("IndexedDB transaction failed.")),
-			{ once: true },
-		);
-	});
-}
+let draftDatabase: LocalDraftDatabase | null = null;
 
-function openDraftDatabase() {
-	return new Promise<IDBDatabase>((resolve, reject) => {
-		const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-		request.addEventListener("upgradeneeded", () => {
-			if (!request.result.objectStoreNames.contains(STORE_NAME)) {
-				request.result.createObjectStore(STORE_NAME, { keyPath: "key" });
-			}
-		});
-		request.addEventListener("success", () => resolve(request.result), {
-			once: true,
-		});
-		request.addEventListener(
-			"error",
-			() =>
-				reject(request.error ?? new Error("IndexedDB could not be opened.")),
-			{ once: true },
-		);
-	});
+function getDraftDatabase() {
+	draftDatabase ??= new LocalDraftDatabase();
+	return draftDatabase;
 }
 
 const indexedDbBackend: LocalDraftBackend = {
 	async get<T>(key: string) {
-		const database = await openDraftDatabase();
-		try {
-			const transaction = database.transaction(STORE_NAME, "readonly");
-			const value = await requestResult(
-				transaction.objectStore(STORE_NAME).get(key),
-			);
-			return (value as LocalDraft<T> | undefined) ?? null;
-		} finally {
-			database.close();
-		}
+		const value = await getDraftDatabase().drafts.get(key);
+		return (value as LocalDraft<T> | undefined) ?? null;
 	},
 	async put<T>(draft: LocalDraft<T>) {
-		const database = await openDraftDatabase();
-		try {
-			const transaction = database.transaction(STORE_NAME, "readwrite");
-			transaction.objectStore(STORE_NAME).put(draft);
-			await transactionFinished(transaction);
-		} finally {
-			database.close();
-		}
+		await getDraftDatabase().drafts.put(draft as LocalDraft<unknown>);
 	},
 	async delete(key: string) {
-		const database = await openDraftDatabase();
-		try {
-			const transaction = database.transaction(STORE_NAME, "readwrite");
-			transaction.objectStore(STORE_NAME).delete(key);
-			await transactionFinished(transaction);
-		} finally {
-			database.close();
-		}
+		await getDraftDatabase().drafts.delete(key);
+	},
+	async acknowledgeSaved<T>(
+		key: string,
+		savedWriteId: string,
+		serverVersion: string | null,
+	) {
+		const database = getDraftDatabase();
+		return database.transaction("rw", database.drafts, async () => {
+			const current = (await database.drafts.get(key)) as
+				| LocalDraft<T>
+				| undefined;
+			if (!current) return null;
+			if (current.writeId === savedWriteId) {
+				await database.drafts.delete(key);
+				return null;
+			}
+			const remaining = {
+				...current,
+				baseVersion: serverVersion,
+				status: "unsaved" as const,
+			};
+			await database.drafts.put(remaining as LocalDraft<unknown>);
+			return remaining;
+		});
 	},
 };
 
@@ -138,8 +119,9 @@ const browserHints: DraftHints = {
 	set: (key) => {
 		try {
 			localStorage.setItem(`${HINT_PREFIX}${key}`, "1");
+			return true;
 		} catch {
-			// Local recovery must never block the primary server save path.
+			return false;
 		}
 	},
 	delete: (key) => {
@@ -155,9 +137,9 @@ export function createLocalDraftStore(
 	backend: LocalDraftBackend,
 	hints: DraftHints,
 ) {
-	const operations = new Map<string, Promise<void>>();
+	const operations = new Map<string, Promise<unknown>>();
 
-	const enqueue = (key: string, operation: () => Promise<void>) => {
+	const enqueue = <T>(key: string, operation: () => Promise<T>) => {
 		const previous = operations.get(key) ?? Promise.resolve();
 		const next = previous.catch(() => undefined).then(operation);
 		operations.set(key, next);
@@ -179,27 +161,74 @@ export function createLocalDraftStore(
 			return draft;
 		},
 		put<T>(draft: LocalDraft<T>) {
-			hints.set(draft.key);
+			if (!hints.set(draft.key)) {
+				return Promise.reject(
+					new Error(LOCAL_DRAFT_STORAGE_UNAVAILABLE_MESSAGE),
+				);
+			}
 			return enqueue(draft.key, () => backend.put(draft));
 		},
 		delete(key: string) {
 			return enqueue(key, async () => {
-				try {
-					await backend.delete(key);
-				} finally {
-					// A failed IndexedDB deletion must not make a resolved conflict
-					// reappear. The unreachable record is replaced by the next put.
+				await backend.delete(key);
+				hints.delete(key);
+			});
+		},
+		acknowledgeSaved<T>(
+			key: string,
+			savedWriteId: string,
+			serverVersion: string | null,
+		) {
+			return enqueue(key, async () => {
+				let remaining: LocalDraft<T> | null;
+				if (backend.acknowledgeSaved) {
+					remaining = await backend.acknowledgeSaved<T>(
+						key,
+						savedWriteId,
+						serverVersion,
+					);
+				} else {
+					const current = await backend.get<T>(key);
+					if (!current || current.writeId === savedWriteId) {
+						await backend.delete(key);
+						remaining = null;
+					} else {
+						remaining = {
+							...current,
+							baseVersion: serverVersion,
+							status: "unsaved",
+						};
+						await backend.put(remaining);
+					}
+				}
+				if (remaining) {
+					if (!hints.set(key)) {
+						throw new Error(LOCAL_DRAFT_STORAGE_UNAVAILABLE_MESSAGE);
+					}
+				} else {
 					hints.delete(key);
 				}
+				return remaining;
 			});
 		},
 	};
 }
 
-const browserDraftStore =
-	typeof indexedDB === "undefined" || typeof localStorage === "undefined"
-		? null
-		: createLocalDraftStore(indexedDbBackend, browserHints);
+function createBrowserDraftStore() {
+	try {
+		if (
+			typeof indexedDB === "undefined" ||
+			typeof localStorage === "undefined"
+		) {
+			return null;
+		}
+		return createLocalDraftStore(indexedDbBackend, browserHints);
+	} catch {
+		return null;
+	}
+}
+
+const browserDraftStore = createBrowserDraftStore();
 
 export function hasLocalDraftHint(key: string) {
 	return browserDraftStore?.hasHint(key) ?? false;
@@ -209,10 +238,28 @@ export function getLocalDraft<T>(key: string) {
 	return browserDraftStore?.get<T>(key) ?? Promise.resolve(null);
 }
 
-export function putLocalDraft<T>(draft: LocalDraft<T>) {
-	return browserDraftStore?.put(draft) ?? Promise.resolve();
+export async function putLocalDraft<T>(draft: LocalDraft<T>) {
+	if (!browserDraftStore) {
+		throw new Error(LOCAL_DRAFT_STORAGE_UNAVAILABLE_MESSAGE);
+	}
+	await browserDraftStore.put(draft);
 }
 
 export function deleteLocalDraft(key: string) {
 	return browserDraftStore?.delete(key) ?? Promise.resolve();
+}
+
+export async function acknowledgeLocalDraftSave<T>(
+	key: string,
+	savedWriteId: string,
+	serverVersion: string | null,
+) {
+	if (!browserDraftStore) {
+		throw new Error(LOCAL_DRAFT_STORAGE_UNAVAILABLE_MESSAGE);
+	}
+	return browserDraftStore.acknowledgeSaved<T>(
+		key,
+		savedWriteId,
+		serverVersion,
+	);
 }

@@ -1,10 +1,30 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { ContractError } from "@beignet/core/client";
 import { makeQueryClient } from "@/client";
 import {
 	authErrorMessage,
+	reportAuthError,
 	reportUserError,
 	subscribeUserErrors,
 } from "@/client/error-feedback";
+import {
+	clearSessionExpired,
+	isSessionExpiredError,
+	prepareForSessionRecovery,
+	registerSessionRecoveryPreparer,
+	subscribeSessionExpired,
+} from "@/client/session-expiration";
+
+function unauthorizedError() {
+	return new ContractError({
+		source: "http",
+		status: 401,
+		code: "UNAUTHORIZED",
+		message: "Authentication required",
+	});
+}
+
+beforeEach(clearSessionExpired);
 
 describe("client error feedback", () => {
 	test("publishes direct user-facing errors and supports cleanup", () => {
@@ -55,6 +75,80 @@ describe("client error feedback", () => {
 		unsubscribe();
 
 		expect(received).toEqual([]);
+	});
+
+	test("routes unauthorized failures to the shared session recovery UI", async () => {
+		const queryClient = makeQueryClient();
+		const messages: string[] = [];
+		let expirations = 0;
+		const unsubscribeErrors = subscribeUserErrors((message) =>
+			messages.push(message),
+		);
+		const unsubscribeExpiration = subscribeSessionExpired(() => {
+			expirations += 1;
+		});
+		const mutation = queryClient.getMutationCache().build(queryClient, {
+			meta: { errorMode: "inline" },
+			mutationFn: async () => {
+				throw unauthorizedError();
+			},
+		});
+
+		await mutation.execute(undefined).catch(() => undefined);
+		unsubscribeErrors();
+		unsubscribeExpiration();
+
+		expect(messages).toEqual([]);
+		expect(expirations).toBe(1);
+	});
+
+	test("routes Better Auth 401 responses without showing an Unauthorized toast", () => {
+		const messages: string[] = [];
+		let expirations = 0;
+		const error = {
+			message: "Unauthorized",
+			status: 401,
+			statusText: "Unauthorized",
+		};
+		const unsubscribeErrors = subscribeUserErrors((message) =>
+			messages.push(message),
+		);
+		const unsubscribeExpiration = subscribeSessionExpired(() => {
+			expirations += 1;
+		});
+
+		expect(isSessionExpiredError(error)).toBe(true);
+		reportAuthError(error, "The workspace could not be opened.");
+		unsubscribeErrors();
+		unsubscribeExpiration();
+
+		expect(messages).toEqual([]);
+		expect(expirations).toBe(1);
+	});
+
+	test("waits for open editors before leaving for sign-in", async () => {
+		const prepared: string[] = [];
+		const unregisterFirst = registerSessionRecoveryPreparer(async () => {
+			prepared.push("page");
+		});
+		const unregisterSecond = registerSessionRecoveryPreparer(async () => {
+			prepared.push("canvas");
+		});
+
+		await expect(prepareForSessionRecovery()).resolves.toBe(true);
+		unregisterFirst();
+		unregisterSecond();
+
+		expect(prepared.sort()).toEqual(["canvas", "page"]);
+	});
+
+	test("keeps the tab open when a local recovery write fails", async () => {
+		const unregister = registerSessionRecoveryPreparer(async () => {
+			throw new Error("IndexedDB unavailable");
+		});
+
+		await expect(prepareForSessionRecovery()).resolves.toBe(false);
+		unregister();
 	});
 
 	test("reports failed refreshes without discarding cached query data", async () => {

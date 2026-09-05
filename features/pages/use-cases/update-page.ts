@@ -59,14 +59,27 @@ export const updatePageUseCase = useCase
 				await assertNotDescendant(tx.pages, scope, page.id, input.parentPageId);
 			}
 
-			return tx.pages.update(scope, input.id, {
+			const updates = {
 				...(input.title !== undefined ? { title: input.title } : {}),
 				...(input.icon !== undefined ? { icon: input.icon } : {}),
 				...(input.parentPageId !== undefined
 					? { parentPageId: input.parentPageId }
 					: {}),
 				...(input.position !== undefined ? { position: input.position } : {}),
-			});
+			};
+			const updated =
+				input.title !== undefined && input.baseTitle !== undefined
+					? await tx.pages.updateIfTitle(
+							scope,
+							input.id,
+							updates,
+							input.baseTitle,
+						)
+					: await tx.pages.update(scope, input.id, updates);
+			if (!updated) {
+				throw appError("StaleWrite", { details: { id: input.id } });
+			}
+			return updated;
 		});
 		const eventType =
 			input.parentPageId !== undefined || input.position !== undefined

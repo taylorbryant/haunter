@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
-import { authErrorMessage, reportUserError } from "@/client/error-feedback";
+import { reportAuthError } from "@/client/error-feedback";
 import { useCommand } from "@/components/command-palette/registry";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { useThemePreferences } from "@/components/theme-provider";
@@ -150,7 +150,7 @@ export function NavUser({
 			// session and redirect to sign-in, and drops all client state.
 			window.location.href = "/";
 		} catch (error) {
-			reportUserError(authErrorMessage(error, "You could not be signed out."));
+			reportAuthError(error, "You could not be signed out.");
 		}
 	}
 

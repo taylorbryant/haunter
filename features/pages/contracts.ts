@@ -122,6 +122,7 @@ export const updatePage = pages
 		Forbidden: errors.Forbidden,
 		PageNotFound: errors.PageNotFound,
 		InvalidPageMove: errors.InvalidPageMove,
+		StaleWrite: errors.StaleWrite,
 	})
 	.responses({
 		200: PageMetaSchema,

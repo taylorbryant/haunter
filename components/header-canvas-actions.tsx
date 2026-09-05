@@ -46,6 +46,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 function saveLabel(state: CanvasSaveState) {
 	if (state === "saving") return "Saving…";
+	if (state === "local") return "Saved locally";
 	if (state === "error") return "Save failed";
 	return "Saved";
 }

@@ -301,11 +301,14 @@ export function setPageTitleInCache(
 	queryClient: QueryClient,
 	id: string,
 	title: string,
-	updatedAt: string,
+	updatedAt?: string,
 ) {
 	queryClient.setQueryData<Page>(
 		rq(getPage).key({ path: { id } }),
-		(current) => (current ? { ...current, title, updatedAt } : current),
+		(current) =>
+			current
+				? { ...current, title, ...(updatedAt ? { updatedAt } : {}) }
+				: current,
 	);
 	queryClient.setQueriesData<{ items: PageMeta[] }>(
 		rq(listPages).filter(),
@@ -314,7 +317,9 @@ export function setPageTitleInCache(
 				? {
 						...current,
 						items: current.items.map((page) =>
-							page.id === id ? { ...page, title, updatedAt } : page,
+							page.id === id
+								? { ...page, title, ...(updatedAt ? { updatedAt } : {}) }
+								: page,
 						),
 					}
 				: current,
@@ -325,10 +330,14 @@ export function setPageTitleInCache(
 			current
 				? {
 						favorites: current.favorites.map((page) =>
-							page.id === id ? { ...page, title, updatedAt } : page,
+							page.id === id
+								? { ...page, title, ...(updatedAt ? { updatedAt } : {}) }
+								: page,
 						),
 						recents: current.recents.map((page) =>
-							page.id === id ? { ...page, title, updatedAt } : page,
+							page.id === id
+								? { ...page, title, ...(updatedAt ? { updatedAt } : {}) }
+								: page,
 						),
 					}
 				: current,

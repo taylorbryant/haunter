@@ -237,6 +237,36 @@ describe("pageRoutes", () => {
 		expect(navigation.recents.map((page) => page.id)).toEqual([created.id]);
 	});
 
+	it("returns 409 when a title update loses its compare-and-set race", async () => {
+		const workspaceId = crypto.randomUUID().replaceAll("-", "");
+		const { app } = await createPagesTestApp({
+			auth: createSignedInAuth("user_test", workspaceId),
+		});
+		const requester = createTestRequester(app, {});
+		const created = await requester.request(createPage, {
+			body: { workspaceId, title: "Original" },
+			idempotencyKey: "title-cas-create",
+		});
+
+		await requester.request(updatePage, {
+			path: { id: created.id },
+			body: { title: "Writer A", baseTitle: "Original" },
+		});
+		const stale = await requester.safeRequest(updatePage, {
+			path: { id: created.id },
+			body: { title: "Writer B", baseTitle: "Original" },
+		});
+		const latest = await requester.request(getPage, {
+			path: { id: created.id },
+		});
+		await app.stop();
+
+		expect(stale.ok).toBe(false);
+		if (stale.ok) throw new Error("Expected a stale-write response.");
+		expect(stale.status).toBe(409);
+		expect(latest.title).toBe("Writer A");
+	});
+
 	it("rejects an excessively nested initial document over HTTP", async () => {
 		const workspace = { id: crypto.randomUUID().replaceAll("-", "") };
 		const { app } = await createPagesTestApp({

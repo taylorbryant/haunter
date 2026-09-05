@@ -12,7 +12,11 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
-import { authErrorMessage, reportUserError } from "@/client/error-feedback";
+import {
+	authErrorMessage,
+	reportAuthError,
+	reportUserError,
+} from "@/client/error-feedback";
 import { useAppSession } from "@/components/app-session-provider";
 import {
 	CommandRegistration,
@@ -193,9 +197,7 @@ export function WorkspaceSwitcher({
 			if (result.error) throw result.error;
 			router.push(`/w/${id}/home`);
 		} catch (switchError) {
-			reportUserError(
-				authErrorMessage(switchError, "The workspace could not be opened."),
-			);
+			reportAuthError(switchError, "The workspace could not be opened.");
 		}
 	}
 
@@ -239,11 +241,9 @@ export function WorkspaceSwitcher({
 				}
 				setName("");
 				setDialogOpen(false);
-				reportUserError(
-					authErrorMessage(
-						createError,
-						"The workspace was created, but it could not be opened.",
-					),
+				reportAuthError(
+					createError,
+					"The workspace was created, but it could not be opened.",
 				);
 			} else {
 				setError(
@@ -321,11 +321,9 @@ export function WorkspaceSwitcher({
 				if (activeResult.error) throw activeResult.error;
 				router.push(`/w/${next.id}/home`);
 			} catch (activationError) {
-				reportUserError(
-					authErrorMessage(
-						activationError,
-						"The workspace was deleted, but the next workspace could not be opened.",
-					),
+				reportAuthError(
+					activationError,
+					"The workspace was deleted, but the next workspace could not be opened.",
 				);
 				router.push("/");
 			}

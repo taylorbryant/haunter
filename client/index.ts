@@ -5,6 +5,10 @@ import {
 	type ErrorFeedbackMeta,
 	reportUserError,
 } from "@/client/error-feedback";
+import {
+	isSessionExpiredError,
+	reportSessionExpired,
+} from "@/client/session-expiration";
 
 export const apiClient = createClient({
 	validateInput: true,
@@ -16,6 +20,7 @@ export function makeQueryClient() {
 	return new QueryClient({
 		queryCache: new QueryCache({
 			onError: (error, query) => {
+				if (reportSessionExpired(error)) return;
 				const meta = query.meta as ErrorFeedbackMeta | undefined;
 				if (meta?.errorMode === "inline" || meta?.errorMode === "silent") {
 					return;
@@ -29,6 +34,7 @@ export function makeQueryClient() {
 		}),
 		mutationCache: new MutationCache({
 			onError: (error, _variables, _context, mutation) => {
+				if (reportSessionExpired(error)) return;
 				const meta = mutation.meta as ErrorFeedbackMeta | undefined;
 				if (meta?.errorMode === "inline" || meta?.errorMode === "silent") {
 					return;
@@ -39,6 +45,10 @@ export function makeQueryClient() {
 		defaultOptions: {
 			queries: {
 				staleTime: 60 * 1000,
+				retry: (failureCount, error) =>
+					typeof window !== "undefined" &&
+					!isSessionExpiredError(error) &&
+					failureCount < 3,
 			},
 		},
 	});
