@@ -1,3 +1,7 @@
+import {
+	getBrowserSessionRecovery,
+	isAuthenticationError,
+} from "./session-recovery";
 import { contractErrorMessage } from "@beignet/core/client";
 
 export type ErrorFeedbackMode = "global" | "inline" | "silent";
@@ -42,6 +46,8 @@ export function reportUserError(
 ) {
 	const message =
 		typeof error === "string" ? error : userErrorMessage(error, fallback);
+	if (getBrowserSessionRecovery() && isAuthenticationError(error))
+		return message;
 	for (const listener of listeners) listener(message);
 	return message;
 }

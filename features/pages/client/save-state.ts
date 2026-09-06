@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-export type PageSaveState = "saved" | "pending" | "saving" | "error";
+export type PageSaveState = "saved" | "pending" | "saving" | "error" | "paused";
 
 let state: PageSaveState = "saved";
 const listeners = new Set<() => void>();

@@ -10,7 +10,8 @@ import {
 	Trash2Icon,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useEffect, useState } from "react";
 import { reportUserError } from "@/client/error-feedback";
 import { useCurrentUser } from "@/components/app-session-provider";

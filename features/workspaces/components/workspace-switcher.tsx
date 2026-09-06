@@ -9,7 +9,7 @@ import {
 	UsersIcon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useState } from "react";
 import { authClient } from "@/client/auth-client";
 import { authErrorMessage, reportUserError } from "@/client/error-feedback";

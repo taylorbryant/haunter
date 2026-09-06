@@ -1,3 +1,4 @@
+import { protectedRefetchInterval } from "@/client/session-recovery";
 import type { QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
@@ -23,7 +24,7 @@ export function getCanvasQueryOptions(id: string) {
 		...rq(getCanvas).queryOptions({ path: { id } }),
 		// Liveblocks is only an acceleration layer. Polling keeps canvases fresh
 		// when live updates are disabled or a client misses a broadcast.
-		refetchInterval: 30_000,
+		refetchInterval: protectedRefetchInterval,
 	};
 }
 
@@ -36,7 +37,7 @@ export function listCanvasesQueryOptions(workspaceId: string) {
 		...rq(listCanvases).queryOptions({ path: { workspaceId } }),
 		// Workspace events accelerate this refresh, while polling covers disabled
 		// live updates and broadcasts missed during a connection gap.
-		refetchInterval: 30_000,
+		refetchInterval: protectedRefetchInterval,
 	};
 }
 
@@ -44,7 +45,7 @@ export function getCanvasNavigationQueryOptions(workspaceId: string) {
 	return {
 		...rq(getCanvasNavigation).queryOptions({ path: { workspaceId } }),
 		refetchOnMount: false,
-		refetchInterval: 30_000,
+		refetchInterval: protectedRefetchInterval,
 	};
 }
 

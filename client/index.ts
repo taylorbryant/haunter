@@ -1,3 +1,4 @@
+import { isAuthenticationError, sessionFetch } from "./session-recovery";
 import { createClient } from "@beignet/core/client";
 import { createReactQuery } from "@beignet/react-query";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
@@ -8,6 +9,7 @@ import {
 
 export const apiClient = createClient({
 	validateInput: true,
+	fetch: sessionFetch,
 });
 
 export const rq = createReactQuery(apiClient);
@@ -39,6 +41,9 @@ export function makeQueryClient() {
 		defaultOptions: {
 			queries: {
 				staleTime: 60 * 1000,
+				retry: (failureCount, error) =>
+					!isAuthenticationError(error) &&
+					failureCount < (typeof window === "undefined" ? 0 : 3),
 			},
 		},
 	});

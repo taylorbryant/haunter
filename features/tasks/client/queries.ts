@@ -1,3 +1,4 @@
+import { protectedRefetchInterval } from "@/client/session-recovery";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
 import { taskWriteLock } from "@/features/tasks/client/completion-lock";
@@ -141,7 +142,8 @@ export function listTasksQueryOptions(
 		// Shared workspaces: pick up other members' changes without a manual
 		// reload. Paused automatically while the tab is in the background.
 		refetchOnMount: false,
-		refetchInterval: () => (taskWriteLock.hasPendingWrites() ? false : 30_000),
+		refetchInterval: () =>
+			taskWriteLock.hasPendingWrites() ? false : protectedRefetchInterval(),
 		refetchOnWindowFocus: () => !taskWriteLock.hasPendingWrites(),
 		refetchOnReconnect: () => !taskWriteLock.hasPendingWrites(),
 	};

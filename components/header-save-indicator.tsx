@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
+import { useDraftRegistry } from "@/client/use-draft-registry";
 import { usePageSaveState } from "@/features/pages/client/save-state";
 import { useCachedPage } from "@/features/pages/client/use-cached-page";
 import { formatEditedAt } from "@/features/pages/lib/format-edited-at";
@@ -29,7 +30,8 @@ function useNow(intervalMs: number) {
 
 export function HeaderSaveIndicator() {
 	const pathname = usePathname();
-	const state = usePageSaveState();
+	const fallbackState = usePageSaveState();
+	const registry = useDraftRegistry();
 	const now = useNow(30_000);
 	const canEdit = useCanEditWorkspace();
 	const [historyOpen, setHistoryOpen] = useState(false);
@@ -40,9 +42,36 @@ export function HeaderSaveIndicator() {
 	const page = useCachedPage(pageId);
 
 	if (pageId === null) return null;
+	const drafts = registry
+		.entries()
+		.filter(
+			(entry) =>
+				entry.identity.resourceId === pageId &&
+				entry.identity.resourceType !== "canvas",
+		)
+		.map((entry) => entry.getSnapshot());
+	const state = drafts.length
+		? drafts.some((draft) =>
+				["storage-error", "sync-error", "conflict", "invalid"].includes(
+					draft.status,
+				),
+			)
+			? "error"
+			: drafts.some(
+						(draft) =>
+							draft.locallySaved === false ||
+							["pending", "syncing"].includes(draft.status),
+					)
+				? "saving"
+				: drafts.some((draft) => draft.remotePaused && draft.dirty)
+					? "paused"
+					: "saved"
+		: fallbackState;
 
 	let label: string | null;
-	if (state === "saving" || state === "pending") {
+	if (state === "paused") {
+		label = "Saved in this browser";
+	} else if (state === "saving" || state === "pending") {
 		label = "Saving…";
 	} else if (state === "error") {
 		label = "Save failed";

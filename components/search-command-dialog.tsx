@@ -2,7 +2,8 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { CornerDownLeftIcon, FileTextIcon } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useEffect, useRef, useState } from "react";
 import { useFilteredCommandGroups } from "@/components/command-palette/registry";
 import { Button } from "@/components/ui/button";

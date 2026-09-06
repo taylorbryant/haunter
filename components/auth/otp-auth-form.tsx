@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { sendSignInCode, verifySignInCode } from "@/client/email-code-auth";
 import { apiClient } from "@/client";
 import { authClient } from "@/client/auth-client";
 import { authErrorMessage } from "@/client/error-feedback";
@@ -49,11 +50,7 @@ export function OtpAuthForm() {
 		setEmail(address);
 
 		try {
-			const result = await authClient.emailOtp.sendVerificationOtp({
-				email: address,
-				type: "sign-in",
-			});
-			if (result.error) throw result.error;
+			await sendSignInCode(address);
 			setStep("code");
 		} catch (sendError) {
 			setError(
@@ -71,11 +68,7 @@ export function OtpAuthForm() {
 		setPending(true);
 		let result: Awaited<ReturnType<typeof authClient.signIn.emailOtp>>;
 		try {
-			result = await authClient.signIn.emailOtp({
-				email: email.trim(),
-				otp: code,
-			});
-			if (result.error) throw result.error;
+			result = await verifySignInCode(email, code);
 		} catch (verifyError) {
 			setPending(false);
 			setError(

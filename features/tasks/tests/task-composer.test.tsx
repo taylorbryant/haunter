@@ -5,9 +5,9 @@ import { TaskComposer } from "@/features/tasks/components/task-composer";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 
 beforeEach(installTestDom);
-afterEach(() => {
+afterEach(async () => {
 	cleanup();
-	uninstallTestDom();
+	await uninstallTestDom();
 });
 
 test("compact task creation clears immediately and restores a rejected draft", async () => {

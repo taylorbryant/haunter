@@ -45,6 +45,7 @@ import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspac
 import { useIsMobile } from "@/hooks/use-mobile";
 
 function saveLabel(state: CanvasSaveState) {
+	if (state === "paused") return "Saved in this browser";
 	if (state === "saving") return "Saving…";
 	if (state === "error") return "Save failed";
 	return "Saved";

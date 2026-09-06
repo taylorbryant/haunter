@@ -307,6 +307,9 @@ export const auth = betterAuth({
 	// could require for deleting an account. Treat sessions as always fresh so
 	// the type-to-confirm delete flow works session-authenticated.
 	session: {
+		// Renew only through the browser GET/POST session flow, which can return
+		// Set-Cookie. Server-only context reads must not consume the refresh window.
+		deferSessionRefresh: true,
 		freshAge: 0,
 		// Serve getSession from a signed cookie instead of a remote-DB lookup —
 		// that lookup was a ~100-150ms tax on every API request and layout

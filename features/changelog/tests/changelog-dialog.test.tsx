@@ -6,9 +6,9 @@ import type { ChangelogRelease } from "@/features/changelog/releases";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 
 beforeEach(installTestDom);
-afterEach(() => {
+afterEach(async () => {
 	cleanup();
-	uninstallTestDom();
+	await uninstallTestDom();
 });
 
 test("release rows expose their summary and select the requested release", async () => {

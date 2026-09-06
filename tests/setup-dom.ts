@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { act } from "react";
 
 let installedResizeObserver = false;
 let installedIntersectionObserver = false;
@@ -61,7 +62,11 @@ export function installTestDom() {
 	}
 }
 
-export function uninstallTestDom() {
+/** Unmount components first, then await teardown before starting another test. */
+export async function uninstallTestDom() {
+	// React can leave passive callbacks queued after a synchronous unmount.
+	// Drain them while window still exists, before Happy DOM restores globals.
+	await act(async () => {});
 	if (installedResizeObserver) {
 		Reflect.deleteProperty(globalThis, "ResizeObserver");
 		installedResizeObserver = false;
@@ -70,5 +75,5 @@ export function uninstallTestDom() {
 		Reflect.deleteProperty(globalThis, "IntersectionObserver");
 		installedIntersectionObserver = false;
 	}
-	GlobalRegistrator.unregister();
+	await GlobalRegistrator.unregister();
 }

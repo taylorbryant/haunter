@@ -1,7 +1,8 @@
 "use client";
 
 import { HouseIcon, ListTodoIcon, ShapesIcon, Trash2Icon } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useCommand } from "@/components/command-palette/registry";
 
 /**

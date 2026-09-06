@@ -4,9 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 
 beforeEach(installTestDom);
-afterEach(() => {
+afterEach(async () => {
 	cleanup();
-	uninstallTestDom();
+	await uninstallTestDom();
 });
 
 test("code editor header changes language and closes from the same chrome", async () => {

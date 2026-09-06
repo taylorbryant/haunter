@@ -38,11 +38,11 @@ describe("canvas navigation cache", () => {
 		const options = getCanvasNavigationQueryOptions("workspace_test");
 
 		expect(options.refetchOnMount).toBe(false);
-		expect(options.refetchInterval).toBe(30_000);
+		expect(options.refetchInterval()).toBe(30_000);
 	});
 
 	it("polls the standalone canvas list as a live-update fallback", () => {
-		expect(listCanvasesQueryOptions("workspace_test").refetchInterval).toBe(
+		expect(listCanvasesQueryOptions("workspace_test").refetchInterval()).toBe(
 			30_000,
 		);
 	});

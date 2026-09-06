@@ -34,6 +34,7 @@ export function ResponsiveDialog({
 	title,
 	description,
 	className,
+	finalFocus,
 	children,
 }: {
 	open: boolean;
@@ -42,6 +43,7 @@ export function ResponsiveDialog({
 	description: React.ReactNode;
 	/** Extra classes for the desktop DialogContent (e.g. sm:max-w-lg). */
 	className?: string;
+	finalFocus?: React.ComponentProps<typeof DialogContent>["finalFocus"];
 	children: React.ReactNode;
 }) {
 	const isMobile = useIsMobile();
@@ -49,7 +51,7 @@ export function ResponsiveDialog({
 	if (isMobile) {
 		return (
 			<Drawer showSwipeHandle open={open} onOpenChange={onOpenChange}>
-				<DrawerContent>
+				<DrawerContent finalFocus={finalFocus}>
 					<DrawerHeader>
 						<DrawerTitle>{title}</DrawerTitle>
 						<DrawerDescription>{description}</DrawerDescription>
@@ -66,7 +68,7 @@ export function ResponsiveDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className={className}>
+			<DialogContent className={className} finalFocus={finalFocus}>
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
 					<DialogDescription>{description}</DialogDescription>

@@ -1,8 +1,11 @@
+import { sessionFetch } from "@/client/session-recovery";
 import { createUploadClient } from "@beignet/core/uploads/client";
 // Type-only: the upload definition itself stays server-side.
 import type { pageUploads } from "@/features/pages/uploads";
 
-const uploadClient = createUploadClient<typeof pageUploads>();
+const uploadClient = createUploadClient<typeof pageUploads>({
+	fetch: sessionFetch,
+});
 
 /**
  * Upload an editor image and return the app URL that serves it back.
