@@ -7,9 +7,9 @@ import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 
 beforeEach(installTestDom);
 
-afterEach(() => {
+afterEach(async () => {
 	cleanup();
-	uninstallTestDom();
+	await uninstallTestDom();
 });
 
 test("mobile scheduling shows presets first and applies the draft when done", async () => {

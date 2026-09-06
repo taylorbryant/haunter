@@ -12,9 +12,9 @@ import { useCachedPage } from "@/features/pages/client/use-cached-page";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 
 beforeEach(installTestDom);
-afterEach(() => {
+afterEach(async () => {
 	cleanup();
-	uninstallTestDom();
+	await uninstallTestDom();
 });
 
 function CachedPageProbe({ pageId }: { pageId: string }) {

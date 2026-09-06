@@ -5,9 +5,9 @@ import { CanvasBlockHeader } from "@/features/pages/components/editor/canvas-blo
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 
 beforeEach(installTestDom);
-afterEach(() => {
+afterEach(async () => {
 	cleanup();
-	uninstallTestDom();
+	await uninstallTestDom();
 });
 
 test("canvas header announces saving and exposes the correct fullscreen action", async () => {

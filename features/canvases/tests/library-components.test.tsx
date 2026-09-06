@@ -5,9 +5,9 @@ import { CANVAS_LIBRARY_ITEMS } from "@/features/canvases/lib/library";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 
 beforeEach(installTestDom);
-afterEach(() => {
+afterEach(async () => {
 	cleanup();
-	uninstallTestDom();
+	await uninstallTestDom();
 });
 
 test("library items render every wireframe preview and insert the selected item", async () => {
