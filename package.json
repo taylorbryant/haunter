@@ -124,6 +124,7 @@
 	},
 	"patchedDependencies": {
 		"@tiptap/core@3.27.1": "patches/@tiptap%2Fcore@3.27.1.patch",
-		"@tiptap/core@3.30.0": "patches/@tiptap%2Fcore@3.30.0.patch"
+		"@tiptap/core@3.30.0": "patches/@tiptap%2Fcore@3.30.0.patch",
+		"@blocknote/core@0.54.0": "patches/@blocknote%2Fcore@0.54.0.patch"
 	}
 }
