@@ -12,6 +12,7 @@ import {
 	useSyncExternalStore,
 } from "react";
 import { downloadRecoveryDrafts } from "@/client/draft-export";
+import { refreshAuthQueries } from "@/client/auth-client";
 import { installDraftLifecycle } from "@/client/draft-lifecycle";
 import { draftRegistry } from "@/client/draft-registry";
 import {
@@ -133,7 +134,10 @@ export function SessionRecoveryProvider({
 						activeWorkspaceId: current.workspaceId,
 						workspaceRole: current.role,
 					});
-				if (previouslyBlocked) void queryClient.invalidateQueries();
+				if (previouslyBlocked) {
+					refreshAuthQueries();
+					void queryClient.invalidateQueries();
+				}
 			}
 			previouslyBlocked = current.blocked;
 		};

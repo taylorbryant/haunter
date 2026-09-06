@@ -29,3 +29,13 @@ export const authClient = createAuthClient({
 		oauthProviderClient(),
 	],
 });
+
+/** Refresh SDK-owned caches after the original account and workspace are verified. */
+export function refreshAuthQueries() {
+	// Better Auth's stores are separate from React Query. In-place sign-in and
+	// raw workspace verification do not invalidate the organization list.
+	authClient.$store.notify("$sessionSignal");
+	authClient.$store.notify("$listOrg");
+	// Active organization, member, and member role all observe this signal.
+	authClient.$store.notify("$activeOrgSignal");
+}
