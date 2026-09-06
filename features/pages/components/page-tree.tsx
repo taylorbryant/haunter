@@ -171,6 +171,8 @@ function useExpandedState(workspaceId: string) {
 export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const router = useRouter();
 	const pathname = usePathname();
+	const currentPathnameRef = useRef(pathname);
+	currentPathnameRef.current = pathname;
 	const queryClient = useQueryClient();
 	const { isMobile, setOpenMobile, setSuppressMobileFinalFocus } = useSidebar();
 	// Viewers browse the tree but get no create/rename/move/delete controls.
@@ -458,8 +460,16 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						// subtree's tasks just left the My Tasks list.
 						invalidateTasksWhenIdle(queryClient),
 					]);
-					if (activePageId && subtree.has(activePageId)) {
-						router.push(`/w/${workspaceId}`);
+					// Live updates or the user may have navigated during invalidation.
+					const currentRoute = currentPathnameRef.current.match(
+						/^\/w\/([^/]+)\/p\/([^/]+)/,
+					);
+					if (
+						currentRoute?.[1] === workspaceId &&
+						currentRoute[2] &&
+						subtree.has(currentRoute[2])
+					) {
+						router.push(`/w/${workspaceId}/home`);
 					}
 				},
 				onError: (error) =>

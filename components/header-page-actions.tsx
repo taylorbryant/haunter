@@ -222,7 +222,7 @@ export function HeaderPageActions() {
 				invalidateTasks(queryClient),
 			]);
 			if (currentPageIdRef.current === target.pageId) {
-				router.push(`/w/${target.workspaceId}`);
+				router.push(`/w/${target.workspaceId}/home`);
 			}
 		} catch (error) {
 			setTrashError(
