@@ -5,7 +5,12 @@ import { sendSignInCode, verifySignInCode } from "@/client/email-code-auth";
 import { authErrorMessage } from "@/client/error-feedback";
 import { ResponsiveDialog } from "@/components/responsive-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+	InputOTP,
+	InputOTPGroup,
+	InputOTPSeparator,
+	InputOTPSlot,
+} from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 
 export function SessionRecoveryDialog({
@@ -32,9 +37,9 @@ export function SessionRecoveryDialog({
 			setError(null);
 		}
 	}, [open]);
-	async function submit(event: React.FormEvent) {
-		event.preventDefault();
-		if (pending) return;
+	async function submit(event?: React.FormEvent) {
+		event?.preventDefault();
+		if (pending || (sent && code.length !== 6)) return;
 		setPending(true);
 		setError(null);
 		try {
@@ -76,18 +81,30 @@ export function SessionRecoveryDialog({
 				{sent ? (
 					<div className="space-y-2">
 						<Label htmlFor="recovery-code">6-digit code</Label>
-						<Input
+						<InputOTP
 							id="recovery-code"
 							name="code"
 							autoFocus
 							inputMode="numeric"
 							autoComplete="one-time-code"
 							maxLength={6}
+							disabled={pending}
 							value={code}
-							onChange={(event) =>
-								setCode(event.target.value.replace(/\D/g, ""))
-							}
-						/>
+							onChange={(next) => setCode(next.replace(/\D/g, ""))}
+							onComplete={() => submit()}
+						>
+							<InputOTPGroup>
+								<InputOTPSlot index={0} />
+								<InputOTPSlot index={1} />
+								<InputOTPSlot index={2} />
+							</InputOTPGroup>
+							<InputOTPSeparator />
+							<InputOTPGroup>
+								<InputOTPSlot index={3} />
+								<InputOTPSlot index={4} />
+								<InputOTPSlot index={5} />
+							</InputOTPGroup>
+						</InputOTP>
 					</div>
 				) : null}
 				{error ? (
