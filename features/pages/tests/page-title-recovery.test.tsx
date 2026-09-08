@@ -79,7 +79,7 @@ mock.module("@/features/members/client/use-workspace-role", () => ({
 }));
 
 mock.module("@/features/pages/client/queries", () => ({
-	getPageQueryOptions: () => ({}),
+	getEditorPageQueryOptions: () => ({}),
 	invalidatePage: () => Promise.resolve(),
 	invalidatePages: () => Promise.resolve(),
 	recordPageViewMutationOptions: () => ({ testKind: "record-view" }),

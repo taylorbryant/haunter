@@ -3,8 +3,9 @@ import { createServiceActor } from "@beignet/core/ports";
 import type { AppContext } from "@/app-context";
 import { adminTasks } from "../features/admin/tasks";
 import { getServer } from "./index";
+import { documentTasks } from "../features/documents/tasks";
 
-export const tasks = defineTasks([...adminTasks] as const);
+export const tasks = defineTasks([...adminTasks, ...documentTasks] as const);
 
 export async function createTaskContext(
 	args?: TaskRunContextArgs,

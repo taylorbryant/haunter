@@ -35,7 +35,7 @@ export type TaskOverdueNotificationPayload = z.infer<
 export const TaskAssignedNotificationPayloadSchema = z.object({
 	taskId: z.string().uuid(),
 	title: z.string(),
-	assignedByUserId: z.string(),
+	assignedByUserId: z.string().nullable(),
 	assignedByName: z.string(),
 	pageId: z.string().uuid().nullable(),
 	sourceBlockId: z.string().nullable(),

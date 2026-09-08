@@ -25,6 +25,16 @@ import {
 
 export const TaskBlockCurrentUserContext = createContext<string | null>(null);
 
+// Input rules run outside React. Resolve the creator at insertion time so
+// collaborators see the same persisted assignee, including after offline sync.
+const taskCreators = new WeakMap<object, string>();
+export function registerTaskCreator(editor: object, userId: string | null) {
+	if (userId) taskCreators.set(editor, userId);
+	return () => {
+		taskCreators.delete(editor);
+	};
+}
+
 const taskBlockConfig = {
 	type: "task",
 	propSchema: {
@@ -218,19 +228,25 @@ export const taskBlockSpec = createReactBlockSpec(
 			inputRules: [
 				{
 					find: /^\s?\[\s*\]\s$/,
-					replace() {
+					replace({ editor }) {
 						return {
 							type: "task",
-							props: { checked: false, assignee: AUTO_TASK_ASSIGNEE },
+							props: {
+								checked: false,
+								assignee: taskCreators.get(editor) ?? "",
+							},
 						};
 					},
 				},
 				{
 					find: /^\s?\[[Xx]\]\s$/,
-					replace() {
+					replace({ editor }) {
 						return {
 							type: "task",
-							props: { checked: true, assignee: AUTO_TASK_ASSIGNEE },
+							props: {
+								checked: true,
+								assignee: taskCreators.get(editor) ?? "",
+							},
 						};
 					},
 				},

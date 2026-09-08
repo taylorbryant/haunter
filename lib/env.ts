@@ -85,6 +85,17 @@ export const env = createEnv({
 			.pipe(z.email())
 			.optional(),
 		SQLITE_DB_URL: z.string().default("file:local.db"),
+		NEXT_PUBLIC_COLLABORATION_URL: (process.env.NODE_ENV === "production"
+			? z.string().url()
+			: z.string().url().default("ws://localhost:1234")
+		).refine((value) => {
+			const url = new URL(value);
+			return (
+				["ws:", "wss:"].includes(url.protocol) &&
+				(url.protocol === "wss:" ||
+					["localhost", "127.0.0.1"].includes(url.hostname))
+			);
+		}, "Use wss:// for a hosted collaboration worker, or ws://localhost for development."),
 		SQLITE_DB_AUTH_TOKEN: z.string().optional(),
 		// Resend delivery for sign-in codes (the @beignet/provider-mail-resend
 		// mailer). RESEND_FROM must be a verified sender in production;

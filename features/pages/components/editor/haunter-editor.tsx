@@ -3,13 +3,13 @@
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 
-import { ContractError } from "@beignet/core/client";
 import {
 	type BlockNoteEditor,
 	filterSuggestionItems,
 	insertOrUpdateBlockForSlashMenu,
 } from "@blocknote/core";
 import { SideMenuExtension } from "@blocknote/core/extensions";
+import { withCollaboration } from "@blocknote/core/yjs";
 import {
 	AddBlockButton,
 	DragHandleMenu,
@@ -27,7 +27,7 @@ import {
 	useExtensionState,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	CheckSquareIcon,
 	FilePlusIcon,
@@ -40,24 +40,20 @@ import { useSearchParams } from "next/navigation";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useTheme } from "next-themes";
 import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-	useSyncExternalStore,
-} from "react";
+	observeEditorPerformance,
+	type EditorMeasurement,
+} from "@/features/pages/client/editor-performance";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiClient } from "@/client";
+import { downloadRecoveryDrafts } from "@/client/draft-export";
 import { useDurableDraftStorage } from "@/client/durable-draft-storage-provider";
-import {
-	DurableDraftController,
-	type DurableDraftSnapshot,
-} from "@/client/durable-drafts";
-import { reportUserError, userErrorMessage } from "@/client/error-feedback";
+import { reportUserError } from "@/client/error-feedback";
 import { localDraftKey } from "@/client/local-drafts";
+import { usePageDocument } from "@/features/documents/client/use-page-document";
+import type { PageDocumentSession } from "@/features/documents/client/session";
+import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
 import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
-import { invalidateNotifications } from "@/features/notifications/client/queries";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-content";
 import {
@@ -65,24 +61,13 @@ import {
 	invalidateBacklinks,
 	invalidatePages,
 	listPagesQueryOptions,
-	savePageContentMutationOptions,
-	setPageContentInCache,
-	setPageSavedAtInCache,
 } from "@/features/pages/client/queries";
 import { registerPageSaveFlusher } from "@/features/pages/client/save-state";
 import { uploadPageImage } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
-import { containsBlockId } from "@/features/pages/lib/block-tree";
-import {
-	normalizeCodeBlockLanguage,
-	normalizeCodeBlockLanguages,
-} from "@/features/pages/lib/code-block-language";
+import { normalizeCodeBlockLanguages } from "@/features/pages/lib/code-block-language";
 import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
-import {
-	type BlockJson,
-	PageContentSchema,
-	type PageMeta,
-} from "@/features/pages/schemas";
+import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getResolvedThemeColorScheme } from "@/lib/themes";
@@ -94,12 +79,11 @@ import {
 	type OpenCodeBlockDialogDetail,
 } from "./code-block-dialog-event";
 import { CodeEditDialog } from "./code-edit-dialog";
+import { registerTaskCreator } from "./task-block";
 import { useSyncEditorCodeTheme } from "./code-theme";
 import { removeBlockFromSideMenu } from "./remove-block-from-side-menu";
 import { editorSchema, syntaxHighlightingExtension } from "./schema";
 import { TaskBlockCurrentUserContext } from "./task-block";
-
-const AUTOSAVE_DELAY_MS = 1000;
 
 type HaunterBlockNoteEditor = BlockNoteEditor<
 	(typeof editorSchema)["blockSchema"],
@@ -191,24 +175,6 @@ function FormattingToolbarWithoutColors() {
 			)}
 		</FormattingToolbar>
 	);
-}
-
-function normalizeEditorCodeBlockLanguages(editor: HaunterBlockNoteEditor) {
-	const visit = (blocks: BlockJson[]) => {
-		for (const block of blocks) {
-			if (block.type === "codeBlock") {
-				const currentLanguage =
-					typeof block.props.language === "string" ? block.props.language : "";
-				const language = normalizeCodeBlockLanguage(currentLanguage);
-				if (language !== currentLanguage) {
-					editor.updateBlock(block.id, { props: { language } });
-				}
-			}
-			visit(block.children);
-		}
-	};
-
-	visit(editor.document as unknown as BlockJson[]);
 }
 
 function focusBlockContentOnNextFrame(
@@ -333,38 +299,22 @@ function getSlashMenuItems(
 
 export type SaveState = "saved" | "pending" | "saving" | "error" | "paused";
 
-function cloneDocument(content: BlockJson[]): BlockJson[] {
-	return structuredClone(content);
-}
-
 type HaunterEditorProps = {
+	measurement?: EditorMeasurement;
 	pageId: string;
 	workspaceId: string;
 	initialContent: BlockJson[];
-	/** Document-only optimistic-concurrency token. */
-	contentUpdatedAt?: string;
 	editable?: boolean;
 	/** Incremented by the owner when focus should move from the title to body. */
 	focusRequest?: number;
 	/** Current signed-in user, used for same-user authoring defaults. */
 	currentUserId?: string | null;
+	currentUserName?: string;
 	onSaveStateChange?: (state: SaveState) => void;
 };
 
-type PageContentSaveMetadata = {
-	updatedAt: string;
-	tasksChanged: boolean;
-	linksChanged: boolean;
-};
-
-type PageContentDraftController = DurableDraftController<
-	BlockJson[],
-	PageContentSaveMetadata
->;
-
 type MountedHaunterEditorProps = HaunterEditorProps & {
-	controller: PageContentDraftController | null;
-	draft: DurableDraftSnapshot<BlockJson[]>;
+	collaboration?: PageDocumentSession;
 };
 
 export default function HaunterEditor(props: HaunterEditorProps) {
@@ -382,176 +332,270 @@ export default function HaunterEditor(props: HaunterEditorProps) {
 		);
 	}
 
-	if (props.editable !== false && props.currentUserId) {
-		return <DurablePageBody {...props} currentUserId={props.currentUserId} />;
+	if (props.currentUserId) {
+		const url = process.env.NEXT_PUBLIC_COLLABORATION_URL;
+		if (!url)
+			return <p role="alert">The editor connection is not configured.</p>;
+		return (
+			<CollaborativePageBody
+				{...props}
+				currentUserId={props.currentUserId}
+				url={url}
+			/>
+		);
 	}
-
-	const content = normalizeCodeBlockLanguages(props.initialContent);
-	return (
-		<MountedHaunterEditor
-			{...props}
-			controller={null}
-			draft={{
-				status: "saved",
-				value: content,
-				serverValue: content,
-				serverVersion: props.contentUpdatedAt ?? null,
-				error: null,
-				validationError: null,
-				dirty: false,
-			}}
-		/>
-	);
+	return <MountedHaunterEditor {...props} editable={false} />;
 }
 
-function DurablePageBody(
-	props: HaunterEditorProps & { currentUserId: string },
+function CollaborativePageBody(
+	props: HaunterEditorProps & { currentUserId: string; url: string },
 ) {
+	const { session, snapshot } = usePageDocument({
+		pageId: props.pageId,
+		workspaceId: props.workspaceId,
+		userId: props.currentUserId,
+		url: props.url,
+	});
 	const queryClient = useQueryClient();
 	const storage = useDurableDraftStorage<BlockJson[]>();
-	const saveMutation = useMutation({
-		...savePageContentMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
-	const lifecycleGeneration = useRef(0);
-	const normalizedServerContent = useMemo(
-		() => normalizeCodeBlockLanguages(props.initialContent),
-		[props.initialContent],
+	const [oldDraft, setOldDraft] = useState<BlockJson[] | null>(null);
+	const [recoveryError, setRecoveryError] = useState<string | null>(null);
+	const [recoveryGeneration, setRecoveryGeneration] = useState<number | null>(
+		null,
 	);
-	const [controller] = useState(
-		() =>
-			new DurableDraftController<BlockJson[], PageContentSaveMetadata>({
-				identity: {
-					key: localDraftKey(props.currentUserId, "page", props.pageId),
-					userId: props.currentUserId,
-					workspaceId: props.workspaceId,
-					resourceType: "page",
-					resourceId: props.pageId,
-				},
-				serverValue: normalizedServerContent,
-				serverVersion: props.contentUpdatedAt ?? null,
-				storage,
-				localDebounceMs: 100,
-				debounceMs: AUTOSAVE_DELAY_MS,
-				isPayload: (value): value is BlockJson[] =>
-					PageContentSchema.safeParse(value).success,
-				areValuesEqual: (left, right) =>
-					JSON.stringify(left) === JSON.stringify(right),
-				isConflictError: (error) =>
-					error instanceof ContractError && error.status === 409,
-				loadServer: async () => {
-					const latest = await queryClient.fetchQuery({
-						...getPageQueryOptions(props.pageId),
-						staleTime: 0,
-					});
-					return {
-						value: normalizeCodeBlockLanguages(latest.content),
-						version: latest.contentUpdatedAt,
-					};
-				},
-				onServerSaved: (result) => {
-					const metadata = result.metadata;
-					setPageContentInCache(queryClient, props.pageId, result.value);
-					if (metadata) {
-						setPageSavedAtInCache(
-							queryClient,
-							props.pageId,
-							metadata.updatedAt,
-							result.version ?? metadata.updatedAt,
-						);
-						if (metadata.linksChanged) invalidateBacklinks(queryClient);
-						if (metadata.tasksChanged) {
-							invalidateTasksWhenIdle(queryClient);
-							invalidateNotifications(queryClient);
-						}
-					}
-				},
-				saveServer: async ({ value, baseVersion }) => {
-					const result = await saveMutation.mutateAsync({
-						path: { id: props.pageId },
-						body: {
-							content: value,
-							...(baseVersion ? { baseUpdatedAt: baseVersion } : {}),
-						},
-					});
-					return {
-						value,
-						version: result.contentUpdatedAt,
-						metadata: {
-							updatedAt: result.updatedAt,
-							linksChanged: result.linksChanged,
-							tasksChanged: result.tasksChanged,
-						},
-					};
-				},
-			}),
-	);
-	const draft = useSyncExternalStore(
-		controller.subscribe,
-		controller.getUncontrolledSnapshot,
-		controller.getUncontrolledSnapshot,
-	);
-
 	useEffect(() => {
-		const generation = ++lifecycleGeneration.current;
-		controller.start();
-		const unregisterFlusher = registerPageSaveFlusher(props.pageId, () =>
-			controller.flushServer(),
-		);
+		let active = true;
+		void storage
+			.load(localDraftKey(props.currentUserId, "page", props.pageId))
+			.then((draft) => {
+				if (active && draft) setOldDraft(draft.payload);
+			})
+			.catch(() => undefined);
 		return () => {
-			unregisterFlusher();
-			void controller.flushLocal().catch(() => undefined);
-			queueMicrotask(() => {
-				if (lifecycleGeneration.current !== generation) return;
-				void controller.flushServer().finally(() => {
-					if (lifecycleGeneration.current === generation) controller.stop();
-				});
-			});
+			active = false;
 		};
-	}, [controller, props.pageId]);
-
+	}, [props.currentUserId, props.pageId, storage]);
 	useEffect(() => {
-		controller.refreshServer(
-			normalizedServerContent,
-			props.contentUpdatedAt ?? null,
+		if (!session) return;
+		return registerPageSaveFlusher(props.pageId, async () => {
+			const saved = await session.flushServer();
+			if (saved)
+				await queryClient.fetchQuery({
+					...getPageQueryOptions(props.pageId),
+					staleTime: 0,
+				});
+			return saved;
+		});
+	}, [session, props.pageId, queryClient]);
+	useEffect(() => {
+		props.onSaveStateChange?.(
+			snapshot.error
+				? "error"
+				: snapshot.saved
+					? "saved"
+					: snapshot.paused
+						? "paused"
+						: snapshot.connected
+							? "saving"
+							: "pending",
 		);
-	}, [controller, normalizedServerContent, props.contentUpdatedAt]);
-
-	if (draft.status === "loading") {
-		return (
-			<div className="py-2">
-				<EditorBodySkeleton />
-			</div>
-		);
-	}
-
+	}, [
+		props.onSaveStateChange,
+		snapshot.error,
+		snapshot.saved,
+		snapshot.paused,
+		snapshot.connected,
+	]);
+	useEffect(() => {
+		if (!snapshot.tasksRevision) return;
+		invalidateTasksWhenIdle(queryClient);
+	}, [snapshot.tasksRevision, queryClient]);
+	useEffect(() => {
+		if (!snapshot.linksRevision) return;
+		invalidateBacklinks(queryClient);
+	}, [snapshot.linksRevision, queryClient]);
+	const status =
+		snapshot.error ??
+		(snapshot.paused
+			? "Saved in this browser. Sign in to sync."
+			: !snapshot.locallySaved
+				? "Saving in this browser…"
+				: snapshot.saved
+					? "Saved to server"
+					: snapshot.connected
+						? "Syncing…"
+						: "Saved in this browser. Waiting for connection…");
 	return (
-		<MountedHaunterEditor {...props} controller={controller} draft={draft} />
+		<>
+			{snapshot.recoveries.length > 0 && session ? (
+				<div
+					role="status"
+					className="mb-3 rounded-lg border p-3 text-sm md:mx-[54px]"
+				>
+					This page was restored. Previous copies, including pending edits, are
+					kept in this browser. Download a copy, then use Recover drafts in the
+					Pages menu to open it as a new page.
+					{snapshot.recoveries.length > 1 ? (
+						<label className="mt-2 flex items-center gap-2">
+							Recovery copy
+							<select
+								className="rounded-md border bg-background p-1"
+								value={recoveryGeneration ?? snapshot.recoveries[0]}
+								onChange={(event) =>
+									setRecoveryGeneration(Number(event.target.value))
+								}
+							>
+								{snapshot.recoveries.map((generation) => (
+									<option key={generation} value={generation}>
+										Before restore {generation + 1}
+									</option>
+								))}
+							</select>
+						</label>
+					) : null}
+					<Button
+						variant="outline"
+						size="sm"
+						className="mt-2"
+						onClick={() => {
+							setRecoveryError(null);
+							void session
+								.recoveryDownload(recoveryGeneration ?? snapshot.recoveries[0])
+								.then((file) => {
+									const url = URL.createObjectURL(
+										new Blob([file], { type: "application/json" }),
+									);
+									const link = document.createElement("a");
+									link.href = url;
+									link.download = "haunter-before-restore.json";
+									link.hidden = true;
+									document.body.append(link);
+									link.click();
+									link.remove();
+									setTimeout(() => URL.revokeObjectURL(url), 1000);
+								})
+								.catch(() =>
+									setRecoveryError(
+										"The recovery copy could not be downloaded. Keep this tab open and try again.",
+									),
+								);
+						}}
+					>
+						Download previous copy
+					</Button>
+					{recoveryError ? (
+						<p role="alert" className="mt-2 text-destructive">
+							{recoveryError}
+						</p>
+					) : null}
+				</div>
+			) : null}
+
+			{oldDraft ? (
+				<div
+					role="alert"
+					className="mb-3 rounded-lg border p-3 text-sm md:mx-[54px]"
+				>
+					A draft from the previous editor is still stored in this browser. Use
+					Recover drafts in the Pages menu to import its download.
+					<Button
+						variant="outline"
+						size="sm"
+						className="ml-2"
+						onClick={() => {
+							const url = URL.createObjectURL(
+								new Blob([JSON.stringify(oldDraft, null, 2)], {
+									type: "application/json",
+								}),
+							);
+							const link = document.createElement("a");
+							link.href = url;
+							link.download = `page-${props.pageId}-previous-draft.json`;
+							link.hidden = true;
+							document.body.append(link);
+							link.click();
+							link.remove();
+							setTimeout(() => URL.revokeObjectURL(url), 1000);
+						}}
+					>
+						Download previous draft
+					</Button>
+				</div>
+			) : null}
+			<div
+				className="mb-2 flex flex-wrap items-center gap-2 text-muted-foreground text-xs md:mx-[54px]"
+				data-testid="document-status"
+				data-ready-source={snapshot.readySource ?? "loading"}
+				data-ready-ms={snapshot.readyMs ?? ""}
+			>
+				<span role="status">
+					{snapshot.ready
+						? status
+						: (snapshot.error ?? "Opening collaborative document…")}
+				</span>
+				{snapshot.error && session ? (
+					<>
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => void session.retry().catch(() => undefined)}
+						>
+							Retry
+						</Button>
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => downloadRecoveryDrafts(props.currentUserId)}
+						>
+							Download unsynced changes
+						</Button>
+					</>
+				) : null}
+			</div>
+			{session && snapshot.ready && !snapshot.restoring ? (
+				<MountedHaunterEditor
+					key={snapshot.generation}
+					{...props}
+					onSaveStateChange={undefined}
+					collaboration={session}
+				/>
+			) : (
+				<EditorBodySkeleton />
+			)}
+		</>
 	);
 }
 
-function MountedHaunterEditor({
+const MountedHaunterEditor = memo(function MountedHaunterEditor({
+	measurement,
 	pageId,
 	workspaceId,
 	editable = true,
 	focusRequest = 0,
 	currentUserId = null,
-	onSaveStateChange,
-	controller,
-	draft,
+	currentUserName = "Collaborator",
+	initialContent,
+	collaboration,
 }: MountedHaunterEditorProps) {
 	const { resolvedTheme } = useTheme();
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const queryClient = useQueryClient();
 	const isMobile = useIsMobile();
-	const applyingActorValue = useRef(false);
-	const projectedValue = useRef(draft.value);
+	const editorElement = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (!measurement || !editorElement.current) return;
+		return observeEditorPerformance(
+			editorElement.current,
+			measurement,
+			collaboration?.getSnapshot(),
+		);
+	}, [measurement, collaboration]);
 	const [editorInitialContent] = useState(() =>
-		normalizeCodeBlockLanguages(draft.value),
+		normalizeCodeBlockLanguages(initialContent),
 	);
 
-	const editor = useCreateBlockNote({
+	const editorOptions = {
 		schema: editorSchema,
 		extensions: [syntaxHighlightingExtension],
 		uploadFile: async (file: File) => {
@@ -562,64 +606,38 @@ function MountedHaunterEditor({
 				throw error;
 			}
 		},
-		initialContent: editorInitialContent.length
-			? // The server stores the document verbatim; the editor owns its shape.
-				(editorInitialContent as never)
-			: undefined,
-	});
+		initialContent:
+			!collaboration && editorInitialContent.length
+				? // The server stores the document verbatim; the editor owns its shape.
+					(editorInitialContent as never)
+				: undefined,
+	};
+	const editor = useCreateBlockNote(
+		collaboration
+			? withCollaboration({
+					...editorOptions,
+					initialContent: undefined,
+					collaboration: {
+						fragment: collaboration.doc.getXmlFragment(PAGE_BODY_FRAGMENT),
+						user: { name: currentUserName, color: "#a78bfa" },
+						provider: collaboration.provider?.awareness
+							? { awareness: collaboration.provider.awareness }
+							: undefined,
+					},
+				})
+			: editorOptions,
+	);
 	useSyncEditorCodeTheme(editor, resolvedTheme);
-
-	const appendSubpageLink = useCallback(
-		(
-			child: Pick<PageMeta, "id" | "workspaceId">,
-			parentContentUpdatedAt: string,
-		) => {
-			const block = createSubpageLinkBlock(child);
-			const exists = containsBlockId(
-				editor.document as unknown as BlockJson[],
-				block.id,
-			);
-			const lastBlock = editor.document.at(-1);
-			if (!exists && !lastBlock) return false;
-
-			const insert = () => {
-				if (!exists && lastBlock) {
-					editor.insertBlocks([block as never], lastBlock, "after");
-				}
-			};
-			insert();
-			controller?.rebaseServer(
-				cloneDocument(editor.document as unknown as BlockJson[]),
-				parentContentUpdatedAt,
-			);
-			return true;
-		},
-		[controller, editor],
+	useEffect(
+		() => registerTaskCreator(editor, currentUserId),
+		[editor, currentUserId],
 	);
 
 	useEffect(() => {
 		if (!editable) return;
-		return registerSubpageLinkAppender(pageId, appendSubpageLink);
-	}, [editable, pageId, appendSubpageLink]);
-
-	// Keep BlockNote as a projection of the durable actor. Local editor changes
-	// are already identical to the actor value; this path applies recovered,
-	// remote, and explicitly selected conflict versions without re-enqueuing them.
-	useEffect(() => {
-		if (draft.status === "conflict") return;
-		const next = draft.value;
-		if (projectedValue.current === next) return;
-
-		applyingActorValue.current = true;
-		editor.replaceBlocks(
-			editor.document,
-			(next.length > 0 ? next : [{ type: "paragraph" }]) as never,
-		);
-		requestAnimationFrame(() => {
-			applyingActorValue.current = false;
-		});
-		projectedValue.current = next;
-	}, [draft.status, draft.value, editor]);
+		// The server appends Yjs nodes; inserting again would duplicate the link.
+		return registerSubpageLinkAppender(pageId, () => true);
+	}, [editable, pageId]);
 
 	useEffect(() => {
 		if (!focusRequest || !editable) return;
@@ -665,53 +683,6 @@ function MountedHaunterEditor({
 		};
 	}, [editor, editable, notificationBlockId]);
 
-	const saveState: SaveState =
-		draft.status === "paused"
-			? "paused"
-			: draft.status === "saved"
-				? "saved"
-				: draft.status === "saving-local" || draft.status === "pending"
-					? "pending"
-					: draft.status === "syncing"
-						? "saving"
-						: "error";
-	const isBusy =
-		draft.status === "saving-local" ||
-		draft.status === "syncing" ||
-		draft.status === "resolving";
-	const hasSaveConflict =
-		draft.status === "conflict" || draft.status === "resolving";
-	const canRetry =
-		draft.status === "storage-error" || draft.status === "sync-error";
-	const saveError = draft.validationError
-		? draft.validationError
-		: draft.status === "storage-error"
-			? userErrorMessage(
-					draft.error,
-					"Your page changes could not be saved in this browser.",
-				)
-			: draft.status === "sync-error" && !draft.remotePaused
-				? "Your changes are saved in this browser but could not be synced."
-				: draft.status === "conflict" && draft.error
-					? userErrorMessage(draft.error, "The conflict could not be resolved.")
-					: null;
-
-	// BlockNote may report a document change while React is still rendering its
-	// editor tree. Keep that callback local, then notify the layout-level store
-	// after the render commits so HeaderSaveIndicator is never updated during a
-	// different component's render phase.
-	useEffect(() => {
-		onSaveStateChange?.(saveState);
-	}, [onSaveStateChange, saveState]);
-
-	const handleChange = useCallback(() => {
-		if (!editable || applyingActorValue.current || !controller) return;
-		normalizeEditorCodeBlockLanguages(editor);
-		const content = cloneDocument(editor.document as unknown as BlockJson[]);
-		projectedValue.current = content;
-		controller.edit(content);
-	}, [controller, editable, editor]);
-
 	const [codeDialogBlockId, setCodeDialogBlockId] = useState<string | null>(
 		null,
 	);
@@ -733,66 +704,14 @@ function MountedHaunterEditor({
 		// On mobile, `editor-flush` drops BlockNote's 54px inline gutter so
 		// content runs edge-to-edge; the block controls that live there are
 		// hidden below. Driven from JS (not CSS) to share one breakpoint.
-		<div className={cn("haunter-editor", isMobile && "editor-flush")}>
-			{hasSaveConflict ? (
-				<div
-					role="alert"
-					className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-sm md:mx-[54px]"
-				>
-					<div className="min-w-0 flex-1">
-						<p className="font-medium text-destructive">
-							This page changed elsewhere. Your unsaved version is still open.
-						</p>
-						<p className="text-muted-foreground text-xs">
-							Load the latest version, or save yours over the newer content.
-						</p>
-						{saveError ? (
-							<p className="mt-1 text-destructive text-xs">{saveError}</p>
-						) : null}
-					</div>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={isBusy}
-						onClick={() => void controller?.useServer()}
-					>
-						Load latest
-					</Button>
-					<Button
-						type="button"
-						variant="destructive"
-						size="sm"
-						disabled={isBusy}
-						onClick={() => void controller?.keepMine()}
-					>
-						Save my version
-					</Button>
-				</div>
-			) : saveError ? (
-				<div
-					role="alert"
-					className="mb-3 flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-destructive text-sm md:mx-[54px]"
-				>
-					<span className="flex-1">{saveError}</span>
-					{canRetry ? (
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							disabled={isBusy}
-							onClick={() => void controller?.retry()}
-						>
-							Retry
-						</Button>
-					) : null}
-				</div>
-			) : null}
+		<div
+			ref={editorElement}
+			className={cn("haunter-editor", isMobile && "editor-flush")}
+		>
 			<TaskBlockCurrentUserContext.Provider value={currentUserId}>
 				<BlockNoteView
 					editor={editor}
-					editable={editable && draft.status !== "resolving"}
-					onChange={handleChange}
+					editable={editable}
 					theme={getResolvedThemeColorScheme(resolvedTheme)}
 					formattingToolbar={false}
 					slashMenu={false}
@@ -856,19 +775,10 @@ function MountedHaunterEditor({
 				<CodeEditDialog
 					editor={editor}
 					blockId={codeDialogBlockId}
-					editable={editable && draft.status !== "resolving"}
+					editable={editable}
 					onClose={() => setCodeDialogBlockId(null)}
 				/>
 			) : null}
-			<span className="sr-only" aria-live="polite">
-				{saveState === "saving" || saveState === "pending"
-					? "Saving"
-					: saveState === "paused"
-						? "Saved in this browser"
-						: saveState === "error"
-							? "Save failed"
-							: "Saved"}
-			</span>
 		</div>
 	);
-}
+});

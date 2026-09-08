@@ -6,6 +6,8 @@ import { appError } from "@/features/shared/errors";
 import { taskPolicy } from "@/features/tasks/policy";
 import { createBetterAuthMcpOAuthRequestVerifier } from "@/infra/agents/better-auth-mcp-oauth-request-verifier";
 import { env } from "@/lib/env";
+import { createDocumentSessionTokens } from "@/infra/documents/session-token";
+import { documentRecovery } from "@/infra/documents/recovery";
 import { mcpResourceUrl } from "@/lib/mcp-configuration";
 import type { AppPorts } from "@/ports";
 
@@ -28,6 +30,8 @@ const gate = createGate({
  */
 export const appPorts = definePorts<AppPorts>()({
 	bound: {
+		documentRecovery,
+		documentSessions: createDocumentSessionTokens(env.BETTER_AUTH_SECRET),
 		errorReporter: createNoopErrorReporter(),
 		gate,
 		mcpOAuthRequests: createBetterAuthMcpOAuthRequestVerifier(
@@ -36,6 +40,8 @@ export const appPorts = definePorts<AppPorts>()({
 		mcpServerConfiguration: { resourceUrl: mcpResourceUrl },
 	},
 	deferred: [
+		"documentMaintenance",
+		"documents",
 		"adminUsers",
 		"agents",
 		"auth",

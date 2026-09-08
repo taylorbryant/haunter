@@ -353,7 +353,7 @@ describe("page shares", () => {
 			pageId: page.id,
 			title: null,
 		});
-		await canvases.saveSnapshot(
+		await canvases.initializeSnapshot(
 			scope,
 			onSharedPage.id,
 			JSON.stringify({ store: { shape: 1 } }),

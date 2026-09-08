@@ -4,7 +4,6 @@ import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { reconcilePageDerivations } from "../lib/apply-page-content";
-import { extractPageSearchText } from "../lib/extract-page-text";
 import {
 	PageVersionIdInputSchema,
 	SavePageContentOutputSchema,
@@ -15,7 +14,8 @@ import { VERSION_RETENTION } from "./save-page-content";
  * Overwrite the page document with a stored version. The current state is
  * always snapshotted first (cause "restore"), so a restore can itself be
  * undone from history. An explicit user action, so it intentionally
- * last-write-wins over concurrent autosaves.
+ * last-write-wins over concurrent autosaves. Collaborative restores start a
+ * new generation; old clients retain recovery copies instead of merging back.
  */
 export const restorePageVersionUseCase = useCase
 	.command("pages.restoreVersion")
@@ -56,11 +56,10 @@ export const restorePageVersionUseCase = useCase
 				await tx.pageVersions.prune(scope, page.id, VERSION_RETENTION);
 			}
 
-			const result = await tx.pages.saveContent(
+			const { content, ...result } = await tx.pages.restoreContent(
 				scope,
 				page.id,
-				JSON.stringify(version.content),
-				extractPageSearchText(version.content),
+				version.content,
 			);
 
 			// A restored document is the source of truth again: reconcile its
@@ -69,7 +68,7 @@ export const restorePageVersionUseCase = useCase
 				tx,
 				scope,
 				page,
-				version.content,
+				content,
 				{
 					assignmentUser: user,
 					defaultTaskAssigneeId: user.id,

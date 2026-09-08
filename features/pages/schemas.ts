@@ -251,6 +251,8 @@ export const SavePageContentInputSchema = PageIdInputSchema.merge(
 );
 
 export const SavePageContentOutputSchema = z.object({
+	/** Present when a restore starts a fresh collaborative document. */
+	documentGeneration: z.number().int().nonnegative().optional(),
 	/** General last-edited timestamp for display and sorting. */
 	updatedAt: z.string().datetime(),
 	/** Document-only optimistic-concurrency token. */
@@ -267,7 +269,7 @@ export const PageVersionMetaSchema = z.object({
 	title: z.string(),
 	icon: z.string().nullable(),
 	cause: z.enum(["checkpoint", "restore"]),
-	createdBy: z.string(),
+	createdBy: z.string().nullable(),
 	/** Author display name, resolved at read time. */
 	createdByName: z.string().nullable(),
 	createdAt: z.string().datetime(),

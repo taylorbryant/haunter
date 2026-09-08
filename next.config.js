@@ -26,6 +26,16 @@ const editorSingletonPackages = [
 
 /** @type {import("next").NextConfig} */
 const nextConfig = {
+	// Route handlers and SSR use separate Turbopack module runtimes. Keep their
+	// editor schemas/state on native modules so constructor checks stay valid.
+	serverExternalPackages: [
+		"yjs",
+		"@tldraw/tlschema",
+		"@tldraw/state",
+		"@tldraw/store",
+		"@tldraw/utils",
+		"@tldraw/validate",
+	],
 	outputFileTracingIncludes: {
 		"/changelog": ["./content/changelog/*.md"],
 	},

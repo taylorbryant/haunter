@@ -122,6 +122,14 @@ const PageIconPanel = dynamic(
 	},
 );
 
+const RecoveryImportDialog = dynamic(
+	() =>
+		import("@/features/documents/components/recovery-import-dialog").then(
+			(mod) => ({ default: mod.RecoveryImportDialog }),
+		),
+	{ ssr: false },
+);
+
 const MarkdownImportDialog = dynamic(
 	() =>
 		import("./markdown-import-dialog").then((mod) => ({
@@ -218,6 +226,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [iconPageId, setIconPageId] = useState<string | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	const [recoveryOpen, setRecoveryOpen] = useState(false);
 	const [pageToTrash, setPageToTrash] = useState<PageTreeNode | null>(null);
 	const [dragId, setDragId] = useState<string | null>(null);
 	const [dropTarget, setDropTarget] = useState<{
@@ -237,6 +246,19 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 					keywords: "upload file note",
 					icon: FileUpIcon,
 					run: () => setImportOpen(true),
+				}
+			: null,
+	);
+
+	useCommand(
+		canEdit && synced
+			? {
+					id: "page.recover-drafts",
+					title: "Recover drafts",
+					group: "Pages",
+					keywords: "import recovery backup json",
+					icon: FileUpIcon,
+					run: () => setRecoveryOpen(true),
 				}
 			: null,
 	);
@@ -892,6 +914,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							<MoreHorizontalIcon />
 						</DropdownMenuTrigger>
 						<DropdownMenuContent className="w-44" side="bottom" align="end">
+							<DropdownMenuItem onClick={() => setRecoveryOpen(true)}>
+								<FileUpIcon />
+								Recover drafts
+							</DropdownMenuItem>
 							<DropdownMenuItem onClick={() => setImportOpen(true)}>
 								<FileUpIcon />
 								Import Markdown
@@ -1001,6 +1027,12 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						</ResponsiveDialogFooter>
 					</form>
 				</ResponsiveDialog>
+			) : null}
+			{recoveryOpen ? (
+				<RecoveryImportDialog
+					workspaceId={workspaceId}
+					onOpenChange={setRecoveryOpen}
+				/>
 			) : null}
 			{importOpen ? (
 				<MarkdownImportDialog

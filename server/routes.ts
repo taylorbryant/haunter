@@ -7,6 +7,7 @@ import { canvasRoutes } from "@/features/canvases/routes";
 import { changelogRoutes } from "@/features/changelog/routes";
 import { notificationRoutes } from "@/features/notifications/routes";
 import { pageRoutes } from "@/features/pages/routes";
+import { documentRoutes } from "@/features/documents/routes";
 import { shareRoutes } from "@/features/shares/routes";
 import { taskRoutes } from "@/features/tasks/routes";
 import { workspaceRoutes } from "@/features/workspaces/routes";
@@ -17,6 +18,7 @@ export const routes = defineRoutes<AppContext>([
 	workspaceRoutes,
 	changelogRoutes,
 	pageRoutes,
+	documentRoutes,
 	shareRoutes,
 	taskRoutes,
 	notificationRoutes,

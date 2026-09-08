@@ -1,8 +1,9 @@
+import type { TestPageRepository } from "@/features/pages/tests/helpers";
 import { tenantScopeId } from "@beignet/core/ports";
 import type { MemberRepository } from "@/features/members/ports";
 import type { NotificationRepository } from "@/features/notifications/ports";
 import type { PageRepository } from "@/features/pages/ports";
-import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
+import { createTaskIntegrationPorts } from "@/features/tasks/tests/task-integration-fixture";
 import type {
 	ListTasksOptions,
 	NewTask,
@@ -149,7 +150,7 @@ export function createTestTaskRepository(options?: {
 }
 
 export function createTestTaskIntegration(options: {
-	documents: PageRepository;
+	documents: TestPageRepository;
 	tasks: TaskRepository;
 	members?: MemberRepository;
 	notificationInbox?: NotificationRepository;

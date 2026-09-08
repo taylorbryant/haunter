@@ -12,6 +12,8 @@ export { recordPageViewUseCase } from "./record-page-view";
 export { restorePageUseCase } from "./restore-page";
 export { restorePageVersionUseCase } from "./restore-page-version";
 export { savePageContentUseCase } from "./save-page-content";
+export { appendPageContentUseCase } from "./append-page-content";
 export { searchPagesUseCase } from "./search-pages";
 export { setPageFavoriteUseCase } from "./set-page-favorite";
 export { updatePageUseCase } from "./update-page";
+export { getPageMetadataUseCase } from "./get-page-metadata";

@@ -1,5 +1,4 @@
 import "@beignet/core/server-only";
-import { extractDocumentSearchText } from "@/features/content/document-text";
 import { reconcilePageDerivations } from "@/features/pages/lib/apply-page-content";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { canEditContent } from "@/lib/org-roles";
@@ -53,15 +52,10 @@ export const onboardUserUseCase = useCase
 					parentPageId: null,
 					title: page.title,
 					position,
+					initialContent: page.content,
 				});
 				if (welcomePageId === null) welcomePageId = created.id;
 				await tx.pages.update(scope, created.id, { icon: page.icon });
-				await tx.pages.saveContent(
-					scope,
-					created.id,
-					JSON.stringify(page.content),
-					extractDocumentSearchText(page.content),
-				);
 				await reconcilePageDerivations(tx, scope, created, page.content, {
 					defaultTaskAssigneeId: user.id,
 				});

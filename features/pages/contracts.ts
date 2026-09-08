@@ -114,6 +114,13 @@ export const getPage = pages
 		200: PageSchema,
 	});
 
+/** Collaborative editors obtain their body through Yjs, not this HTTP read. */
+export const getPageMetadata = pages
+	.get("/api/pages/:id/metadata")
+	.pathParams(PageIdInputSchema)
+	.errors({ Forbidden: errors.Forbidden, PageNotFound: errors.PageNotFound })
+	.responses({ 200: PageMetaSchema });
+
 export const updatePage = pages
 	.patch("/api/pages/:id")
 	.pathParams(PageIdInputSchema)

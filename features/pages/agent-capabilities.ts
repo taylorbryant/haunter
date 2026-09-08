@@ -168,7 +168,7 @@ export const appendToPageCapability = defineAgentCapability("append_to_page", {
 		updatedAt: z.string(),
 	}),
 	async handle({ ctx, input }) {
-		const { getPageUseCase, savePageContentUseCase } = await import(
+		const { getPageUseCase, appendPageContentUseCase } = await import(
 			"@/features/pages/use-cases"
 		);
 		const page = await getPageUseCase.run({
@@ -180,12 +180,11 @@ export const appendToPageCapability = defineAgentCapability("append_to_page", {
 		if (appended.length === 0) {
 			throw appError("InvalidPageContent");
 		}
-		const saved = await savePageContentUseCase.run({
+		const saved = await appendPageContentUseCase.run({
 			ctx,
 			input: {
 				id: input.pageId,
-				content: [...page.content, ...appended],
-				baseUpdatedAt: page.contentUpdatedAt,
+				content: appended,
 			},
 		});
 		return {

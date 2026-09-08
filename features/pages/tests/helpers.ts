@@ -143,7 +143,23 @@ export function createTestPageNavigationRepository(deps: {
 	};
 }
 
-export function createTestPageRepository(): PageRepository {
+export type TestPageRepository = PageRepository & {
+	saveContent(
+		scope: import("@beignet/core/ports").TenantScope,
+		id: string,
+		contentJson: string,
+		searchText: string,
+	): Promise<{ updatedAt: string; contentUpdatedAt: string }>;
+	saveContentIf(
+		scope: import("@beignet/core/ports").TenantScope,
+		id: string,
+		contentJson: string,
+		searchText: string,
+		baseUpdatedAt: string,
+	): Promise<{ updatedAt: string; contentUpdatedAt: string } | null>;
+};
+
+export function createTestPageRepository(): TestPageRepository {
 	const pages = new Map<string, Page>();
 
 	function toMeta(page: Page): PageMeta {
@@ -155,7 +171,34 @@ export function createTestPageRepository(): PageRepository {
 		return meta;
 	}
 
-	return {
+	const repository: TestPageRepository = {
+		async restoreContent(scope, id, content) {
+			return {
+				...(await repository.saveContent(
+					scope,
+					id,
+					JSON.stringify(content),
+					"",
+				)),
+				content,
+			};
+		},
+		async appendContent(scope, id, blocks) {
+			for (let attempt = 0; attempt < 3; attempt++) {
+				const page = await repository.findById(scope, id);
+				if (!page || page.deletedAt !== null) throw new Error("Page not found");
+				const content = [...page.content, ...blocks];
+				const saved = await repository.saveContentIf(
+					scope,
+					id,
+					JSON.stringify(content),
+					"",
+					page.contentUpdatedAt,
+				);
+				if (saved) return { ...saved, content };
+			}
+			throw new Error("Stale append");
+		},
 		async listMetaByWorkspace(scope) {
 			const workspaceId = tenantScopeId(scope);
 			return Array.from(pages.values())
@@ -250,7 +293,7 @@ export function createTestPageRepository(): PageRepository {
 				title: input.title,
 				icon: null,
 				position: input.position,
-				content: [],
+				content: input.initialContent ?? [],
 				contentUpdatedAt: now,
 				deletedAt: null,
 				createdAt: now,
@@ -368,6 +411,7 @@ export function createTestPageRepository(): PageRepository {
 			}
 		},
 	};
+	return repository;
 }
 
 export function createTestPageVersionRepository(): PageVersionRepository {

@@ -1,5 +1,5 @@
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
+import { createEmbeddedTaskProjectionPort } from "@/features/tasks/lib/task-integration-ports";
 import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
 import { createDrizzleAgentAdminRepository } from "@/infra/agents/drizzle-agent-admin-repository";
 import { createDrizzleMcpConnectionRepository } from "@/infra/agents/drizzle-mcp-connection-repository";
@@ -17,6 +17,8 @@ import { createDrizzleShareRepository } from "@/infra/shares/drizzle-share-repos
 import { createDrizzleTaskRepository } from "@/infra/tasks/drizzle-task-repository";
 import type { AppTransactionPorts } from "@/ports";
 import type * as schema from "./schema";
+import { createDrizzleDocumentRepository } from "@/infra/documents/drizzle-document-repository";
+import { createCollaborativeTaskSourceDocuments } from "@/infra/documents/task-source-documents";
 
 export function createRepositories(
 	db: DrizzleSqliteDatabase<typeof schema>,
@@ -25,13 +27,14 @@ export function createRepositories(
 	const notificationInbox = createDrizzleNotificationRepository(db);
 	const pages = createDrizzlePageRepository(db);
 	const tasks = createDrizzleTaskRepository(db);
-	const taskIntegration = createTaskIntegrationPorts({
-		documents: pages,
+	const documents = createDrizzleDocumentRepository(db);
+	const pageTaskProjection = createEmbeddedTaskProjectionPort({
 		members,
 		notificationInbox,
 		tasks,
 	});
 	return {
+		documents,
 		adminUsers: createDrizzleAdminUserRepository(db),
 		agents: createDrizzleAgentAdminRepository(db),
 		mcpConnections: createDrizzleMcpConnectionRepository(db),
@@ -46,8 +49,8 @@ export function createRepositories(
 		pages,
 		pageVersions: createDrizzlePageVersionRepository(db),
 		shares: createDrizzleShareRepository(db),
-		pageTaskProjection: taskIntegration.pageTaskProjection,
+		pageTaskProjection,
 		tasks,
-		taskSourceDocuments: taskIntegration.taskSourceDocuments,
+		taskSourceDocuments: createCollaborativeTaskSourceDocuments(documents),
 	};
 }

@@ -122,7 +122,7 @@ async function createFixture(userId = "user_test") {
 }
 
 describe("canvases use cases", () => {
-	it("creates a canvas, saves snapshots, and reads them back", async () => {
+	it("creates a canvas and fences old snapshot clients", async () => {
 		const { workspace, page, tester, ctx } = await createFixture();
 
 		const canvas = await tester.run(
@@ -138,23 +138,19 @@ describe("canvases use cases", () => {
 			store: { "shape:abc": { type: "geo", x: 10, y: 20 } },
 			schema: { schemaVersion: 2 },
 		};
-		const saved = await tester.run(
-			saveCanvasSnapshotUseCase,
-			{ id: canvas.id, snapshot },
-			{ ctx },
-		);
-		expect(saved.updatedAt >= canvas.updatedAt).toBe(true);
-		expect(saved.snapshotUpdatedAt > canvas.snapshotUpdatedAt).toBe(true);
-
-		const fetched = await tester.run(
-			getCanvasUseCase,
-			{ id: canvas.id },
-			{ ctx },
-		);
-		expect(fetched.snapshot).toEqual(snapshot);
+		await expect(
+			tester.run(
+				saveCanvasSnapshotUseCase,
+				{ id: canvas.id, snapshot },
+				{ ctx },
+			),
+		).rejects.toThrow("can no longer save drawings");
+		expect(
+			(await tester.run(getCanvasUseCase, { id: canvas.id }, { ctx })).snapshot,
+		).toEqual({});
 	});
 
-	it("creates, lists, renames, saves, and deletes standalone canvases", async () => {
+	it("creates, lists, renames, and deletes standalone canvases", async () => {
 		const { workspace, page, tester, ctx } = await createFixture();
 		await tester.run(
 			createCanvasUseCase,
@@ -185,15 +181,6 @@ describe("canvases use cases", () => {
 			{ ctx },
 		);
 		expect(renamed.title).toBe("Architecture map");
-
-		await tester.run(
-			saveCanvasSnapshotUseCase,
-			{ id: canvas.id, snapshot: { standalone: true } },
-			{ ctx },
-		);
-		expect(
-			(await tester.run(getCanvasUseCase, { id: canvas.id }, { ctx })).snapshot,
-		).toEqual({ standalone: true });
 
 		await tester.run(deleteCanvasUseCase, { id: canvas.id }, { ctx });
 		await expect(
@@ -270,52 +257,24 @@ describe("canvases use cases", () => {
 		).rejects.toThrow("lives in a page");
 	});
 
-	it("rejects a stale snapshot save and accepts a rebased one", async () => {
+	it("rejects legacy snapshots even with a current revision", async () => {
 		const { workspace, page, tester, ctx } = await createFixture();
-
 		const canvas = await tester.run(
 			createCanvasUseCase,
 			{ workspaceId: workspace.id, pageId: page.id },
 			{ ctx },
 		);
-
-		const first = await tester.run(
-			saveCanvasSnapshotUseCase,
-			{
-				id: canvas.id,
-				snapshot: { v: 1 },
-				baseUpdatedAt: canvas.snapshotUpdatedAt,
-			},
-			{ ctx },
-		);
-
-		// A second writer still holding the created version must not clobber.
-		await expect(
-			tester.run(
-				saveCanvasSnapshotUseCase,
-				{
-					id: canvas.id,
-					snapshot: { v: 2 },
-					baseUpdatedAt: canvas.snapshotUpdatedAt,
-				},
-				{ ctx },
-			),
-		).rejects.toThrow(/changed since/);
-
-		// Rebased on the current version, the save lands.
-		const rebased = await tester.run(
-			saveCanvasSnapshotUseCase,
-			{
-				id: canvas.id,
-				snapshot: { v: 3 },
-				baseUpdatedAt: first.snapshotUpdatedAt,
-			},
-			{ ctx },
-		);
-		expect(rebased.snapshotUpdatedAt > first.snapshotUpdatedAt).toBe(true);
+		for (const baseUpdatedAt of [undefined, canvas.snapshotUpdatedAt])
+			await expect(
+				tester.run(
+					saveCanvasSnapshotUseCase,
+					{ id: canvas.id, snapshot: { v: 1 }, baseUpdatedAt },
+					{ ctx },
+				),
+			).rejects.toThrow("can no longer save drawings");
 	});
 
-	it("keeps a drawing save valid after standalone canvas metadata changes", async () => {
+	it("keeps the drawing version stable after metadata changes", async () => {
 		const { workspace, tester, ctx } = await createFixture();
 		const canvas = await tester.run(
 			createCanvasUseCase,
@@ -329,22 +288,6 @@ describe("canvases use cases", () => {
 			{ ctx },
 		);
 		expect(renamed.snapshotUpdatedAt).toBe(canvas.snapshotUpdatedAt);
-
-		await expect(
-			tester.run(
-				saveCanvasSnapshotUseCase,
-				{
-					id: canvas.id,
-					snapshot: { afterRename: true },
-					baseUpdatedAt: canvas.snapshotUpdatedAt,
-				},
-				{ ctx },
-			),
-		).resolves.toEqual(
-			expect.objectContaining({
-				snapshotUpdatedAt: expect.any(String),
-			}),
-		);
 	});
 
 	it("rejects creating a canvas on a page in another workspace", async () => {

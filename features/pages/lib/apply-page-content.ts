@@ -54,6 +54,7 @@ export async function reconcilePageDerivations(
 	content: BlockJson[],
 	options: {
 		assignmentActor?: TaskAssignmentActor;
+		assignmentActorsByBlock?: ReadonlyMap<string, TaskAssignmentActor>;
 		assignmentUser?: {
 			id: string;
 			name?: string | null;
@@ -71,6 +72,7 @@ export async function reconcilePageDerivations(
 		{ id: page.id, userId: page.userId, content },
 		{
 			assignmentActor: options.assignmentActor,
+			assignmentActorsByBlock: options.assignmentActorsByBlock,
 			assignmentUser: options.assignmentUser,
 			defaultAssigneeId: options.defaultTaskAssigneeId,
 		},
