@@ -26,7 +26,12 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { type TLComponents, useEditor } from "tldraw";
+import {
+	PORTRAIT_BREAKPOINT,
+	type TLComponents,
+	useBreakpoint,
+	useEditor,
+} from "tldraw";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -465,6 +470,7 @@ function LibraryBody({
 
 function CanvasLibraryOverlay() {
 	const editor = useEditor();
+	const breakpoint = useBreakpoint();
 	const isMobile = useIsMobile();
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
@@ -520,7 +526,11 @@ function CanvasLibraryOverlay() {
 				size="sm"
 				aria-expanded={open}
 				aria-label="Open canvas library"
-				className="pointer-events-auto absolute top-2 left-36 z-20 bg-popover text-popover-foreground shadow-sm dark:shadow-none md:in-data-[canvas-layout=fullscreen]:left-80"
+				className={cn(
+					"pointer-events-auto absolute top-2 z-20 bg-popover text-popover-foreground shadow-sm dark:shadow-none",
+					// Match tldraw's menu expansion to the canvas width in every layout.
+					breakpoint >= PORTRAIT_BREAKPOINT.TABLET ? "left-80" : "left-36",
+				)}
 				onClick={() => changeOpen(!open)}
 			>
 				<LayoutGridIcon
