@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { TLSyncClient } from "@tldraw/sync-core";
 import {
 	atom,
@@ -279,7 +281,10 @@ test("canvas grants are resource-bound and revoke access for trashed parents, ex
 
 test("canvas cutover backs up snapshots and preserves native room clocks on rerun", async () => {
 	const f = await documentFixture();
-	const backupPath = `/private/tmp/haunter-canvas-migration-${crypto.randomUUID()}.json`;
+	const backupPath = join(
+		tmpdir(),
+		`haunter-canvas-migration-${crypto.randomUUID()}.json`,
+	);
 	try {
 		const canvas = await f.database.repositories.canvases.create(f.scope, {
 			userId: f.userId,

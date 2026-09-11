@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { createDocumentMaintenance } from "@/infra/documents/migration";
 import { loadPageBody } from "@/infra/documents/persistence";
@@ -8,7 +10,10 @@ import { documentFixture, paragraph } from "./helpers";
 
 test("offline cutover validates and backs up live and trashed pages, preserving existing CRDT identity on rerun", async () => {
 	const f = await documentFixture();
-	const backupPath = `/private/tmp/haunter-migration-test-${crypto.randomUUID()}.json`;
+	const backupPath = join(
+		tmpdir(),
+		`haunter-migration-test-${crypto.randomUUID()}.json`,
+	);
 	const url = `file:${f.database.path}`;
 	const maintenance = createDocumentMaintenance(f.database.db, url);
 	try {
