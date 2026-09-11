@@ -14,6 +14,7 @@
 		"test": "bun test --parallel=4",
 		"typecheck": "node_modules/typescript/bin/tsc --noEmit",
 		"check:feature-boundaries": "bun scripts/check-feature-boundaries.ts",
+		"check:yjs-bundle": "bun scripts/check-yjs-bundle.ts",
 		"bootstrap-admin": "bun scripts/bootstrap-admin.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
