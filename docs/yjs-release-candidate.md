@@ -92,7 +92,7 @@ smoke tests remain part of the production cutover below.
 
 `fly.collaboration.toml` targets the `haunter-collaboration` app in the personal
 Fly organization. Its public WebSocket URL is
-`wss://haunter-collaboration.fly.dev`. The starting size is one shared CPU and
+`wss://collab.haunter.app`. The starting size is one shared CPU and
 1 GB RAM in `iad`; review memory and CPU usage after the release rehearsal.
 The service disables idle stopping, restarts after process exits, requests a
 60-second graceful shutdown, and checks `/health` every 15 seconds.
@@ -117,7 +117,7 @@ Machine and verify the result:
 fly deploy --config fly.collaboration.toml --ha=false
 fly machine list --app haunter-collaboration
 fly checks list --app haunter-collaboration
-curl --fail https://haunter-collaboration.fly.dev/health
+curl --fail https://collab.haunter.app/health
 ```
 
 Always retain `--ha=false`: Fly otherwise creates spare Machines by default.
@@ -127,8 +127,22 @@ local worker against the same production database. Database conversion is a
 separate maintenance operation, never an automatic Fly release command.
 
 Set Vercel's production `NEXT_PUBLIC_COLLABORATION_URL` to the URL above before
-building the release. Fly's built-in hostname supplies HTTPS/WSS; a custom
-domain is optional.
+building the release. Keep `APP_URL` set to the canonical website origin.
+
+Fly manages the TLS certificate for `collab.haunter.app`. In Namecheap's
+Advanced DNS settings for `haunter.app`, configure these records using the
+automatic TTL:
+
+| Type | Host | Value |
+| --- | --- | --- |
+| CNAME | `collab` | `e59mjy1.haunter-collaboration.fly.dev` |
+| CNAME | `_acme-challenge.collab` | `collab.haunter.app.e59mjy1.flydns.net` |
+
+The DNS challenge allows certificate issuance before the worker starts. Keep
+both records for routing and automatic certificate renewal. Verify issuance with
+`fly certs check collab.haunter.app --app haunter-collaboration`; use
+`fly certs setup collab.haunter.app --app haunter-collaboration` to retrieve the
+current required records if the Fly app is recreated.
 
 ## Recovery and rollback
 

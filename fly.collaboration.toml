@@ -17,7 +17,7 @@ kill_timeout = "60s"
   NODE_ENV = "production"
   COLLABORATION_HOST = "0.0.0.0"
   COLLABORATION_PORT = "1234"
-  NEXT_PUBLIC_COLLABORATION_URL = "wss://haunter-collaboration.fly.dev"
+  NEXT_PUBLIC_COLLABORATION_URL = "wss://collab.haunter.app"
 
 [http_service]
   internal_port = 1234
