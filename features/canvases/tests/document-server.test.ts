@@ -219,10 +219,15 @@ test("read-only sessions reject edits and wrong-resource tokens", async () => {
 					.snapshot,
 			),
 		).not.toContain("Forbidden edit");
+		const [payload, encodedSignature] = h.tokens.issue(h.grant).token.split(".");
+		const signature = Buffer.from(encodedSignature!, "base64url");
+		// Changing the last base64url character can affect only unused padding bits.
+		signature[0] = signature[0]! ^ 1;
+		const tamperedToken = `${payload}.${signature.toString("base64url")}`;
 		await expect(
 			h.engine.prepare(
 				new Request(
-					`http://localhost/canvas/${h.canvas.id}?token=${h.tokens.issue(h.grant).token.replace(/.$/, "x")}`,
+					`http://localhost/canvas/${h.canvas.id}?token=${tamperedToken}`,
 				),
 			),
 		).rejects.toThrow();
