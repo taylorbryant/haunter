@@ -66,7 +66,14 @@ pages or canvases during conversion. Backup files are created exclusively with m
    `APP_URL`. Set `NEXT_PUBLIC_COLLABORATION_URL=wss://YOUR_WORKER_HOST` **before
    building Next**, and at worker runtime. Production builds reject missing or
    insecure remote collaboration URLs. Allow WebSocket upgrades and keep the
-   worker available continuously. The app accepts one canonical browser origin.
+   worker available continuously. The worker accepts the canonical browser origin
+   from `APP_URL`. To test a trusted preview, set `COLLABORATION_ALLOWED_ORIGINS`
+   on the worker to a comma-separated list of additional exact HTTP(S) origins.
+   This applies to page and canvas sockets, preserves `APP_URL`, and does not
+   bypass document tokens or membership checks. Wildcards are rejected. Prefer
+   the stable Vercel branch alias; a new deployment URL needs an explicit entry.
+   Each preview must use the same test database and auth secret as its worker.
+   Remove preview origins before switching that worker to a production database.
 6. Start the worker, check `/health`, deploy/start Next, and reopen the app. Run the
    browser release checks below before inviting normal usage.
 

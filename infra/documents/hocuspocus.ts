@@ -11,6 +11,10 @@ import { DocumentRestoredError } from "@/features/documents/restoration";
 import { trackAssignmentChanges } from "./assignment-attribution";
 import { deliverTaskAssignmentNotifications } from "@/features/tasks/notifications/assigned";
 import { validateDocumentUpdate } from "./validate-update";
+import {
+	isAllowedCollaborationOrigin,
+	type CollaborationOriginOptions,
+} from "@/lib/collaboration-origins";
 
 type ConnectionContext = {
 	grant: DocumentGrant;
@@ -20,14 +24,15 @@ type ConnectionContext = {
 	syncType?: number;
 };
 
-export function createDocumentServer(options: {
-	origin: string;
-	verify(token: string): DocumentGrant;
-	authorize(grant: DocumentGrant): Promise<{ ctx: AppContext; role: string }>;
-	workerOwnerId?: string;
-	canWrite?: () => boolean;
-	onStorageHealth?: (documentName: string, healthy: boolean) => void;
-}) {
+export function createDocumentServer(
+	options: CollaborationOriginOptions & {
+		verify(token: string): DocumentGrant;
+		authorize(grant: DocumentGrant): Promise<{ ctx: AppContext; role: string }>;
+		workerOwnerId?: string;
+		canWrite?: () => boolean;
+		onStorageHealth?: (documentName: string, healthy: boolean) => void;
+	},
+) {
 	const attributions = new Map<
 		string,
 		ReturnType<typeof trackAssignmentChanges>
@@ -151,7 +156,7 @@ export function createDocumentServer(options: {
 		maxDebounce: 2000,
 		async onConnect({ requestHeaders }) {
 			const origin = requestHeaders.get("origin");
-			if (origin && origin !== options.origin)
+			if (!isAllowedCollaborationOrigin(origin, options))
 				throw new Error("Origin not allowed");
 		},
 		async onAuthenticate({ token, documentName, connectionConfig }) {

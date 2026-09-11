@@ -1,5 +1,6 @@
 import { createEnv } from "@beignet/core/config";
 import { z } from "zod";
+import { CollaborationOrigins } from "./collaboration-origins";
 
 const BooleanEnv = z
 	.enum(["true", "false"])
@@ -51,6 +52,8 @@ export const env = createEnv({
 			.enum(["development", "test", "production"])
 			.default("development"),
 		APP_URL: z.string().url().default("http://localhost:3000"),
+		// Worker-only additions to APP_URL, for exact trusted preview origins.
+		COLLABORATION_ALLOWED_ORIGINS: CollaborationOrigins.optional(),
 		CRON_SECRET: z.string().min(1).optional(),
 		WEB_PUSH_PUBLIC_KEY: z.string().min(1).optional(),
 		WEB_PUSH_PRIVATE_KEY: z.string().min(1).optional(),

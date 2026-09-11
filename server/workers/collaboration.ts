@@ -53,6 +53,10 @@ const heartbeat = setInterval(async () => {
 	}
 }, 5000);
 const tokens = createDocumentSessionTokens(env.BETTER_AUTH_SECRET);
+const origins = {
+	origin: new URL(env.APP_URL).origin,
+	additionalOrigins: env.COLLABORATION_ALLOWED_ORIGINS,
+};
 const sharedOptions = {
 	workerOwnerId: lease.ownerId,
 	canWrite: () => lease.valid(),
@@ -72,7 +76,7 @@ const sharedOptions = {
 };
 const server = createDocumentServer({
 	...sharedOptions,
-	origin: new URL(env.APP_URL).origin,
+	...origins,
 });
 const canvasServer = createCanvasSyncServer(sharedOptions);
 let stopping = false;
@@ -80,7 +84,7 @@ const transport = listenDocumentServer(server, {
 	canvases: canvasServer,
 	port: Number(process.env.COLLABORATION_PORT ?? 1234),
 	hostname: process.env.COLLABORATION_HOST ?? "127.0.0.1",
-	origin: new URL(env.APP_URL).origin,
+	...origins,
 	canAcceptConnections: () => !stopping && lease.valid(),
 	isReady: () => heartbeatHealthy && failedDocuments.size === 0,
 });

@@ -4,14 +4,17 @@ import type {
 	PreparedCanvasConnection,
 } from "@/infra/canvases/sync-server";
 import type { Hocuspocus, WebSocketLike } from "@hocuspocus/server";
+import {
+	isAllowedCollaborationOrigin,
+	type CollaborationOriginOptions,
+} from "@/lib/collaboration-origins";
 
 /** Hocuspocus v4's Server wrapper is Node-only; Bun hosts its protocol engine directly. */
 export function listenDocumentServer(
 	hocuspocus: Hocuspocus,
-	options: {
+	options: CollaborationOriginOptions & {
 		port: number;
 		hostname: string;
-		origin: string;
 		canAcceptConnections?: () => boolean;
 		isReady?: () => boolean;
 		canvases?: CanvasSyncServer;
@@ -37,7 +40,7 @@ export function listenDocumentServer(
 			if (options.canAcceptConnections?.() === false)
 				return new Response("Collaboration is shutting down.", { status: 503 });
 			const origin = request.headers.get("origin");
-			if (origin && origin !== options.origin)
+			if (!isAllowedCollaborationOrigin(origin, options))
 				return new Response("Forbidden", { status: 403 });
 			let canvasPrepared: PreparedCanvasConnection | undefined;
 			if (new URL(request.url).pathname.startsWith("/canvas/")) {
