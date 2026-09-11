@@ -84,9 +84,51 @@ allows recovery after a crash without manually deleting ownership rows.
 The worker boots the app providers, so it needs the same provider configuration as
 Next (including mail configuration), even though it does not send sign-in emails.
 The existing task notification schedule retries durable pending push deliveries;
-keep the app's schedule enabled. Docker is not installed in the development
-environment used for this validation, so the container itself still needs a build
-and boot smoke test on the selected host.
+keep the app's schedule enabled. The container built successfully with Fly's
+remote builder on September 11, 2026. Its first boot and public HTTPS/WebSocket
+smoke tests remain part of the production cutover below.
+
+### Fly.io configuration
+
+`fly.collaboration.toml` targets the `haunter-collaboration` app in the personal
+Fly organization. Its public WebSocket URL is
+`wss://haunter-collaboration.fly.dev`. The starting size is one shared CPU and
+1 GB RAM in `iad`; review memory and CPU usage after the release rehearsal.
+The service disables idle stopping, restarts after process exits, requests a
+60-second graceful shutdown, and checks `/health` every 15 seconds.
+
+Before the first worker start, enable Fly billing for continuous operation and
+stage production values in Fly Secrets: `APP_URL`, `SQLITE_DB_URL`,
+`SQLITE_DB_AUTH_TOKEN`, `BETTER_AUTH_SECRET`, `RESEND_API_KEY`, and `RESEND_FROM`.
+Match the Next app's optional Blob, Upstash and web-push configuration when those
+providers are enabled. Do not import redacted `[SENSITIVE]` values from a Vercel
+environment export. Keep production and preview databases/workers separate.
+
+Build the container before cutover without starting a worker:
+
+```sh
+fly deploy --config fly.collaboration.toml --remote-only --build-only --push
+```
+
+After the backup and migration steps above have completed, deploy exactly one
+Machine and verify the result:
+
+```sh
+fly deploy --config fly.collaboration.toml --ha=false
+fly machine list --app haunter-collaboration
+fly checks list --app haunter-collaboration
+curl --fail https://haunter-collaboration.fly.dev/health
+```
+
+Always retain `--ha=false`: Fly otherwise creates spare Machines by default.
+The rolling strategy replaces the single Machine in place with one unavailable
+Machine allowed; do not switch to canary or bluegreen, add replicas, or run a
+local worker against the same production database. Database conversion is a
+separate maintenance operation, never an automatic Fly release command.
+
+Set Vercel's production `NEXT_PUBLIC_COLLABORATION_URL` to the URL above before
+building the release. Fly's built-in hostname supplies HTTPS/WSS; a custom
+domain is optional.
 
 ## Recovery and rollback
 

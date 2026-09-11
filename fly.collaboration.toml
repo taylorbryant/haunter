@@ -1,0 +1,41 @@
+app = "haunter-collaboration"
+primary_region = "iad"
+kill_signal = "SIGTERM"
+kill_timeout = "60s"
+
+[build]
+  dockerfile = "Dockerfile.collaboration"
+
+# Deploy with --ha=false and keep exactly one Machine for this database.
+# Rolling replaces that Machine in place; canary/bluegreen would overlap owners.
+[deploy]
+  strategy = "rolling"
+  max_unavailable = 1
+  wait_timeout = "10m"
+
+[env]
+  NODE_ENV = "production"
+  COLLABORATION_HOST = "0.0.0.0"
+  COLLABORATION_PORT = "1234"
+  NEXT_PUBLIC_COLLABORATION_URL = "wss://haunter-collaboration.fly.dev"
+
+[http_service]
+  internal_port = 1234
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = false
+
+  [[http_service.checks]]
+    grace_period = "60s"
+    interval = "15s"
+    timeout = "5s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"
+
+[[restart]]
+  policy = "always"
