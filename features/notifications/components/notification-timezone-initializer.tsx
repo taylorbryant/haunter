@@ -1,17 +1,15 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import {
 	initializeNotificationTimezoneMutationOptions,
-	invalidateNotificationSettings,
 	notificationSettingsQueryOptions,
 } from "@/features/notifications/client/queries";
 import { getBrowserTimezone } from "@/features/notifications/client/timezone";
 import { useAfterFirstPaint } from "@/hooks/use-after-first-paint";
 
 export function NotificationTimezoneInitializer() {
-	const queryClient = useQueryClient();
 	const afterFirstPaint = useAfterFirstPaint();
 	const settings = useQuery({
 		...notificationSettingsQueryOptions(),
@@ -35,11 +33,8 @@ export function NotificationTimezoneInitializer() {
 		attempted.current = true;
 		const timezone = getBrowserTimezone();
 		if (!timezone) return;
-		initializeTimezone.mutate(
-			{ body: { timezone } },
-			{ onSuccess: () => invalidateNotificationSettings(queryClient) },
-		);
-	}, [initializeTimezone, queryClient, settings.data]);
+		initializeTimezone.mutate({ body: { timezone } });
+	}, [initializeTimezone, settings.data]);
 
 	return null;
 }

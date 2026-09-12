@@ -59,6 +59,59 @@ test("does not remount-refetch hydrated task lists", () => {
 	expect(options.refetchOnMount).toBe(false);
 });
 
+test("task cache updates leave infinite and custom query data untouched", async () => {
+	const queryClient = new QueryClient();
+	const queryKey = listTasksQueryOptions("workspace_1", "all").queryKey;
+	const infiniteKey = [...queryKey, "infinite"];
+	const customKey = [...queryKey.slice(0, 4), { view: "summary" }];
+	const infiniteData = { pages: [output(false)], pageParams: [null] };
+	const summary = { count: 1 };
+	queryClient.setQueryData(queryKey, output(false));
+	queryClient.setQueryData(infiniteKey, infiniteData);
+	queryClient.setQueryData(customKey, summary);
+
+	const completion = await optimisticallySetTaskCompletion(
+		queryClient,
+		task.id,
+		true,
+	);
+	expect(completion).toHaveLength(1);
+	restoreTasksCache(queryClient, completion);
+	const schedule = await optimisticallySetTaskSchedule(queryClient, task.id, {
+		dueDate: "2026-08-01",
+		dueTime: "09:00",
+		reminderOffsetMinutes: null,
+	});
+	restoreTasksCache(queryClient, schedule);
+	const patch = await optimisticallyPatchTask(
+		queryClient,
+		task.id,
+		{ title: "Edited" },
+		"user_1",
+	);
+	restoreTasksCache(queryClient, patch);
+	const removal = await optimisticallyRemoveTask(queryClient, task.id);
+	restoreTasksCache(queryClient, removal);
+	const temporaryId = createOptimisticTaskId();
+	const creation = await optimisticallyAddTask(
+		queryClient,
+		{ ...otherTask, id: temporaryId },
+		"user_1",
+	);
+	replaceOptimisticTask(queryClient, temporaryId, otherTask);
+	expect(
+		queryClient
+			.getQueryData<ListTasksOutput>(queryKey)
+			?.items.map((item) => item.id),
+	).toEqual([task.id, otherTask.id]);
+	expect(creation).toHaveLength(1);
+	expect(queryClient.getQueryData<typeof infiniteData>(infiniteKey)).toBe(
+		infiniteData,
+	);
+	expect(queryClient.getQueryData<typeof summary>(customKey)).toBe(summary);
+	queryClient.clear();
+});
+
 test("task completion updates every cached task view and can roll back", async () => {
 	const queryClient = new QueryClient();
 	const openKey = listTasksQueryOptions("workspace_1", "open", "mine").queryKey;

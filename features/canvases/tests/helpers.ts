@@ -10,6 +10,16 @@ export function createTestCanvasRepository(): CanvasRepository {
 	const canvases = new Map<string, Canvas>();
 
 	return {
+		async findSyncRoom(scope, id) {
+			return canvases.get(id)?.workspaceId === tenantScopeId(scope)
+				? { roomJson: "{}", revision: 0 }
+				: null;
+		},
+		async commitSyncRoom() {
+			throw new Error(
+				"Use the real database document fixture for collaborative writes",
+			);
+		},
 		async listStandalone(scope) {
 			return Array.from(canvases.values())
 				.filter(
@@ -60,7 +70,7 @@ export function createTestCanvasRepository(): CanvasRepository {
 			canvases.set(id, updated);
 			return updated;
 		},
-		async saveSnapshot(scope, id: string, snapshotJson: string) {
+		async initializeSnapshot(scope, id: string, snapshotJson: string) {
 			const canvas = canvases.get(id);
 			if (!canvas || canvas.workspaceId !== tenantScopeId(scope)) {
 				throw new Error(`Canvas not found: ${id}`);
@@ -80,41 +90,6 @@ export function createTestCanvasRepository(): CanvasRepository {
 				updatedAt: snapshotUpdatedAt,
 			});
 			return { updatedAt: snapshotUpdatedAt, snapshotUpdatedAt };
-		},
-		async saveSnapshotIf(
-			scope,
-			id: string,
-			snapshotJson: string,
-			baseUpdatedAt: string,
-		) {
-			const canvas = canvases.get(id);
-			if (!canvas || canvas.workspaceId !== tenantScopeId(scope)) {
-				throw new Error(`Canvas not found: ${id}`);
-			}
-			if (canvas.snapshotUpdatedAt !== baseUpdatedAt) {
-				return null;
-			}
-
-			// Strictly after the base version, mirroring the drizzle repo.
-			const snapshotUpdatedAt = new Date(
-				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
-			).toISOString();
-			canvases.set(id, {
-				...canvas,
-				snapshot: JSON.parse(snapshotJson),
-				snapshotUpdatedAt,
-				updatedAt:
-					canvas.updatedAt > snapshotUpdatedAt
-						? canvas.updatedAt
-						: snapshotUpdatedAt,
-			});
-			return {
-				updatedAt:
-					canvas.updatedAt > snapshotUpdatedAt
-						? canvas.updatedAt
-						: snapshotUpdatedAt,
-				snapshotUpdatedAt,
-			};
 		},
 		async delete(scope, id: string) {
 			const canvas = canvases.get(id);

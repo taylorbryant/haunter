@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { QueryClient } from "@tanstack/react-query";
+import {
+	MutationObserver,
+	QueryClient,
+	QueryObserver,
+} from "@tanstack/react-query";
 import {
 	getPageNavigationQueryOptions,
 	getPageQueryOptions,
@@ -9,6 +13,7 @@ import {
 	restorePagePlacementInCache,
 	restorePageTitleInCache,
 	setFavoriteInNavigationCache,
+	setPageFavoriteMutationOptions,
 	setPageTitleInCache,
 	setViewedInNavigationCache,
 	syncRecordedPageViewInNavigationCache,
@@ -45,6 +50,166 @@ function setup() {
 }
 
 describe("page navigation cache", () => {
+	it("keeps a pending favorite's callbacks and invalidation in its original workspace", async () => {
+		const { queryClient, queryKey } = setup();
+		const otherKey = getPageNavigationQueryOptions("other_workspace").queryKey;
+		queryClient.setQueryData(otherKey, { favorites: [], recents: [] });
+		const item = page(1);
+		const started = Promise.withResolvers<void>();
+		const saved = Promise.withResolvers<{
+			pageId: string;
+			favoritedAt: string | null;
+		}>();
+		const callbacks: string[] = [];
+		const mutation = new MutationObserver(queryClient, {
+			...setPageFavoriteMutationOptions("workspace_test", {
+				onSuccess: () => {
+					callbacks.push("original");
+				},
+			}),
+			mutationFn: () => {
+				started.resolve();
+				return saved.promise;
+			},
+		});
+		const pending = mutation.mutate({
+			path: { id: item.id },
+			body: { favorite: true },
+		});
+		await started.promise;
+		mutation.setOptions({
+			...setPageFavoriteMutationOptions("other_workspace", {
+				onSuccess: () => {
+					callbacks.push("other");
+				},
+			}),
+			mutationFn: async () => ({ pageId: item.id, favoritedAt: null }),
+		});
+		saved.resolve({ pageId: item.id, favoritedAt: "2026-09-12T12:00:00.000Z" });
+		await pending;
+		expect(callbacks).toEqual(["original"]);
+		expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+		expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(false);
+		queryClient.clear();
+	});
+
+	it("commits favorite metadata before one scoped refresh and waits for that refresh", async () => {
+		const { queryClient, queryKey } = setup();
+		const item = page(1);
+		const otherWorkspaceKey =
+			getPageNavigationQueryOptions("other_workspace").queryKey;
+		const pageKey = getPageQueryOptions(item.id).queryKey;
+		queryClient.setQueryData(otherWorkspaceKey, { favorites: [], recents: [] });
+		queryClient.setQueryData(pageKey, item);
+		const favoritedAt = "2026-09-12T12:00:00.000Z";
+		const refreshed = Promise.withResolvers<PageNavigationOutput>();
+		const refetchStarted = Promise.withResolvers<void>();
+		let refetches = 0;
+		const observer = new QueryObserver(queryClient, {
+			queryKey,
+			staleTime: Infinity,
+			queryFn: () => {
+				refetches++;
+				expect(
+					queryClient.getQueryData<PageNavigationOutput>(queryKey)?.favorites[0]
+						?.favoritedAt,
+				).toBe(favoritedAt);
+				refetchStarted.resolve();
+				return refreshed.promise;
+			},
+		});
+		const unsubscribe = observer.subscribe(() => {});
+		try {
+			const mutation = new MutationObserver(queryClient, {
+				...setPageFavoriteMutationOptions("workspace_test", {
+					onSuccess: (result) =>
+						setFavoriteInNavigationCache(
+							queryClient,
+							"workspace_test",
+							item,
+							result.favoritedAt,
+						),
+				}),
+				mutationFn: async () => ({ pageId: item.id, favoritedAt }),
+			});
+			const pending = mutation.mutate({
+				path: { id: item.id },
+				body: { favorite: true },
+			});
+			await refetchStarted.promise;
+			expect(mutation.getCurrentResult().isPending).toBe(true);
+			const serverNavigation: PageNavigationOutput = {
+				favorites: [
+					{
+						...item,
+						title: "Renamed on server",
+						favoritedAt,
+						lastViewedAt: null,
+					},
+				],
+				recents: [],
+			};
+			refreshed.resolve(serverNavigation);
+			await pending;
+			expect(refetches).toBe(1);
+			expect(queryClient.getQueryData<PageNavigationOutput>(queryKey)).toEqual(
+				serverNavigation,
+			);
+			expect(queryClient.getQueryState(otherWorkspaceKey)?.isInvalidated).toBe(
+				false,
+			);
+			expect(queryClient.getQueryState(pageKey)?.isInvalidated).toBe(false);
+		} finally {
+			unsubscribe();
+			queryClient.clear();
+		}
+	});
+
+	it("title and placement updates skip incompatible cached query shapes", async () => {
+		const { queryClient } = setup();
+		const item = page(1);
+		const listKey = listPagesQueryOptions("workspace_test").queryKey;
+		const infiniteListKey = [...listKey, "infinite"];
+		const infiniteNavKey = [
+			...getPageNavigationQueryOptions("workspace_test").queryKey,
+			"infinite",
+		];
+		const infinitePages = { pages: [{ items: [item] }], pageParams: [null] };
+		const infiniteNavigation = {
+			pages: [{ favorites: [], recents: [] }],
+			pageParams: [null],
+		};
+		queryClient.setQueryData(listKey, { items: [item] });
+		queryClient.setQueryData(infiniteListKey, infinitePages);
+		queryClient.setQueryData(infiniteNavKey, infiniteNavigation);
+		setPageTitleInCache(queryClient, item.id, "New title");
+		const snapshot = await optimisticallySetPagePlacement(
+			queryClient,
+			item.id,
+			null,
+			5,
+		);
+		expect(snapshot).toHaveLength(1);
+		restorePagePlacementInCache(queryClient, item.id, snapshot);
+		restorePageTitleInCache(
+			queryClient,
+			item.id,
+			"New title",
+			item.title,
+			item.updatedAt,
+		);
+		expect(queryClient.getQueryData<{ items: PageMeta[] }>(listKey)).toEqual({
+			items: [item],
+		});
+		expect(
+			queryClient.getQueryData<typeof infinitePages>(infiniteListKey),
+		).toBe(infinitePages);
+		expect(
+			queryClient.getQueryData<typeof infiniteNavigation>(infiniteNavKey),
+		).toBe(infiniteNavigation);
+		queryClient.clear();
+	});
+
 	it("keeps a hydrated page fresh until its background poll", () => {
 		const options = getPageQueryOptions("page-1");
 

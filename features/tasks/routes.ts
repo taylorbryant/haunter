@@ -23,6 +23,7 @@ export const taskRoutes = defineRouteGroup({
 		{
 			contract: actOnTaskNotification,
 			useCase: actOnTaskNotificationUseCase,
+			input: ({ body, path }) => ({ ...body, id: path.id }),
 		},
 		{ contract: listTasks, useCase: listTasksUseCase },
 		{ contract: createTask, useCase: createTaskUseCase },

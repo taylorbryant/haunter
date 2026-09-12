@@ -1,5 +1,6 @@
 import type { TenantScope } from "@beignet/core/ports";
 import type {
+	BlockJson,
 	Page,
 	PageMeta,
 	PageNavigationItem,
@@ -8,6 +9,7 @@ import type {
 } from "@/features/pages/schemas";
 
 export type NewPage = {
+	initialContent?: BlockJson[];
 	userId: string;
 	parentPageId: string | null;
 	title: string;
@@ -46,6 +48,26 @@ export interface PageLinkRepository {
 }
 
 export interface PageRepository {
+	restoreContent(
+		scope: TenantScope,
+		id: string,
+		content: BlockJson[],
+	): Promise<{
+		content: BlockJson[];
+		updatedAt: string;
+		contentUpdatedAt: string;
+		documentGeneration?: number;
+	}>;
+	/** Append without replacing existing blocks; caller owns the surrounding transaction. */
+	appendContent(
+		scope: TenantScope,
+		id: string,
+		blocks: BlockJson[],
+	): Promise<{
+		content: BlockJson[];
+		updatedAt: string;
+		contentUpdatedAt: string;
+	}>;
 	/** Live (non-trashed) pages only. */
 	listMetaByWorkspace(scope: TenantScope): Promise<PageMeta[]>;
 	/** Minimal parent links for every page in a workspace, including trash. */
@@ -85,23 +107,6 @@ export interface PageRepository {
 		input: UpdatePageData,
 		baseTitle: string,
 	): Promise<PageMeta | null>;
-	saveContent(
-		scope: TenantScope,
-		id: string,
-		contentJson: string,
-		searchText: string,
-	): Promise<{ updatedAt: string; contentUpdatedAt: string }>;
-	/**
-	 * Compare-and-set variant: persist only if the row's contentUpdatedAt still
-	 * equals `baseUpdatedAt`. Returns null when the row moved on (stale write).
-	 */
-	saveContentIf(
-		scope: TenantScope,
-		id: string,
-		contentJson: string,
-		searchText: string,
-		baseUpdatedAt: string,
-	): Promise<{ updatedAt: string; contentUpdatedAt: string } | null>;
 	/** Set or clear deletedAt for the given pages. */
 	setDeletedByIds(
 		scope: TenantScope,
@@ -140,7 +145,7 @@ export type NewPageVersion = {
 	icon: string | null;
 	contentJson: string;
 	cause: "checkpoint" | "restore";
-	createdBy: string;
+	createdBy: string | null;
 };
 
 export interface PageVersionRepository {

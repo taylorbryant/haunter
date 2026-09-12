@@ -1,4 +1,5 @@
 import { protectedRefetchInterval } from "@/client/session-recovery";
+import type { ContractUseMutationOptions } from "@beignet/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
@@ -67,10 +68,20 @@ export const markNotificationReadMutationOptions = () =>
 	rq(markNotificationRead).mutationOptions();
 export const markAllNotificationsReadMutationOptions = () =>
 	rq(markAllNotificationsRead).mutationOptions();
-export const updateNotificationSettingsMutationOptions = () =>
-	rq(updateNotificationSettings).mutationOptions();
+export const updateNotificationSettingsMutationOptions = (
+	options: Pick<
+		ContractUseMutationOptions<typeof updateNotificationSettings.config>,
+		"onSuccess"
+	> = {},
+) =>
+	rq(updateNotificationSettings).mutationOptions({
+		...options,
+		invalidates: () => [rq(getNotificationSettings).filter()],
+	});
 export const initializeNotificationTimezoneMutationOptions = () =>
-	rq(initializeNotificationTimezone).mutationOptions();
+	rq(initializeNotificationTimezone).mutationOptions({
+		invalidates: () => [rq(getNotificationSettings).filter()],
+	});
 export const subscribePushMutationOptions = () =>
 	rq(subscribePush).mutationOptions();
 export const unsubscribePushMutationOptions = () =>
@@ -91,10 +102,9 @@ export async function markNotificationReadInCache(
 	const operationId = crypto.randomUUID();
 	const snapshot: NotificationReadCacheSnapshot = [];
 
-	for (const [
-		queryKey,
-		current,
-	] of queryClient.getQueriesData<ListNotificationsOutput>(filter)) {
+	for (const { queryKey, data: current } of rq(listNotifications).cacheEntries(
+		queryClient,
+	)) {
 		if (!current) continue;
 		const notification = current.items.find(
 			(notification) => notification.id === item.id,
@@ -133,10 +143,9 @@ export async function markAllNotificationsReadInCache(
 	const operationId = crypto.randomUUID();
 	const snapshot: NotificationReadCacheSnapshot = [];
 
-	for (const [
-		queryKey,
-		current,
-	] of queryClient.getQueriesData<ListNotificationsOutput>(filter)) {
+	for (const { queryKey, data: current } of rq(listNotifications).cacheEntries(
+		queryClient,
+	)) {
 		if (!current) continue;
 		snapshot.push({
 			queryKey,
@@ -245,19 +254,23 @@ export async function removeNotificationFromCache(
 ): Promise<NotificationsCacheSnapshot> {
 	const filter = rq(listNotifications).filter();
 	await queryClient.cancelQueries(filter, { revert: false, silent: true });
-	const snapshot = queryClient.getQueriesData<ListNotificationsOutput>(filter);
-	queryClient.setQueriesData<ListNotificationsOutput>(filter, (current) => {
-		if (!current) return current;
-		return {
-			...current,
-			items: current.items.filter(
-				(notification) => notification.id !== item.id,
-			),
-			unreadCount:
-				item.readAt === null
-					? Math.max(0, current.unreadCount - 1)
-					: current.unreadCount,
-		};
+	const snapshot: NotificationsCacheSnapshot = rq(listNotifications)
+		.cacheEntries(queryClient)
+		.map(({ queryKey, data }) => [queryKey, data]);
+	rq(listNotifications).updateCachedQueries(queryClient, {
+		update: ({ data: current }) => {
+			if (!current) return current;
+			return {
+				...current,
+				items: current.items.filter(
+					(notification) => notification.id !== item.id,
+				),
+				unreadCount:
+					item.readAt === null
+						? Math.max(0, current.unreadCount - 1)
+						: current.unreadCount,
+			};
+		},
 	});
 	return snapshot;
 }

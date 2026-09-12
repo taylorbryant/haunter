@@ -46,6 +46,23 @@ test("a title-only draft produces a nonempty recovery file", () => {
 		createRecoveryDownload([draft("page-title", "Recover this title")]).content,
 	).toContain("Recover this title");
 });
+test("collaborative recovery preserves the binary document and current title", () => {
+	const state = { format: "haunter-yjs-v1", update: [1, 2, 3] };
+	const file = createRecoveryDownload([
+		draft("page-title", "Offline collaborative page"),
+		draft("page", state),
+	]);
+	expect(file.filename.endsWith(".json")).toBe(true);
+	expect(JSON.parse(file.content)).toMatchObject({
+		pages: [
+			{
+				id: "page",
+				title: "Offline collaborative page",
+				collaborativeState: state,
+			},
+		],
+	});
+});
 test("embedded canvases and page content survive in a single linked recovery file", () => {
 	const snapshot = {
 		document: { store: { shape: { text: "Canvas sentence" } } },

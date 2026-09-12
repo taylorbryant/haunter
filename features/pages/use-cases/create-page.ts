@@ -5,15 +5,12 @@ import {
 	reconcilePageDerivations,
 	reconcilePageLinks,
 } from "@/features/pages/lib/apply-page-content";
-import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
-import type { BlockJson, Page } from "@/features/pages/schemas";
+import type { Page } from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
 import { CreatePageInputSchema, CreatePageOutputSchema } from "../schemas";
-
-const PARENT_APPEND_ATTEMPTS = 3;
 
 export const createPageUseCase = useCase
 	.command("pages.create")
@@ -41,20 +38,15 @@ export const createPageUseCase = useCase
 				const position =
 					(await tx.pages.maxPositionForParent(scope, parentPageId)) + 1;
 
-				let created = await tx.pages.create(scope, {
+				const created = await tx.pages.create(scope, {
 					userId: user.id,
 					parentPageId,
 					title: input.title,
 					position,
+					initialContent: input.initialContent,
 				});
 
 				if (input.initialContent && input.initialContent.length > 0) {
-					const saved = await tx.pages.saveContent(
-						scope,
-						created.id,
-						JSON.stringify(input.initialContent),
-						extractPageSearchText(input.initialContent),
-					);
 					const derivations = await reconcilePageDerivations(
 						tx,
 						scope,
@@ -66,46 +58,15 @@ export const createPageUseCase = useCase
 						},
 					);
 					assignmentNotifications = derivations.assignmentNotifications;
-					created = { ...created, ...saved };
 				}
 
 				if (parent && input.appendToParentContent !== false) {
 					const pageLinkBlock = createSubpageLinkBlock(created);
-					let currentParent = parent;
-					let savedContent: BlockJson[] | null = null;
-
-					for (
-						let attempt = 0;
-						attempt < PARENT_APPEND_ATTEMPTS;
-						attempt += 1
-					) {
-						const content = [...currentParent.content, pageLinkBlock];
-						const saved = await tx.pages.saveContentIf(
-							scope,
-							currentParent.id,
-							JSON.stringify(content),
-							extractPageSearchText(content),
-							currentParent.contentUpdatedAt,
-						);
-						if (saved) {
-							savedContent = content;
-							parentContentUpdatedAt = saved.contentUpdatedAt;
-							break;
-						}
-
-						const refreshed = await tx.pages.findById(scope, currentParent.id);
-						if (!refreshed || refreshed.deletedAt !== null) {
-							throw appError("PageNotFound", {
-								details: { id: currentParent.id },
-							});
-						}
-						currentParent = refreshed;
-					}
-
-					if (!savedContent) {
-						throw appError("StaleWrite", { details: { id: currentParent.id } });
-					}
-					await reconcilePageLinks(tx, scope, currentParent, savedContent);
+					const saved = await tx.pages.appendContent(scope, parent.id, [
+						pageLinkBlock,
+					]);
+					parentContentUpdatedAt = saved.contentUpdatedAt;
+					await reconcilePageLinks(tx, scope, parent, saved.content);
 				}
 
 				return {

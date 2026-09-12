@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
-import { getPageQueryOptions } from "@/features/pages/client/queries";
+import { getEditorPageQueryOptions } from "@/features/pages/client/queries";
 import { useCachedPage } from "@/features/pages/client/use-cached-page";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 
@@ -24,7 +24,7 @@ function CachedPageProbe({ pageId }: { pageId: string }) {
 
 test("observing a cached page does not create an empty query before hydration", () => {
 	const queryClient = new QueryClient();
-	const queryKey = getPageQueryOptions("page-1").queryKey;
+	const queryKey = getEditorPageQueryOptions("page-1").queryKey;
 
 	renderToString(
 		<QueryClientProvider client={queryClient}>
@@ -40,8 +40,17 @@ test("observing a cached page does not create an empty query before hydration", 
 test("hydration does not update the cached-page observer during another render", () => {
 	const queryClient = new QueryClient();
 	const serverQueryClient = new QueryClient();
-	serverQueryClient.setQueryData(getPageQueryOptions("page-1").queryKey, {
+	serverQueryClient.setQueryData(getEditorPageQueryOptions("page-1").queryKey, {
 		id: "page-1",
+		workspaceId: "workspace-1",
+		userId: "user-1",
+		parentPageId: null,
+		title: "Cached page",
+		icon: null,
+		position: 0,
+		deletedAt: null,
+		createdAt: "2026-09-01T00:00:00.000Z",
+		updatedAt: "2026-09-01T00:00:00.000Z",
 	});
 	const dehydratedState = dehydrate(serverQueryClient);
 	const view = render(

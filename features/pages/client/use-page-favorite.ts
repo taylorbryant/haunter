@@ -15,7 +15,18 @@ export function usePageFavorite(
 	const queryClient = useQueryClient();
 	const queryKey = getPageNavigationQueryOptions(workspaceId).queryKey;
 	const mutation = useMutation({
-		...setPageFavoriteMutationOptions(),
+		...setPageFavoriteMutationOptions(workspaceId, {
+			onSuccess: (result) => {
+				if (page?.id === result.pageId) {
+					setFavoriteInNavigationCache(
+						queryClient,
+						workspaceId,
+						page,
+						result.favoritedAt,
+					);
+				}
+			},
+		}),
 		meta: { errorFallback: "The favorite could not be updated." },
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey, exact: true });
@@ -34,18 +45,6 @@ export function usePageFavorite(
 			if (context?.previous) {
 				queryClient.setQueryData(queryKey, context.previous);
 			}
-		},
-		onSuccess: (result) => {
-			if (page) {
-				setFavoriteInNavigationCache(
-					queryClient,
-					workspaceId,
-					page,
-					result.favoritedAt,
-				);
-			}
-		},
-		onSettled: () => {
 			void queryClient.invalidateQueries({ queryKey, exact: true });
 		},
 	});

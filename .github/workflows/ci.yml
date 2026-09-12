@@ -39,3 +39,16 @@ jobs:
 
       - name: Run tests
         run: bun run test
+
+      - name: Build and verify packaged Yjs under Bun
+        env:
+          APP_URL: http://localhost:3000
+          NEXT_PUBLIC_COLLABORATION_URL: ws://localhost:1234
+          BETTER_AUTH_SECRET: ci-build-placeholder-not-a-production-secret
+          SQLITE_DB_URL: file:ci-build.db
+          RESEND_API_KEY: re_ci_placeholder
+          RESEND_FROM: Haunter <onboarding@resend.dev>
+        run: |
+          bun beignet db migrate
+          bun run build
+          bun run check:yjs-bundle

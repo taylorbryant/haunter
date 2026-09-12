@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
 	type AnySQLiteColumn,
+	blob,
 	foreignKey,
 	index,
 	integer,
@@ -10,6 +11,45 @@ import {
 	text,
 	uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+
+// The binary Yjs state is authoritative; pages.content is its readable projection.
+export const collaborativeDocuments = sqliteTable("collaborative_documents", {
+	pageId: text("page_id")
+		.primaryKey()
+		.references(() => pages.id, { onDelete: "cascade" }),
+	workspaceId: text("workspace_id")
+		.notNull()
+		.references(() => organization.id, { onDelete: "cascade" }),
+	schemaVersion: integer("schema_version").notNull().default(1),
+	state: blob("state", { mode: "buffer" }).notNull(),
+	revision: integer("revision").notNull().default(0),
+	generation: integer("generation").notNull().default(0),
+	updatedAt: text("updated_at").notNull(),
+});
+
+// First-party tldraw room state includes records, clocks and deletion tombstones.
+export const canvasSyncRooms = sqliteTable("canvas_sync_rooms", {
+	canvasId: text("canvas_id")
+		.primaryKey()
+		.references(() => canvases.id, { onDelete: "cascade" }),
+	workspaceId: text("workspace_id")
+		.notNull()
+		.references(() => organization.id, { onDelete: "cascade" }),
+	schemaVersion: integer("schema_version").notNull().default(1),
+	snapshot: text("snapshot").notNull(),
+	revision: integer("revision").notNull().default(0),
+	updatedAt: text("updated_at").notNull(),
+});
+
+// A single active collaboration worker per database; every worker save is fenced.
+export const collaborationWorkerLease = sqliteTable(
+	"collaboration_worker_lease",
+	{
+		id: integer("id").primaryKey(),
+		ownerId: text("owner_id").notNull(),
+		expiresAt: integer("expires_at").notNull(),
+	},
+);
 
 export const user = sqliteTable("user", {
 	id: text("id").primaryKey(),
@@ -979,9 +1019,10 @@ export const pageVersions = sqliteTable(
 		content: text("content").notNull(),
 		// What produced the snapshot: a periodic "checkpoint" or a "restore".
 		cause: text("cause").notNull().default("checkpoint"),
-		createdBy: text("created_by")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// Collaborative checkpoints have multiple or unknown authors.
+		createdBy: text("created_by").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		createdAt: text("created_at").notNull(),
 	},
 	(table) => ({

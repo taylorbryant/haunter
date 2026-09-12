@@ -14,16 +14,22 @@ export function createRecoveryDownload(entries: RegisteredDraft[]) {
 	const canvases = entries.filter(
 		(entry) => entry.identity.resourceType === "canvas",
 	);
-	const resources = pages.map((page) => ({
-		type: "page",
-		id: page.identity.resourceId,
-		title: String(
-			titles
-				.find((title) => title.identity.resourceId === page.identity.resourceId)
-				?.getSnapshot().value ?? "Recovered page",
-		),
-		content: page.getSnapshot().value as BlockJson[],
-	}));
+	const resources = pages.map((page) => {
+		const value = page.getSnapshot().value;
+		return {
+			type: "page",
+			id: page.identity.resourceId,
+			title: String(
+				titles
+					.find(
+						(title) => title.identity.resourceId === page.identity.resourceId,
+					)
+					?.getSnapshot().value ?? "Recovered page",
+			),
+			content: Array.isArray(value) ? (value as BlockJson[]) : [],
+			collaborativeState: Array.isArray(value) ? undefined : value,
+		};
+	});
 	for (const title of titles) {
 		if (
 			!pages.some(
@@ -35,11 +41,17 @@ export function createRecoveryDownload(entries: RegisteredDraft[]) {
 				id: title.identity.resourceId,
 				title: String(title.getSnapshot().value),
 				content: [],
+				collaborativeState: undefined,
 			});
 		}
 	}
 	const page = resources[0];
-	if (page && resources.length === 1 && canvases.length === 0) {
+	if (
+		page &&
+		!page.collaborativeState &&
+		resources.length === 1 &&
+		canvases.length === 0
+	) {
 		return {
 			filename: pageExportFilename(page.title, "md"),
 			mime: "text/markdown;charset=utf-8",
@@ -58,7 +70,9 @@ export function createRecoveryDownload(entries: RegisteredDraft[]) {
 				pages: resources,
 				canvases: canvases.map((canvas) => ({
 					id: canvas.identity.resourceId,
-					snapshot: canvas.getSnapshot().value,
+					...(isCollaborativeValue(canvas.getSnapshot().value)
+						? { collaborativeState: canvas.getSnapshot().value }
+						: { snapshot: canvas.getSnapshot().value }),
 				})),
 			},
 			null,
@@ -80,4 +94,13 @@ export function downloadRecoveryDrafts(userId: string) {
 	anchor.click();
 	anchor.remove();
 	setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function isCollaborativeValue(value: unknown) {
+	return (
+		value !== null &&
+		typeof value === "object" &&
+		"format" in value &&
+		value.format === "haunter-yjs-v1"
+	);
 }

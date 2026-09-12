@@ -1,3 +1,5 @@
+import type { TestPageRepository } from "@/features/pages/tests/helpers";
+import { writeTestPageBody } from "@/features/pages/tests/write-test-page-body";
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
@@ -16,7 +18,7 @@ import type {
 	PageNavigationRepository,
 	PageRepository,
 } from "@/features/pages/ports";
-import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
+import { createTaskIntegrationPorts } from "@/features/tasks/tests/task-integration-fixture";
 import type { TaskAssignmentDeliveryPort } from "@/features/tasks/ports";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/port-wiring";
@@ -36,7 +38,6 @@ import {
 	recordPageViewUseCase,
 	restorePageUseCase,
 	restorePageVersionUseCase,
-	savePageContentUseCase,
 	searchPagesUseCase,
 	setPageFavoriteUseCase,
 	updatePageUseCase,
@@ -51,7 +52,7 @@ import {
 
 function createTester(
 	userId: string,
-	pages: PageRepository,
+	pages: TestPageRepository,
 	workspaceId: string,
 	tasks = createTestTaskRepository(),
 	role = "owner",
@@ -203,7 +204,7 @@ describe("pages use cases", () => {
 			children: [],
 		};
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: root.id, content: [intro] },
 			{ ctx },
 		);
@@ -457,7 +458,7 @@ describe("pages use cases", () => {
 		];
 
 		const saved = await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content },
 			{ ctx },
 		);
@@ -465,64 +466,6 @@ describe("pages use cases", () => {
 
 		expect(saved.updatedAt >= page.updatedAt).toBe(true);
 		expect(fetched.content).toEqual(content);
-	});
-
-	it("rejects a stale save and accepts one based on the current version", async () => {
-		const { workspace, tester, ctx } = await createFixture();
-
-		const page = await tester.run(
-			createPageUseCase,
-			{ workspaceId: workspace.id, title: "Contested" },
-			{ ctx },
-		);
-		const block = (text: string) => [
-			{
-				id: "block-1",
-				type: "paragraph",
-				props: {},
-				content: [{ type: "text", text, styles: {} }],
-				children: [],
-			},
-		];
-
-		// Writer A saves on top of the created version.
-		const first = await tester.run(
-			savePageContentUseCase,
-			{
-				id: page.id,
-				content: block("A"),
-				baseUpdatedAt: page.contentUpdatedAt,
-			},
-			{ ctx },
-		);
-
-		// Writer B still holds the created version: their save must not clobber A.
-		await expect(
-			tester.run(
-				savePageContentUseCase,
-				{
-					id: page.id,
-					content: block("B"),
-					baseUpdatedAt: page.contentUpdatedAt,
-				},
-				{ ctx },
-			),
-		).rejects.toThrow(/changed since/);
-
-		// After rebasing on A's version, B's save lands.
-		const rebased = await tester.run(
-			savePageContentUseCase,
-			{
-				id: page.id,
-				content: block("B2"),
-				baseUpdatedAt: first.contentUpdatedAt,
-			},
-			{ ctx },
-		);
-		expect(rebased.updatedAt >= first.updatedAt).toBe(true);
-
-		const fetched = await tester.run(getPageUseCase, { id: page.id }, { ctx });
-		expect(fetched.content).toEqual(block("B2"));
 	});
 
 	it("does not invalidate the content token when only metadata changes", async () => {
@@ -553,7 +496,7 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 		const saved = await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: created.id,
 				content,
@@ -684,7 +627,7 @@ describe("pages use cases", () => {
 			tester.run(getPageUseCase, { id: child.id }, { ctx }),
 		).rejects.toThrow(/not found/i);
 		await expect(
-			tester.run(savePageContentUseCase, { id: root.id, content: [] }, { ctx }),
+			tester.run(writeTestPageBody, { id: root.id, content: [] }, { ctx }),
 		).rejects.toThrow(/not found/i);
 
 		const restored = await tester.run(
@@ -738,7 +681,7 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: root.id,
 				content: [
@@ -775,7 +718,7 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: page.id,
 				content: [
@@ -917,7 +860,7 @@ describe("pages use cases", () => {
 		);
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: source.id,
 				content: [
@@ -961,7 +904,7 @@ describe("pages use cases", () => {
 
 		// Removing the references removes the backlinks.
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: source.id,
 				content: [
@@ -998,7 +941,7 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: source.id,
 				content: [
@@ -1051,7 +994,7 @@ describe("pages use cases", () => {
 		};
 
 		const plain = await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: source.id,
 				content: [
@@ -1070,7 +1013,7 @@ describe("pages use cases", () => {
 		expect(plain.linksChanged).toBe(false);
 
 		const linked = await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: source.id, content: [linkBlock] },
 			{ ctx },
 		);
@@ -1078,7 +1021,7 @@ describe("pages use cases", () => {
 		expect(linked.linksChanged).toBe(true);
 
 		const unchanged = await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: source.id, content: [linkBlock] },
 			{ ctx },
 		);
@@ -1086,7 +1029,7 @@ describe("pages use cases", () => {
 		expect(unchanged.linksChanged).toBe(false);
 
 		const withTask = await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: source.id, content: [linkBlock, taskBlock] },
 			{ ctx },
 		);
@@ -1108,7 +1051,7 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: notes.id,
 				content: [
@@ -1180,7 +1123,7 @@ describe("pages use cases", () => {
 			{ ctx },
 		);
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: snippets.id,
 				content: [
@@ -1245,7 +1188,7 @@ describe("page versioning", () => {
 
 		// First save: page is empty, nothing to checkpoint.
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [block("b1", "v1")] },
 			{ ctx },
 		);
@@ -1258,7 +1201,7 @@ describe("page versioning", () => {
 
 		// Second save checkpoints the pre-save ("v1") state...
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [block("b1", "v2")] },
 			{ ctx },
 		);
@@ -1272,7 +1215,7 @@ describe("page versioning", () => {
 
 		// ...and further saves inside the interval don't add more.
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [block("b1", "v3")] },
 			{ ctx },
 		);
@@ -1301,12 +1244,12 @@ describe("page versioning", () => {
 
 		// v1 has a task block; the current doc replaced it with a paragraph.
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [taskBlock("t1", "Old task")] },
 			{ ctx },
 		);
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [block("b2", "No more tasks")] },
 			{ ctx },
 		);
@@ -1348,12 +1291,12 @@ describe("page versioning", () => {
 			{ ctx },
 		);
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [block("b1", "v1")] },
 			{ ctx },
 		);
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [block("b1", "v2")] },
 			{ ctx },
 		);

@@ -1,10 +1,12 @@
 import { protectedRefetchInterval } from "@/client/session-recovery";
+import type { ContractUseMutationOptions } from "@beignet/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
 	createPage,
 	deletePage,
 	getPage,
+	getPageMetadata,
 	getPageNavigation,
 	getPageVersion,
 	listBacklinks,
@@ -15,7 +17,6 @@ import {
 	recordPageView,
 	restorePage,
 	restorePageVersion,
-	savePageContent,
 	searchPages,
 	setPageFavorite,
 	updatePage,
@@ -49,6 +50,33 @@ export function getPageQueryOptions(id: string) {
 	};
 }
 
+export function getPageMetadataQueryOptions(id: string) {
+	return {
+		...rq(getPageMetadata).queryOptions({ path: { id } }),
+		staleTime: 30_000,
+		refetchOnMount: false,
+		refetchInterval: protectedRefetchInterval,
+	};
+}
+
+export type EditorPage = PageMeta &
+	Partial<Pick<Page, "content" | "contentUpdatedAt">>;
+
+export const getEditorPageQueryOptions = getPageMetadataQueryOptions;
+
+/** Keep metadata and full-body readers coherent without fabricating a body. */
+function updatePageCaches(
+	queryClient: QueryClient,
+	id: string,
+	update: (page: EditorPage | undefined) => EditorPage | undefined,
+) {
+	for (const key of [
+		rq(getPage).key({ path: { id } }),
+		rq(getPageMetadata).key({ path: { id } }),
+	])
+		queryClient.setQueryData<EditorPage>(key, update);
+}
+
 export function getPageNavigationQueryOptions(workspaceId: string) {
 	return {
 		...rq(getPageNavigation).queryOptions({ path: { workspaceId } }),
@@ -57,8 +85,22 @@ export function getPageNavigationQueryOptions(workspaceId: string) {
 	};
 }
 
-export function setPageFavoriteMutationOptions() {
-	return rq(setPageFavorite).mutationOptions();
+export function setPageFavoriteMutationOptions(
+	workspaceId: string,
+	options: Pick<
+		ContractUseMutationOptions<typeof setPageFavorite.config>,
+		"onSuccess"
+	> = {},
+) {
+	return rq(setPageFavorite).mutationOptions({
+		...options,
+		// Keep an in-flight favorite attached to its original workspace when
+		// the sidebar switches workspaces and the mutation observer resets.
+		mutationKey: [...rq(setPageFavorite).contractKey(), workspaceId],
+		invalidates: () => [
+			rq(getPageNavigation).filter({ path: { workspaceId } }),
+		],
+	});
 }
 
 export function recordPageViewMutationOptions() {
@@ -165,10 +207,6 @@ export function updatePageMutationOptions() {
 	return rq(updatePage).mutationOptions();
 }
 
-export function savePageContentMutationOptions() {
-	return rq(savePageContent).mutationOptions();
-}
-
 export function deletePageMutationOptions() {
 	return rq(deletePage).mutationOptions();
 }
@@ -211,11 +249,17 @@ export function invalidateTrash(queryClient: QueryClient) {
 }
 
 export function invalidatePage(queryClient: QueryClient, id: string) {
-	return rq(getPage).invalidate(queryClient, { path: { id } });
+	return Promise.all([
+		rq(getPage).invalidate(queryClient, { path: { id } }),
+		rq(getPageMetadata).invalidate(queryClient, { path: { id } }),
+	]);
 }
 
 export function invalidatePageDetails(queryClient: QueryClient) {
-	return rq(getPage).invalidate(queryClient);
+	return Promise.all([
+		rq(getPage).invalidate(queryClient),
+		rq(getPageMetadata).invalidate(queryClient),
+	]);
 }
 
 /**
@@ -229,13 +273,11 @@ export function setPageIconInCache(
 	id: string,
 	icon: string | null,
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) => (current ? { ...current, icon } : current),
+	updatePageCaches(queryClient, id, (current) =>
+		current ? { ...current, icon } : current,
 	);
-	queryClient.setQueriesData<{ items: PageMeta[] }>(
-		rq(listPages).filter(),
-		(current) =>
+	rq(listPages).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						...current,
@@ -244,10 +286,9 @@ export function setPageIconInCache(
 						),
 					}
 				: current,
-	);
-	queryClient.setQueriesData<PageNavigationOutput>(
-		rq(getPageNavigation).filter(),
-		(current) =>
+	});
+	rq(getPageNavigation).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						favorites: current.favorites.map((page) =>
@@ -258,7 +299,7 @@ export function setPageIconInCache(
 						),
 					}
 				: current,
-	);
+	});
 }
 
 /**
@@ -272,14 +313,11 @@ export function setPageSavedAtInCache(
 	updatedAt: string,
 	contentUpdatedAt: string,
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) =>
-			current ? { ...current, updatedAt, contentUpdatedAt } : current,
+	updatePageCaches(queryClient, id, (current) =>
+		current ? { ...current, updatedAt, contentUpdatedAt } : current,
 	);
-	queryClient.setQueriesData<PageNavigationOutput>(
-		rq(getPageNavigation).filter(),
-		(current) =>
+	rq(getPageNavigation).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						favorites: current.favorites.map((page) =>
@@ -290,7 +328,7 @@ export function setPageSavedAtInCache(
 						),
 					}
 				: current,
-	);
+	});
 }
 
 /**
@@ -304,16 +342,13 @@ export function setPageTitleInCache(
 	title: string,
 	updatedAt?: string,
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) =>
-			current
-				? { ...current, title, ...(updatedAt ? { updatedAt } : {}) }
-				: current,
+	updatePageCaches(queryClient, id, (current) =>
+		current
+			? { ...current, title, ...(updatedAt ? { updatedAt } : {}) }
+			: current,
 	);
-	queryClient.setQueriesData<{ items: PageMeta[] }>(
-		rq(listPages).filter(),
-		(current) =>
+	rq(listPages).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						...current,
@@ -324,10 +359,9 @@ export function setPageTitleInCache(
 						),
 					}
 				: current,
-	);
-	queryClient.setQueriesData<PageNavigationOutput>(
-		rq(getPageNavigation).filter(),
-		(current) =>
+	});
+	rq(getPageNavigation).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						favorites: current.favorites.map((page) =>
@@ -342,7 +376,7 @@ export function setPageTitleInCache(
 						),
 					}
 				: current,
-	);
+	});
 }
 
 export type PageTitleCacheSnapshot = {
@@ -365,6 +399,10 @@ export async function optimisticallySetPageTitle(
 ): Promise<PageTitleCacheSnapshot> {
 	await Promise.all([
 		queryClient.cancelQueries(
+			{ queryKey: rq(getPageMetadata).key({ path: { id } }), exact: true },
+			{ revert: false, silent: true },
+		),
+		queryClient.cancelQueries(
 			{ queryKey: rq(getPage).key({ path: { id } }), exact: true },
 			{ revert: false, silent: true },
 		),
@@ -385,6 +423,14 @@ export async function optimisticallySetPageTitle(
 	]);
 
 	const candidates: PageTitleCacheSnapshot[] = [fallback];
+	const metadata = queryClient.getQueryData<PageMeta>(
+		rq(getPageMetadata).key({ path: { id } }),
+	);
+	if (metadata)
+		candidates.push({
+			previousTitle: metadata.title,
+			previousUpdatedAt: metadata.updatedAt,
+		});
 	const fullPage = queryClient.getQueryData<Page>(
 		rq(getPage).key({ path: { id } }),
 	);
@@ -420,16 +466,13 @@ export function restorePageTitleInCache(
 	previousTitle: string,
 	previousUpdatedAt: string,
 ) {
-	queryClient.setQueryData<Page>(
-		rq(getPage).key({ path: { id } }),
-		(current) =>
-			current?.title === optimisticTitle
-				? { ...current, title: previousTitle, updatedAt: previousUpdatedAt }
-				: current,
+	updatePageCaches(queryClient, id, (current) =>
+		current?.title === optimisticTitle
+			? { ...current, title: previousTitle, updatedAt: previousUpdatedAt }
+			: current,
 	);
-	queryClient.setQueriesData<{ items: PageMeta[] }>(
-		rq(listPages).filter(),
-		(current) =>
+	rq(listPages).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						...current,
@@ -444,10 +487,9 @@ export function restorePageTitleInCache(
 						),
 					}
 				: current,
-	);
-	queryClient.setQueriesData<PageNavigationOutput>(
-		rq(getPageNavigation).filter(),
-		(current) =>
+	});
+	rq(getPageNavigation).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						favorites: current.favorites.map((page) =>
@@ -470,7 +512,7 @@ export function restorePageTitleInCache(
 						),
 					}
 				: current,
-	);
+	});
 }
 
 export type PagePlacementCacheSnapshot = Array<{
@@ -490,9 +532,9 @@ export async function optimisticallySetPagePlacement(
 	const filter = rq(listPages).filter();
 	await queryClient.cancelQueries(filter, { revert: false, silent: true });
 	const snapshot: PagePlacementCacheSnapshot = [];
-	for (const [queryKey, current] of queryClient.getQueriesData<{
-		items: PageMeta[];
-	}>(filter)) {
+	for (const { queryKey, data: current } of rq(listPages).cacheEntries(
+		queryClient,
+	)) {
 		const page = current?.items.find((item) => item.id === id);
 		if (!current || !page) continue;
 		snapshot.push({

@@ -1,3 +1,5 @@
+import { savePageContentUseCase } from "@/features/pages/use-cases/save-page-content";
+import { writeTestPageBody } from "@/features/pages/tests/write-test-page-body";
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
@@ -23,15 +25,12 @@ import {
 	createTestPageVersionRepository,
 	createTestWorkspaceEventPublisher,
 } from "@/features/pages/tests/helpers";
-import {
-	createPageUseCase,
-	savePageContentUseCase,
-} from "@/features/pages/use-cases";
+import { createPageUseCase } from "@/features/pages/use-cases";
 import { appPorts } from "@/infra/port-wiring";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
-import { createTaskIntegrationPorts } from "../lib/task-integration-ports";
+import { createTaskIntegrationPorts } from "./task-integration-fixture";
 import { createTaskAssignmentDeliveryPort } from "../notifications/assigned";
 import type { UpdateTaskData } from "../ports";
 import { TASK_TITLE_MAX_LENGTH, TASK_TITLE_TOO_LONG_MESSAGE } from "../schemas";
@@ -318,7 +317,7 @@ describe("task reconciliation on page content save", () => {
 		const { tasks, scope, page, tester, ctx } = await createFixture();
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: page.id,
 				content: [
@@ -351,7 +350,7 @@ describe("task reconciliation on page content save", () => {
 		const { tasks, scope, page, tester, ctx } = await createFixture();
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [taskBlock("b1", "Task", { checked: true })] },
 			{ ctx },
 		);
@@ -361,7 +360,7 @@ describe("task reconciliation on page content save", () => {
 
 		// Save again with only the title changed: completedAt must not move.
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: page.id,
 				content: [taskBlock("b1", "Task renamed", { checked: true })],
@@ -374,7 +373,7 @@ describe("task reconciliation on page content save", () => {
 
 		// Unchecking clears completedAt.
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: page.id,
 				content: [taskBlock("b1", "Task renamed", { checked: false })],
@@ -396,16 +395,12 @@ describe("task reconciliation on page content save", () => {
 			{ ctx },
 		);
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [taskBlock("b1", "Doomed")] },
 			{ ctx },
 		);
 
-		await tester.run(
-			savePageContentUseCase,
-			{ id: page.id, content: [] },
-			{ ctx },
-		);
+		await tester.run(writeTestPageBody, { id: page.id, content: [] }, { ctx });
 
 		const rows = await tasks.listByWorkspace(scope, "all");
 		expect(rows.map((row) => row.id)).toEqual([standalone.id]);
@@ -415,7 +410,7 @@ describe("task reconciliation on page content save", () => {
 		const { pages, scope, page, tester, ctx } = await createFixture();
 		const content = [taskBlock("b1", "Task")];
 
-		await tester.run(savePageContentUseCase, { id: page.id, content }, { ctx });
+		await tester.run(writeTestPageBody, { id: page.id, content }, { ctx });
 
 		const saved = await pages.findById(scope, page.id);
 		expect(saved?.content).toEqual(content);
@@ -426,7 +421,7 @@ describe("task reconciliation on page content save", () => {
 
 		await expect(
 			tester.run(
-				savePageContentUseCase,
+				writeTestPageBody,
 				{
 					id: page.id,
 					content: [taskBlock("bad-due", "Bad due", { due: "tomorrow" })],
@@ -437,7 +432,7 @@ describe("task reconciliation on page content save", () => {
 
 		await expect(
 			tester.run(
-				savePageContentUseCase,
+				writeTestPageBody,
 				{
 					id: page.id,
 					content: [
@@ -453,7 +448,7 @@ describe("task reconciliation on page content save", () => {
 
 		await expect(
 			tester.run(
-				savePageContentUseCase,
+				writeTestPageBody,
 				{
 					id: page.id,
 					content: [
@@ -468,7 +463,7 @@ describe("task reconciliation on page content save", () => {
 
 		await expect(
 			tester.run(
-				savePageContentUseCase,
+				writeTestPageBody,
 				{
 					id: page.id,
 					content: [
@@ -484,7 +479,7 @@ describe("task reconciliation on page content save", () => {
 
 		await expect(
 			tester.run(
-				savePageContentUseCase,
+				writeTestPageBody,
 				{
 					id: page.id,
 					content: [
@@ -576,7 +571,7 @@ describe("tasks use cases", () => {
 			ctx,
 		} = await createFixture();
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: page.id,
 				content: [
@@ -659,7 +654,7 @@ describe("tasks use cases", () => {
 		const { page, pages, scope, tasks, tester, ctx } = await createFixture();
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [taskBlock("b1", "Toggle me")] },
 			{ ctx },
 		);
@@ -688,7 +683,7 @@ describe("tasks use cases", () => {
 		const staleEditorContent = [taskBlock("b1", "Toggle me")];
 
 		const firstSave = await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: staleEditorContent },
 			{ ctx },
 		);
@@ -711,7 +706,7 @@ describe("tasks use cases", () => {
 				},
 				{ ctx },
 			),
-		).rejects.toThrow(/changed since/);
+		).rejects.toThrow(/can no longer save/);
 
 		const saved = await pages.findById(scope, page.id);
 		expect(saved?.content[0]?.props).toEqual({
@@ -725,7 +720,7 @@ describe("tasks use cases", () => {
 		const { tasks, scope, page, tester, ctx } = await createFixture();
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [taskBlock("b1", "Page task")] },
 			{ ctx },
 		);
@@ -748,7 +743,7 @@ describe("tasks use cases", () => {
 		const { pages, tasks, scope, page, tester, ctx } = await createFixture();
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [taskBlock("b1", "Soon gone")] },
 			{ ctx },
 		);
@@ -1106,7 +1101,7 @@ describe("task assignment", () => {
 			await createFixture();
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: page.id,
 				content: [
@@ -1121,7 +1116,7 @@ describe("task assignment", () => {
 		expect(row.assigneeId).toBe("user_test");
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: page.id,
 				content: [
@@ -1136,7 +1131,7 @@ describe("task assignment", () => {
 		expect(row.assigneeId).toBe("user_test");
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: page.id,
 				content: [
@@ -1186,7 +1181,7 @@ describe("task assignment", () => {
 			await createFixture();
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [taskBlock("b-assign", "Shared work")] },
 			{ ctx },
 		);
@@ -1219,7 +1214,7 @@ describe("task assignment", () => {
 			await createFixture();
 
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{
 				id: page.id,
 				content: [
@@ -1233,7 +1228,7 @@ describe("task assignment", () => {
 
 		// Clearing the prop unassigns the row.
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: page.id, content: [taskBlock("b-owned", "Theirs")] },
 			{ ctx },
 		);
@@ -1275,7 +1270,7 @@ describe("task assignment", () => {
 			position: 2,
 		});
 		await tester.run(
-			savePageContentUseCase,
+			writeTestPageBody,
 			{ id: theirPage.id, content: [taskBlock("b-theirs", "Their task")] },
 			{ ctx },
 		);

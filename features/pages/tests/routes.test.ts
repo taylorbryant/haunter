@@ -380,19 +380,6 @@ describe("pageRoutes", () => {
 		});
 		const requester = createTestRequester(app, {});
 
-		const created = await requester.request(createPage, {
-			body: { workspaceId: workspace.id, title: "Weekly notes" },
-			idempotencyKey: "page-create-1",
-		});
-		const child = await requester.request(createPage, {
-			body: {
-				workspaceId: workspace.id,
-				parentPageId: created.id,
-				title: "7/2 - Meeting",
-			},
-			idempotencyKey: "page-create-2",
-		});
-
 		const content = [
 			{
 				id: "block-1",
@@ -402,10 +389,33 @@ describe("pageRoutes", () => {
 				children: [],
 			},
 		];
-		await requester.request(savePageContent, {
-			path: { id: created.id },
-			body: { content },
+
+		const created = await requester.request(createPage, {
+			body: {
+				workspaceId: workspace.id,
+				title: "Weekly notes",
+				initialContent: content,
+			},
+			idempotencyKey: "page-create-1",
 		});
+		const child = await requester.request(createPage, {
+			body: {
+				workspaceId: workspace.id,
+				parentPageId: created.id,
+				title: "7/2 - Meeting",
+				appendToParentContent: false,
+			},
+			idempotencyKey: "page-create-2",
+		});
+
+		const retired = await requester.safeRequest(savePageContent, {
+			path: { id: created.id },
+			body: { content: [] },
+		});
+
+		expect(retired.ok).toBe(false);
+		if (retired.ok) throw new Error("Expected retired writer to reject");
+		expect(retired.status).toBe(409);
 
 		const fetched = await requester.request(getPage, {
 			path: { id: created.id },

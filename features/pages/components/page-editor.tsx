@@ -2,12 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { beginEditorMeasurement } from "@/features/pages/client/editor-performance";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
-	getPageQueryOptions,
+	getEditorPageQueryOptions,
 	recordPageViewMutationOptions,
 	syncRecordedPageViewInNavigationCache,
 } from "@/features/pages/client/queries";
@@ -17,6 +18,8 @@ import { Backlinks } from "./backlinks";
 import { EditorBodySkeleton, PageEditorSkeleton } from "./page-editor-skeleton";
 import { PageIconButton } from "./page-icon-picker";
 import { PageTitleField } from "./page-title-field";
+
+const EMPTY_CONTENT: import("@/features/pages/schemas").BlockJson[] = [];
 
 const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
 	ssr: false,
@@ -28,8 +31,10 @@ const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
 });
 
 export function PageEditor({ pageId }: { pageId: string }) {
+	// biome-ignore lint/correctness/useExhaustiveDependencies: each page navigation starts a new measurement
+	const measurement = useMemo(() => beginEditorMeasurement(), [pageId]);
 	const queryClient = useQueryClient();
-	const pageQuery = useQuery(getPageQueryOptions(pageId));
+	const pageQuery = useQuery(getEditorPageQueryOptions(pageId));
 	const recordViewMutation = useMutation({
 		...recordPageViewMutationOptions(),
 		meta: { errorMode: "silent" },
@@ -38,6 +43,30 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// but the UI must not pretend edits will stick.
 	const readOnly = !useCanEditWorkspace();
 	const currentUser = useCurrentUser();
+	const workspaceId = pageQuery.data?.workspaceId;
+	const userId = currentUser?.id;
+	useEffect(() => {
+		const url = process.env.NEXT_PUBLIC_COLLABORATION_URL;
+		if (!url || !userId || !workspaceId) return;
+		let active = true;
+		let release: (() => void) | undefined;
+		// Start IndexedDB and the authenticated connection alongside the editor bundle.
+		void import("@/features/documents/client/session")
+			.then(({ acquirePageDocument }) => {
+				if (active)
+					release = acquirePageDocument({
+						userId,
+						workspaceId,
+						pageId,
+						url,
+					}).release;
+			})
+			.catch(() => undefined); // The editor owns visible loading/retry errors.
+		return () => {
+			active = false;
+			release?.();
+		};
+	}, [userId, workspaceId, pageId]);
 	const [editorFocusRequest, setEditorFocusRequest] = useState(0);
 	const recordedViewPageIdRef = useRef<string | null>(null);
 	// Reset the shared header state when navigating between pages.
@@ -118,14 +147,15 @@ export function PageEditor({ pageId }: { pageId: string }) {
 				</div>
 			</div>
 			<HaunterEditor
+				measurement={measurement}
 				key={`${currentUser?.id ?? "anonymous"}:${pageId}`}
 				pageId={pageId}
 				workspaceId={page.workspaceId}
-				initialContent={page.content}
-				contentUpdatedAt={page.contentUpdatedAt}
+				initialContent={EMPTY_CONTENT}
 				editable={!readOnly}
 				focusRequest={editorFocusRequest}
 				currentUserId={currentUser?.id ?? null}
+				currentUserName={currentUser?.name}
 				onSaveStateChange={setPageSaveState}
 			/>
 			{/* Same 54px inset as the editor content column. */}

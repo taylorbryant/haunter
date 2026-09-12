@@ -6,6 +6,8 @@ import {
 	type DbPort,
 } from "@beignet/provider-db-drizzle/sqlite";
 import type { AppPorts } from "@/ports";
+import { env } from "@/lib/env";
+import { createDocumentMaintenance } from "@/infra/documents/migration";
 import { ensureDatabaseReady } from "./database-ready";
 import { createRepositories } from "./repositories";
 import type * as schema from "./schema";
@@ -29,6 +31,8 @@ export const appDatabaseProvider = createProvider<{
 		const providedPorts: Pick<
 			AppPorts,
 			| "canvases"
+			| "documents"
+			| "documentMaintenance"
 			| "changelogState"
 			| "idempotency"
 			| "members"
@@ -44,6 +48,10 @@ export const appDatabaseProvider = createProvider<{
 			| "uow"
 		> = {
 			...repositories,
+			documentMaintenance: createDocumentMaintenance(
+				dbPort.drizzle,
+				env.SQLITE_DB_URL,
+			),
 			idempotency,
 			uow: createDrizzleSqliteUnitOfWork({
 				db: dbPort.drizzle,

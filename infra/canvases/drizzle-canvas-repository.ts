@@ -1,3 +1,7 @@
+import {
+	createCanvasRoom,
+	projectCanvasRoom,
+} from "@/features/canvases/lib/document";
 import "@beignet/core/server-only";
 import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
@@ -27,6 +31,64 @@ export function createDrizzleCanvasRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): CanvasRepository {
 	return {
+		async findSyncRoom(scope, id) {
+			const [row] = await db
+				.select()
+				.from(schema.canvasSyncRooms)
+				.where(
+					and(
+						eq(schema.canvasSyncRooms.canvasId, id),
+						eq(schema.canvasSyncRooms.workspaceId, tenantScopeId(scope)),
+					),
+				);
+			if (row && row.schemaVersion !== 1)
+				throw new Error("Unsupported canvas sync schema");
+			return row
+				? {
+						roomJson: row.snapshot,
+						revision: row.revision,
+					}
+				: null;
+		},
+		async commitSyncRoom(scope, input) {
+			const now = new Date().toISOString();
+			const [row] = await db
+				.update(schema.canvasSyncRooms)
+				.set({
+					snapshot: input.roomJson,
+					revision: input.baseRevision + 1,
+					updatedAt: now,
+				})
+				.where(
+					and(
+						eq(schema.canvasSyncRooms.canvasId, input.id),
+						eq(schema.canvasSyncRooms.workspaceId, tenantScopeId(scope)),
+						eq(schema.canvasSyncRooms.revision, input.baseRevision),
+					),
+				)
+				.returning();
+			if (!row) throw new Error("Canvas changed or was deleted");
+			const [canvas] = await db
+				.update(schema.canvases)
+				.set({
+					snapshot: input.snapshotJson,
+					updatedAt: sql`max(updated_at, ${now})`,
+					snapshotUpdatedAt: now,
+				})
+				.where(
+					and(
+						eq(schema.canvases.id, input.id),
+						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
+					),
+				)
+				.returning();
+			if (!canvas) throw new Error("Canvas deleted");
+			return {
+				revision: row.revision,
+				updatedAt: canvas.updatedAt,
+				snapshotUpdatedAt: now,
+			};
+		},
 		async listStandalone(scope) {
 			const rows = await db
 				.select({
@@ -79,13 +141,24 @@ export function createDrizzleCanvasRepository(
 				createdAt: now,
 				updatedAt: now,
 			};
-			const [row] = await db.insert(schema.canvases).values(canvas).returning();
-
-			if (!row) {
-				throw new Error("Failed to create canvas");
+			const room = createCanvasRoom({});
+			{
+				canvas.snapshot = JSON.stringify(projectCanvasRoom(room));
+				return await db.transaction(async (tx) => {
+					const [row] = await tx
+						.insert(schema.canvases)
+						.values(canvas)
+						.returning();
+					if (!row) throw new Error("Failed to create canvas");
+					await tx.insert(schema.canvasSyncRooms).values({
+						canvasId: row.id,
+						workspaceId: row.workspaceId,
+						snapshot: JSON.stringify(room),
+						updatedAt: now,
+					});
+					return toCanvas(row);
+				});
 			}
-
-			return toCanvas(row);
 		},
 		async updateTitle(scope, id: string, title: string) {
 			const updatedAt = new Date().toISOString();
@@ -107,81 +180,20 @@ export function createDrizzleCanvasRepository(
 
 			return toCanvas(row);
 		},
-		async saveSnapshot(scope, id: string, snapshotJson: string) {
-			const [current] = await db
-				.select({
-					updatedAt: schema.canvases.updatedAt,
-					snapshotUpdatedAt: schema.canvases.snapshotUpdatedAt,
-				})
-				.from(schema.canvases)
-				.where(
-					and(
-						eq(schema.canvases.id, id),
-						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
-					),
-				)
-				.limit(1);
-			if (!current) {
-				throw new Error(`Failed to save snapshot for canvas ${id}`);
+		async initializeSnapshot(scope, id, snapshotJson) {
+			const room = createCanvasRoom(JSON.parse(snapshotJson));
+			{
+				// Only used inside the transaction that creates a recovery canvas.
+				return await db.transaction(async (tx) => {
+					const repository = createDrizzleCanvasRepository(tx);
+					return repository.commitSyncRoom(scope, {
+						id,
+						roomJson: JSON.stringify(room),
+						snapshotJson: JSON.stringify(projectCanvasRoom(room)),
+						baseRevision: 0,
+					});
+				});
 			}
-
-			const snapshotUpdatedAt = new Date(
-				Math.max(
-					Date.now(),
-					Date.parse(current.updatedAt) + 1,
-					Date.parse(current.snapshotUpdatedAt) + 1,
-				),
-			).toISOString();
-			const [row] = await db
-				.update(schema.canvases)
-				.set({
-					snapshot: snapshotJson,
-					snapshotUpdatedAt,
-					updatedAt: snapshotUpdatedAt,
-				})
-				.where(
-					and(
-						eq(schema.canvases.id, id),
-						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
-					),
-				)
-				.returning({ id: schema.canvases.id });
-
-			if (!row) {
-				throw new Error(`Failed to save snapshot for canvas ${id}`);
-			}
-
-			return { updatedAt: snapshotUpdatedAt, snapshotUpdatedAt };
-		},
-		async saveSnapshotIf(
-			scope,
-			id: string,
-			snapshotJson: string,
-			baseUpdatedAt: string,
-		) {
-			// Strictly after the base version; see saveContentIf on pages.
-			const snapshotUpdatedAt = new Date(
-				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
-			).toISOString();
-			// The WHERE clause is the compare-and-set: metadata writes do not
-			// invalidate the drawing token, while another snapshot writer does.
-			const [row] = await db
-				.update(schema.canvases)
-				.set({
-					snapshot: snapshotJson,
-					snapshotUpdatedAt,
-					updatedAt: sql<string>`max(${schema.canvases.updatedAt}, ${snapshotUpdatedAt})`,
-				})
-				.where(
-					and(
-						eq(schema.canvases.id, id),
-						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
-						eq(schema.canvases.snapshotUpdatedAt, baseUpdatedAt),
-					),
-				)
-				.returning({ updatedAt: schema.canvases.updatedAt });
-
-			return row ? { updatedAt: row.updatedAt, snapshotUpdatedAt } : null;
 		},
 		async delete(scope, id: string) {
 			await db

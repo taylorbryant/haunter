@@ -1,14 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { QueryClient } from "@tanstack/react-query";
-import {
-	getCanvasQueryOptions,
-	setCanvasSnapshotInCache,
-} from "@/features/canvases/client/queries";
 import {
 	flushPendingCanvasSave,
 	registerCanvasSaveFlusher,
 } from "@/features/canvases/client/save-state";
-import type { Canvas } from "@/features/canvases/schemas";
 
 describe("canvas save flush registry", () => {
 	it("flushes the mounted surface before replacing its tldraw store", async () => {
@@ -34,92 +28,5 @@ describe("canvas save flush registry", () => {
 
 		unregisterOld();
 		await expect(flushPendingCanvasSave("canvas_2")).resolves.toBe(true);
-	});
-});
-
-describe("canvas snapshot cache", () => {
-	it("advances the snapshot and concurrency version together after a save", async () => {
-		const queryClient = new QueryClient();
-		const id = "2d8ed4e8-4f61-4e27-9ae8-04d9212b7c19";
-		const initialUpdatedAt = "2026-07-17T10:00:00.000Z";
-		const savedUpdatedAt = "2026-07-17T10:00:01.000Z";
-		const canvas: Canvas = {
-			id,
-			userId: "user_1",
-			workspaceId: "workspace_1",
-			pageId: "30e7a4bf-a661-438e-bbc2-35f4b71a5ee2",
-			title: null,
-			snapshot: { version: 1 },
-			snapshotUpdatedAt: initialUpdatedAt,
-			createdAt: initialUpdatedAt,
-			updatedAt: initialUpdatedAt,
-		};
-		const options = getCanvasQueryOptions(id);
-		queryClient.setQueryData(options.queryKey, canvas);
-
-		await setCanvasSnapshotInCache(
-			queryClient,
-			id,
-			{ version: 2 },
-			{
-				updatedAt: savedUpdatedAt,
-				snapshotUpdatedAt: savedUpdatedAt,
-			},
-		);
-
-		expect(queryClient.getQueryData<Canvas>(options.queryKey)).toEqual({
-			...canvas,
-			snapshot: { version: 2 },
-			updatedAt: savedUpdatedAt,
-			snapshotUpdatedAt: savedUpdatedAt,
-		});
-	});
-
-	it("cancels an older refetch before staging a local snapshot", async () => {
-		const queryClient = new QueryClient({
-			defaultOptions: { queries: { retry: false } },
-		});
-		const id = "9cfef31e-df69-4770-94d8-a53c5ff6d959";
-		const updatedAt = "2026-07-17T10:00:00.000Z";
-		const canvas: Canvas = {
-			id,
-			userId: "user_1",
-			workspaceId: "workspace_1",
-			pageId: "a0df810a-e1e3-4857-aa44-d8f909fa5563",
-			title: null,
-			snapshot: { version: 1 },
-			snapshotUpdatedAt: updatedAt,
-			createdAt: updatedAt,
-			updatedAt,
-		};
-		const options = getCanvasQueryOptions(id);
-		queryClient.setQueryData(options.queryKey, canvas);
-		let markStarted = () => {};
-		const started = new Promise<void>((resolve) => {
-			markStarted = resolve;
-		});
-		const staleRefetch = queryClient
-			.fetchQuery({
-				queryKey: options.queryKey,
-				queryFn: ({ signal }) =>
-					new Promise<Canvas>((_resolve, reject) => {
-						markStarted();
-						signal.addEventListener(
-							"abort",
-							() => reject(new Error("cancelled stale canvas refetch")),
-							{ once: true },
-						);
-					}),
-			})
-			.catch(() => undefined);
-
-		await started;
-		await setCanvasSnapshotInCache(queryClient, id, { version: 2 });
-		await staleRefetch;
-
-		expect(queryClient.getQueryData<Canvas>(options.queryKey)).toEqual({
-			...canvas,
-			snapshot: { version: 2 },
-		});
 	});
 });

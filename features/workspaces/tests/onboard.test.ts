@@ -16,7 +16,7 @@ import {
 	createTestPageLinkRepository,
 	createTestPageRepository,
 } from "@/features/pages/tests/helpers";
-import { createTaskIntegrationPorts } from "@/features/tasks/lib/task-integration-ports";
+import { createTaskIntegrationPorts } from "@/features/tasks/tests/task-integration-fixture";
 import type { TaskAssignmentDeliveryPort } from "@/features/tasks/ports";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
 import { appPorts } from "@/infra/port-wiring";

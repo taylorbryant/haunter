@@ -12,22 +12,36 @@ export type NewCanvas = {
 };
 
 export interface CanvasRepository {
+	findSyncRoom(
+		scope: TenantScope,
+		id: string,
+	): Promise<{
+		roomJson: string;
+		revision: number;
+	} | null>;
+	commitSyncRoom(
+		scope: TenantScope,
+		input: {
+			id: string;
+			roomJson: string;
+			snapshotJson: string;
+			baseRevision: number;
+		},
+	): Promise<{
+		revision: number;
+		updatedAt: string;
+		snapshotUpdatedAt: string;
+	}>;
+
 	listStandalone(scope: TenantScope): Promise<CanvasListItem[]>;
 	findById(scope: TenantScope, id: string): Promise<Canvas | null>;
 	create(scope: TenantScope, input: NewCanvas): Promise<Canvas>;
 	updateTitle(scope: TenantScope, id: string, title: string): Promise<Canvas>;
-	saveSnapshot(
+	initializeSnapshot(
 		scope: TenantScope,
 		id: string,
 		snapshotJson: string,
 	): Promise<{ updatedAt: string; snapshotUpdatedAt: string }>;
-	/** Compare-and-set variant; null when the drawing moved on (stale write). */
-	saveSnapshotIf(
-		scope: TenantScope,
-		id: string,
-		snapshotJson: string,
-		baseUpdatedAt: string,
-	): Promise<{ updatedAt: string; snapshotUpdatedAt: string } | null>;
 	delete(scope: TenantScope, id: string): Promise<void>;
 	deleteByPageIds(scope: TenantScope, pageIds: string[]): Promise<void>;
 }

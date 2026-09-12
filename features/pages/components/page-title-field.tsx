@@ -20,7 +20,7 @@ import {
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
 import {
-	getPageQueryOptions,
+	getEditorPageQueryOptions,
 	invalidatePage,
 	invalidatePages,
 	setPageTitleInCache,
@@ -131,7 +131,7 @@ function EditablePageTitleField({
 					error instanceof ContractError && error.status === 409,
 				loadServer: async () => {
 					const latest = await queryClient.fetchQuery({
-						...getPageQueryOptions(page.id),
+						...getEditorPageQueryOptions(page.id),
 						staleTime: 0,
 					});
 					return { value: latest.title, version: latest.title };

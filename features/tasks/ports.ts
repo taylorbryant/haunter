@@ -6,7 +6,7 @@ import type { Notification } from "@/features/notifications/schemas";
 import type { Task, TaskFilter, TaskWithPage } from "@/features/tasks/schemas";
 
 export type TaskAssignmentActor = {
-	userId: string;
+	userId: string | null;
 	name: string;
 };
 
@@ -17,24 +17,6 @@ export type TaskBlockPatch = {
 	reminderOffsetMinutes?: number | null;
 	assignee?: string | null;
 };
-
-export interface TaskSourceDocumentRepository {
-	findById(
-		scope: TenantScope,
-		id: string,
-	): Promise<{
-		id: string;
-		content: BlockJson[];
-		contentUpdatedAt: string;
-	} | null>;
-	saveContentIf(
-		scope: TenantScope,
-		id: string,
-		contentJson: string,
-		searchText: string,
-		baseUpdatedAt: string,
-	): Promise<{ updatedAt: string; contentUpdatedAt: string } | null>;
-}
 
 export interface TaskSourceDocumentPort {
 	patchTaskBlock(
@@ -49,6 +31,7 @@ export interface EmbeddedTaskProjectionPort {
 		source: { id: string; userId: string; content: BlockJson[] },
 		options?: {
 			assignmentActor?: TaskAssignmentActor;
+			assignmentActorsByBlock?: ReadonlyMap<string, TaskAssignmentActor>;
 			assignmentUser?: {
 				id: string;
 				name?: string | null;

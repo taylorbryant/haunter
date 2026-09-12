@@ -20,6 +20,9 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "@/components/ui/drawer";
+import { flushPendingPageSave } from "@/features/pages/client/save-state";
+import { refreshPageDocumentSessions } from "@/features/documents/client/session";
+import { userErrorMessage } from "@/client/error-feedback";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
 	getPageVersionQueryOptions,
@@ -79,14 +82,42 @@ export function PageHistoryDialog({
 		...getPageVersionQueryOptions(pageId, selected ?? ""),
 		enabled: selected !== null,
 	});
-	const restoreMutation = useMutation(restorePageVersionMutationOptions());
+	const restoreMutation = useMutation({
+		...restorePageVersionMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
+	const [preparing, setPreparing] = useState(false);
+	const [restoreError, setRestoreError] = useState<string | null>(null);
 
-	function restore() {
-		if (!selected || restoreMutation.isPending) return;
+	async function restore() {
+		if (!selected || restoreMutation.isPending || preparing) return;
+		setPreparing(true);
+		setRestoreError(null);
+		try {
+			if (!(await flushPendingPageSave(pageId)))
+				throw new Error(
+					"Your current edits could not be saved. Reconnect and try again before restoring.",
+				);
+		} catch (error) {
+			setRestoreError(
+				error instanceof Error
+					? error.message
+					: "Your current edits could not be saved.",
+			);
+			setPreparing(false);
+			return;
+		}
+		setPreparing(false);
 		restoreMutation.mutate(
 			{ path: { id: pageId, versionId: selected }, body: {} },
 			{
+				onError: (error) =>
+					setRestoreError(
+						userErrorMessage(error, "The version could not be restored."),
+					),
 				onSuccess: async (result) => {
+					if (result.documentGeneration !== undefined)
+						await refreshPageDocumentSessions(pageId);
 					const invalidations = [
 						invalidatePage(queryClient, pageId),
 						invalidatePages(queryClient),
@@ -100,9 +131,8 @@ export function PageHistoryDialog({
 					}
 					await Promise.all(invalidations);
 					onOpenChange(false);
-					// The open editor initializes once; a hard reload is the
-					// simplest way to guarantee it picks up the restored doc.
-					window.location.reload();
+					// Collaborative editors switch generations without reloading the app.
+					if (result.documentGeneration === undefined) window.location.reload();
 				},
 			},
 		);
@@ -215,8 +245,16 @@ export function PageHistoryDialog({
 								{preview}
 							</div>
 							<DrawerFooter className="pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-								<Button disabled={restoreMutation.isPending} onClick={restore}>
-									{restoreMutation.isPending
+								{restoreError ? (
+									<p role="alert" className="text-destructive text-sm">
+										{restoreError}
+									</p>
+								) : null}
+								<Button
+									disabled={restoreMutation.isPending || preparing}
+									onClick={restore}
+								>
+									{restoreMutation.isPending || preparing
 										? "Restoring…"
 										: "Restore this version"}
 								</Button>
@@ -282,12 +320,17 @@ export function PageHistoryDialog({
 							<div className="min-h-0 flex-1 overflow-y-auto rounded-md border p-3">
 								{preview}
 							</div>
+							{restoreError ? (
+								<p role="alert" className="text-destructive text-sm">
+									{restoreError}
+								</p>
+							) : null}
 							<Button
 								className="w-fit"
-								disabled={!selected || restoreMutation.isPending}
+								disabled={!selected || restoreMutation.isPending || preparing}
 								onClick={restore}
 							>
-								{restoreMutation.isPending
+								{restoreMutation.isPending || preparing
 									? "Restoring…"
 									: "Restore this version"}
 							</Button>

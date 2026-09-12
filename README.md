@@ -179,6 +179,18 @@ Set these values before the production server starts:
 On a fresh installation, also set `BOOTSTRAP_ADMIN_EMAIL` before the owner
 first signs in. Leave it unset on established installations.
 
+### Collaborative editors
+
+Page bodies use Yjs/Hocuspocus, and canvases use first-party tldraw sync. Run one
+combined worker with `bun run dev:collaboration`, alongside Next. Set
+`NEXT_PUBLIC_COLLABORATION_URL` before building the app (`ws://localhost:1234`
+locally; `wss://` in production). The worker uses the same database and auth secret.
+Only one worker replica may own a database at a time.
+
+Existing databases need the one-time conversion before starting the worker.
+Follow the backup, migration, recovery and deployment instructions in
+[the collaboration release guide](docs/yjs-release-candidate.md).
+
 ### Optional services
 
 - **Uploads:** Set `BLOB_READ_WRITE_TOKEN` to use Vercel Blob. Local filesystem

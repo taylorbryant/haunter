@@ -1,0 +1,12 @@
+.git
+.next
+node_modules
+.env
+.env.*
+*.db
+*.db-*
+storage
+coverage
+*.tsbuildinfo
+.codex
+.agents

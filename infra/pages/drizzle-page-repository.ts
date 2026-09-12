@@ -1,4 +1,7 @@
 import "@beignet/core/server-only";
+import * as Y from "yjs";
+import { seedPageBody, projectPageBody } from "@/infra/documents/codec";
+import { PageContentSchema } from "@/features/pages/schemas";
 import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
 import {
@@ -21,6 +24,8 @@ import type {
 import type { BlockJson, Page, PageMeta } from "@/features/pages/schemas";
 import * as schema from "@/infra/db/schema";
 import { assertPageInScope } from "@/infra/db/tenant-scope";
+import { appError } from "@/features/shared/errors";
+import { createDrizzleDocumentRepository } from "@/infra/documents/drizzle-document-repository";
 
 type PageRow = typeof schema.pages.$inferSelect;
 
@@ -76,7 +81,21 @@ function searchTextForRow(
 export function createDrizzlePageRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): PageRepository {
-	return {
+	const repository: PageRepository = {
+		async restoreContent(scope, id, content) {
+			return createDrizzleDocumentRepository(db).restoreBody(
+				scope,
+				id,
+				content,
+			);
+		},
+		async appendContent(scope, id, blocks) {
+			return createDrizzleDocumentRepository(db).appendBlocks(
+				scope,
+				id,
+				blocks,
+			);
+		},
 		async listMetaByWorkspace(scope) {
 			const workspaceId = tenantScopeId(scope);
 			const rows = await db
@@ -224,31 +243,44 @@ export function createDrizzlePageRepository(
 			return row?.position ?? 0;
 		},
 		async create(scope, input: NewPage) {
-			if (input.parentPageId !== null) {
-				await assertPageInScope(db, scope, input.parentPageId);
+			const doc = seedPageBody(
+				PageContentSchema.parse(input.initialContent ?? []),
+			);
+			try {
+				const content = PageContentSchema.parse(projectPageBody(doc));
+				const state = Y.encodeStateAsUpdate(doc);
+				return await db.transaction(async (tx) => {
+					if (input.parentPageId !== null)
+						await assertPageInScope(tx, scope, input.parentPageId);
+					const now = new Date().toISOString();
+					const [row] = await tx
+						.insert(schema.pages)
+						.values({
+							id: crypto.randomUUID(),
+							userId: input.userId,
+							workspaceId: tenantScopeId(scope),
+							parentPageId: input.parentPageId,
+							title: input.title,
+							icon: null,
+							position: input.position,
+							content: JSON.stringify(content),
+							searchText: extractPageSearchText(content),
+							contentUpdatedAt: now,
+							createdAt: now,
+							updatedAt: now,
+						})
+						.returning();
+					if (!row) throw new Error("Failed to create page");
+					await createDrizzleDocumentRepository(tx).insert(
+						scope,
+						row.id,
+						state,
+					);
+					return { ...toPageMeta(row), contentUpdatedAt: row.contentUpdatedAt };
+				});
+			} finally {
+				doc.destroy();
 			}
-			const now = new Date().toISOString();
-			const page = {
-				id: crypto.randomUUID(),
-				userId: input.userId,
-				workspaceId: tenantScopeId(scope),
-				parentPageId: input.parentPageId,
-				title: input.title,
-				icon: null,
-				position: input.position,
-				content: "[]",
-				searchText: "",
-				contentUpdatedAt: now,
-				createdAt: now,
-				updatedAt: now,
-			};
-			const [row] = await db.insert(schema.pages).values(page).returning();
-
-			if (!row) {
-				throw new Error("Failed to create page");
-			}
-
-			return { ...toPageMeta(row), contentUpdatedAt: row.contentUpdatedAt };
 		},
 		async update(scope, id: string, input: UpdatePageData) {
 			if (input.parentPageId !== undefined && input.parentPageId !== null) {
@@ -288,100 +320,6 @@ export function createDrizzlePageRepository(
 				.returning(metaColumns);
 			return row ? toPageMeta(row) : null;
 		},
-		async saveContent(
-			scope,
-			id: string,
-			contentJson: string,
-			searchText: string,
-		) {
-			const [current] = await db
-				.select({
-					updatedAt: schema.pages.updatedAt,
-					contentUpdatedAt: schema.pages.contentUpdatedAt,
-				})
-				.from(schema.pages)
-				.where(
-					and(
-						eq(schema.pages.id, id),
-						eq(schema.pages.workspaceId, tenantScopeId(scope)),
-					),
-				)
-				.limit(1);
-			if (!current) {
-				throw new Error(`Failed to save content for page ${id}`);
-			}
-
-			// Strictly after the previous version: write-through saves without a
-			// CAS base must still invalidate any editor holding that base.
-			const contentUpdatedAt = new Date(
-				Math.max(
-					Date.now(),
-					Date.parse(current.updatedAt) + 1,
-					Date.parse(current.contentUpdatedAt) + 1,
-				),
-			).toISOString();
-			const [row] = await db
-				.update(schema.pages)
-				.set({
-					content: contentJson,
-					searchText,
-					contentUpdatedAt,
-					updatedAt: sql<string>`max(${schema.pages.updatedAt}, ${contentUpdatedAt})`,
-				})
-				.where(
-					and(
-						eq(schema.pages.id, id),
-						eq(schema.pages.workspaceId, tenantScopeId(scope)),
-					),
-				)
-				.returning({
-					updatedAt: schema.pages.updatedAt,
-					contentUpdatedAt: schema.pages.contentUpdatedAt,
-				});
-
-			if (!row) {
-				throw new Error(`Failed to save content for page ${id}`);
-			}
-
-			return row;
-		},
-		async saveContentIf(
-			scope,
-			id: string,
-			contentJson: string,
-			searchText: string,
-			baseUpdatedAt: string,
-		) {
-			// Strictly after the base version: two writes inside the same
-			// millisecond must still produce distinct versions, or the next
-			// stale write would slip past the compare-and-set.
-			const contentUpdatedAt = new Date(
-				Math.max(Date.now(), Date.parse(baseUpdatedAt) + 1),
-			).toISOString();
-			// The WHERE clause is the compare-and-set: metadata writes do not
-			// invalidate the document token, while another content writer does.
-			const [row] = await db
-				.update(schema.pages)
-				.set({
-					content: contentJson,
-					searchText,
-					contentUpdatedAt,
-					updatedAt: sql<string>`max(${schema.pages.updatedAt}, ${contentUpdatedAt})`,
-				})
-				.where(
-					and(
-						eq(schema.pages.id, id),
-						eq(schema.pages.workspaceId, tenantScopeId(scope)),
-						eq(schema.pages.contentUpdatedAt, baseUpdatedAt),
-					),
-				)
-				.returning({
-					updatedAt: schema.pages.updatedAt,
-					contentUpdatedAt: schema.pages.contentUpdatedAt,
-				});
-
-			return row ?? null;
-		},
 		async setDeletedByIds(scope, ids: string[], deletedAt: string | null) {
 			if (ids.length === 0) return;
 			await db
@@ -411,4 +349,5 @@ export function createDrizzlePageRepository(
 				.where(eq(schema.pages.workspaceId, tenantScopeId(scope)));
 		},
 	};
+	return repository;
 }

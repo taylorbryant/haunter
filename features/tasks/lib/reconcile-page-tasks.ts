@@ -25,6 +25,7 @@ type TaskReconciliationPorts = {
 
 type ReconcilePageTasksOptions = {
 	assignmentActor?: TaskAssignmentActor;
+	assignmentActorsByBlock?: ReadonlyMap<string, TaskAssignmentActor>;
 	defaultAssigneeId?: string | null;
 };
 
@@ -161,7 +162,8 @@ export async function reconcilePageTasks(
 				ports.notificationInbox,
 				created,
 				null,
-				options.assignmentActor,
+				options.assignmentActorsByBlock?.get(block.blockId) ??
+					options.assignmentActor,
 			);
 			if (notification) assignmentNotifications.push(notification);
 			continue;
@@ -211,7 +213,8 @@ export async function reconcilePageTasks(
 				ports.notificationInbox,
 				updated,
 				current.assigneeId,
-				options.assignmentActor,
+				options.assignmentActorsByBlock?.get(block.blockId) ??
+					options.assignmentActor,
 			);
 			if (notification) assignmentNotifications.push(notification);
 		}

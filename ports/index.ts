@@ -32,6 +32,12 @@ import type {
 } from "@/features/collab/workspace-events";
 import type { MemberRepository } from "@/features/members/ports";
 import type {
+	DocumentRepository,
+	DocumentSessionPort,
+	DocumentRecoveryPort,
+	DocumentMaintenancePort,
+} from "@/features/documents/ports";
+import type {
 	NotificationRepository,
 	WebPushPort,
 } from "@/features/notifications/ports";
@@ -60,6 +66,7 @@ export type AppPolicies = [
 ];
 
 export type AppTransactionPorts = {
+	documents: DocumentRepository;
 	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
 	mcpConnections: McpConnectionRepository;
@@ -83,6 +90,10 @@ export type AppTransactionPorts = {
 export type AppGate = BoundGate<AppPolicies>;
 
 export type AppPorts = {
+	documentMaintenance: DocumentMaintenancePort;
+	documentRecovery: DocumentRecoveryPort;
+	documents: DocumentRepository;
+	documentSessions: DocumentSessionPort;
 	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
 	mcpConnections: McpConnectionRepository;

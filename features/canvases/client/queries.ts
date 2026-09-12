@@ -1,4 +1,5 @@
 import { protectedRefetchInterval } from "@/client/session-recovery";
+import type { ContractUseMutationOptions } from "@beignet/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
@@ -8,7 +9,6 @@ import {
 	getCanvasNavigation,
 	listCanvases,
 	recordCanvasView,
-	saveCanvasSnapshot,
 	setCanvasFavorite,
 	updateCanvas,
 } from "@/features/canvases/contracts";
@@ -16,14 +16,12 @@ import type {
 	Canvas,
 	CanvasListItem,
 	CanvasNavigationOutput,
-	CanvasSnapshot,
 } from "@/features/canvases/schemas";
 
 export function getCanvasQueryOptions(id: string) {
 	return {
 		...rq(getCanvas).queryOptions({ path: { id } }),
-		// Liveblocks is only an acceleration layer. Polling keeps canvases fresh
-		// when live updates are disabled or a client misses a broadcast.
+		// Refresh metadata and read-only projections; drawing edits arrive through Yjs.
 		refetchInterval: protectedRefetchInterval,
 	};
 }
@@ -49,8 +47,20 @@ export function getCanvasNavigationQueryOptions(workspaceId: string) {
 	};
 }
 
-export function setCanvasFavoriteMutationOptions() {
-	return rq(setCanvasFavorite).mutationOptions();
+export function setCanvasFavoriteMutationOptions(
+	workspaceId: string,
+	options: Pick<
+		ContractUseMutationOptions<typeof setCanvasFavorite.config>,
+		"onSuccess"
+	> = {},
+) {
+	return rq(setCanvasFavorite).mutationOptions({
+		...options,
+		mutationKey: [...rq(setCanvasFavorite).contractKey(), workspaceId],
+		invalidates: () => [
+			rq(getCanvasNavigation).filter({ path: { workspaceId } }),
+		],
+	});
 }
 
 export function recordCanvasViewMutationOptions() {
@@ -157,10 +167,6 @@ export function deleteCanvasMutationOptions() {
 	return rq(deleteCanvas).mutationOptions();
 }
 
-export function saveCanvasSnapshotMutationOptions() {
-	return rq(saveCanvasSnapshot).mutationOptions();
-}
-
 function canvasQueryKey(id: string) {
 	return rq(getCanvas).key({ path: { id } });
 }
@@ -207,39 +213,6 @@ export function setCanvasTitleInCache(
 	queryClient.setQueryData<Canvas>(canvasQueryKey(id), (current) =>
 		current
 			? { ...current, title, ...(updatedAt ? { updatedAt } : {}) }
-			: current,
-	);
-}
-
-/** Fetch and cache the current server snapshot without reusing an older request. */
-export async function refreshCanvasQuery(queryClient: QueryClient, id: string) {
-	await cancelCanvasQuery(queryClient, id);
-	return queryClient.fetchQuery({
-		...getCanvasQueryOptions(id),
-		staleTime: 0,
-	});
-}
-
-/**
- * Mirror the current local snapshot into the cache so remounting the surface
- * (e.g. switching between the inline block and the expanded dialog) never
- * restores a stale drawing. Pass both server versions after persistence
- * succeeds so the next mount also uses the matching concurrency token.
- */
-export async function setCanvasSnapshotInCache(
-	queryClient: QueryClient,
-	id: string,
-	snapshot: CanvasSnapshot,
-	versions?: Pick<Canvas, "updatedAt" | "snapshotUpdatedAt">,
-) {
-	await cancelCanvasQuery(queryClient, id);
-	queryClient.setQueryData<Canvas>(canvasQueryKey(id), (current) =>
-		current
-			? {
-					...current,
-					snapshot,
-					...versions,
-				}
 			: current,
 	);
 }

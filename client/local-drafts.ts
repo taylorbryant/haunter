@@ -263,3 +263,19 @@ export async function acknowledgeLocalDraftSave<T>(
 		serverVersion,
 	);
 }
+
+/** Recovery copies are scoped to both the account and the resource. */
+export async function listLocalCanvasDrafts<T>(
+	userId: string,
+	workspaceId: string,
+	canvasId: string,
+) {
+	const rows = await getDraftDatabase().drafts.toArray();
+	return rows.filter(
+		(row) =>
+			row.userId === userId &&
+			row.workspaceId === workspaceId &&
+			row.resourceType === "canvas" &&
+			row.resourceId === canvasId,
+	) as LocalDraft<T>[];
+}
