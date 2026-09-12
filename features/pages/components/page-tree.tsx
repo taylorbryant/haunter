@@ -74,7 +74,6 @@ import {
 	primeTitleKeyboard,
 	releaseTitleKeyboardPrime,
 } from "@/features/pages/client/new-page-focus";
-import { appendSubpageLinkToOpenPage } from "@/features/pages/client/open-page-content";
 import {
 	buildPageTreeIndex,
 	canDropPage,
@@ -331,14 +330,6 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			{
 				onSuccess: async (page) => {
 					if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
-					const parentContentUpdatedAt = page.parentContentUpdatedAt;
-					if (parentPageId && parentContentUpdatedAt) {
-						appendSubpageLinkToOpenPage(
-							parentPageId,
-							page,
-							parentContentUpdatedAt,
-						);
-					}
 					await Promise.all([
 						invalidatePages(queryClient),
 						parentPageId
