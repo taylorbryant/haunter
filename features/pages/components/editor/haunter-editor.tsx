@@ -414,17 +414,6 @@ function CollaborativePageBody(
 		if (!snapshot.linksRevision) return;
 		invalidateBacklinks(queryClient);
 	}, [snapshot.linksRevision, queryClient]);
-	const status =
-		snapshot.error ??
-		(snapshot.paused
-			? "Saved in this browser. Sign in to sync."
-			: !snapshot.locallySaved
-				? "Saving in this browser…"
-				: snapshot.saved
-					? "Saved to server"
-					: snapshot.connected
-						? "Syncing…"
-						: "Saved in this browser. Waiting for connection…");
 	return (
 		<>
 			{snapshot.recoveries.length > 0 && session ? (
@@ -523,33 +512,33 @@ function CollaborativePageBody(
 				</div>
 			) : null}
 			<div
-				className="mb-2 flex flex-wrap items-center gap-2 text-muted-foreground text-xs md:mx-[54px]"
 				data-testid="document-status"
 				data-ready-source={snapshot.readySource ?? "loading"}
 				data-ready-ms={snapshot.readyMs ?? ""}
+				data-saved={snapshot.saved}
 			>
-				<span role="status">
-					{snapshot.ready
-						? status
-						: (snapshot.error ?? "Opening collaborative document…")}
-				</span>
-				{snapshot.error && session ? (
-					<>
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={() => void session.retry().catch(() => undefined)}
-						>
-							Retry
-						</Button>
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={() => downloadRecoveryDrafts(props.currentUserId)}
-						>
-							Download unsynced changes
-						</Button>
-					</>
+				{snapshot.error ? (
+					<div className="mb-2 flex flex-wrap items-center gap-2 text-muted-foreground text-xs md:mx-[54px]">
+						<span role="alert">{snapshot.error}</span>
+						{session ? (
+							<>
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => void session.retry().catch(() => undefined)}
+								>
+									Retry
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => downloadRecoveryDrafts(props.currentUserId)}
+								>
+									Download unsynced changes
+								</Button>
+							</>
+						) : null}
+					</div>
 				) : null}
 			</div>
 			{session && snapshot.ready && !snapshot.restoring ? (

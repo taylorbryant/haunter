@@ -36,8 +36,10 @@ is independent of this cutover.
 
 ## One-time production cutover
 
-1. Have both users sync their open tabs until they say **Saved to server**, export
-   any remaining drafts, and close old tabs. Stop app and worker writers.
+1. Have both users sync their open tabs, export any remaining drafts, and close
+   old tabs. For collaborative pages, confirm `data-saved="true"` on
+   `[data-testid="document-status"]` in the browser's Elements inspector; routine
+   save messages are intentionally hidden. Stop app and worker writers.
 2. Take a **full database snapshot/branch** and retain the previous app revision.
    The task backup below contains page, canvas, and Yjs rows; it is not a replacement for a
    full backup of tasks, history, accounts, and other tables.
@@ -154,8 +156,9 @@ current required records if the Fly app is recreated.
 ## Recovery and rollback
 
 A worker outage leaves edits in IndexedDB. Restart the same worker/database and
-wait for **Saved to server**. An expired login uses the existing sign-in recovery
-flow. Save errors expose retry and download actions. Previous restore generations
+confirm `data-saved="true"` on `[data-testid="document-status"]` for each open page
+before closing its tab. An expired login uses the existing sign-in recovery flow.
+Save errors expose retry and download actions. Previous restore generations
 can be downloaded and imported as new pages; they never overwrite the restored
 page automatically. Browser recovery imports retain the existing 5 MB file /
 2 MB binary-document limits; larger recovery files need offline handling. The
