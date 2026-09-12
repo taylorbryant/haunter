@@ -1,4 +1,5 @@
 import { protectedRefetchInterval } from "@/client/session-recovery";
+import type { ContractUseMutationOptions } from "@beignet/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
@@ -84,8 +85,22 @@ export function getPageNavigationQueryOptions(workspaceId: string) {
 	};
 }
 
-export function setPageFavoriteMutationOptions() {
-	return rq(setPageFavorite).mutationOptions();
+export function setPageFavoriteMutationOptions(
+	workspaceId: string,
+	options: Pick<
+		ContractUseMutationOptions<typeof setPageFavorite.config>,
+		"onSuccess"
+	> = {},
+) {
+	return rq(setPageFavorite).mutationOptions({
+		...options,
+		// Keep an in-flight favorite attached to its original workspace when
+		// the sidebar switches workspaces and the mutation observer resets.
+		mutationKey: [...rq(setPageFavorite).contractKey(), workspaceId],
+		invalidates: () => [
+			rq(getPageNavigation).filter({ path: { workspaceId } }),
+		],
+	});
 }
 
 export function recordPageViewMutationOptions() {
@@ -261,9 +276,8 @@ export function setPageIconInCache(
 	updatePageCaches(queryClient, id, (current) =>
 		current ? { ...current, icon } : current,
 	);
-	queryClient.setQueriesData<{ items: PageMeta[] }>(
-		rq(listPages).filter(),
-		(current) =>
+	rq(listPages).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						...current,
@@ -272,10 +286,9 @@ export function setPageIconInCache(
 						),
 					}
 				: current,
-	);
-	queryClient.setQueriesData<PageNavigationOutput>(
-		rq(getPageNavigation).filter(),
-		(current) =>
+	});
+	rq(getPageNavigation).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						favorites: current.favorites.map((page) =>
@@ -286,7 +299,7 @@ export function setPageIconInCache(
 						),
 					}
 				: current,
-	);
+	});
 }
 
 /**
@@ -303,9 +316,8 @@ export function setPageSavedAtInCache(
 	updatePageCaches(queryClient, id, (current) =>
 		current ? { ...current, updatedAt, contentUpdatedAt } : current,
 	);
-	queryClient.setQueriesData<PageNavigationOutput>(
-		rq(getPageNavigation).filter(),
-		(current) =>
+	rq(getPageNavigation).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						favorites: current.favorites.map((page) =>
@@ -316,7 +328,7 @@ export function setPageSavedAtInCache(
 						),
 					}
 				: current,
-	);
+	});
 }
 
 /**
@@ -335,9 +347,8 @@ export function setPageTitleInCache(
 			? { ...current, title, ...(updatedAt ? { updatedAt } : {}) }
 			: current,
 	);
-	queryClient.setQueriesData<{ items: PageMeta[] }>(
-		rq(listPages).filter(),
-		(current) =>
+	rq(listPages).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						...current,
@@ -348,10 +359,9 @@ export function setPageTitleInCache(
 						),
 					}
 				: current,
-	);
-	queryClient.setQueriesData<PageNavigationOutput>(
-		rq(getPageNavigation).filter(),
-		(current) =>
+	});
+	rq(getPageNavigation).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						favorites: current.favorites.map((page) =>
@@ -366,7 +376,7 @@ export function setPageTitleInCache(
 						),
 					}
 				: current,
-	);
+	});
 }
 
 export type PageTitleCacheSnapshot = {
@@ -461,9 +471,8 @@ export function restorePageTitleInCache(
 			? { ...current, title: previousTitle, updatedAt: previousUpdatedAt }
 			: current,
 	);
-	queryClient.setQueriesData<{ items: PageMeta[] }>(
-		rq(listPages).filter(),
-		(current) =>
+	rq(listPages).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						...current,
@@ -478,10 +487,9 @@ export function restorePageTitleInCache(
 						),
 					}
 				: current,
-	);
-	queryClient.setQueriesData<PageNavigationOutput>(
-		rq(getPageNavigation).filter(),
-		(current) =>
+	});
+	rq(getPageNavigation).updateCachedQueries(queryClient, {
+		update: ({ data: current }) =>
 			current
 				? {
 						favorites: current.favorites.map((page) =>
@@ -504,7 +512,7 @@ export function restorePageTitleInCache(
 						),
 					}
 				: current,
-	);
+	});
 }
 
 export type PagePlacementCacheSnapshot = Array<{
@@ -524,9 +532,9 @@ export async function optimisticallySetPagePlacement(
 	const filter = rq(listPages).filter();
 	await queryClient.cancelQueries(filter, { revert: false, silent: true });
 	const snapshot: PagePlacementCacheSnapshot = [];
-	for (const [queryKey, current] of queryClient.getQueriesData<{
-		items: PageMeta[];
-	}>(filter)) {
+	for (const { queryKey, data: current } of rq(listPages).cacheEntries(
+		queryClient,
+	)) {
 		const page = current?.items.find((item) => item.id === id);
 		if (!current || !page) continue;
 		snapshot.push({

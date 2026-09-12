@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { QueryClient } from "@tanstack/react-query";
+import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import {
 	getCanvasNavigationQueryOptions,
 	listCanvasesQueryOptions,
+	setCanvasFavoriteMutationOptions,
 	setFavoriteInCanvasNavigationCache,
 	setViewedInCanvasNavigationCache,
 } from "@/features/canvases/client/queries";
@@ -34,6 +35,39 @@ function setup() {
 }
 
 describe("canvas navigation cache", () => {
+	it("favorites invalidate only their workspace after updating its cache", async () => {
+		const { queryClient, queryKey } = setup();
+		const item = canvas(1);
+		const otherKey =
+			getCanvasNavigationQueryOptions("other_workspace").queryKey;
+		queryClient.setQueryData(otherKey, { favorites: [], recents: [] });
+		const favoritedAt = "2026-09-12T12:00:00.000Z";
+		const mutation = new MutationObserver(queryClient, {
+			...setCanvasFavoriteMutationOptions("workspace_test", {
+				onSuccess: (result) => {
+					expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(
+						false,
+					);
+					setFavoriteInCanvasNavigationCache(
+						queryClient,
+						"workspace_test",
+						item,
+						result.favoritedAt,
+					);
+				},
+			}),
+			mutationFn: async () => ({ canvasId: item.id, favoritedAt }),
+		});
+		await mutation.mutate({ path: { id: item.id }, body: { favorite: true } });
+		expect(
+			queryClient.getQueryData<CanvasNavigationOutput>(queryKey)?.favorites[0]
+				?.favoritedAt,
+		).toBe(favoritedAt);
+		expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+		expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(false);
+		queryClient.clear();
+	});
+
 	it("does not remount-refetch hydrated canvas navigation", () => {
 		const options = getCanvasNavigationQueryOptions("workspace_test");
 

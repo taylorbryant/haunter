@@ -18,7 +18,18 @@ export function useCanvasFavorite(
 	const queryClient = useQueryClient();
 	const queryKey = getCanvasNavigationQueryOptions(workspaceId).queryKey;
 	const mutation = useMutation({
-		...setCanvasFavoriteMutationOptions(),
+		...setCanvasFavoriteMutationOptions(workspaceId, {
+			onSuccess: (result) => {
+				if (canvas?.id === result.canvasId) {
+					setFavoriteInCanvasNavigationCache(
+						queryClient,
+						workspaceId,
+						canvas,
+						result.favoritedAt,
+					);
+				}
+			},
+		}),
 		meta: { errorFallback: "The favorite could not be updated." },
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey, exact: true });
@@ -38,18 +49,6 @@ export function useCanvasFavorite(
 			if (context?.previous) {
 				queryClient.setQueryData(queryKey, context.previous);
 			}
-		},
-		onSuccess: (result) => {
-			if (canvas) {
-				setFavoriteInCanvasNavigationCache(
-					queryClient,
-					workspaceId,
-					canvas,
-					result.favoritedAt,
-				);
-			}
-		},
-		onSettled: () => {
 			void queryClient.invalidateQueries({ queryKey, exact: true });
 		},
 	});

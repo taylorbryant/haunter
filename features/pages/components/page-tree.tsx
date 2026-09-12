@@ -106,6 +106,7 @@ import { flushPendingPageSave } from "@/features/pages/client/save-state";
 import {
 	PAGE_TITLE_MAX_LENGTH,
 	PAGE_TITLE_TOO_LONG_MESSAGE,
+	type PageNavigationOutput,
 } from "@/features/pages/schemas";
 import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
@@ -211,8 +212,41 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		meta: { errorMode: "inline" },
 	});
 	const favoriteMutation = useMutation({
-		...setPageFavoriteMutationOptions(),
+		...setPageFavoriteMutationOptions(workspaceId, {
+			onSuccess: ({ favoritedAt }, { path }) => {
+				const page = pagesQuery.data?.items.find((item) => item.id === path.id);
+				if (page) {
+					setFavoriteInNavigationCache(
+						queryClient,
+						workspaceId,
+						page,
+						favoritedAt,
+					);
+				}
+			},
+		}),
 		meta: { errorFallback: "The favorite could not be updated." },
+		onMutate: async ({ path, body }) => {
+			const queryKey = getPageNavigationQueryOptions(workspaceId).queryKey;
+			await queryClient.cancelQueries({ queryKey, exact: true });
+			const previous = queryClient.getQueryData<PageNavigationOutput>(queryKey);
+			const page = pagesQuery.data?.items.find((item) => item.id === path.id);
+			if (page) {
+				setFavoriteInNavigationCache(
+					queryClient,
+					workspaceId,
+					page,
+					body.favorite ? new Date().toISOString() : null,
+				);
+			}
+			return { queryKey, previous };
+		},
+		onError: (_error, _variables, context) => {
+			if (context?.previous) {
+				queryClient.setQueryData(context.queryKey, context.previous);
+			}
+			void invalidatePageNavigation(queryClient, workspaceId);
+		},
 	});
 
 	const { expanded, toggle } = useExpandedState(workspaceId);
@@ -428,40 +462,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		const wasFavorite = navigation.favorites.some(
 			(page) => page.id === node.id,
 		);
-		const nextFavorite = !wasFavorite;
-		const previousNavigation = navigation;
-		setFavoriteInNavigationCache(
-			queryClient,
-			workspaceId,
-			node,
-			nextFavorite ? new Date().toISOString() : null,
-		);
-		favoriteMutation.mutate(
-			{ path: { id: node.id }, body: { favorite: nextFavorite } },
-			{
-				onSuccess: ({ favoritedAt }) =>
-					setFavoriteInNavigationCache(
-						queryClient,
-						workspaceId,
-						node,
-						favoritedAt,
-					),
-				onError: () => {
-					if (previousNavigation) {
-						queryClient.setQueryData(
-							getPageNavigationQueryOptions(workspaceId).queryKey,
-							previousNavigation,
-						);
-					}
-				},
-				onSettled: () => {
-					void queryClient.invalidateQueries({
-						queryKey: getPageNavigationQueryOptions(workspaceId).queryKey,
-						exact: true,
-					});
-				},
-			},
-		);
+		favoriteMutation.mutate({
+			path: { id: node.id },
+			body: { favorite: !wasFavorite },
+		});
 	}
 
 	// Soft delete: the subtree moves to the workspace trash (restorable).

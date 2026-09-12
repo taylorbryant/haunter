@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
-import { QueryClient } from "@tanstack/react-query";
+import {
+	MutationObserver,
+	QueryClient,
+	QueryObserver,
+} from "@tanstack/react-query";
 import {
 	commitNotificationReadCache,
+	initializeNotificationTimezoneMutationOptions,
 	listNotificationsQueryOptions,
 	markAllNotificationsReadInCache,
 	markNotificationReadInCache,
@@ -10,6 +15,7 @@ import {
 	removeNotificationFromCache,
 	restoreNotificationReadCache,
 	restoreNotificationsCache,
+	updateNotificationSettingsMutationOptions,
 } from "@/features/notifications/client/queries";
 import type {
 	ListNotificationsOutput,
@@ -42,6 +48,120 @@ const notification: Notification = {
 	taskAvailable: true,
 	taskCanComplete: true,
 };
+
+const settings: NotificationSettings = {
+	overdueTasksEnabled: true,
+	taskAssignmentsEnabled: true,
+	taskRemindersEnabled: true,
+	timezone: "America/Chicago",
+	timezoneConfigured: false,
+	pushSupported: true,
+	vapidPublicKey: "public-key",
+};
+
+test("settings mutations refresh preferences once without refreshing the notification inbox", async () => {
+	const queryClient = new QueryClient();
+	const queryKey = notificationSettingsQueryOptions().queryKey;
+	const inboxKey = listNotificationsQueryOptions().queryKey;
+	queryClient.setQueryData(queryKey, settings);
+	queryClient.setQueryData(inboxKey, {
+		items: [],
+		unreadCount: 0,
+		nextCursor: null,
+	});
+	const saved = {
+		...settings,
+		timezone: "America/New_York",
+		timezoneConfigured: true,
+	};
+	const refetchStarted = Promise.withResolvers<void>();
+	const refreshed = Promise.withResolvers<NotificationSettings>();
+	let refetches = 0;
+	const observer = new QueryObserver(queryClient, {
+		queryKey,
+		staleTime: Infinity,
+		queryFn: () => {
+			refetches++;
+			expect(queryClient.getQueryData<NotificationSettings>(queryKey)).toEqual(
+				saved,
+			);
+			refetchStarted.resolve();
+			return refreshed.promise;
+		},
+	});
+	const unsubscribe = observer.subscribe(() => {});
+	try {
+		const mutation = new MutationObserver(queryClient, {
+			...updateNotificationSettingsMutationOptions({
+				onSuccess: (result) => {
+					queryClient.setQueryData(queryKey, result);
+				},
+			}),
+			mutationFn: async () => saved,
+		});
+		const pending = mutation.mutate({ body: { timezone: saved.timezone } });
+		await refetchStarted.promise;
+		expect(mutation.getCurrentResult().isPending).toBe(true);
+		refreshed.resolve(saved);
+		await pending;
+		expect(refetches).toBe(1);
+		expect(queryClient.getQueryState(inboxKey)?.isInvalidated).toBe(false);
+	} finally {
+		unsubscribe();
+		queryClient.clear();
+	}
+});
+
+test("timezone initialization invalidates preferences only on success", async () => {
+	const queryClient = new QueryClient();
+	const queryKey = notificationSettingsQueryOptions().queryKey;
+	queryClient.setQueryData(queryKey, settings);
+	let fail = true;
+	const failure = new Error("Unavailable");
+	const mutation = new MutationObserver(queryClient, {
+		...initializeNotificationTimezoneMutationOptions(),
+		mutationFn: async () => {
+			if (fail) throw failure;
+			return { ...settings, timezoneConfigured: true };
+		},
+	});
+	await expect(
+		mutation.mutate({ body: { timezone: settings.timezone } }),
+	).rejects.toBe(failure);
+	expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(false);
+	fail = false;
+	await mutation.mutate({ body: { timezone: settings.timezone } });
+	expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+	queryClient.clear();
+});
+
+test("notification updates skip infinite data while preserving read rollback", async () => {
+	const queryClient = new QueryClient();
+	const queryKey = listNotificationsQueryOptions().queryKey;
+	const infiniteKey = [...queryKey, "infinite"];
+	const data: ListNotificationsOutput = {
+		items: [notification],
+		unreadCount: 1,
+		nextCursor: null,
+	};
+	const infiniteData = { pages: [data], pageParams: [null] };
+	queryClient.setQueryData(queryKey, data);
+	queryClient.setQueryData(infiniteKey, infiniteData);
+	const read = await markNotificationReadInCache(queryClient, notification);
+	expect(read).toHaveLength(1);
+	restoreNotificationReadCache(queryClient, read);
+	const readAll = await markAllNotificationsReadInCache(queryClient);
+	restoreNotificationReadCache(queryClient, readAll);
+	const removal = await removeNotificationFromCache(queryClient, notification);
+	restoreNotificationsCache(queryClient, removal);
+	expect(queryClient.getQueryData<ListNotificationsOutput>(queryKey)).toEqual(
+		data,
+	);
+	expect(queryClient.getQueryData<typeof infiniteData>(infiniteKey)).toBe(
+		infiniteData,
+	);
+	queryClient.clear();
+});
 
 test("notification cache removes active items and restores failed actions", async () => {
 	const queryClient = new QueryClient();
@@ -247,15 +367,6 @@ test("read rollback restores each cached page independently", async () => {
 test("notification preferences update immediately and expose a rollback snapshot", async () => {
 	const queryClient = new QueryClient();
 	const queryKey = notificationSettingsQueryOptions().queryKey;
-	const settings: NotificationSettings = {
-		overdueTasksEnabled: true,
-		taskAssignmentsEnabled: true,
-		taskRemindersEnabled: true,
-		timezone: "America/Chicago",
-		timezoneConfigured: false,
-		pushSupported: true,
-		vapidPublicKey: "public-key",
-	};
 	queryClient.setQueryData(queryKey, settings);
 
 	const snapshot = await optimisticallyUpdateNotificationSettings(queryClient, {

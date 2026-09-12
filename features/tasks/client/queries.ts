@@ -1,4 +1,5 @@
 import { protectedRefetchInterval } from "@/client/session-recovery";
+import type { ContractCacheParams } from "@beignet/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
 import { taskWriteLock } from "@/features/tasks/client/completion-lock";
@@ -29,6 +30,7 @@ export type TaskScheduleCacheSnapshot = TaskCacheSnapshot;
 
 export type TaskCreationCacheSnapshot = Array<{
 	queryKey: QueryKey;
+	limit: number;
 	previousHasMore: boolean;
 	displacedTask: TaskWithPage | null;
 }>;
@@ -43,33 +45,19 @@ export function isOptimisticTaskId(taskId: string) {
 	return taskId.startsWith(OPTIMISTIC_TASK_ID_PREFIX);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
-}
-
-function taskFilterFromQueryKey(queryKey: QueryKey): TaskFilter | null {
-	const params = queryKey.at(-1);
-	if (!isRecord(params) || !isRecord(params.query)) return null;
-	const filter = params.query.filter;
-	return filter === "open" || filter === "completed" || filter === "all"
-		? filter
-		: null;
-}
-
-function listTasksParamsFromQueryKey(queryKey: QueryKey) {
-	const params = queryKey.at(-1);
-	if (!isRecord(params) || !isRecord(params.path) || !isRecord(params.query)) {
-		return null;
-	}
-	const workspaceId = params.path.workspaceId;
-	const filter = params.query.filter;
-	const scope = params.query.scope;
-	const limit = params.query.limit;
+function listTasksCacheParams(
+	params: ContractCacheParams<typeof listTasks.config>,
+) {
+	const workspaceId = params.path?.workspaceId;
+	const { filter, scope, limit, dueOnOrAfter, dueOnOrBefore } =
+		params.query ?? {};
+	// Cache identities can be partial. Only infer list membership when the
+	// caller explicitly keyed the filters and limit, as our query options do.
 	if (
-		typeof workspaceId !== "string" ||
-		(filter !== "open" && filter !== "completed" && filter !== "all") ||
-		(scope !== "mine" && scope !== "everyone") ||
-		typeof limit !== "number"
+		workspaceId === undefined ||
+		filter === undefined ||
+		scope === undefined ||
+		limit === undefined
 	) {
 		return null;
 	}
@@ -78,14 +66,8 @@ function listTasksParamsFromQueryKey(queryKey: QueryKey) {
 		filter,
 		scope,
 		limit,
-		dueOnOrAfter:
-			typeof params.query.dueOnOrAfter === "string"
-				? params.query.dueOnOrAfter
-				: undefined,
-		dueOnOrBefore:
-			typeof params.query.dueOnOrBefore === "string"
-				? params.query.dueOnOrBefore
-				: undefined,
+		dueOnOrAfter,
+		dueOnOrBefore,
 	};
 }
 
@@ -105,7 +87,7 @@ function compareListedTasks(left: TaskWithPage, right: TaskWithPage) {
 function taskMatchesListQuery(
 	task: TaskWithPage,
 	currentUserId: string,
-	params: NonNullable<ReturnType<typeof listTasksParamsFromQueryKey>>,
+	params: NonNullable<ReturnType<typeof listTasksCacheParams>>,
 ) {
 	if (task.workspaceId !== params.workspaceId) return false;
 	if (params.filter === "open" && task.completed) return false;
@@ -184,12 +166,15 @@ export async function optimisticallyAddTask(
 		revert: false,
 		silent: true,
 	});
-	const cachedQueries =
-		queryClient.getQueriesData<ListTasksOutput>(queryFilter);
+	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
 	const snapshot: TaskCreationCacheSnapshot = [];
 
-	for (const [queryKey, current] of cachedQueries) {
-		const params = listTasksParamsFromQueryKey(queryKey);
+	for (const {
+		queryKey,
+		data: current,
+		params: cacheParams,
+	} of cachedQueries) {
+		const params = listTasksCacheParams(cacheParams);
 		if (
 			!current ||
 			!params ||
@@ -208,6 +193,7 @@ export async function optimisticallyAddTask(
 		snapshot.push({
 			queryKey,
 			previousHasMore: current.hasMore,
+			limit: params.limit,
 			displacedTask,
 		});
 		queryClient.setQueryData<ListTasksOutput>(queryKey, {
@@ -225,9 +211,8 @@ export function replaceOptimisticTask(
 	temporaryTaskId: string,
 	createdTask: TaskWithPage,
 ) {
-	queryClient.setQueriesData<ListTasksOutput>(
-		rq(listTasks).filter(),
-		(current) => {
+	rq(listTasks).updateCachedQueries(queryClient, {
+		update: ({ data: current }) => {
 			if (!current?.items.some((task) => task.id === temporaryTaskId)) {
 				return current;
 			}
@@ -238,7 +223,7 @@ export function replaceOptimisticTask(
 					.sort(compareListedTasks),
 			};
 		},
-	);
+	});
 }
 
 export function restoreTaskCreationCache(
@@ -246,11 +231,9 @@ export function restoreTaskCreationCache(
 	temporaryTaskId: string,
 	snapshot: TaskCreationCacheSnapshot,
 ) {
-	for (const { queryKey, previousHasMore, displacedTask } of snapshot) {
+	for (const { queryKey, limit, previousHasMore, displacedTask } of snapshot) {
 		queryClient.setQueryData<ListTasksOutput>(queryKey, (current) => {
 			if (!current) return current;
-			const params = listTasksParamsFromQueryKey(queryKey);
-			if (!params) return current;
 			const items = current.items.filter((task) => task.id !== temporaryTaskId);
 			if (
 				displacedTask &&
@@ -261,8 +244,8 @@ export function restoreTaskCreationCache(
 			}
 			return {
 				...current,
-				items: items.slice(0, params.limit),
-				hasMore: previousHasMore || items.length > params.limit,
+				items: items.slice(0, limit),
+				hasMore: previousHasMore || items.length > limit,
 			};
 		});
 	}
@@ -278,12 +261,11 @@ export async function optimisticallySetTaskCompletion(
 		revert: false,
 		silent: true,
 	});
-	const cachedQueries =
-		queryClient.getQueriesData<ListTasksOutput>(queryFilter);
+	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
 	const snapshot: TaskCompletionCacheSnapshot = [];
 	const completedAt = completed ? new Date().toISOString() : null;
 
-	for (const [queryKey, current] of cachedQueries) {
+	for (const { queryKey, data: current, params } of cachedQueries) {
 		const previousIndex = current?.items.findIndex(
 			(task) => task.id === taskId,
 		);
@@ -297,7 +279,7 @@ export async function optimisticallySetTaskCompletion(
 		const previousTask = current.items[previousIndex];
 		if (!previousTask) continue;
 		const nextTask = { ...previousTask, completed, completedAt };
-		const filter = taskFilterFromQueryKey(queryKey);
+		const filter = params.query?.filter;
 		const shouldRemove =
 			(filter === "open" && completed) ||
 			(filter === "completed" && !completed);
@@ -329,11 +311,14 @@ export async function optimisticallySetTaskSchedule(
 		revert: false,
 		silent: true,
 	});
-	const cachedQueries =
-		queryClient.getQueriesData<ListTasksOutput>(queryFilter);
+	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
 	const snapshot: TaskScheduleCacheSnapshot = [];
 
-	for (const [queryKey, current] of cachedQueries) {
+	for (const {
+		queryKey,
+		data: current,
+		params: cacheParams,
+	} of cachedQueries) {
 		const previousIndex = current?.items.findIndex(
 			(task) => task.id === taskId,
 		);
@@ -347,7 +332,7 @@ export async function optimisticallySetTaskSchedule(
 		const previousTask = current.items[previousIndex];
 		if (!previousTask) continue;
 		const nextTask = { ...previousTask, ...schedule };
-		const params = listTasksParamsFromQueryKey(queryKey);
+		const params = listTasksCacheParams(cacheParams);
 		const movesOutsideDueRange =
 			params !== null &&
 			((params.dueOnOrAfter !== undefined &&
@@ -388,12 +373,15 @@ export async function optimisticallyPatchTask(
 		revert: false,
 		silent: true,
 	});
-	const cachedQueries =
-		queryClient.getQueriesData<ListTasksOutput>(queryFilter);
+	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
 	const snapshot: TaskCacheSnapshot = [];
 	const changedFields = Object.keys(patch) as Array<keyof TaskWithPage>;
 
-	for (const [queryKey, current] of cachedQueries) {
+	for (const {
+		queryKey,
+		data: current,
+		params: cacheParams,
+	} of cachedQueries) {
 		const previousIndex = current?.items.findIndex(
 			(task) => task.id === taskId,
 		);
@@ -407,7 +395,7 @@ export async function optimisticallyPatchTask(
 		const previousTask = current.items[previousIndex];
 		if (!previousTask) continue;
 		const nextTask = { ...previousTask, ...patch };
-		const params = listTasksParamsFromQueryKey(queryKey);
+		const params = listTasksCacheParams(cacheParams);
 		const shouldRemove = Boolean(
 			params &&
 				currentUserId &&
@@ -444,8 +432,8 @@ export async function optimisticallyRemoveTask(
 	});
 	const snapshot: TaskCacheSnapshot = [];
 
-	for (const [queryKey, current] of queryClient.getQueriesData<ListTasksOutput>(
-		queryFilter,
+	for (const { queryKey, data: current } of rq(listTasks).cacheEntries(
+		queryClient,
 	)) {
 		const previousIndex = current?.items.findIndex(
 			(task) => task.id === taskId,

@@ -1,4 +1,5 @@
 import { protectedRefetchInterval } from "@/client/session-recovery";
+import type { ContractUseMutationOptions } from "@beignet/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
 import {
@@ -46,8 +47,20 @@ export function getCanvasNavigationQueryOptions(workspaceId: string) {
 	};
 }
 
-export function setCanvasFavoriteMutationOptions() {
-	return rq(setCanvasFavorite).mutationOptions();
+export function setCanvasFavoriteMutationOptions(
+	workspaceId: string,
+	options: Pick<
+		ContractUseMutationOptions<typeof setCanvasFavorite.config>,
+		"onSuccess"
+	> = {},
+) {
+	return rq(setCanvasFavorite).mutationOptions({
+		...options,
+		mutationKey: [...rq(setCanvasFavorite).contractKey(), workspaceId],
+		invalidates: () => [
+			rq(getCanvasNavigation).filter({ path: { workspaceId } }),
+		],
+	});
 }
 
 export function recordCanvasViewMutationOptions() {

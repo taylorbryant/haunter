@@ -30,7 +30,14 @@ export function NotificationSettingsPanel() {
 	const queryClient = useQueryClient();
 	const settings = useQuery(notificationSettingsQueryOptions());
 	const updateSettings = useMutation({
-		...updateNotificationSettingsMutationOptions(),
+		...updateNotificationSettingsMutationOptions({
+			onSuccess: (result) => {
+				queryClient.setQueryData(
+					notificationSettingsQueryOptions().queryKey,
+					result,
+				);
+			},
+		}),
 		meta: { errorMode: "inline" },
 		onMutate: (variables) =>
 			optimisticallyUpdateNotificationSettings(queryClient, variables.body),
@@ -38,11 +45,8 @@ export function NotificationSettingsPanel() {
 			if (context?.previous) {
 				queryClient.setQueryData(context.queryKey, context.previous);
 			}
+			void invalidateNotificationSettings(queryClient);
 		},
-		onSuccess: (result, _variables, context) => {
-			if (context) queryClient.setQueryData(context.queryKey, result);
-		},
-		onSettled: () => void invalidateNotificationSettings(queryClient),
 	});
 	const subscribe = useMutation({
 		...subscribePushMutationOptions(),
@@ -151,7 +155,6 @@ export function NotificationSettingsPanel() {
 			await updateSettings.mutateAsync({
 				body: { timezone: browserTimezone },
 			});
-			await invalidateNotificationSettings(queryClient);
 			setMessage(`Delivery timezone updated to ${browserTimezone}.`);
 		} catch (error) {
 			setError(userErrorMessage(error, "Timezone could not be updated."));
