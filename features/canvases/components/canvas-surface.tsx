@@ -26,6 +26,7 @@ import {
 	type CanvasSaveState,
 } from "../client/save-state";
 import { CanvasSyncRecovery } from "../client/sync-recovery";
+import { useCanvasConnectionWarning } from "../client/use-connection-warning";
 import { CANVAS_LIBRARY_COMPONENTS } from "./canvas-library";
 import SharedCanvasSurface from "./shared-canvas-surface";
 import { TldrawWithFonts } from "./tldraw-with-fonts";
@@ -194,6 +195,7 @@ function CollaborativeCanvasSurface({
 	const store = synced.status === "synced-remote" ? synced.store : null;
 	const connected =
 		synced.status === "synced-remote" && synced.connectionStatus === "online";
+	const showConnectionWarning = useCanvasConnectionWarning(connected);
 	useEffect(() => {
 		if (!store) return;
 		const controller = new CanvasSyncRecovery(
@@ -316,7 +318,7 @@ function CollaborativeCanvasSurface({
 								? "Saved in this browser · Offline"
 								: "Saving…")}
 			</span>
-			{(error || !connected) && (
+			{(error || showConnectionWarning) && (
 				<div
 					role={error ? "alert" : "status"}
 					className="absolute inset-x-2 bottom-14 z-[310] flex flex-wrap items-center gap-2 rounded border bg-background/95 px-3 py-2 text-xs shadow sm:left-auto sm:max-w-md"
@@ -324,7 +326,7 @@ function CollaborativeCanvasSurface({
 					<span>
 						{error ??
 							(store
-								? "Offline · Keep this tab open to sync automatically. After a reload, use the recovery copy."
+								? "Reconnecting… Keep this tab open to sync automatically. After a reload, use the recovery copy."
 								: "Connecting to canvas…")}
 					</span>
 					<Button
