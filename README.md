@@ -31,8 +31,7 @@ each client can do and which workspaces it can reach.
   Assign them to workspace members, write due dates in natural language, add
   due times, and manage them from the workspace task list.
 - **Work together with clear boundaries.** Workspace roles separate viewing,
-  editing, and member management. Optional live updates bring changes from
-  other open clients into view sooner.
+  editing, and member management. Edit pages and canvases together in real time.
 - **Take your pages with you.** Move pages in or out as Markdown, or create
   standalone HTML in your chosen Haunter theme.
 - **Connect AI on your terms.** Use Haunter's hosted MCP server or a local Agent
@@ -74,6 +73,15 @@ bun beignet db migrate
 bun run dev
 ```
 
+In a second terminal, from the same directory, start the collaboration worker:
+
+```bash
+bun run dev:collaboration
+```
+
+Keep both processes running. The defaults in `.env.local` connect the app to the
+worker at `ws://localhost:1234`, using the same local database.
+
 Open [http://localhost:3000/sign-in](http://localhost:3000/sign-in), request a
 code for the configured email address, and copy the six-digit code from the
 server console. The first sign-in continues through workspace onboarding.
@@ -101,6 +109,9 @@ bun beignet check
 The command runs Beignet's dependency-direction lint and strict doctor checks,
 then the app's Biome lint, type check, and tests. Every check runs even when an
 earlier check fails. Use `bun run format` to apply Biome formatting.
+
+See [Editor benchmarks](docs/editor-benchmarks.md) for document benchmarks and
+browser checks covering page readiness, typing, and synchronization.
 
 ### Generate a feature
 
@@ -151,16 +162,8 @@ to catch registration drift.
 
 ## Deploy Haunter
 
-Apply the checked-in migrations before starting each production release:
-
-```bash
-bun beignet db migrate
-bun run build
-bun run start
-```
-
 Use [`.env.example`](.env.example) as the complete configuration reference.
-Set these values before the production server starts:
+Configure the production environment before building and starting the app:
 
 - Set `APP_URL` to the canonical public origin and set `BETTER_AUTH_SECRET` to
   a unique secret of at least 32 characters.
@@ -168,6 +171,10 @@ Set these values before the production server starts:
   persistent libSQL database such as Turso.
 - Set `RESEND_API_KEY` and `RESEND_FROM` to a verified sender for passwordless
   sign-in and workspace invitations.
+- Set `NEXT_PUBLIC_COLLABORATION_URL` to the worker's public `wss://` URL before
+  building. The worker needs the same database, auth secret, and canonical
+  `APP_URL` as Next.
+- Set `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` before building for a production domain.
 - Remove `DEVTOOLS_ENABLED=true` unless the production devtools route is
   protected appropriately.
 - Confirm that the default workspace roles match the deployment's needs:
@@ -179,17 +186,23 @@ Set these values before the production server starts:
 On a fresh installation, also set `BOOTSTRAP_ADMIN_EMAIL` before the owner
 first signs in. Leave it unset on established installations.
 
+Apply the checked-in migrations before starting each production release:
+
+```bash
+bun beignet db migrate
+bun run build
+bun run start
+```
+
 ### Collaborative editors
 
-Page bodies use Yjs/Hocuspocus, and canvases use first-party tldraw sync. Run one
-combined worker with `bun run dev:collaboration`, alongside Next. Set
-`NEXT_PUBLIC_COLLABORATION_URL` before building the app (`ws://localhost:1234`
-locally; `wss://` in production). The worker uses the same database and auth secret.
-Only one worker replica may own a database at a time.
+Page bodies use Yjs/Hocuspocus, and canvases use first-party tldraw sync. Both
+protocols run in one persistent WebSocket worker alongside Next. Only one worker
+may own a database at a time; deployments must stop it before starting its
+replacement.
 
-Existing databases need the one-time conversion before starting the worker.
-Follow the backup, migration, recovery and deployment instructions in
-[the collaboration release guide](docs/yjs-release-candidate.md).
+See [Collaboration](docs/collaboration.md) for worker deployment, preview origins,
+storage, offline recovery, and troubleshooting.
 
 ### Optional services
 
@@ -198,14 +211,13 @@ Follow the backup, migration, recovery and deployment instructions in
 - **Distributed rate limiting:** Set `UPSTASH_REDIS_REST_URL` and
   `UPSTASH_REDIS_REST_TOKEN`. Without them, each app process keeps its own
   rate-limit state in memory.
-- **Canvases:** Set `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` before using tldraw on a
-  production domain.
 - **Scheduled jobs:** Set `CRON_SECRET` before enabling the Vercel Cron Jobs or
   equivalent external scheduler described below.
-- **Live updates:** With the Upstash variables configured, build with
-  `NEXT_PUBLIC_LIVE_UPDATES=true` to notify other open clients after a page,
-  task, or canvas changes. SQLite remains the source of truth, and polling
-  keeps the app functional without the stream. Set a distinct
+- **Workspace live updates:** With the Upstash variables configured, build with
+  `NEXT_PUBLIC_LIVE_UPDATES=true` to refresh workspace lists and metadata after
+  changes from other clients. This stream is separate from page and canvas
+  editing, which use the collaboration worker. SQLite is the source of
+  truth, and polling provides a fallback for workspace updates. Set a distinct
   `UPSTASH_WORKSPACE_EVENT_PREFIX` for deployments that share one Redis
   database. Active streams are capped at eight per signed-in user by default;
   adjust `UPSTASH_WORKSPACE_EVENT_MAX_CONNECTIONS_PER_USER` if needed. Because
