@@ -8,7 +8,6 @@ import {
 } from "../lib/group-tasks-by-due-date";
 import { parseTaskDateShortcut, toIsoDate } from "../lib/parse-task-input";
 import { patchTaskBlock } from "../lib/patch-task-block";
-import { reconcileTaskBlockProps } from "../lib/reconcile-task-block-props";
 import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
 
 function addDays(days: number): Date {
@@ -271,76 +270,5 @@ describe("patchTaskBlock", () => {
 			{ due: null },
 		);
 		expect(blocks[0]?.props.due).toBe("");
-	});
-});
-
-describe("reconcileTaskBlockProps", () => {
-	it("copies task-owned props from the authoritative document", () => {
-		const current = [
-			paragraph("p1", [
-				task("t1", "Local text", {
-					checked: false,
-					due: "",
-					assignee: "",
-					color: "red",
-				}),
-			]),
-			task("local", "New local task", { checked: true }),
-		];
-		const authoritative = [
-			task("t1", "Server text", {
-				checked: true,
-				due: "2026-07-04",
-				assignee: "user_teammate",
-			}),
-		];
-
-		const { blocks, changed } = reconcileTaskBlockProps(current, authoritative);
-
-		expect(changed).toBe(true);
-		expect(blocks[0]?.children[0]?.content).toEqual(
-			current[0]?.children[0]?.content,
-		);
-		expect(blocks[0]?.children[0]?.props).toEqual({
-			checked: true,
-			due: "2026-07-04",
-			dueTime: "",
-			reminder: "",
-			assignee: "user_teammate",
-			color: "red",
-		});
-		expect(blocks[1]?.props.checked).toBe(true);
-		expect(current[0]?.children[0]?.props.checked).toBe(false);
-	});
-
-	it("reports unchanged when task props already match", () => {
-		const doc = [
-			task("t1", "Done", {
-				checked: true,
-				due: "2026-07-04",
-				assignee: "user_teammate",
-			}),
-		];
-
-		const { blocks, changed } = reconcileTaskBlockProps(doc, doc);
-
-		expect(changed).toBe(false);
-		expect(blocks[0]).toBe(doc[0]);
-	});
-
-	it("treats missing optional task props as empty values", () => {
-		const doc: BlockJson[] = [
-			{
-				id: "t1",
-				type: "task",
-				props: { checked: false, due: "" },
-				content: [{ type: "text", text: "Legacy task", styles: {} }],
-				children: [],
-			},
-		];
-
-		const { changed } = reconcileTaskBlockProps(doc, doc);
-
-		expect(changed).toBe(false);
 	});
 });

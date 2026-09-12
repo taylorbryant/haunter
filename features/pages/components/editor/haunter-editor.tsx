@@ -55,7 +55,6 @@ import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
 import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
-import { registerSubpageLinkAppender } from "@/features/pages/client/open-page-content";
 import {
 	getPageQueryOptions,
 	invalidateBacklinks,
@@ -621,12 +620,6 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 		() => registerTaskCreator(editor, currentUserId),
 		[editor, currentUserId],
 	);
-
-	useEffect(() => {
-		if (!editable) return;
-		// The server appends Yjs nodes; inserting again would duplicate the link.
-		return registerSubpageLinkAppender(pageId, () => true);
-	}, [editable, pageId]);
 
 	useEffect(() => {
 		if (!focusRequest || !editable) return;
