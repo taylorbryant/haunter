@@ -1,5 +1,3 @@
-import type { TestPageRepository } from "@/features/pages/tests/helpers";
-import { writeTestPageBody } from "@/features/pages/tests/write-test-page-body";
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
@@ -18,9 +16,11 @@ import type {
 	PageNavigationRepository,
 	PageRepository,
 } from "@/features/pages/ports";
-import { createTaskIntegrationPorts } from "@/features/tasks/tests/task-integration-fixture";
+import type { TestPageRepository } from "@/features/pages/tests/helpers";
+import { writeTestPageBody } from "@/features/pages/tests/write-test-page-body";
 import type { TaskAssignmentDeliveryPort } from "@/features/tasks/ports";
 import { createTestTaskRepository } from "@/features/tasks/tests/helpers";
+import { createTaskIntegrationPorts } from "@/features/tasks/tests/task-integration-fixture";
 import { appPorts } from "@/infra/port-wiring";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
@@ -109,7 +109,7 @@ function createTester(
 				...taskIntegration,
 				taskAssignmentDelivery,
 				tasks,
-				workspaceEvents,
+				broadcast: workspaceEvents,
 				devtools: createInMemoryDevtools(),
 			},
 			transaction: {
@@ -412,8 +412,9 @@ describe("pages use cases", () => {
 			createTestTaskRepository({ pages }),
 			"owner",
 			{
+				...createTestWorkspaceEventPublisher(),
 				async publish() {
-					throw new Error("Liveblocks unavailable");
+					throw new Error("Redis unavailable");
 				},
 			},
 		);

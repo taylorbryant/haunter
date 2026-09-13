@@ -102,7 +102,7 @@ async function createPagesTestApp(options: {
 			...taskIntegration,
 			tasks,
 			canvases,
-			workspaceEvents,
+			broadcast: workspaceEvents,
 			devtools: createInMemoryDevtools(),
 			auth: options.auth,
 			// Bound so the harness's unenforceable-metadata warning stays quiet;

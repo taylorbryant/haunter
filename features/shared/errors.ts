@@ -1,6 +1,16 @@
 import { createAppError, defineErrors } from "@beignet/core/errors";
 
 export const errors = defineErrors({
+	BroadcastUnavailable: {
+		code: "BROADCAST_UNAVAILABLE",
+		status: 503,
+		message: "Live updates are temporarily unavailable",
+	},
+	BroadcastConnectionLimit: {
+		code: "BROADCAST_CONNECTION_LIMIT",
+		status: 429,
+		message: "Too many live-update connections",
+	},
 	Unauthorized: {
 		code: "UNAUTHORIZED",
 		status: 401,

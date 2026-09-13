@@ -74,7 +74,7 @@ async function createHookedTestApp(options: { auth: AppPorts["auth"] }) {
 			...taskIntegration,
 			tasks,
 			canvases,
-			workspaceEvents,
+			broadcast: workspaceEvents,
 			devtools: createInMemoryDevtools(),
 			auth: options.auth,
 			// The point of this file: with the port bound, meta.rateLimit is

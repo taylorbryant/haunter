@@ -1,6 +1,26 @@
 import { expect, test } from "bun:test";
 import { createTaskWriteLock } from "@/features/tasks/client/completion-lock";
 
+test("task write observers see start and settlement without controlling writes", async () => {
+	const lock = createTaskWriteLock();
+	const changes: boolean[] = [];
+	const stopBroken = lock.subscribe(() => {
+		throw new Error("observer failed");
+	});
+	const stop = lock.subscribe(() => changes.push(lock.hasPendingWrites()));
+	await expect(
+		lock.run("task_1", async () => {
+			throw new Error("write failed");
+		}),
+	).rejects.toThrow("write failed");
+	expect(changes).toEqual([true, false]);
+	expect(lock.hasPendingWrites()).toBe(false);
+	stop();
+	stopBroken();
+	await lock.run("task_1", async () => {});
+	expect(changes).toEqual([true, false]);
+});
+
 test("task write lock queues same-task requests in user order", async () => {
 	const lock = createTaskWriteLock();
 	const calls: string[] = [];

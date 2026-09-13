@@ -113,6 +113,20 @@ export const env = createEnv({
 		// signals. Rate limiting falls back to memory when it is unset.
 		UPSTASH_REDIS_REST_URL: z.string().optional(),
 		UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+		REDIS_BROADCAST_URL: z
+			.string()
+			.url()
+			.refine(
+				(value) => ["redis:", "rediss:"].includes(new URL(value).protocol),
+				"Use a redis:// or rediss:// connection URL.",
+			)
+			.optional(),
+		REDIS_BROADCAST_PREFIX: z
+			.string()
+			.trim()
+			.min(1)
+			.max(256)
+			.default("haunter:broadcast:"),
 		// Key prefix shared with @beignet/provider-rate-limit-upstash (which
 		// reads it directly); the default mirrors that provider's default.
 		UPSTASH_PREFIX: z.string().default("beignet:ratelimit"),

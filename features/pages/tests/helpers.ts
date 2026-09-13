@@ -1,8 +1,7 @@
+import type { BroadcastPort } from "@beignet/core/broadcasting/server";
 import { tenantScopeId } from "@beignet/core/ports";
-import type {
-	WorkspaceEvent,
-	WorkspaceEventPublisherPort,
-} from "@/features/collab/workspace-events";
+import { WorkspaceEventSchema } from "@/features/collab/schemas";
+import type { WorkspaceEvent } from "@/features/collab/workspace-events";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type {
 	NewPage,
@@ -17,10 +16,13 @@ import type { Page, PageMeta, PageVersion } from "@/features/pages/schemas";
 
 export function createTestWorkspaceEventPublisher(
 	published: WorkspaceEvent[] = [],
-): WorkspaceEventPublisherPort {
+): BroadcastPort {
 	return {
-		async publish(event) {
-			published.push(event);
+		async publish(_channel, event) {
+			published.push(WorkspaceEventSchema.parse(event.data));
+		},
+		subscribe() {
+			throw new Error("This test only records publications");
 		},
 	};
 }
