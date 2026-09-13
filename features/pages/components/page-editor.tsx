@@ -3,16 +3,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { beginEditorMeasurement } from "@/features/pages/client/editor-performance";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
+import { beginEditorMeasurement } from "@/features/pages/client/editor-performance";
 import {
 	getEditorPageQueryOptions,
 	recordPageViewMutationOptions,
 	syncRecordedPageViewInNavigationCache,
 } from "@/features/pages/client/queries";
 import { setPageSaveState } from "@/features/pages/client/save-state";
+import { useTaskRefetchOptions } from "@/features/tasks/client/use-task-refetch-options";
 import { cn } from "@/lib/utils";
 import { Backlinks } from "./backlinks";
 import { EditorBodySkeleton, PageEditorSkeleton } from "./page-editor-skeleton";
@@ -34,7 +35,12 @@ export function PageEditor({ pageId }: { pageId: string }) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: each page navigation starts a new measurement
 	const measurement = useMemo(() => beginEditorMeasurement(), [pageId]);
 	const queryClient = useQueryClient();
-	const pageQuery = useQuery(getEditorPageQueryOptions(pageId));
+	const refetchOptions = useTaskRefetchOptions();
+	const pageQuery = useQuery({
+		...getEditorPageQueryOptions(pageId),
+		...refetchOptions,
+		refetchOnMount: false,
+	});
 	const recordViewMutation = useMutation({
 		...recordPageViewMutationOptions(),
 		meta: { errorMode: "silent" },

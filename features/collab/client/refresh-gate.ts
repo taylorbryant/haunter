@@ -2,32 +2,24 @@ import {
 	type BroadcastRefreshGate,
 	createBroadcastMutationRefreshGate,
 } from "@beignet/react-query";
-import { matchQuery, type QueryClient } from "@tanstack/react-query";
-import { rq } from "@/client";
-import { taskWriteLock } from "@/features/tasks/client/completion-lock";
-import { listTasks } from "@/features/tasks/contracts";
+import type { QueryClient } from "@tanstack/react-query";
+import {
+	taskWriteBlocksQuery,
+	taskWriteIdentity,
+} from "@/features/tasks/client/write-state";
 
 export function createWorkspaceRefreshGate(
 	queryClient: QueryClient,
-	writeLock = taskWriteLock,
 ): BroadcastRefreshGate {
-	// Preserve the existing barrier: unkeyed mutations cannot yet be scoped safely.
-	const mutations = createBroadcastMutationRefreshGate({
+	// Unmigrated mutations retain their conservative barrier. Task mutations
+	// declare their affected queries and only hold those projections.
+	const others = createBroadcastMutationRefreshGate({
 		queryClient,
-		mutations: {},
+		mutations: { predicate: (mutation) => !taskWriteIdentity(mutation) },
 	});
 	return {
 		isBlocked: (query) =>
-			mutations.isBlocked(query) ||
-			(matchQuery(rq(listTasks).filter(), query) &&
-				writeLock.hasPendingWrites()),
-		subscribe(onChange) {
-			const stopMutations = mutations.subscribe(onChange);
-			const stopWrites = writeLock.subscribe(onChange);
-			return () => {
-				stopWrites();
-				stopMutations();
-			};
-		},
+			others.isBlocked(query) || taskWriteBlocksQuery(queryClient, query),
+		subscribe: (onChange) => others.subscribe(onChange),
 	};
 }

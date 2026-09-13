@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import {
+	MutationObserver,
+	QueryClient,
+	QueryObserver,
+} from "@tanstack/react-query";
 import {
 	getCanvasQueryOptions,
 	listCanvasesQueryOptions,
@@ -9,8 +13,8 @@ import {
 	getPageQueryOptions,
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
-import { createTaskWriteLock } from "@/features/tasks/client/completion-lock";
 import { listTasksQueryOptions } from "@/features/tasks/client/queries";
+import { TASK_WRITE_KEY } from "@/features/tasks/client/write-state";
 import { subscribeToWorkspaceChanges } from "../client/broadcasts";
 import { createWorkspaceRefreshGate } from "../client/refresh-gate";
 import {
@@ -30,7 +34,25 @@ function fixture() {
 		defaultOptions: { queries: { retry: false, staleTime: Infinity } },
 	});
 	cleanups.push(() => queryClient.clear());
-	const writeLock = createTaskWriteLock();
+	const writeTask = async (taskId: string, request: () => Promise<void>) => {
+		const observer = new MutationObserver(queryClient, {
+			mutationKey: [...TASK_WRITE_KEY, "user_1", "workspace_1", taskId],
+			meta: {
+				taskWrite: {
+					userId: "user_1",
+					workspaceId: "workspace_1",
+					taskId,
+					pageId: null,
+				},
+			},
+			mutationFn: request,
+		});
+		try {
+			await observer.mutate();
+		} finally {
+			observer.reset();
+		}
+	};
 	const broadcast = controlledBroadcastClient();
 	const removed: string[] = [];
 	let currentPageId = "open_page";
@@ -42,13 +64,13 @@ function fixture() {
 		onPageRemoved: (pageId) => {
 			removed.push(pageId);
 		},
-		refreshGate: createWorkspaceRefreshGate(queryClient, writeLock),
+		refreshGate: createWorkspaceRefreshGate(queryClient),
 	});
 	cleanups.push(unsubscribe);
 	return {
 		...broadcast,
 		queryClient,
-		writeLock,
+		writeTask,
 		removed,
 		unsubscribe,
 		navigate(pageId: string) {
@@ -107,7 +129,7 @@ describe("workspace broadcast cache", () => {
 		f.queryClient.setQueryData(tasks, { items: [], hasMore: false });
 		f.queryClient.setQueryData(pages, { items: [] });
 		const pending = deferred();
-		const write = f.writeLock.run("task_1", () => pending.promise);
+		const write = f.writeTask("task_1", () => pending.promise);
 		await f.sync();
 		expect(f.queryClient.getQueryState(tasks)?.isInvalidated).toBe(false);
 		expect(f.queryClient.getQueryState(pages)?.isInvalidated).toBe(true);
@@ -123,7 +145,7 @@ describe("workspace broadcast cache", () => {
 		const key = listTasksQueryOptions("workspace_1", "open").queryKey;
 		f.queryClient.setQueryData(key, { items: [], hasMore: false });
 		const pending = deferred();
-		const write = f.writeLock.run("task_1", () => pending.promise);
+		const write = f.writeTask("task_1", () => pending.promise);
 		await f.event(
 			createWorkspaceTaskEvent({
 				workspaceId: "workspace_1",

@@ -1,7 +1,5 @@
 "use client";
 
-import { protectedRefetchInterval } from "@/client/session-recovery";
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	BellIcon,
@@ -12,9 +10,9 @@ import {
 	TimerIcon,
 	UserRoundCheckIcon,
 } from "lucide-react";
-import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { reportUserError } from "@/client/error-feedback";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +41,6 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toast";
-import type { NotificationsCacheSnapshot } from "@/features/notifications/client/queries";
 import {
 	commitNotificationReadCache,
 	invalidateNotifications,
@@ -52,17 +49,11 @@ import {
 	markAllNotificationsReadMutationOptions,
 	markNotificationReadInCache,
 	markNotificationReadMutationOptions,
-	removeNotificationFromCache,
 	restoreNotificationReadCache,
-	restoreNotificationsCache,
 } from "@/features/notifications/client/queries";
 import type { Notification } from "@/features/notifications/schemas";
-import { invalidatePage } from "@/features/pages/client/queries";
-import { taskWriteLock } from "@/features/tasks/client/completion-lock";
-import {
-	actOnTaskNotificationMutationOptions,
-	invalidateTasksWhenIdle,
-} from "@/features/tasks/client/queries";
+import { useTaskMutations } from "@/features/tasks/client/use-task-mutations";
+import { useTaskRefetchOptions } from "@/features/tasks/client/use-task-refetch-options";
 import { useAfterFirstPaint } from "@/hooks/use-after-first-paint";
 import { formatDueDateTimeLabel, parseIsoDate } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
@@ -325,20 +316,21 @@ export function NotificationCenter() {
 	const { isMobile, setOpenMobile } = useSidebar();
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	const refetchOptions = useTaskRefetchOptions();
 	const [open, setOpen] = useState(false);
 	const afterFirstPaint = useAfterFirstPaint();
-	const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(
-		() => new Set(),
-	);
-	const pendingActionIdsRef = useRef(new Set<string>());
+	const mutations = useTaskMutations();
+
 	const badgeQuery = useQuery({
 		...listNotificationsQueryOptions(1),
+		...refetchOptions,
 		meta: { errorMode: "silent" },
 	});
 	const query = useQuery({
 		...listNotificationsQueryOptions(),
 		enabled: open || afterFirstPaint,
-		refetchInterval: open ? protectedRefetchInterval : false,
+		...refetchOptions,
+		refetchInterval: open ? refetchOptions.refetchInterval : false,
 		meta: { errorMode: "inline" },
 	});
 	const markRead = useMutation({
@@ -373,11 +365,13 @@ export function NotificationCenter() {
 		},
 		onSettled: () => void invalidateNotifications(queryClient),
 	});
-	const action = useMutation({
-		...actOnTaskNotificationMutationOptions(),
-		meta: { errorMode: "silent" },
-	});
+
 	const items = query.data?.items ?? [];
+	const pendingActionIds = new Set(
+		items
+			.filter((item) => mutations.pendingTaskIds.has(item.payload.taskId))
+			.map((item) => item.id),
+	);
 	const unreadCount = badgeQuery.data?.unreadCount ?? 0;
 
 	useEffect(() => {
@@ -423,56 +417,19 @@ export function NotificationCenter() {
 					preset: "15m" | "1h" | "tomorrow_9am";
 			  },
 	) {
-		if (pendingActionIdsRef.current.has(item.id)) return;
-		pendingActionIdsRef.current.add(item.id);
-		setPendingActionIds((current) => new Set(current).add(item.id));
-		let result: Awaited<ReturnType<typeof action.mutateAsync>> | null = null;
+		if (mutations.isPending(item.workspaceId, item.payload.taskId)) return;
 		try {
-			result = await taskWriteLock.run(item.payload.taskId, async () => {
-				const variables =
-					request.action === "complete"
-						? { path: { id: item.id }, body: { action: "complete" as const } }
-						: {
-								path: { id: item.id },
-								body: {
-									action: "snooze" as const,
-									preset: request.preset,
-								},
-							};
-				let cacheSnapshot: NotificationsCacheSnapshot | null = null;
-				try {
-					cacheSnapshot = await removeNotificationFromCache(queryClient, item);
-					return await action.mutateAsync(variables);
-				} catch (error) {
-					if (cacheSnapshot) {
-						restoreNotificationsCache(queryClient, cacheSnapshot);
-					}
-					reportUserError(error, "The notification could not be updated.");
-					return null;
-				}
-			});
-		} finally {
-			pendingActionIdsRef.current.delete(item.id);
-			setPendingActionIds((current) => {
-				const next = new Set(current);
-				next.delete(item.id);
-				return next;
-			});
+			await mutations.actOnNotification(item, request);
+		} catch (error) {
+			reportUserError(error, "The notification could not be updated.");
+			return;
 		}
-		if (!result) return;
 
 		toast.add({
 			title:
 				request.action === "complete" ? "Task completed" : "Reminder snoozed",
 			type: "success",
 		});
-		await Promise.allSettled([
-			invalidateNotifications(queryClient),
-			invalidateTasksWhenIdle(queryClient),
-			result.pageId
-				? invalidatePage(queryClient, result.pageId)
-				: Promise.resolve(),
-		]);
 	}
 
 	const triggerLabel =
@@ -497,7 +454,7 @@ export function NotificationCenter() {
 			unreadCount={unreadCount}
 			loading={query.isPending}
 			error={query.isError && !query.data}
-			onRetry={() => void query.refetch()}
+			onRetry={() => void invalidateNotifications(queryClient)}
 			onOpen={openNotification}
 			onMarkAll={markAllRead}
 			markingAll={markAll.isPending}

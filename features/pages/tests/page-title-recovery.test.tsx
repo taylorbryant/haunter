@@ -41,6 +41,10 @@ mock.module("next/dynamic", () => ({
 	default: () => () => null,
 }));
 
+mock.module("@/features/tasks/client/use-task-refetch-options", () => ({
+	useTaskRefetchOptions: () => ({}),
+}));
+
 mock.module("@tanstack/react-query", () => ({
 	useQueryClient: () => ({}),
 	useQuery: () => ({ data: page, isPending: false }),

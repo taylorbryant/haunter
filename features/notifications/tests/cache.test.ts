@@ -14,7 +14,7 @@ import {
 	optimisticallyUpdateNotificationSettings,
 	removeNotificationFromCache,
 	restoreNotificationReadCache,
-	restoreNotificationsCache,
+	restoreRemovedNotificationCache,
 	updateNotificationSettingsMutationOptions,
 } from "@/features/notifications/client/queries";
 import type {
@@ -153,7 +153,7 @@ test("notification updates skip infinite data while preserving read rollback", a
 	const readAll = await markAllNotificationsReadInCache(queryClient);
 	restoreNotificationReadCache(queryClient, readAll);
 	const removal = await removeNotificationFromCache(queryClient, notification);
-	restoreNotificationsCache(queryClient, removal);
+	restoreRemovedNotificationCache(queryClient, removal);
 	expect(queryClient.getQueryData<ListNotificationsOutput>(queryKey)).toEqual(
 		data,
 	);
@@ -196,13 +196,38 @@ test("notification cache removes active items and restores failed actions", asyn
 		unreadCount: 0,
 	});
 
-	restoreNotificationsCache(queryClient, snapshot);
+	restoreRemovedNotificationCache(queryClient, snapshot);
 	expect(queryClient.getQueryData<ListNotificationsOutput>(visibleKey)).toEqual(
 		visible,
 	);
 	expect(
 		queryClient.getQueryData<ListNotificationsOutput>(smallerPageKey),
 	).toEqual(smallerPage);
+});
+
+test("a failed task action restores only its notification, preserving other actions and read changes", async () => {
+	const queryClient = new QueryClient();
+	const queryKey = listNotificationsQueryOptions().queryKey;
+	const successful = { ...notification, id: "successful" };
+	const read = { ...notification, id: "read" };
+	queryClient.setQueryData<ListNotificationsOutput>(queryKey, {
+		items: [notification, successful, read],
+		unreadCount: 3,
+		nextCursor: null,
+	});
+	const failed = await removeNotificationFromCache(queryClient, notification);
+	await removeNotificationFromCache(queryClient, successful);
+	const markedRead = await markNotificationReadInCache(queryClient, read);
+	commitNotificationReadCache(queryClient, markedRead);
+	restoreRemovedNotificationCache(queryClient, failed);
+	const restored = queryClient.getQueryData<ListNotificationsOutput>(queryKey);
+	expect(restored?.items.map((item) => item.id)).toEqual([
+		notification.id,
+		read.id,
+	]);
+	expect(restored?.items[1]?.readAt).not.toBeNull();
+	expect(restored?.unreadCount).toBe(1);
+	queryClient.clear();
 });
 
 test("notification reads update every cached page and can roll back", async () => {
