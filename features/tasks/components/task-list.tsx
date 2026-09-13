@@ -130,6 +130,7 @@ export function TaskList({
 	const editSession = useRef(0);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [taskToDelete, setTaskToDelete] = useState<TaskWithPage | null>(null);
+	const deleteSession = useRef(0);
 	const mutations = useTaskMutations(workspaceId);
 	const { pendingTaskIds } = mutations;
 
@@ -292,11 +293,20 @@ export function TaskList({
 		if (!taskToDelete || mutations.isPending(workspaceId, taskToDelete.id))
 			return;
 		const target = taskToDelete;
+		const session = deleteSession.current;
 		setDeleteError(null);
 		setTaskToDelete(null);
 		try {
 			await mutations.remove(target);
 		} catch (error) {
+			// A later confirmation or dismissal owns the dialog now.
+			if (deleteSession.current !== session) {
+				reportUserError(
+					error,
+					`“${target.title || "Untitled task"}” could not be deleted. Try again.`,
+				);
+				return;
+			}
 			setTaskToDelete(target);
 			setDeleteError(
 				contractErrorMessage(error, "Task could not be deleted. Try again."),
@@ -507,7 +517,11 @@ export function TaskList({
 										disabled={
 											isOptimisticTaskId(task.id) || pendingTaskIds.has(task.id)
 										}
-										onClick={() => setTaskToDelete(task)}
+										onClick={() => {
+											deleteSession.current += 1;
+											setDeleteError(null);
+											setTaskToDelete(task);
+										}}
 									>
 										<Trash2Icon className="size-3.5" />
 									</Button>
@@ -696,6 +710,7 @@ export function TaskList({
 				open={taskToDelete !== null}
 				onOpenChange={(open) => {
 					if (!open) {
+						deleteSession.current += 1;
 						setTaskToDelete(null);
 						setDeleteError(null);
 					}
