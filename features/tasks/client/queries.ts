@@ -138,10 +138,9 @@ export async function optimisticallyAddTask(
 	const queryFilter = rq(listTasks).filter({
 		path: { workspaceId: task.workspaceId },
 	});
-	await queryClient.cancelQueries(queryFilter, {
-		revert: false,
-		silent: true,
-	});
+	// Default cancellation returns the query to idle and preserves manual cache
+	// edits, so refreshAfterTaskWrites can reconcile once the write settles.
+	await queryClient.cancelQueries(queryFilter);
 	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
 	const snapshot: TaskCreationCacheSnapshot = [];
 
@@ -237,10 +236,7 @@ export async function optimisticallyPatchTask(
 	const queryFilter = rq(listTasks).filter(
 		workspaceId ? { path: { workspaceId } } : undefined,
 	);
-	await queryClient.cancelQueries(queryFilter, {
-		revert: false,
-		silent: true,
-	});
+	await queryClient.cancelQueries(queryFilter);
 	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
 	const snapshot: TaskCacheSnapshot = [];
 	const changedFields = Object.keys(patch) as Array<keyof TaskWithPage>;
@@ -297,10 +293,7 @@ export async function optimisticallyRemoveTask(
 	const queryFilter = rq(listTasks).filter(
 		workspaceId ? { path: { workspaceId } } : undefined,
 	);
-	await queryClient.cancelQueries(queryFilter, {
-		revert: false,
-		silent: true,
-	});
+	await queryClient.cancelQueries(queryFilter);
 	const snapshot: TaskCacheSnapshot = [];
 
 	for (const { queryKey, data: current } of rq(listTasks).cacheEntries(

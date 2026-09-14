@@ -101,7 +101,8 @@ export async function markNotificationReadInCache(
 	item: Pick<Notification, "id" | "readAt">,
 ): Promise<NotificationReadCacheSnapshot> {
 	const filter = rq(listNotifications).filter();
-	await queryClient.cancelQueries(filter, { revert: false, silent: true });
+	// Return canceled queries to idle so invalidateNotifications can reconcile.
+	await queryClient.cancelQueries(filter);
 	const optimisticReadAt = new Date().toISOString();
 	const operationId = crypto.randomUUID();
 	const snapshot: NotificationReadCacheSnapshot = [];
@@ -142,7 +143,7 @@ export async function markAllNotificationsReadInCache(
 	queryClient: QueryClient,
 ): Promise<NotificationReadCacheSnapshot> {
 	const filter = rq(listNotifications).filter();
-	await queryClient.cancelQueries(filter, { revert: false, silent: true });
+	await queryClient.cancelQueries(filter);
 	const optimisticReadAt = new Date().toISOString();
 	const operationId = crypto.randomUUID();
 	const snapshot: NotificationReadCacheSnapshot = [];
@@ -256,10 +257,7 @@ export async function removeNotificationFromCache(
 	queryClient: QueryClient,
 	item: Pick<Notification, "id" | "readAt">,
 ): Promise<NotificationRemovalCacheSnapshot> {
-	await queryClient.cancelQueries(rq(listNotifications).filter(), {
-		revert: false,
-		silent: true,
-	});
+	await queryClient.cancelQueries(rq(listNotifications).filter());
 	const snapshot: NotificationRemovalCacheSnapshot = [];
 	for (const { queryKey, data: current } of rq(listNotifications).cacheEntries(
 		queryClient,

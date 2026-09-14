@@ -642,6 +642,113 @@ const task: TaskWithPage = {
 };
 const actor = { id: "user_1", name: "Taylor" };
 
+test.each(["create", "update", "delete"] as const)(
+	"queued %s reconciles after canceling a reconnect fetch without losing newer cache edits",
+	async (operation) => {
+		const queryClient = client();
+		const queryKey = listTasksQueryOptions("workspace_1", "all").queryKey;
+		const other = {
+			...task,
+			id: "1a6aa7dd-878c-4589-af87-f5d1eec88a3d",
+			title: "Other task",
+		};
+		const saved = { ...task, title: "Saved task" };
+		const remote = { ...other, title: "Changed in another browser" };
+		const fresh: ListTasksOutput = {
+			items: operation === "delete" ? [remote] : [saved, remote],
+			hasMore: false,
+		};
+		const initial: ListTasksOutput = {
+			items: operation === "create" ? [other] : [task, other],
+			hasMore: false,
+		};
+		let fetches = 0;
+		let aborted = false;
+		const observer = new QueryObserver(queryClient, {
+			queryKey,
+			initialData: initial,
+			queryFn: ({ signal }): Promise<ListTasksOutput> => {
+				if (++fetches > 1) return Promise.resolve(fresh);
+				return new Promise((_resolve, reject) => {
+					signal.addEventListener("abort", () => {
+						aborted = true;
+						reject(signal.reason);
+					});
+				});
+			},
+		});
+		cleanups.push(observer.subscribe(() => {}));
+		const session = {
+			userId: actor.id,
+			workspaceId: task.workspaceId,
+			role: "member",
+		};
+		const recovery = new SessionRecovery(
+			actor.id,
+			async () => session,
+			session,
+		);
+		cleanups.push(installSessionRecovery(recovery));
+		const response = Promise.withResolvers<Response>();
+		const requests = mockFetch(() => response.promise);
+		const mutations = createTaskMutations(queryClient, actor);
+		onlineManager.setOnline(false);
+		const pending =
+			operation === "create"
+				? mutations.create(task.workspaceId, {
+						title: saved.title,
+						dueDate: null,
+						dueTime: null,
+						reminderOffsetMinutes: null,
+					})
+				: operation === "update"
+					? mutations.update(task, { title: saved.title })
+					: mutations.remove(task);
+		await until(
+			() => queryClient.getMutationCache().getAll()[0]?.state.isPaused === true,
+		);
+		expect(requests).not.toHaveBeenCalled();
+		expect(await recovery.recheck()).toBe(true);
+		onlineManager.setOnline(true);
+		const reconnectFetch = observer.refetch();
+		expect(fetches).toBe(1);
+		// A cache edit made after the fetch started must survive cancellation.
+		queryClient.setQueryData<ListTasksOutput>(queryKey, {
+			...initial,
+			items: initial.items.map((item) =>
+				item.id === other.id ? { ...item, title: "Newer local edit" } : item,
+			),
+		});
+		const resumed = queryClient.resumePausedMutations();
+		await until(() => requests.mock.calls.length === 1);
+		expect(aborted).toBe(true);
+		expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe("idle");
+		expect(
+			queryClient
+				.getQueryData<ListTasksOutput>(queryKey)
+				?.items.find((item) => item.id === other.id)?.title,
+		).toBe("Newer local edit");
+		let reconciled = false;
+		const refresh = invalidateTasks(queryClient, task.workspaceId).then(() => {
+			reconciled = true;
+		});
+		await Bun.sleep(0);
+		expect(reconciled).toBe(false);
+		expect(fetches).toBe(1); // Still blocked by the pending write, not a stale fetch.
+		response.resolve(
+			operation === "delete"
+				? new Response(null, { status: 204 })
+				: Response.json(saved, { status: operation === "create" ? 201 : 200 }),
+		);
+		await Promise.all([pending, resumed, reconnectFetch]);
+		await until(() => reconciled);
+		await refresh;
+		expect(requests).toHaveBeenCalledTimes(1);
+		expect(fetches).toBe(2);
+		expect(queryClient.getQueryData<ListTasksOutput>(queryKey)).toEqual(fresh);
+	},
+);
+
 test("task updates use the typed transport and roll back only the failed row", async () => {
 	const queryClient = client();
 	const queryKey = listTasksQueryOptions("workspace_1", "all").queryKey;

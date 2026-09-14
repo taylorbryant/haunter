@@ -7,6 +7,7 @@ import {
 import {
 	commitNotificationReadCache,
 	initializeNotificationTimezoneMutationOptions,
+	invalidateNotifications,
 	listNotificationsQueryOptions,
 	markAllNotificationsReadInCache,
 	markNotificationReadInCache,
@@ -58,6 +59,61 @@ const settings: NotificationSettings = {
 	pushSupported: true,
 	vapidPublicKey: "public-key",
 };
+
+test.each(["read", "read-all", "remove"] as const)(
+	"notification %s releases a canceled fetch for reconciliation",
+	async (operation) => {
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+		});
+		const queryKey = listNotificationsQueryOptions().queryKey;
+		const initial: ListNotificationsOutput = {
+			items: [notification],
+			unreadCount: 1,
+			nextCursor: null,
+		};
+		const fresh: ListNotificationsOutput = {
+			items: [],
+			unreadCount: 0,
+			nextCursor: null,
+		};
+		let fetches = 0;
+		let aborted = false;
+		const observer = new QueryObserver(queryClient, {
+			queryKey,
+			initialData: initial,
+			queryFn: ({ signal }): Promise<ListNotificationsOutput> => {
+				if (++fetches > 1) return Promise.resolve(fresh);
+				return new Promise((_resolve, reject) => {
+					signal.addEventListener("abort", () => {
+						aborted = true;
+						reject(signal.reason);
+					});
+				});
+			},
+		});
+		const unsubscribe = observer.subscribe(() => {});
+		try {
+			const pending = observer.refetch();
+			if (operation === "read")
+				await markNotificationReadInCache(queryClient, notification);
+			else if (operation === "read-all")
+				await markAllNotificationsReadInCache(queryClient);
+			else await removeNotificationFromCache(queryClient, notification);
+			expect(aborted).toBe(true);
+			expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe("idle");
+			await pending;
+			await invalidateNotifications(queryClient);
+			expect(fetches).toBe(2);
+			expect(queryClient.getQueryData<ListNotificationsOutput>(queryKey)).toEqual(
+				fresh,
+			);
+		} finally {
+			unsubscribe();
+			queryClient.clear();
+		}
+	},
+);
 
 test("settings mutations refresh preferences once without refreshing the notification inbox", async () => {
 	const queryClient = new QueryClient();
