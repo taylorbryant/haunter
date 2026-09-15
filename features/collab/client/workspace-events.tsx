@@ -1,25 +1,15 @@
 "use client";
 
+import { BroadcastClientError } from "@beignet/core/broadcasting/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useEffect, useRef } from "react";
-import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
+import { createAppBroadcastClient } from "@/client/broadcasts";
 import { getBrowserSessionRecovery } from "@/client/session-recovery";
+import { useDraftSafeRouter } from "@/client/use-draft-safe-router";
 import { useCurrentUser } from "@/components/app-session-provider";
-import {
-	isWorkspaceCanvasEvent,
-	isWorkspaceEvent,
-	isWorkspaceTaskEvent,
-	workspaceEventAffectedPageIds,
-	workspaceEventRemovesPage,
-} from "@/features/collab/workspace-events";
-import {
-	invalidateWorkspaceCanvasProjection,
-	invalidateWorkspacePageProjections,
-	invalidateWorkspaceTaskProjections,
-	reconcileWorkspaceEventConnection,
-} from "./workspace-event-cache";
+import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
+import { subscribeToWorkspaceChanges } from "./broadcasts";
 
 const liveUpdatesEnabled = process.env.NEXT_PUBLIC_LIVE_UPDATES === "true";
 
@@ -30,114 +20,48 @@ export function WorkspaceEventSubscriber({
 }) {
 	const queryClient = useQueryClient();
 	const requestsEnabled = useProtectedRequestsEnabled();
-	const currentUser = useCurrentUser();
-	const currentUserId = currentUser?.id;
-	const router = useRouter();
+	const currentUserId = useCurrentUser()?.id;
+	const router = useDraftSafeRouter();
 	const params = useParams<{ pageId?: string | string[] }>();
-	const activePageId = Array.isArray(params.pageId)
+	const activePageIdRef = useRef<string | undefined>(undefined);
+	activePageIdRef.current = Array.isArray(params.pageId)
 		? params.pageId[0]
 		: params.pageId;
-	const activePageIdRef = useRef(activePageId);
-	activePageIdRef.current = activePageId;
-
 	useEffect(() => {
-		if (!requestsEnabled || !currentUserId || !liveUpdatesEnabled) {
-			return;
-		}
-		let disposed = false;
-		let unbind: (() => void) | null = null;
-		let flushTimer: ReturnType<typeof setTimeout> | null = null;
-		let taskChanged = false;
-		const pageIds = new Set<string>();
-		const canvasIds = new Set<string>();
-
-		const flush = () => {
-			flushTimer = null;
-			const pendingPageIds = [...pageIds];
-			const pendingCanvasIds = [...canvasIds];
-			const pendingTaskChange = taskChanged;
-			pageIds.clear();
-			canvasIds.clear();
-			taskChanged = false;
-			if (pendingPageIds.length > 0) {
-				void invalidateWorkspacePageProjections(
-					queryClient,
-					workspaceId,
-					pendingPageIds,
-				);
-			}
-			if (pendingTaskChange) {
-				void invalidateWorkspaceTaskProjections(queryClient);
-			}
-			for (const canvasId of pendingCanvasIds) {
-				void invalidateWorkspaceCanvasProjection(
-					queryClient,
-					workspaceId,
-					canvasId,
-				);
-			}
-		};
-		const scheduleFlush = () => {
-			if (flushTimer) return;
-			flushTimer = setTimeout(flush, 50);
-		};
-
-		void import("./sse").then(({ bindWorkspaceEvents }) => {
-			if (disposed) return;
-			unbind = bindWorkspaceEvents(workspaceId, {
-				onConnectionError() {
-					void getBrowserSessionRecovery()?.check();
-				},
-				onEvent(event) {
-					if (!isWorkspaceEvent(event) || event.workspaceId !== workspaceId) {
-						return;
-					}
-					if (isWorkspaceTaskEvent(event)) {
-						taskChanged = true;
-						scheduleFlush();
-						return;
-					}
-					if (isWorkspaceCanvasEvent(event)) {
-						canvasIds.add(event.canvasId);
-						scheduleFlush();
-						return;
-					}
-					const currentPageId = activePageIdRef.current;
-					if (
-						currentPageId &&
-						workspaceEventRemovesPage(event, currentPageId)
-					) {
-						router.replace(`/w/${workspaceId}/home`);
-					}
-					for (const pageId of workspaceEventAffectedPageIds(event)) {
-						pageIds.add(pageId);
-					}
-					scheduleFlush();
-				},
-				onConnected() {
-					const currentPageId = activePageIdRef.current;
-					void reconcileWorkspaceEventConnection(
-						queryClient,
-						workspaceId,
-						currentPageId,
-					).then(({ currentPageMissing }) => {
-						if (
-							currentPageMissing &&
-							!disposed &&
-							activePageIdRef.current === currentPageId
-						) {
-							router.replace(`/w/${workspaceId}/home`);
-						}
-					});
-				},
-			});
+		if (!requestsEnabled || !currentUserId || !liveUpdatesEnabled) return;
+		const client = createAppBroadcastClient();
+		const recovery = getBrowserSessionRecovery();
+		const epoch = recovery?.epoch;
+		const unsubscribe = subscribeToWorkspaceChanges({
+			client,
+			queryClient,
+			workspaceId,
+			getCurrentPageId: () => activePageIdRef.current,
+			onPageRemoved(pageId) {
+				if (activePageIdRef.current === pageId)
+					router.replace(`/w/${workspaceId}/home`);
+			},
+			onError(error) {
+				// Per-channel denial arrives inside a successful SSE response, so it
+				// also needs the session check used for ordinary HTTP 401/403 responses.
+				if (
+					recovery &&
+					getBrowserSessionRecovery() === recovery &&
+					epoch === recovery.epoch &&
+					error instanceof BroadcastClientError
+				) {
+					if (error.status === 401) recovery.rejectRequest(epoch);
+					else if (error.status === 403) void recovery.check();
+				}
+			},
 		});
 		return () => {
-			disposed = true;
-			if (flushTimer) clearTimeout(flushTimer);
-			unbind?.();
+			try {
+				unsubscribe();
+			} finally {
+				client.close();
+			}
 		};
 	}, [requestsEnabled, currentUserId, queryClient, router, workspaceId]);
-
 	return null;
 }

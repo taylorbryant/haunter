@@ -7,6 +7,7 @@ import {
 import {
 	commitNotificationReadCache,
 	initializeNotificationTimezoneMutationOptions,
+	invalidateNotifications,
 	listNotificationsQueryOptions,
 	markAllNotificationsReadInCache,
 	markNotificationReadInCache,
@@ -14,7 +15,7 @@ import {
 	optimisticallyUpdateNotificationSettings,
 	removeNotificationFromCache,
 	restoreNotificationReadCache,
-	restoreNotificationsCache,
+	restoreRemovedNotificationCache,
 	updateNotificationSettingsMutationOptions,
 } from "@/features/notifications/client/queries";
 import type {
@@ -58,6 +59,61 @@ const settings: NotificationSettings = {
 	pushSupported: true,
 	vapidPublicKey: "public-key",
 };
+
+test.each(["read", "read-all", "remove"] as const)(
+	"notification %s releases a canceled fetch for reconciliation",
+	async (operation) => {
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+		});
+		const queryKey = listNotificationsQueryOptions().queryKey;
+		const initial: ListNotificationsOutput = {
+			items: [notification],
+			unreadCount: 1,
+			nextCursor: null,
+		};
+		const fresh: ListNotificationsOutput = {
+			items: [],
+			unreadCount: 0,
+			nextCursor: null,
+		};
+		let fetches = 0;
+		let aborted = false;
+		const observer = new QueryObserver(queryClient, {
+			queryKey,
+			initialData: initial,
+			queryFn: ({ signal }): Promise<ListNotificationsOutput> => {
+				if (++fetches > 1) return Promise.resolve(fresh);
+				return new Promise((_resolve, reject) => {
+					signal.addEventListener("abort", () => {
+						aborted = true;
+						reject(signal.reason);
+					});
+				});
+			},
+		});
+		const unsubscribe = observer.subscribe(() => {});
+		try {
+			const pending = observer.refetch();
+			if (operation === "read")
+				await markNotificationReadInCache(queryClient, notification);
+			else if (operation === "read-all")
+				await markAllNotificationsReadInCache(queryClient);
+			else await removeNotificationFromCache(queryClient, notification);
+			expect(aborted).toBe(true);
+			expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe("idle");
+			await pending;
+			await invalidateNotifications(queryClient);
+			expect(fetches).toBe(2);
+			expect(queryClient.getQueryData<ListNotificationsOutput>(queryKey)).toEqual(
+				fresh,
+			);
+		} finally {
+			unsubscribe();
+			queryClient.clear();
+		}
+	},
+);
 
 test("settings mutations refresh preferences once without refreshing the notification inbox", async () => {
 	const queryClient = new QueryClient();
@@ -153,7 +209,7 @@ test("notification updates skip infinite data while preserving read rollback", a
 	const readAll = await markAllNotificationsReadInCache(queryClient);
 	restoreNotificationReadCache(queryClient, readAll);
 	const removal = await removeNotificationFromCache(queryClient, notification);
-	restoreNotificationsCache(queryClient, removal);
+	restoreRemovedNotificationCache(queryClient, removal);
 	expect(queryClient.getQueryData<ListNotificationsOutput>(queryKey)).toEqual(
 		data,
 	);
@@ -196,13 +252,38 @@ test("notification cache removes active items and restores failed actions", asyn
 		unreadCount: 0,
 	});
 
-	restoreNotificationsCache(queryClient, snapshot);
+	restoreRemovedNotificationCache(queryClient, snapshot);
 	expect(queryClient.getQueryData<ListNotificationsOutput>(visibleKey)).toEqual(
 		visible,
 	);
 	expect(
 		queryClient.getQueryData<ListNotificationsOutput>(smallerPageKey),
 	).toEqual(smallerPage);
+});
+
+test("a failed task action restores only its notification, preserving other actions and read changes", async () => {
+	const queryClient = new QueryClient();
+	const queryKey = listNotificationsQueryOptions().queryKey;
+	const successful = { ...notification, id: "successful" };
+	const read = { ...notification, id: "read" };
+	queryClient.setQueryData<ListNotificationsOutput>(queryKey, {
+		items: [notification, successful, read],
+		unreadCount: 3,
+		nextCursor: null,
+	});
+	const failed = await removeNotificationFromCache(queryClient, notification);
+	await removeNotificationFromCache(queryClient, successful);
+	const markedRead = await markNotificationReadInCache(queryClient, read);
+	commitNotificationReadCache(queryClient, markedRead);
+	restoreRemovedNotificationCache(queryClient, failed);
+	const restored = queryClient.getQueryData<ListNotificationsOutput>(queryKey);
+	expect(restored?.items.map((item) => item.id)).toEqual([
+		notification.id,
+		read.id,
+	]);
+	expect(restored?.items[1]?.readAt).not.toBeNull();
+	expect(restored?.unreadCount).toBe(1);
+	queryClient.clear();
 });
 
 test("notification reads update every cached page and can roll back", async () => {

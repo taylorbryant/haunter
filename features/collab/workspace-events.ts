@@ -1,78 +1,16 @@
+import type { z } from "zod";
+import {
+	WorkspaceCanvasEventSchema,
+	WorkspaceEventSchema,
+	WorkspacePageEventSchema,
+	WorkspaceTaskEventSchema,
+} from "./schemas";
+
 export const WORKSPACE_EVENT_SCHEMA_VERSION = 1 as const;
-
-type WorkspaceEventBase = {
-	schemaVersion: typeof WORKSPACE_EVENT_SCHEMA_VERSION;
-	workspaceId: string;
-	occurredAt: string;
-};
-
-type WorkspacePageEventBase = WorkspaceEventBase & {
-	pageId: string;
-	/** Every page whose direct SQLite projection changed. */
-	affectedPageIds?: string[];
-};
-
-export type WorkspacePageEvent = WorkspacePageEventBase &
-	(
-		| { type: "page.created" }
-		| { type: "page.renamed" }
-		| { type: "page.contentChanged" }
-		| { type: "page.moved" }
-		| { type: "page.iconChanged" }
-		| { type: "page.trashed" }
-		| { type: "page.restored" }
-		| { type: "page.purged" }
-	);
-
-export type WorkspaceTaskEvent = WorkspaceEventBase & {
-	type: "task.changed";
-	taskId: string;
-};
-
-export type WorkspaceCanvasEvent = WorkspaceEventBase & {
-	type: "canvas.changed";
-	canvasId: string;
-	pageId: string | null;
-};
-
-export type WorkspaceEvent =
-	| WorkspacePageEvent
-	| WorkspaceTaskEvent
-	| WorkspaceCanvasEvent;
-
-/** Ephemeral invalidation hints only. SQLite remains authoritative. */
-export type WorkspaceEventPublisherPort = {
-	publish(event: WorkspaceEvent): Promise<void>;
-};
-
-export type WorkspaceEventSubscription = {
-	unsubscribe(): Promise<void>;
-};
-
-/** Server-side subscription used by the authenticated SSE transport. */
-export type WorkspaceEventSubscriberPort = {
-	isConfigured(): boolean;
-	subscribe(input: {
-		workspaceId: string;
-		onReady(): void;
-		onEvent(event: WorkspaceEvent): void;
-		onError(error: unknown): void;
-	}): WorkspaceEventSubscription | null;
-};
-
-export type WorkspaceEventStreamLease = {
-	release(): Promise<void>;
-};
-
-/** Bounds active SSE streams across every instance serving the same user. */
-export type WorkspaceEventStreamLeasePort = {
-	isConfigured(): boolean;
-	acquire(input: {
-		userId: string;
-		maxConnections: number;
-		ttlMs: number;
-	}): Promise<WorkspaceEventStreamLease | null>;
-};
+export type WorkspacePageEvent = z.infer<typeof WorkspacePageEventSchema>;
+export type WorkspaceTaskEvent = z.infer<typeof WorkspaceTaskEventSchema>;
+export type WorkspaceCanvasEvent = z.infer<typeof WorkspaceCanvasEventSchema>;
+export type WorkspaceEvent = z.infer<typeof WorkspaceEventSchema>;
 
 export function createWorkspacePageEvent(input: {
 	type: WorkspacePageEvent["type"];
@@ -140,75 +78,17 @@ export function workspaceEventRemovesPage(
 	);
 }
 
-function isEventBase(value: unknown): value is Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
-		return false;
-	}
-	const event = value as Record<string, unknown>;
-	return (
-		event.schemaVersion === WORKSPACE_EVENT_SCHEMA_VERSION &&
-		typeof event.workspaceId === "string" &&
-		event.workspaceId.length > 0 &&
-		typeof event.occurredAt === "string"
-	);
-}
-
-export function isWorkspacePageEvent(
+export const isWorkspaceEvent = (value: unknown): value is WorkspaceEvent =>
+	WorkspaceEventSchema.safeParse(value).success;
+export const isWorkspacePageEvent = (
 	value: unknown,
-): value is WorkspacePageEvent {
-	if (!isEventBase(value)) return false;
-	const event = value as Record<string, unknown>;
-	const affectedPageIds = event.affectedPageIds;
-	return (
-		typeof event.pageId === "string" &&
-		event.pageId.length > 0 &&
-		(affectedPageIds === undefined ||
-			(Array.isArray(affectedPageIds) &&
-				affectedPageIds.length > 0 &&
-				affectedPageIds.every(
-					(pageId) => typeof pageId === "string" && pageId.length > 0,
-				))) &&
-		(event.type === "page.created" ||
-			event.type === "page.renamed" ||
-			event.type === "page.contentChanged" ||
-			event.type === "page.moved" ||
-			event.type === "page.iconChanged" ||
-			event.type === "page.trashed" ||
-			event.type === "page.restored" ||
-			event.type === "page.purged")
-	);
-}
-
-export function isWorkspaceTaskEvent(
+): value is WorkspacePageEvent =>
+	WorkspacePageEventSchema.safeParse(value).success;
+export const isWorkspaceTaskEvent = (
 	value: unknown,
-): value is WorkspaceTaskEvent {
-	if (!isEventBase(value)) return false;
-	const event = value as Record<string, unknown>;
-	return (
-		event.type === "task.changed" &&
-		typeof event.taskId === "string" &&
-		event.taskId.length > 0
-	);
-}
-
-export function isWorkspaceCanvasEvent(
+): value is WorkspaceTaskEvent =>
+	WorkspaceTaskEventSchema.safeParse(value).success;
+export const isWorkspaceCanvasEvent = (
 	value: unknown,
-): value is WorkspaceCanvasEvent {
-	if (!isEventBase(value)) return false;
-	const event = value as Record<string, unknown>;
-	return (
-		event.type === "canvas.changed" &&
-		typeof event.canvasId === "string" &&
-		event.canvasId.length > 0 &&
-		(event.pageId === null ||
-			(typeof event.pageId === "string" && event.pageId.length > 0))
-	);
-}
-
-export function isWorkspaceEvent(value: unknown): value is WorkspaceEvent {
-	return (
-		isWorkspacePageEvent(value) ||
-		isWorkspaceTaskEvent(value) ||
-		isWorkspaceCanvasEvent(value)
-	);
-}
+): value is WorkspaceCanvasEvent =>
+	WorkspaceCanvasEventSchema.safeParse(value).success;

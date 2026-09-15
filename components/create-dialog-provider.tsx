@@ -3,7 +3,6 @@
 import { contractErrorMessage } from "@beignet/core/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FilePlus2Icon, ListTodoIcon, ShapesIcon } from "lucide-react";
-import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import {
 	createContext,
 	type FormEvent,
@@ -14,6 +13,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { useCommand } from "@/components/command-palette/registry";
 import {
@@ -38,10 +38,8 @@ import {
 } from "@/features/pages/client/queries";
 import type { BlockJson } from "@/features/pages/schemas";
 import { PAGE_TITLE_MAX_LENGTH } from "@/features/pages/schemas";
-import {
-	createTaskMutationOptions,
-	invalidateTasks,
-} from "@/features/tasks/client/queries";
+import { invalidateTasks } from "@/features/tasks/client/queries";
+import { useTaskMutations } from "@/features/tasks/client/use-task-mutations";
 import {
 	TaskComposer,
 	type TaskSubmissionResult,
@@ -239,13 +237,9 @@ function CreateTaskDialog({
 	onPendingChange: (pending: boolean) => void;
 	workspaceId: string;
 }) {
-	const queryClient = useQueryClient();
 	const currentUser = useCurrentUser();
 	const [pending, setPending] = useState(false);
-	const mutation = useMutation({
-		...createTaskMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
+	const mutations = useTaskMutations(workspaceId);
 
 	function changePending(nextPending: boolean) {
 		setPending(nextPending);
@@ -260,21 +254,7 @@ function CreateTaskDialog({
 		assigneeId?: string | null;
 	}): Promise<TaskSubmissionResult> {
 		try {
-			await mutation.mutateAsync({
-				body: {
-					workspaceId,
-					title: input.title,
-					...(input.dueDate ? { dueDate: input.dueDate } : {}),
-					...(input.dueTime ? { dueTime: input.dueTime } : {}),
-					...(input.reminderOffsetMinutes !== null
-						? { reminderOffsetMinutes: input.reminderOffsetMinutes }
-						: {}),
-					...(input.assigneeId !== undefined
-						? { assigneeId: input.assigneeId }
-						: {}),
-				},
-			});
-			void invalidateTasks(queryClient).catch(() => undefined);
+			await mutations.create(workspaceId, input);
 			return { ok: true };
 		} catch (error) {
 			return {

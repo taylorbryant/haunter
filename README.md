@@ -213,16 +213,22 @@ storage, offline recovery, and troubleshooting.
   rate-limit state in memory.
 - **Scheduled jobs:** Set `CRON_SECRET` before enabling the Vercel Cron Jobs or
   equivalent external scheduler described below.
-- **Workspace live updates:** With the Upstash variables configured, build with
-  `NEXT_PUBLIC_LIVE_UPDATES=true` to refresh workspace lists and metadata after
-  changes from other clients. This stream is separate from page and canvas
-  editing, which use the collaboration worker. SQLite is the source of
-  truth, and polling provides a fallback for workspace updates. Set a distinct
-  `UPSTASH_WORKSPACE_EVENT_PREFIX` for deployments that share one Redis
-  database. Active streams are capped at eight per signed-in user by default;
-  adjust `UPSTASH_WORKSPACE_EVENT_MAX_CONNECTIONS_PER_USER` if needed. Because
-  `NEXT_PUBLIC_` values are embedded at build time, changing them requires a
-  new deployment.
+- **Workspace live updates:** Set the Upstash REST variables above and
+  `REDIS_BROADCAST_URL` to the Redis TCP/TLS connection URL (`rediss://…`), then
+  build with `NEXT_PUBLIC_LIVE_UPDATES=true`. Workspace lists and metadata
+  refresh after changes from other clients; pending edits delay those refreshes.
+  Configure the same Redis URL and prefixes in Next and the collaboration
+  worker so changes made through either process reach connected browsers.
+  Use distinct `REDIS_BROADCAST_PREFIX` and `UPSTASH_WORKSPACE_EVENT_PREFIX`
+  values for unrelated environments sharing a Redis database. The former
+  isolates messages; the latter isolates per-user stream leases.
+  Active streams are capped at eight per signed-in user by default; adjust
+  `UPSTASH_WORKSPACE_EVENT_MAX_CONNECTIONS_PER_USER` if needed. Streams renew
+  every four minutes and recheck workspace membership. A reconnect refreshes
+  cached data to recover changes missed while disconnected. SQLite is the
+  source of truth, and polling provides a fallback for workspace updates.
+  Page and canvas editing use the collaboration worker's WebSocket connections.
+  Changing `NEXT_PUBLIC_` values requires a new build.
 
 ### Authentication origins
 

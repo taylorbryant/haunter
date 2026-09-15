@@ -5,9 +5,9 @@ import { pagePolicy } from "@/features/pages/policy";
 import { appError } from "@/features/shared/errors";
 import { taskPolicy } from "@/features/tasks/policy";
 import { createBetterAuthMcpOAuthRequestVerifier } from "@/infra/agents/better-auth-mcp-oauth-request-verifier";
-import { env } from "@/lib/env";
-import { createDocumentSessionTokens } from "@/infra/documents/session-token";
 import { documentRecovery } from "@/infra/documents/recovery";
+import { createDocumentSessionTokens } from "@/infra/documents/session-token";
+import { env } from "@/lib/env";
 import { mcpResourceUrl } from "@/lib/mcp-configuration";
 import type { AppPorts } from "@/ports";
 
@@ -71,8 +71,7 @@ export const appPorts = definePorts<AppPorts>()({
 		"uow",
 		"storage",
 		"webPush",
-		"workspaceEvents",
+		"broadcast",
 		"workspaceEventStreamLeases",
-		"workspaceEventSubscriptions",
 	],
 });

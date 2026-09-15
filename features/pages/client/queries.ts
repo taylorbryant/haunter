@@ -1,7 +1,7 @@
-import { protectedRefetchInterval } from "@/client/session-recovery";
 import type { ContractUseMutationOptions } from "@beignet/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
+import { protectedRefetchInterval } from "@/client/session-recovery";
 import {
 	createPage,
 	deletePage,
@@ -27,6 +27,7 @@ import type {
 	PageMeta,
 	PageNavigationOutput,
 } from "@/features/pages/schemas";
+import { refreshAfterTaskWrites } from "@/features/tasks/client/refresh";
 
 export function listPagesQueryOptions(workspaceId: string) {
 	return {
@@ -44,7 +45,7 @@ export function getPageQueryOptions(id: string) {
 		// until the normal page poll so mounting does not fetch it twice.
 		staleTime: 30_000,
 		refetchOnMount: false,
-		// Liveblocks events accelerate this refresh, but polling remains the
+		// Workspace events accelerate this refresh, but polling remains the
 		// correctness fallback when live updates are disabled or missed.
 		refetchInterval: protectedRefetchInterval,
 	};
@@ -249,9 +250,9 @@ export function invalidateTrash(queryClient: QueryClient) {
 }
 
 export function invalidatePage(queryClient: QueryClient, id: string) {
-	return Promise.all([
-		rq(getPage).invalidate(queryClient, { path: { id } }),
-		rq(getPageMetadata).invalidate(queryClient, { path: { id } }),
+	return refreshAfterTaskWrites(queryClient, [
+		rq(getPage).filter({ path: { id } }),
+		rq(getPageMetadata).filter({ path: { id } }),
 	]);
 }
 
