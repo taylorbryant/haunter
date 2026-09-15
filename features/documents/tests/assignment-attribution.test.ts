@@ -130,9 +130,49 @@ test("collaborative assignments create durable notifications once, suppress know
 			doc,
 			baseRevision: 2,
 		});
-		expect(offline.assignmentNotifications[0]).toMatchObject({
-			payload: { assignedByUserId: null, assignedByName: "A teammate" },
+		expect(offline.assignmentNotifications).toHaveLength(0);
+		expect(await f.database.db.select().from(schema.notifications)).toHaveLength(
+			1,
+		);
+	} finally {
+		doc.destroy();
+		await f.database.close();
+	}
+});
+
+test("offline task creation and self-assignment persist without notifying the creator", async () => {
+	const f = await documentFixture();
+	const doc = new Y.Doc();
+	try {
+		await seedFixtureBody(f, [task("existing", "")], true);
+		const stored = await f.database.repositories.documents.find(
+			f.scope,
+			f.page.id,
+		);
+		Y.applyUpdate(doc, stored!.state);
+		const tracker = trackAssignmentChanges(doc, () => null);
+		appendDocumentBlocks(doc, [task("offline-self", f.userId)]);
+		patchDocumentBlockProps(doc, {
+			blockId: "existing",
+			blockType: "task",
+			props: { assignee: f.userId },
 		});
+		const result = await persistPageBody(f.ctx, {
+			...f.grant,
+			doc,
+			baseRevision: stored!.revision,
+			assignmentChanges: tracker.capture(),
+		});
+		const tasks = await f.database.repositories.tasks.listByPage(
+			f.scope,
+			f.page.id,
+		);
+		expect(tasks).toHaveLength(2);
+		expect(tasks.every((task) => task.assigneeId === f.userId)).toBe(true);
+		expect(result.assignmentNotifications).toHaveLength(0);
+		expect(await f.database.db.select().from(schema.notifications)).toHaveLength(
+			0,
+		);
 	} finally {
 		doc.destroy();
 		await f.database.close();
