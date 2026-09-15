@@ -110,6 +110,23 @@ export const syntaxHighlightingExtension = SyntaxHighlightingExtension({
 	createHighlighter: () => getHaunterHighlighter(),
 });
 
+// The upstream fence rule preserves blank and unknown labels verbatim, but
+// its language picker only accepts supported IDs. Normalize before insertion.
+const codeBlockInputExtension = createExtension({
+	key: "haunter-code-block-input",
+	runsBefore: ["code-block-keyboard-shortcuts"],
+	inputRules: [
+		{
+			find: /^```(.*?)\s$/,
+			replace: ({ match }) => ({
+				type: "codeBlock",
+				props: { language: normalizeCodeBlockLanguage(match[1]) },
+				content: [],
+			}),
+		},
+	],
+});
+
 const codeBlockUnindentExtension = createExtension({
 	key: "haunter-code-block-unindent",
 	runsBefore: ["code-block-keyboard-shortcuts"],
@@ -168,18 +185,33 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 	...baseCodeBlockSpec,
 	extensions: [
 		...(baseCodeBlockSpec.extensions ?? []),
+		codeBlockInputExtension,
 		codeBlockUnindentExtension,
 	],
 	implementation: {
 		...baseCodeBlockSpec.implementation,
+		meta: {
+			...baseCodeBlockSpec.implementation.meta,
+			highlight: (block) => normalizeCodeBlockLanguage(block.props.language),
+		},
 		render(
 			...args: Parameters<typeof baseCodeBlockSpec.implementation.render>
 		) {
-			const [block] = args;
-			const rendered = baseCodeBlockSpec.implementation.render.apply(
-				this,
-				args,
-			);
+			const [block, ...renderArgs] = args;
+			// Yjs updates and old saved documents bypass initialContent cleanup.
+			// Sanitize the render input before the upstream picker can throw,
+			// without rewriting shared content or adding a history entry.
+			const normalizedBlock = {
+				...block,
+				props: {
+					...block.props,
+					language: normalizeCodeBlockLanguage(block.props.language),
+				},
+			};
+			const rendered = baseCodeBlockSpec.implementation.render.apply(this, [
+				normalizedBlock,
+				...renderArgs,
+			]);
 
 			const sourceNodes =
 				rendered.dom instanceof DocumentFragment
@@ -191,12 +223,6 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 					node.querySelector(":scope > select") !== null,
 			);
 			const languageSelect = selectWrapper?.querySelector("select");
-			const normalizedLanguage = normalizeCodeBlockLanguage(
-				block.props.language,
-			);
-			if (languageSelect && normalizedLanguage) {
-				languageSelect.value = normalizedLanguage;
-			}
 			const pre = sourceNodes.find(
 				(node): node is HTMLPreElement => node instanceof HTMLPreElement,
 			);
