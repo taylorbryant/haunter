@@ -28,8 +28,10 @@ export async function createTaskAssignmentNotification(
 	previousAssigneeId: string | null,
 	actor: TaskAssignmentActor | undefined,
 ): Promise<Notification | null> {
+	// Offline sync can lose attribution, so an unknown actor may be the assignee.
 	if (
 		!actor ||
+		actor.userId === null ||
 		task.completed ||
 		task.assigneeId === null ||
 		task.assigneeId === previousAssigneeId ||
