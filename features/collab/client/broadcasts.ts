@@ -9,6 +9,11 @@ import {
 } from "@beignet/react-query";
 import { matchQuery, type QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
+import {
+	clearPageAgentActivity,
+	receivePageAgentActivity,
+} from "@/features/agents/client/page-activity-cache";
+import { isPageAgentActivity } from "@/features/agents/page-activity";
 import { listPages } from "@/features/pages/contracts";
 import type { PageMeta } from "@/features/pages/schemas";
 import { workspaceChanges } from "../channels";
@@ -17,6 +22,7 @@ import {
 	workspaceEventRemovesPage,
 } from "../workspace-events";
 import { createWorkspaceRefreshGate } from "./refresh-gate";
+import type { WorkspaceEventClock } from "./event-clock";
 import {
 	workspaceEventQueries,
 	workspaceReconciliationQueries,
@@ -25,14 +31,18 @@ import {
 export function subscribeToWorkspaceChanges(options: {
 	client: BroadcastClient;
 	queryClient: QueryClient;
+	userId: string;
 	workspaceId: string;
+	getClock(): WorkspaceEventClock | null;
 	getCurrentPageId(): string | undefined;
 	onPageRemoved(pageId: string): void;
 	onError?(error: unknown): void;
 	onSync?(info: BroadcastConnectionInfo): void;
 	refreshGate?: BroadcastRefreshGate;
 }) {
-	const { queryClient, workspaceId } = options;
+	const { queryClient, userId, workspaceId } = options;
+	const clearPresence = () =>
+		clearPageAgentActivity(queryClient, userId, workspaceId);
 	const gate = options.refreshGate ?? createWorkspaceRefreshGate(queryClient);
 	const pages = rq(listPages).filter({ path: { workspaceId } });
 	let closed = false;
@@ -78,7 +88,19 @@ export function subscribeToWorkspaceChanges(options: {
 			queryClient,
 			refreshGate: gate,
 			invalidates({ data }) {
-				if (data.workspaceId !== workspaceId) return [];
+				if (closed || data.workspaceId !== workspaceId) return [];
+				if (isPageAgentActivity(data)) {
+					const clock = options.getClock();
+					if (clock)
+						receivePageAgentActivity(
+							queryClient,
+							userId,
+							workspaceId,
+							data,
+							clock,
+						);
+					return [];
+				}
 				const pageId = options.getCurrentPageId();
 				if (
 					pageId &&
@@ -90,19 +112,27 @@ export function subscribeToWorkspaceChanges(options: {
 			},
 			reconciles: workspaceReconciliationQueries(workspaceId),
 			onSync(info) {
+				if (closed) return;
+				clearPresence();
 				requiredFetch = fetchSequence + 1;
 				pageToReconcile = options.getCurrentPageId();
 				options.onSync?.(info);
+			},
+			onStatusChange(status) {
+				if (!closed && status !== "connected") clearPresence();
 			},
 			onError: options.onError,
 		});
 	} catch (error) {
 		stopCache();
+		clearPresence();
 		throw error;
 	}
 	return () => {
+		if (closed) return;
 		closed = true;
 		stopCache();
+		clearPresence();
 		subscription.unsubscribe();
 	};
 }

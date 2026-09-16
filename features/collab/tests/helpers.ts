@@ -1,6 +1,7 @@
 import type { InferChannelEvent } from "@beignet/core/broadcasting";
 import type {
 	BroadcastClient,
+	BroadcastClientStatus,
 	BroadcastConnectionInfo,
 } from "@beignet/core/broadcasting/client";
 import {
@@ -66,6 +67,7 @@ export function controlledBroadcastClient() {
 			event: InferChannelEvent<typeof workspaceChanges>,
 		): void | Promise<void>;
 		onSync(info: BroadcastConnectionInfo): void | Promise<void>;
+		onStatusChange?(status: BroadcastClientStatus): void;
 	};
 	let observer: Observer | undefined;
 	const client: BroadcastClient = {
@@ -91,5 +93,7 @@ export function controlledBroadcastClient() {
 		event: (data: Parameters<Observer["onEvent"]>[0]["data"]) =>
 			observer?.onEvent({ event: "changed", data }),
 		sync: () => observer?.onSync({ reason: "interruption" }),
+		status: (status: BroadcastClientStatus) =>
+			observer?.onStatusChange?.(status),
 	};
 }

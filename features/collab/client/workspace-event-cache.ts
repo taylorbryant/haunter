@@ -1,5 +1,6 @@
 import type { QueryFilters } from "@tanstack/react-query";
 import { rq } from "@/client";
+import { isPageAgentActivity } from "@/features/agents/page-activity";
 import {
 	getCanvas,
 	getCanvasNavigation,
@@ -62,6 +63,7 @@ export function workspaceEventQueries(
 	event: WorkspaceEvent,
 ): QueryFilters[] {
 	if (event.workspaceId !== workspaceId) return [];
+	if (isPageAgentActivity(event)) return [];
 	if (isWorkspaceTaskEvent(event)) return taskQueries(workspaceId);
 	if (isWorkspaceCanvasEvent(event))
 		return [

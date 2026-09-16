@@ -35,7 +35,9 @@ export function WorkspaceEventSubscriber({
 		const unsubscribe = subscribeToWorkspaceChanges({
 			client,
 			queryClient,
+			userId: currentUserId,
 			workspaceId,
+			getClock: client.getClock,
 			getCurrentPageId: () => activePageIdRef.current,
 			onPageRemoved(pageId) {
 				if (activePageIdRef.current === pageId)

@@ -1,15 +1,19 @@
 import { describe, expect, it } from "bun:test";
-import {
-	BroadcastClientError,
-	createBroadcastClient,
-} from "@beignet/core/broadcasting/client";
+import { BroadcastClientError } from "@beignet/core/broadcasting/client";
 import { createStaticAuth } from "@beignet/core/ports";
 import { defineRoutes } from "@beignet/core/server";
 import { createTestPorts } from "@beignet/core/testing";
 import { createInMemoryDevtools } from "@beignet/devtools";
 import { createBroadcastRoute } from "@beignet/next";
 import { createTestApp } from "@beignet/web/testing";
+import { QueryClient } from "@tanstack/react-query";
 import type { AppContext } from "@/app-context";
+import { createAppBroadcastClient } from "@/client/broadcasts";
+import {
+	pageAgentActivityKey,
+	type CachedPageAgentActivity,
+} from "@/features/agents/client/page-activity-cache";
+import { activity } from "@/features/agents/tests/page-activity-fixture";
 import { appPorts } from "@/infra/port-wiring";
 import { routeAuth } from "@/lib/route-auth";
 import type { AppTransactionPorts } from "@/ports";
@@ -27,6 +31,9 @@ import {
 import { channels } from "@/server/broadcasts";
 import { type AppServiceContextInput, appContext } from "@/server/context";
 import { workspaceChanges } from "../channels";
+import { subscribeToWorkspaceChanges } from "../client/broadcasts";
+import { WORKSPACE_EVENT_TIME_HEADER } from "../headers";
+import { withWorkspaceEventClock } from "../server/event-clock";
 import { createWorkspaceTaskEvent } from "../workspace-events";
 import { deferred, memoryBroadcast, until } from "./helpers";
 
@@ -98,13 +105,18 @@ async function fixture(
 		context: appContext,
 		routes: defineRoutes<AppContext>([]),
 	});
-	const route = createBroadcastRoute({
+	const adapter = createBroadcastRoute({
 		server: app.server,
 		channels,
 		hooks: [routeAuth.required()],
 		admit: admitWorkspaceBroadcast,
 		maxLifetimeMs: options.lifetime ?? WORKSPACE_BROADCAST_LIFETIME_MS,
 	});
+	const route = {
+		async GET(request: Request) {
+			return withWorkspaceEventClock(await adapter.GET(request));
+		},
+	};
 	function request(workspaceId = "workspace_1") {
 		const url = new URL("http://beignet.test/api/broadcasts");
 		url.searchParams.set(
@@ -118,10 +130,9 @@ async function fixture(
 		);
 		return new Request(url);
 	}
-	const client = createBroadcastClient({
-		url: "http://beignet.test/api/broadcasts",
-		fetch: (input, init) => route.GET(new Request(input, init)),
-	});
+	const client = createAppBroadcastClient((input, init) =>
+		route.GET(new Request(new URL(String(input), "http://beignet.test"), init)),
+	);
 	return {
 		bus,
 		route,
@@ -140,6 +151,63 @@ async function fixture(
 }
 
 describe("workspace broadcast route", () => {
+	it("delivers agent activity through the real stream and clears it on interruption", async () => {
+		const f = await fixture();
+		const queryClient = new QueryClient();
+		const key = pageAgentActivityKey("user_1", "workspace_1");
+		let synced = 0;
+		const unsubscribe = subscribeToWorkspaceChanges({
+			client: f.client,
+			queryClient,
+			userId: "user_1",
+			workspaceId: "workspace_1",
+			getClock: f.client.getClock,
+			getCurrentPageId: () => undefined,
+			onPageRemoved() {},
+			onSync() {
+				synced++;
+			},
+		});
+		try {
+			await until(() => synced === 1);
+			expect(f.client.getClock()?.serverTime).toBeGreaterThan(0);
+			const now = new Date().toISOString();
+			const event = activity({
+				workspaceId: "workspace_1",
+				startedAt: now,
+				occurredAt: now,
+			});
+			for (const phase of ["active", "completed"] as const) {
+				await f.bus.port.publish(workspaceChanges, {
+					params: { workspaceId: "workspace_1" },
+					event: "changed",
+					data: { ...event, phase },
+				});
+				await until(
+					() =>
+						queryClient.getQueryData<CachedPageAgentActivity[]>(key)?.[0]
+							?.phase === phase,
+				);
+			}
+			f.bus.disconnect();
+			await until(
+				() =>
+					queryClient.getQueryData<CachedPageAgentActivity[]>(key)?.length ===
+					0,
+			);
+			await until(() => synced === 2);
+			expect(f.client.getClock()?.serverTime).toBeGreaterThan(0);
+			expect(queryClient.getQueryData<CachedPageAgentActivity[]>(key)).toEqual(
+				[],
+			);
+		} finally {
+			unsubscribe();
+			queryClient.clear();
+			await f.close();
+		}
+		expect(f.client.getClock()).toBeNull();
+	});
+
 	it("streams typed events only for the authorized workspace and cleans up", async () => {
 		const f = await fixture();
 		try {
@@ -183,6 +251,9 @@ describe("workspace broadcast route", () => {
 		try {
 			const response = await f.route.GET(f.request());
 			expect(response.status).toBe(200);
+			expect(
+				Number(response.headers.get(WORKSPACE_EVENT_TIME_HEADER)),
+			).toBeGreaterThan(0);
 			if (!response.body) throw new Error("Missing broadcast stream");
 			const reader = response.body.getReader();
 			let text = "";
@@ -205,6 +276,7 @@ describe("workspace broadcast route", () => {
 		try {
 			const response = await f.route.GET(f.request());
 			expect(response.status).toBe(status);
+			expect(response.headers.has(WORKSPACE_EVENT_TIME_HEADER)).toBe(false);
 			if (status === 429)
 				expect(response.headers.get("retry-after")).toBe("30");
 			expect(f.bus.subscriberCount()).toBe(0);

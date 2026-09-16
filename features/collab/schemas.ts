@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PageAgentActivitySchema } from "@/features/agents/page-activity";
 
 const WorkspaceEventBase = z.object({
 	schemaVersion: z.literal(1),
@@ -33,4 +34,5 @@ export const WorkspaceEventSchema = z.discriminatedUnion("type", [
 	WorkspacePageEventSchema,
 	WorkspaceTaskEventSchema,
 	WorkspaceCanvasEventSchema,
+	PageAgentActivitySchema,
 ]);

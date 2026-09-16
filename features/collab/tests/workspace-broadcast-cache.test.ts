@@ -5,6 +5,12 @@ import {
 	QueryObserver,
 } from "@tanstack/react-query";
 import {
+	pageAgentActivityKey,
+	type CachedPageAgentActivity,
+} from "@/features/agents/client/page-activity-cache";
+import { activity } from "@/features/agents/tests/page-activity-fixture";
+import type { WorkspaceEventClock } from "../client/event-clock";
+import {
 	getCanvasQueryOptions,
 	listCanvasesQueryOptions,
 } from "@/features/canvases/client/queries";
@@ -56,10 +62,16 @@ function fixture() {
 	const broadcast = controlledBroadcastClient();
 	const removed: string[] = [];
 	let currentPageId = "open_page";
+	let clock: WorkspaceEventClock | null = {
+		serverTime: Date.parse(activity().occurredAt),
+		receivedAt: performance.now(),
+	};
 	const unsubscribe = subscribeToWorkspaceChanges({
 		client: broadcast.client,
 		queryClient,
+		userId: "user_1",
 		workspaceId: "workspace_1",
+		getClock: () => clock,
 		getCurrentPageId: () => currentPageId,
 		onPageRemoved: (pageId) => {
 			removed.push(pageId);
@@ -73,6 +85,9 @@ function fixture() {
 		writeTask,
 		removed,
 		unsubscribe,
+		setClock(value: WorkspaceEventClock | null) {
+			clock = value;
+		},
 		navigate(pageId: string) {
 			currentPageId = pageId;
 		},
@@ -80,6 +95,93 @@ function fixture() {
 }
 
 describe("workspace broadcast cache", () => {
+	it("receives presence immediately during a pending write without invalidating content", async () => {
+		const f = fixture();
+		const keys = [
+			listPagesQueryOptions("workspace_1").queryKey,
+			listTasksQueryOptions("workspace_1", "open").queryKey,
+			listNotificationsQueryOptions().queryKey,
+		];
+		for (const key of keys) f.queryClient.setQueryData(key, {});
+		const pending = deferred();
+		const write = f.writeTask("task_1", () => pending.promise);
+		const event = activity({ workspaceId: "workspace_1" });
+		const presence = pageAgentActivityKey("user_1", "workspace_1");
+		try {
+			await f.event(event);
+			expect(f.queryClient.getQueryData(presence)).toMatchObject([
+				{ phase: "active" },
+			]);
+			await f.event({ ...event, phase: "completed" });
+			expect(f.queryClient.getQueryData(presence)).toMatchObject([
+				{ phase: "completed" },
+			]);
+			for (const key of keys)
+				expect(f.queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+		} finally {
+			pending.resolve();
+			await write;
+		}
+		for (const key of keys)
+			expect(f.queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+	});
+
+	it("clears scoped presence on disconnect, renewal, and teardown", async () => {
+		const f = fixture();
+		const event = activity({ workspaceId: "workspace_1" });
+		const key = pageAgentActivityKey("user_1", "workspace_1");
+		const otherKeys = [
+			pageAgentActivityKey("user_2", "workspace_1"),
+			pageAgentActivityKey("user_1", "workspace_2"),
+		];
+		for (const other of otherKeys) f.queryClient.setQueryData(other, [event]);
+		await f.event(activity({ workspaceId: "workspace_2" }));
+		expect(f.queryClient.getQueryData(key)).toBeUndefined();
+		for (const status of ["reconnecting", "blocked", "closed"] as const) {
+			await f.event(event);
+			expect(
+				f.queryClient.getQueryData<CachedPageAgentActivity[]>(key),
+			).toHaveLength(1);
+			f.status(status);
+			expect(
+				f.queryClient.getQueryData<CachedPageAgentActivity[]>(key),
+			).toEqual([]);
+		}
+		await f.event(event);
+		await f.sync();
+		expect(f.queryClient.getQueryData<CachedPageAgentActivity[]>(key)).toEqual(
+			[],
+		);
+		await f.event(event);
+		f.unsubscribe();
+		await f.event(event);
+		expect(f.queryClient.getQueryData<CachedPageAgentActivity[]>(key)).toEqual(
+			[],
+		);
+		for (const other of otherKeys)
+			expect(
+				f.queryClient.getQueryData<ReturnType<typeof activity>[]>(other),
+			).toEqual([event]);
+	});
+
+	it("ignores uncalibrated presence while continuing ordinary workspace updates", async () => {
+		const f = fixture();
+		f.setClock(null);
+		await f.event(activity({ workspaceId: "workspace_1" }));
+		expect(
+			f.queryClient.getQueryData(pageAgentActivityKey("user_1", "workspace_1")),
+		).toBeUndefined();
+		const key = listTasksQueryOptions("workspace_1", "open").queryKey;
+		f.queryClient.setQueryData(key, { items: [] });
+		await f.event(
+			createWorkspaceTaskEvent({
+				workspaceId: "workspace_1",
+				taskId: "task_1",
+			}),
+		);
+		expect(f.queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+	});
+
 	it("coalesces hints and renewal behind pending optimistic mutations", async () => {
 		const f = fixture();
 		const key = listPagesQueryOptions("workspace_1").queryKey;
