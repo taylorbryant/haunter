@@ -6,6 +6,7 @@ import {
 import { APIError } from "better-auth/api";
 import type { AppContext, AppRuntimePorts } from "@/app-context";
 import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
+import { startPageAgentActivity } from "@/features/agents/server/page-activity";
 import {
 	recordAgentActivity,
 	recordMcpConnectionActivity,
@@ -47,6 +48,10 @@ export async function createHaunterAgentCapabilityExecutor(
 			? createHaunterAgentCapabilityRegistry(dependencies)
 			: agentCapabilityRegistry;
 	const server = await dependencies.getServer();
+	const pageActivity = new WeakMap<
+		AppContext,
+		(phase: "completed" | "failed") => Promise<void>
+	>();
 
 	const executor = createAgentCapabilityExecutor({
 		registry,
@@ -54,6 +59,11 @@ export async function createHaunterAgentCapabilityExecutor(
 		hooks: [
 			async (event) => {
 				if (event.phase === "start") return;
+				if (event.ctx) {
+					const finish = pageActivity.get(event.ctx);
+					pageActivity.delete(event.ctx);
+					await finish?.(event.phase === "end" ? "completed" : "failed");
+				}
 				const error =
 					event.phase === "error" ? executionError(event.error) : null;
 				if (
@@ -96,7 +106,7 @@ export async function createHaunterAgentCapabilityExecutor(
 				});
 			},
 		],
-		async createContext({ principal, input }) {
+		async createContext({ principal, input, name }) {
 			const workspaceId = inputRecord(input)?.workspaceId;
 			if (typeof workspaceId !== "string") {
 				return server.createServiceContext({
@@ -111,10 +121,20 @@ export async function createHaunterAgentCapabilityExecutor(
 					message: "The acting user is not a member of this workspace.",
 				});
 			}
-			return server.createServiceContext({
+			const ctx = await server.createServiceContext({
 				asUser: { id: principal.userId, role },
 				tenantId: workspaceId,
 			});
+			// The executor's start hook runs before input/grant validation. Begin
+			// presence here, using this invocation's authorized service context.
+			const finish = await startPageAgentActivity({
+				ctx,
+				principal,
+				capability: name,
+				args: inputRecord(input),
+			});
+			if (finish) pageActivity.set(ctx, finish);
+			return ctx;
 		},
 	});
 
@@ -164,6 +184,7 @@ export async function executeRemoteMcpCapability(
 				transport: "remote-mcp",
 				remoteConnectionId: connection.id,
 				remoteClientId: input.clientId,
+				remoteClientName: connection.clientName,
 				authorizedWorkspaceIds: connection.workspaceIds,
 			},
 			input: input.arguments ?? {},

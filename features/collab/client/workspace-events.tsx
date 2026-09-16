@@ -8,6 +8,11 @@ import { useProtectedRequestsEnabled } from "@/components/session-recovery-provi
 import { getBrowserSessionRecovery } from "@/client/session-recovery";
 import { useCurrentUser } from "@/components/app-session-provider";
 import {
+	clearPageAgentActivity,
+	receivePageAgentActivity,
+} from "@/features/agents/client/page-activity-cache";
+import { isPageAgentActivity } from "@/features/agents/page-activity";
+import {
 	isWorkspaceCanvasEvent,
 	isWorkspaceEvent,
 	isWorkspaceTaskEvent,
@@ -86,10 +91,23 @@ export function WorkspaceEventSubscriber({
 			if (disposed) return;
 			unbind = bindWorkspaceEvents(workspaceId, {
 				onConnectionError() {
+					clearPageAgentActivity(queryClient, currentUserId, workspaceId);
 					void getBrowserSessionRecovery()?.check();
 				},
-				onEvent(event) {
+				onEvent(event, clock) {
+					if (disposed) return;
 					if (!isWorkspaceEvent(event) || event.workspaceId !== workspaceId) {
+						return;
+					}
+					if (isPageAgentActivity(event)) {
+						if (!clock) return;
+						receivePageAgentActivity(
+							queryClient,
+							currentUserId,
+							workspaceId,
+							event,
+							clock,
+						);
 						return;
 					}
 					if (isWorkspaceTaskEvent(event)) {
@@ -115,6 +133,7 @@ export function WorkspaceEventSubscriber({
 					scheduleFlush();
 				},
 				onConnected() {
+					clearPageAgentActivity(queryClient, currentUserId, workspaceId);
 					const currentPageId = activePageIdRef.current;
 					void reconcileWorkspaceEventConnection(
 						queryClient,
@@ -134,6 +153,7 @@ export function WorkspaceEventSubscriber({
 		});
 		return () => {
 			disposed = true;
+			clearPageAgentActivity(queryClient, currentUserId, workspaceId);
 			if (flushTimer) clearTimeout(flushTimer);
 			unbind?.();
 		};

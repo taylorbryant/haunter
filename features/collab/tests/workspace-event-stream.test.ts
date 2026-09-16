@@ -54,6 +54,7 @@ describe("workspace event SSE stream", () => {
 	it("frames events and releases the Redis subscription on disconnect", async () => {
 		const fixture = createSubscriberFixture();
 		let leaseReleaseCount = 0;
+		const beforeConnect = Date.now();
 		const response = createWorkspaceEventStream({
 			workspaceId: "workspace_1",
 			signal: new AbortController().signal,
@@ -80,9 +81,13 @@ describe("workspace event SSE stream", () => {
 		expect(reader).toBeDefined();
 		const decoder = new TextDecoder();
 		const connected = await reader?.read();
-		expect(decoder.decode(connected?.value)).toBe(
-			"event: connected\ndata: {}\n\n",
+		const connectedText = decoder.decode(connected?.value);
+		const { serverTime } = JSON.parse(connectedText.split("data: ")[1] ?? "{}");
+		expect(connectedText).toBe(
+			`event: connected\ndata: ${JSON.stringify({ serverTime })}\n\n`,
 		);
+		expect(serverTime).toBeGreaterThanOrEqual(beforeConnect);
+		expect(serverTime).toBeLessThanOrEqual(Date.now());
 
 		const event = createWorkspaceTaskEvent({
 			workspaceId: "workspace_1",

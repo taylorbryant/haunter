@@ -1,3 +1,8 @@
+import {
+	isPageAgentActivity,
+	type PageAgentActivity,
+} from "@/features/agents/page-activity";
+
 export const WORKSPACE_EVENT_SCHEMA_VERSION = 1 as const;
 
 type WorkspaceEventBase = {
@@ -38,9 +43,10 @@ export type WorkspaceCanvasEvent = WorkspaceEventBase & {
 export type WorkspaceEvent =
 	| WorkspacePageEvent
 	| WorkspaceTaskEvent
-	| WorkspaceCanvasEvent;
+	| WorkspaceCanvasEvent
+	| PageAgentActivity;
 
-/** Ephemeral invalidation hints only. SQLite remains authoritative. */
+/** Ephemeral invalidation and presence hints. SQLite remains authoritative. */
 export type WorkspaceEventPublisherPort = {
 	publish(event: WorkspaceEvent): Promise<void>;
 };
@@ -207,6 +213,7 @@ export function isWorkspaceCanvasEvent(
 
 export function isWorkspaceEvent(value: unknown): value is WorkspaceEvent {
 	return (
+		isPageAgentActivity(value) ||
 		isWorkspacePageEvent(value) ||
 		isWorkspaceTaskEvent(value) ||
 		isWorkspaceCanvasEvent(value)
