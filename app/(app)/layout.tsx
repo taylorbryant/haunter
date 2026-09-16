@@ -10,6 +10,7 @@ import { DeviceTimeProvider } from "@/components/device-time-provider";
 import { HeaderBreadcrumbs } from "@/components/header-breadcrumbs";
 import { HeaderCanvasActions } from "@/components/header-canvas-actions";
 import { HeaderPageActions } from "@/components/header-page-actions";
+import { HeaderPageAgents } from "@/components/header-page-agents";
 import { HeaderSaveIndicator } from "@/components/header-save-indicator";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -105,6 +106,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 										/>
 										<HeaderBreadcrumbs />
 										<HeaderSaveIndicator />
+										<HeaderPageAgents />
 										<HeaderPageActions />
 										<HeaderCanvasActions />
 									</header>

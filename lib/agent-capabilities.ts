@@ -8,6 +8,7 @@ export type AgentPrincipal = {
 	transport?: "agent-auth" | "remote-mcp";
 	remoteConnectionId?: string;
 	remoteClientId?: string;
+	remoteClientName?: string | null;
 	authorizedWorkspaceIds?: readonly string[];
 };
 

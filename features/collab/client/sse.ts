@@ -1,6 +1,10 @@
 "use client";
 
 import type { WorkspaceEvent } from "@/features/collab/workspace-events";
+import {
+	readWorkspaceEventClock,
+	type WorkspaceEventClock,
+} from "./event-clock";
 
 const INITIAL_RECONNECT_DELAY_MS = 1_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
@@ -9,7 +13,7 @@ const MAX_RECONNECT_DELAY_MS = 30_000;
 export function bindWorkspaceEvents(
 	workspaceId: string,
 	input: {
-		onEvent(event: WorkspaceEvent): void;
+		onEvent(event: WorkspaceEvent, clock: WorkspaceEventClock | null): void;
 		onConnected(): void;
 		onConnectionError?(): void;
 	},
@@ -21,24 +25,39 @@ export function bindWorkspaceEvents(
 
 	const connect = () => {
 		if (disposed) return;
-		source = new EventSource(
+		const connection = new EventSource(
 			`/api/workspaces/${encodeURIComponent(workspaceId)}/events`,
 		);
-		source.addEventListener("connected", () => {
+		source = connection;
+		let clock: WorkspaceEventClock | null = null;
+		connection.addEventListener("connected", (event) => {
+			if (disposed || source !== connection) return;
+			const receivedAt = performance.now();
+			try {
+				clock = readWorkspaceEventClock(
+					JSON.parse((event as MessageEvent<string>).data),
+					receivedAt,
+				);
+			} catch {
+				clock = null;
+			}
 			reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
 			input.onConnected();
 		});
-		source.addEventListener("workspace-event", (event) => {
+		connection.addEventListener("workspace-event", (event) => {
+			if (disposed || source !== connection) return;
 			try {
-				input.onEvent(JSON.parse((event as MessageEvent<string>).data));
+				input.onEvent(JSON.parse((event as MessageEvent<string>).data), clock);
 			} catch {
 				// Ignore malformed transport data; the next valid event or reconnect
 				// refresh restores the authoritative SQLite projections.
 			}
 		});
-		source.addEventListener("error", () => {
+		connection.addEventListener("error", () => {
+			if (disposed || source !== connection) return;
+			clock = null;
 			input.onConnectionError?.();
-			source?.close();
+			connection.close();
 			source = null;
 			if (disposed || reconnectTimer) return;
 			reconnectTimer = setTimeout(() => {

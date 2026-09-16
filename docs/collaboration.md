@@ -31,6 +31,32 @@ not by itself prove that it has been saved to the database.
 Optional workspace live updates use a separate event stream to refresh lists
 and metadata. They do not carry page bodies or canvas edits.
 
+### Agent presence in page headers
+
+With workspace live updates enabled (Upstash configured and
+`NEXT_PUBLIC_LIVE_UPDATES=true`), page headers show MCP connections reading,
+appending to, updating, archiving, or restoring that page. Click the agent
+indicator to see its connection name, the member who connected it, and its
+current or most recent action. Multiple connections share one participant list.
+On smaller screens, the header uses a compact agent icon.
+
+Presence starts only after capability, membership, and page authorization checks.
+It describes an executing tool call, not the agent's thinking between calls.
+Completed or failed calls remain visible for 15 seconds; a start without a
+completion expires after 60 seconds. Disconnecting the live-update stream clears
+presence. Events are ephemeral and are not replayed when someone opens the page
+or reconnects. Page content, prompts, and error details are not broadcast as
+presence. A failed presence publication does not fail the MCP operation.
+Each live-update connection supplies a server-time reference. The browser uses
+that reference to estimate event age, then expires indicators using elapsed time
+instead of its system clock. Reconnecting clears old presence and establishes a
+fresh reference. Network latency makes this timing approximate. If a connection
+does not supply a valid time reference, presence stays hidden while ordinary
+workspace updates continue.
+Presence lookups and initial publication share a one-second deadline. If the
+lookups exceed it, the MCP action continues without an indicator and still runs
+its normal authorization checks. Timed-out lookups cannot publish activity later.
+
 ## Worker deployment
 
 The deployment entrypoint is [Dockerfile.collaboration](../Dockerfile.collaboration).

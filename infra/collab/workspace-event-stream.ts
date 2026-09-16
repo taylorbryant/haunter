@@ -61,7 +61,10 @@ export function createWorkspaceEventStream(input: {
 				subscription = input.subscriptions.subscribe({
 					workspaceId: input.workspaceId,
 					onReady() {
-						stream.send({ event: "connected", data: {} });
+						stream.send({
+							event: "connected",
+							data: { serverTime: Date.now() },
+						});
 					},
 					onEvent(event) {
 						stream.send({ event: "workspace-event", data: event });
