@@ -89,10 +89,10 @@ export async function pageActivityFixture(
 					updatedAt: new Date(),
 				},
 			]),
-			workspaceEvents: createTestWorkspaceEventPublisher(events),
-			workspaceEventSubscriptions: {
+			broadcast: createTestWorkspaceEventPublisher(events),
+			workspaceEventStreamLeases: {
 				isConfigured: () => options.configured ?? true,
-				subscribe: () => null,
+				acquire: async () => null,
 			},
 		},
 	});

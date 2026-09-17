@@ -1,3 +1,4 @@
+import type { BroadcastPort } from "@beignet/core/broadcasting/server";
 import type { ErrorReporterPort } from "@beignet/core/error-reporting";
 import type { IdempotencyPort } from "@beignet/core/idempotency";
 import type { MailerPort } from "@beignet/core/mail";
@@ -25,18 +26,14 @@ import type {
 	CanvasRepository,
 } from "@/features/canvases/ports";
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
+import type { WorkspaceEventStreamLeasePort } from "@/features/collab/ports";
 import type {
-	WorkspaceEventPublisherPort,
-	WorkspaceEventStreamLeasePort,
-	WorkspaceEventSubscriberPort,
-} from "@/features/collab/workspace-events";
-import type { MemberRepository } from "@/features/members/ports";
-import type {
+	DocumentMaintenancePort,
+	DocumentRecoveryPort,
 	DocumentRepository,
 	DocumentSessionPort,
-	DocumentRecoveryPort,
-	DocumentMaintenancePort,
 } from "@/features/documents/ports";
+import type { MemberRepository } from "@/features/members/ports";
 import type {
 	NotificationRepository,
 	WebPushPort,
@@ -127,7 +124,6 @@ export type AppPorts = {
 	uow: UnitOfWorkPort<AppTransactionPorts>;
 	storage: StoragePort;
 	webPush: WebPushPort;
-	workspaceEvents: WorkspaceEventPublisherPort;
+	broadcast: BroadcastPort;
 	workspaceEventStreamLeases: WorkspaceEventStreamLeasePort;
-	workspaceEventSubscriptions: WorkspaceEventSubscriberPort;
 };

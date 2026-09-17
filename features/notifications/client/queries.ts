@@ -1,7 +1,7 @@
-import { protectedRefetchInterval } from "@/client/session-recovery";
 import type { ContractUseMutationOptions } from "@beignet/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
+import { protectedRefetchInterval } from "@/client/session-recovery";
 import {
 	getNotificationSettings,
 	initializeNotificationTimezone,
@@ -19,10 +19,14 @@ import type {
 	NotificationSettings,
 	UpdateNotificationPreferences,
 } from "@/features/notifications/schemas";
+import { refreshAfterTaskWrites } from "@/features/tasks/client/refresh";
 
-export type NotificationsCacheSnapshot = Array<
-	[QueryKey, ListNotificationsOutput | undefined]
->;
+export type NotificationRemovalCacheSnapshot = Array<{
+	queryKey: QueryKey;
+	item: Notification | undefined;
+	previousIndex: number;
+	unreadDelta: number;
+}>;
 
 export type NotificationReadCacheSnapshot = Array<{
 	queryKey: QueryKey;
@@ -89,7 +93,7 @@ export const unsubscribePushMutationOptions = () =>
 export const testPushMutationOptions = () => rq(testPush).mutationOptions();
 
 export function invalidateNotifications(queryClient: QueryClient) {
-	return rq(listNotifications).invalidate(queryClient);
+	return refreshAfterTaskWrites(queryClient, [rq(listNotifications).filter()]);
 }
 
 export async function markNotificationReadInCache(
@@ -97,7 +101,8 @@ export async function markNotificationReadInCache(
 	item: Pick<Notification, "id" | "readAt">,
 ): Promise<NotificationReadCacheSnapshot> {
 	const filter = rq(listNotifications).filter();
-	await queryClient.cancelQueries(filter, { revert: false, silent: true });
+	// Return canceled queries to idle so invalidateNotifications can reconcile.
+	await queryClient.cancelQueries(filter);
 	const optimisticReadAt = new Date().toISOString();
 	const operationId = crypto.randomUUID();
 	const snapshot: NotificationReadCacheSnapshot = [];
@@ -138,7 +143,7 @@ export async function markAllNotificationsReadInCache(
 	queryClient: QueryClient,
 ): Promise<NotificationReadCacheSnapshot> {
 	const filter = rq(listNotifications).filter();
-	await queryClient.cancelQueries(filter, { revert: false, silent: true });
+	await queryClient.cancelQueries(filter);
 	const optimisticReadAt = new Date().toISOString();
 	const operationId = crypto.randomUUID();
 	const snapshot: NotificationReadCacheSnapshot = [];
@@ -251,36 +256,63 @@ export function commitNotificationReadCache(
 export async function removeNotificationFromCache(
 	queryClient: QueryClient,
 	item: Pick<Notification, "id" | "readAt">,
-): Promise<NotificationsCacheSnapshot> {
-	const filter = rq(listNotifications).filter();
-	await queryClient.cancelQueries(filter, { revert: false, silent: true });
-	const snapshot: NotificationsCacheSnapshot = rq(listNotifications)
-		.cacheEntries(queryClient)
-		.map(({ queryKey, data }) => [queryKey, data]);
-	rq(listNotifications).updateCachedQueries(queryClient, {
-		update: ({ data: current }) => {
-			if (!current) return current;
-			return {
-				...current,
-				items: current.items.filter(
-					(notification) => notification.id !== item.id,
-				),
-				unreadCount:
-					item.readAt === null
-						? Math.max(0, current.unreadCount - 1)
-						: current.unreadCount,
-			};
-		},
-	});
+): Promise<NotificationRemovalCacheSnapshot> {
+	await queryClient.cancelQueries(rq(listNotifications).filter());
+	const snapshot: NotificationRemovalCacheSnapshot = [];
+	for (const { queryKey, data: current } of rq(listNotifications).cacheEntries(
+		queryClient,
+	)) {
+		if (!current) continue;
+		const previousIndex = current.items.findIndex(
+			(notification) => notification.id === item.id,
+		);
+		const previous = current.items[previousIndex];
+		const unreadDelta =
+			(previous ? previous.readAt : item.readAt) === null &&
+			current.unreadCount > 0
+				? 1
+				: 0;
+		snapshot.push({ queryKey, item: previous, previousIndex, unreadDelta });
+		queryClient.setQueryData<ListNotificationsOutput>(queryKey, {
+			...current,
+			items: current.items.filter(
+				(notification) => notification.id !== item.id,
+			),
+			unreadCount: current.unreadCount - unreadDelta,
+		});
+	}
 	return snapshot;
 }
 
-export function restoreNotificationsCache(
+/** Restore only this removal; other task actions and read changes stay applied. */
+export function restoreRemovedNotificationCache(
 	queryClient: QueryClient,
-	snapshot: NotificationsCacheSnapshot,
+	snapshot: NotificationRemovalCacheSnapshot,
 ) {
-	for (const [queryKey, data] of snapshot) {
-		queryClient.setQueryData(queryKey, data);
+	for (const entry of snapshot) {
+		queryClient.setQueryData<ListNotificationsOutput>(
+			entry.queryKey,
+			(current) => {
+				if (
+					!current ||
+					(entry.item &&
+						current.items.some((item) => item.id === entry.item?.id))
+				)
+					return current;
+				const items = [...current.items];
+				if (entry.item)
+					items.splice(
+						Math.min(entry.previousIndex, items.length),
+						0,
+						entry.item,
+					);
+				return {
+					...current,
+					items,
+					unreadCount: current.unreadCount + entry.unreadDelta,
+				};
+			},
+		);
 	}
 }
 

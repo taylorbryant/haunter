@@ -5,6 +5,7 @@ import {
 	visiblePageAgents,
 } from "@/features/agents/client/page-activity-cache";
 import { isPageAgentActivity } from "@/features/agents/page-activity";
+import { WorkspaceEventSchema } from "@/features/collab/schemas";
 import { pageActivityFixture } from "./page-activity-fixture";
 
 test("authorized MCP reads publish attributed start and completion without page contents", async () => {
@@ -85,7 +86,7 @@ test("handler failures finish presence and a failing publisher cannot fail the o
 	expect(f.events).toHaveLength(2);
 	expect(f.events[1]).toMatchObject({ phase: "failed" });
 	const healthy = await pageActivityFixture();
-	healthy.ports.workspaceEvents.publish = async () => {
+	healthy.ports.broadcast.publish = async () => {
 		throw new Error("Redis unavailable");
 	};
 	await expect(healthy.execute()).resolves.toMatchObject({
@@ -176,7 +177,8 @@ test("initial publication uses the remaining preparation budget and still receiv
 		await Bun.sleep(800);
 		return listMembers(...args);
 	};
-	f.ports.workspaceEvents.publish = async (event) => {
+	f.ports.broadcast.publish = async (_channel, publication) => {
+		const event = WorkspaceEventSchema.parse(publication.data);
 		if (isPageAgentActivity(event) && event.phase === "active")
 			await blocked.promise;
 		f.events.push(event);

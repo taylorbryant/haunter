@@ -1,7 +1,7 @@
 "use client";
 
 import { contractErrorMessage } from "@beignet/core/client";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	BellIcon,
 	CalendarIcon,
@@ -11,9 +11,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { reportUserError } from "@/client/error-feedback";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { useCreateDialog } from "@/components/create-dialog-provider";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
@@ -22,31 +22,14 @@ import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
-import { invalidateNotifications } from "@/features/notifications/client/queries";
-import { invalidatePage } from "@/features/pages/client/queries";
-import { taskWriteLock } from "@/features/tasks/client/completion-lock";
+import type { TaskCreationInput } from "@/features/tasks/client/mutations";
 import {
-	createOptimisticTaskId,
-	createTaskMutationOptions,
-	deleteTaskMutationOptions,
 	invalidateTasksWhenIdle,
 	isOptimisticTaskId,
 	listTasksQueryOptions,
-	optimisticallyAddTask,
-	optimisticallyPatchTask,
-	optimisticallyRemoveTask,
-	optimisticallySetTaskCompletion,
-	optimisticallySetTaskSchedule,
-	replaceOptimisticTask,
-	restoreTaskCreationCache,
-	restoreTasksCache,
-	type TaskCacheSnapshot,
-	type TaskCompletionCacheSnapshot,
-	type TaskCreationCacheSnapshot,
-	type TaskScheduleCacheSnapshot,
-	updateTaskMutationOptions,
 } from "@/features/tasks/client/queries";
-import { runOptimisticTaskWrite } from "@/features/tasks/client/task-list-controller";
+import { useTaskMutations } from "@/features/tasks/client/use-task-mutations";
+import { useTaskRefetchOptions } from "@/features/tasks/client/use-task-refetch-options";
 import {
 	TaskComposer,
 	type TaskSubmissionResult,
@@ -56,7 +39,6 @@ import {
 	groupTasksByDueDate,
 	UPCOMING_TASK_SUMMARY_LIMIT,
 } from "@/features/tasks/lib/group-tasks-by-due-date";
-import type { TaskReminderOffsetMinutes } from "@/features/tasks/lib/reminder-options";
 import {
 	TASK_TITLE_MAX_LENGTH,
 	TASK_TITLE_TOO_LONG_MESSAGE,
@@ -73,6 +55,8 @@ import { cn } from "@/lib/utils";
 
 const TASK_PAGE_SIZE = 50;
 const TODAY_PAGE_SIZE = 200;
+
+type TitleDraft = { title: string; error?: string };
 
 const FILTERS: { value: TaskFilter; label: string }[] = [
 	{ value: "open", label: "Open" },
@@ -112,6 +96,7 @@ export function TaskList({
 	upcomingEndDate?: string;
 }) {
 	const queryClient = useQueryClient();
+	const refetchOptions = useTaskRefetchOptions();
 	const deviceTime = useDeviceTime();
 	const pathname = usePathname();
 	const router = useRouter();
@@ -139,18 +124,15 @@ export function TaskList({
 				: TASK_PAGE_SIZE,
 	);
 	const [editingId, setEditingId] = useState<string | null>(null);
-	const [editTitle, setEditTitle] = useState("");
-	const [editError, setEditError] = useState<{
-		taskId: string;
-		message: string;
-	} | null>(null);
+	const [titleDrafts, setTitleDrafts] = useState<Record<string, TitleDraft>>(
+		{},
+	);
+	const editSession = useRef(0);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [taskToDelete, setTaskToDelete] = useState<TaskWithPage | null>(null);
-	// Every write for one task shares a lock. Separate locks per field allow an
-	// older failed mutation to roll back after a newer completion or deletion.
-	const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(
-		() => new Set(),
-	);
+	const deleteSession = useRef(0);
+	const mutations = useTaskMutations(workspaceId);
+	const { pendingTaskIds } = mutations;
 
 	const tasksQuery = useQuery({
 		...listTasksQueryOptions(
@@ -167,31 +149,9 @@ export function TaskList({
 						}
 					: {},
 		),
+		...refetchOptions,
+		refetchOnMount: false,
 		enabled: deviceTime.ready,
-	});
-	const createMutation = useMutation({
-		...createTaskMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
-	const completionMutation = useMutation({
-		...updateTaskMutationOptions(),
-		meta: { errorMode: "silent" },
-	});
-	const scheduleMutation = useMutation({
-		...updateTaskMutationOptions(),
-		meta: { errorMode: "silent" },
-	});
-	const assigneeMutation = useMutation({
-		...updateTaskMutationOptions(),
-		meta: { errorMode: "silent" },
-	});
-	const renameMutation = useMutation({
-		...updateTaskMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
-	const deleteMutation = useMutation({
-		...deleteTaskMutationOptions(),
-		meta: { errorMode: "inline" },
 	});
 
 	const tasks = tasksQuery.data?.items ?? [];
@@ -223,39 +183,12 @@ export function TaskList({
 		});
 	}, [searchParams, router, pathname, canEdit, isHomeView, openCreateTask]);
 
-	async function refresh(task?: TaskWithPage) {
-		await Promise.all([
-			invalidateTasksWhenIdle(queryClient),
-			invalidateNotifications(queryClient),
-		]);
-		// Keep an open editor for the source page consistent.
-		if (task?.pageId) {
-			await invalidatePage(queryClient, task.pageId);
-		}
-	}
-
 	async function setTaskCompletion(task: TaskWithPage, completed: boolean) {
-		await runOptimisticTaskWrite<TaskCompletionCacheSnapshot>({
-			taskId: task.id,
-			setPendingTaskIds,
-			optimistic: () =>
-				optimisticallySetTaskCompletion(queryClient, task.id, completed),
-			commit: () =>
-				completionMutation.mutateAsync({
-					path: { id: task.id },
-					body: { completed },
-				}),
-			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
-			onError: (error) =>
-				reportUserError(error, "Task could not be updated. Try again."),
-		});
-		await Promise.allSettled([
-			invalidateTasksWhenIdle(queryClient),
-			invalidateNotifications(queryClient),
-			task.pageId
-				? invalidatePage(queryClient, task.pageId)
-				: Promise.resolve(),
-		]);
+		try {
+			await mutations.update(task, { completed });
+		} catch (error) {
+			reportUserError(error, "Task could not be updated. Try again.");
+		}
 	}
 
 	async function setTaskSchedule(
@@ -265,30 +198,11 @@ export function TaskList({
 			"dueDate" | "dueTime" | "reminderOffsetMinutes"
 		>,
 	) {
-		await runOptimisticTaskWrite<TaskScheduleCacheSnapshot>({
-			taskId: task.id,
-			setPendingTaskIds,
-			optimistic: () =>
-				optimisticallySetTaskSchedule(queryClient, task.id, schedule),
-			commit: () =>
-				scheduleMutation.mutateAsync({
-					path: { id: task.id },
-					body: schedule,
-				}),
-			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
-			onError: (error) =>
-				reportUserError(
-					error,
-					"Task schedule could not be updated. Try again.",
-				),
-		});
-		await Promise.allSettled([
-			invalidateTasksWhenIdle(queryClient),
-			invalidateNotifications(queryClient),
-			task.pageId
-				? invalidatePage(queryClient, task.pageId)
-				: Promise.resolve(),
-		]);
+		try {
+			await mutations.update(task, schedule);
+		} catch (error) {
+			reportUserError(error, "Task schedule could not be updated. Try again.");
+		}
 	}
 
 	async function setTaskAssignee(
@@ -296,183 +210,107 @@ export function TaskList({
 		assigneeId: string | null,
 		assigneeName: string | null,
 	) {
-		await runOptimisticTaskWrite<TaskCacheSnapshot>({
-			taskId: task.id,
-			setPendingTaskIds,
-			optimistic: () =>
-				optimisticallyPatchTask(
-					queryClient,
-					task.id,
-					{ assigneeId, assigneeName },
-					currentUser?.id,
-				),
-			commit: () =>
-				assigneeMutation.mutateAsync({
-					path: { id: task.id },
-					body: { assigneeId },
-				}),
-			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
-			onError: (error) =>
-				reportUserError(
-					error,
-					"Task assignee could not be updated. Try again.",
-				),
-		});
-		await refresh(task);
+		try {
+			await mutations.update(task, { assigneeId }, assigneeName);
+		} catch (error) {
+			reportUserError(error, "Task assignee could not be updated. Try again.");
+		}
 	}
 
 	// Standalone tasks are renamed here; page-sourced titles live in the page
 	// document and are edited in the editor.
+	function discardTitle(taskId: string) {
+		editSession.current++;
+		setEditingId((current) => (current === taskId ? null : current));
+		setTitleDrafts((current) => {
+			const next = { ...current };
+			delete next[taskId];
+			return next;
+		});
+	}
+
 	async function commitTitle(task: TaskWithPage) {
-		if (renameMutation.isPending || pendingTaskIds.has(task.id)) return;
-		const trimmed = editTitle.trim();
+		if (mutations.isPending(workspaceId, task.id)) return;
+		const draft = titleDrafts[task.id];
+		if (!draft) return;
+		const trimmed = draft.title.trim();
 		if (!trimmed || trimmed === task.title) {
-			setEditingId(null);
-			setEditError(null);
+			discardTitle(task.id);
 			return;
 		}
 		if (trimmed.length > TASK_TITLE_MAX_LENGTH) {
-			setEditError({
-				taskId: task.id,
-				message: TASK_TITLE_TOO_LONG_MESSAGE,
-			});
+			setTitleDrafts((current) => ({
+				...current,
+				[task.id]: { ...draft, error: TASK_TITLE_TOO_LONG_MESSAGE },
+			}));
 			return;
 		}
-		setEditError(null);
+		const session = editSession.current;
+		const submittedDraft: TitleDraft = { title: trimmed };
+		setTitleDrafts((current) => ({ ...current, [task.id]: submittedDraft }));
 		setEditingId((current) => (current === task.id ? null : current));
-		await runOptimisticTaskWrite<TaskCacheSnapshot>({
-			taskId: task.id,
-			setPendingTaskIds,
-			optimistic: () =>
-				optimisticallyPatchTask(queryClient, task.id, { title: trimmed }),
-			commit: () =>
-				renameMutation.mutateAsync({
-					path: { id: task.id },
-					body: { title: trimmed },
-				}),
-			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
-			onError: (error) => {
-				setEditTitle(trimmed);
-				setEditingId(task.id);
-				setEditError({
-					taskId: task.id,
-					message: contractErrorMessage(
-						error,
-						"Task could not be renamed. Try again.",
-					),
-				});
-			},
-		});
-		await refresh(task);
+		try {
+			await mutations.update(task, { title: trimmed });
+			setTitleDrafts((current) => {
+				if (current[task.id] !== submittedDraft) return current;
+				const next = { ...current };
+				delete next[task.id];
+				return next;
+			});
+		} catch (error) {
+			const message = contractErrorMessage(
+				error,
+				"Task could not be renamed. Try again.",
+			);
+			setTitleDrafts((current) =>
+				current[task.id] === submittedDraft
+					? { ...current, [task.id]: { ...submittedDraft, error: message } }
+					: current,
+			);
+			// Reopen a failed submission only if no later editing interaction owns focus.
+			if (editSession.current === session) setEditingId(task.id);
+		}
 	}
 
-	async function createTask(input: {
-		title: string;
-		dueDate: string | null;
-		dueTime: string | null;
-		reminderOffsetMinutes: TaskReminderOffsetMinutes;
-		assigneeId?: string | null;
-	}): Promise<TaskSubmissionResult> {
-		const now = new Date().toISOString();
-		const temporaryTask = currentUser
-			? ({
-					id: createOptimisticTaskId(),
-					userId: currentUser.id,
-					workspaceId,
-					pageId: null,
-					sourceBlockId: null,
-					title: input.title,
-					completed: false,
-					dueDate: input.dueDate,
-					dueTime: input.dueTime,
-					reminderOffsetMinutes: input.reminderOffsetMinutes,
-					assigneeId:
-						input.assigneeId === undefined ? currentUser.id : input.assigneeId,
-					completedAt: null,
-					createdAt: now,
-					updatedAt: now,
-					pageTitle: null,
-					assigneeName:
-						input.assigneeId === undefined ||
-						input.assigneeId === currentUser.id
-							? currentUser.name || currentUser.email
-							: null,
-				} satisfies TaskWithPage)
-			: null;
-		const writeId = temporaryTask?.id ?? createOptimisticTaskId();
-		const result = await taskWriteLock.run(writeId, async () => {
-			let cacheSnapshot: TaskCreationCacheSnapshot | null = null;
-			try {
-				if (temporaryTask && currentUser) {
-					cacheSnapshot = await optimisticallyAddTask(
-						queryClient,
-						temporaryTask,
-						currentUser.id,
-					);
-				}
-				const created = await createMutation.mutateAsync({
-					body: {
-						workspaceId,
-						title: input.title,
-						...(input.dueDate ? { dueDate: input.dueDate } : {}),
-						...(input.dueTime ? { dueTime: input.dueTime } : {}),
-						...(input.reminderOffsetMinutes !== null
-							? { reminderOffsetMinutes: input.reminderOffsetMinutes }
-							: {}),
-						...(input.assigneeId !== undefined
-							? { assigneeId: input.assigneeId }
-							: {}),
-					},
-				});
-				if (temporaryTask) {
-					replaceOptimisticTask(queryClient, temporaryTask.id, {
-						...created,
-						pageTitle: null,
-						assigneeName: temporaryTask.assigneeName,
-					});
-				}
-				return { ok: true } satisfies TaskSubmissionResult;
-			} catch (error) {
-				if (temporaryTask && cacheSnapshot) {
-					restoreTaskCreationCache(
-						queryClient,
-						temporaryTask.id,
-						cacheSnapshot,
-					);
-				}
-				return {
-					ok: false,
-					error: contractErrorMessage(
-						error,
-						"Task could not be added. Try again.",
-					),
-				} satisfies TaskSubmissionResult;
-			}
-		});
-		void refresh().catch(() => undefined);
-		return result;
+	async function createTask(
+		input: TaskCreationInput,
+	): Promise<TaskSubmissionResult> {
+		try {
+			await mutations.create(workspaceId, input);
+			return { ok: true };
+		} catch (error) {
+			return {
+				ok: false,
+				error: contractErrorMessage(
+					error,
+					"Task could not be added. Try again.",
+				),
+			};
+		}
 	}
 
 	async function confirmDeleteTask() {
-		if (!taskToDelete || deleteMutation.isPending) return;
+		if (!taskToDelete || mutations.isPending(workspaceId, taskToDelete.id))
+			return;
 		const target = taskToDelete;
+		const session = deleteSession.current;
 		setDeleteError(null);
 		setTaskToDelete(null);
-		const deleted = await runOptimisticTaskWrite<TaskCacheSnapshot>({
-			taskId: target.id,
-			setPendingTaskIds,
-			optimistic: () => optimisticallyRemoveTask(queryClient, target.id),
-			commit: () => deleteMutation.mutateAsync({ path: { id: target.id } }),
-			rollback: (snapshot) => restoreTasksCache(queryClient, snapshot),
-			onError: (error) => {
-				setTaskToDelete(target);
-				setDeleteError(
-					contractErrorMessage(error, "Task could not be deleted. Try again."),
+		try {
+			await mutations.remove(target);
+		} catch (error) {
+			// A later confirmation or dismissal owns the dialog now.
+			if (deleteSession.current !== session) {
+				reportUserError(
+					error,
+					`“${target.title || "Untitled task"}” could not be deleted. Try again.`,
 				);
-			},
-		});
-		if (deleted) {
-			await refresh(target);
+				return;
+			}
+			setTaskToDelete(target);
+			setDeleteError(
+				contractErrorMessage(error, "Task could not be deleted. Try again."),
+			);
 		}
 	}
 
@@ -533,33 +371,28 @@ export function TaskList({
 						<div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
 							<div className="min-w-0 flex-1">
 								{editingId === task.id ? (
-									<>
-										<input
-											// biome-ignore lint/a11y/noAutofocus: opened by an explicit tap on the title
-											autoFocus
-											value={editTitle}
-											aria-label="Task name"
-											maxLength={TASK_TITLE_MAX_LENGTH}
-											className="keyboard-focus-ring w-full rounded-sm bg-transparent text-base leading-tight outline-none [--keyboard-focus-ring-size:2px] sm:text-sm"
-											onChange={(event) => {
-												setEditTitle(event.target.value);
-												setEditError(null);
-											}}
-											onKeyDown={(event) => {
-												if (event.key === "Enter") void commitTitle(task);
-												if (event.key === "Escape") {
-													setEditingId(null);
-													setEditError(null);
-												}
-											}}
-											onBlur={() => void commitTitle(task)}
-										/>
-										{editError?.taskId === task.id ? (
-											<p role="alert" className="mt-1 text-destructive text-xs">
-												{editError.message}
-											</p>
-										) : null}
-									</>
+									<input
+										// biome-ignore lint/a11y/noAutofocus: opened by an explicit tap on the title
+										autoFocus
+										value={titleDrafts[task.id]?.title ?? task.title}
+										aria-label="Task name"
+										maxLength={TASK_TITLE_MAX_LENGTH}
+										className="keyboard-focus-ring w-full rounded-sm bg-transparent text-base leading-tight outline-none [--keyboard-focus-ring-size:2px] sm:text-sm"
+										onChange={(event) => {
+											const title = event.target.value;
+											setTitleDrafts((current) => ({
+												...current,
+												[task.id]: { title },
+											}));
+										}}
+										onKeyDown={(event) => {
+											if (event.key === "Enter") void commitTitle(task);
+											if (event.key === "Escape") {
+												discardTitle(task.id);
+											}
+										}}
+										onBlur={() => void commitTitle(task)}
+									/>
 								) : task.sourceBlockId === null &&
 									canEdit &&
 									!isOptimisticTaskId(task.id) ? (
@@ -569,12 +402,13 @@ export function TaskList({
 											"block max-w-full cursor-text truncate text-left text-sm",
 											task.completed && "text-muted-foreground line-through",
 										)}
-										disabled={
-											renameMutation.isPending || pendingTaskIds.has(task.id)
-										}
+										disabled={pendingTaskIds.has(task.id)}
 										onClick={() => {
-											setEditTitle(task.title);
-											setEditError(null);
+											editSession.current++;
+											setTitleDrafts((current) => ({
+												...current,
+												[task.id]: current[task.id] ?? { title: task.title },
+											}));
 											setEditingId(task.id);
 										}}
 									>
@@ -590,6 +424,11 @@ export function TaskList({
 										{task.title || "Untitled task"}
 									</p>
 								)}
+								{titleDrafts[task.id]?.error ? (
+									<p role="alert" className="mt-1 text-destructive text-xs">
+										{titleDrafts[task.id].error}
+									</p>
+								) : null}
 								{task.pageId ? (
 									<Link
 										href={`/w/${workspaceId}/p/${task.pageId}`}
@@ -676,11 +515,13 @@ export function TaskList({
 										className="size-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
 										aria-label="Delete task"
 										disabled={
-											deleteMutation.isPending ||
-											isOptimisticTaskId(task.id) ||
-											pendingTaskIds.has(task.id)
+											isOptimisticTaskId(task.id) || pendingTaskIds.has(task.id)
 										}
-										onClick={() => setTaskToDelete(task)}
+										onClick={() => {
+											deleteSession.current += 1;
+											setDeleteError(null);
+											setTaskToDelete(task);
+										}}
 									>
 										<Trash2Icon className="size-3.5" />
 									</Button>
@@ -765,7 +606,9 @@ export function TaskList({
 						type="button"
 						variant="ghost"
 						size="sm"
-						onClick={() => tasksQuery.refetch()}
+						onClick={() =>
+							void invalidateTasksWhenIdle(queryClient, workspaceId)
+						}
 					>
 						Retry
 					</Button>
@@ -867,6 +710,7 @@ export function TaskList({
 				open={taskToDelete !== null}
 				onOpenChange={(open) => {
 					if (!open) {
+						deleteSession.current += 1;
 						setTaskToDelete(null);
 						setDeleteError(null);
 					}
@@ -880,7 +724,7 @@ export function TaskList({
 				}
 				actionLabel="Delete task"
 				pendingLabel="Deleting…"
-				pending={deleteMutation.isPending}
+				pending={taskToDelete !== null && pendingTaskIds.has(taskToDelete.id)}
 				error={deleteError}
 				onConfirm={() => void confirmDeleteTask()}
 			/>

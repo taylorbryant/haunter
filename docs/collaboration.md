@@ -33,7 +33,8 @@ and metadata. They do not carry page bodies or canvas edits.
 
 ### Agent presence in page headers
 
-With workspace live updates enabled (Upstash configured and
+With [workspace live updates](../README.md#optional-services) enabled
+(`REDIS_BROADCAST_URL`, Upstash REST credentials, and
 `NEXT_PUBLIC_LIVE_UPDATES=true`), page headers show MCP connections reading,
 appending to, updating, archiving, or restoring that page. Click the agent
 indicator to see its connection name, the member who connected it, and its

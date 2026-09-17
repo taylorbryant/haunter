@@ -96,7 +96,7 @@ async function createFixture() {
 			pageVersions,
 			...taskIntegration,
 			tasks,
-			workspaceEvents,
+			broadcast: workspaceEvents,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {

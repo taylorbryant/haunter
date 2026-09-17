@@ -1,21 +1,15 @@
-import { protectedRefetchInterval } from "@/client/session-recovery";
 import type { ContractCacheParams } from "@beignet/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
-import { taskWriteLock } from "@/features/tasks/client/completion-lock";
-import {
-	actOnTaskNotification,
-	createTask,
-	deleteTask,
-	listTasks,
-	updateTask,
-} from "@/features/tasks/contracts";
+import { protectedRefetchInterval } from "@/client/session-recovery";
+import { listTasks } from "@/features/tasks/contracts";
 import type {
 	ListTasksOutput,
 	TaskFilter,
 	TaskScope,
 	TaskWithPage,
 } from "@/features/tasks/schemas";
+import { refreshAfterTaskWrites } from "./refresh";
 
 export type TaskCacheSnapshot = Array<{
 	queryKey: QueryKey;
@@ -24,9 +18,6 @@ export type TaskCacheSnapshot = Array<{
 	optimisticTask: TaskWithPage | null;
 	changedFields: Array<keyof TaskWithPage>;
 }>;
-
-export type TaskCompletionCacheSnapshot = TaskCacheSnapshot;
-export type TaskScheduleCacheSnapshot = TaskCacheSnapshot;
 
 export type TaskCreationCacheSnapshot = Array<{
 	queryKey: QueryKey;
@@ -124,48 +115,32 @@ export function listTasksQueryOptions(
 		// Shared workspaces: pick up other members' changes without a manual
 		// reload. Paused automatically while the tab is in the background.
 		refetchOnMount: false,
-		refetchInterval: () =>
-			taskWriteLock.hasPendingWrites() ? false : protectedRefetchInterval(),
-		refetchOnWindowFocus: () => !taskWriteLock.hasPendingWrites(),
-		refetchOnReconnect: () => !taskWriteLock.hasPendingWrites(),
+		refetchInterval: protectedRefetchInterval,
 	};
 }
 
-export function createTaskMutationOptions() {
-	return rq(createTask).mutationOptions();
+export function invalidateTasks(
+	queryClient: QueryClient,
+	workspaceId?: string,
+) {
+	return refreshAfterTaskWrites(queryClient, [
+		rq(listTasks).filter(workspaceId ? { path: { workspaceId } } : undefined),
+	]);
 }
 
-export function actOnTaskNotificationMutationOptions() {
-	return rq(actOnTaskNotification).mutationOptions();
-}
-
-export function updateTaskMutationOptions() {
-	return rq(updateTask).mutationOptions();
-}
-
-export function deleteTaskMutationOptions() {
-	return rq(deleteTask).mutationOptions();
-}
-
-export function invalidateTasks(queryClient: QueryClient) {
-	return rq(listTasks).invalidate(queryClient);
-}
-
-export async function invalidateTasksWhenIdle(queryClient: QueryClient) {
-	await taskWriteLock.whenIdle();
-	return invalidateTasks(queryClient);
-}
+export const invalidateTasksWhenIdle = invalidateTasks;
 
 export async function optimisticallyAddTask(
 	queryClient: QueryClient,
 	task: TaskWithPage,
 	currentUserId: string,
 ): Promise<TaskCreationCacheSnapshot> {
-	const queryFilter = rq(listTasks).filter();
-	await queryClient.cancelQueries(queryFilter, {
-		revert: false,
-		silent: true,
+	const queryFilter = rq(listTasks).filter({
+		path: { workspaceId: task.workspaceId },
 	});
+	// Default cancellation returns the query to idle and preserves manual cache
+	// edits, so refreshAfterTaskWrites can reconcile once the write settles.
+	await queryClient.cancelQueries(queryFilter);
 	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
 	const snapshot: TaskCreationCacheSnapshot = [];
 
@@ -251,128 +226,17 @@ export function restoreTaskCreationCache(
 	}
 }
 
-export async function optimisticallySetTaskCompletion(
-	queryClient: QueryClient,
-	taskId: string,
-	completed: boolean,
-): Promise<TaskCompletionCacheSnapshot> {
-	const queryFilter = rq(listTasks).filter();
-	await queryClient.cancelQueries(queryFilter, {
-		revert: false,
-		silent: true,
-	});
-	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
-	const snapshot: TaskCompletionCacheSnapshot = [];
-	const completedAt = completed ? new Date().toISOString() : null;
-
-	for (const { queryKey, data: current, params } of cachedQueries) {
-		const previousIndex = current?.items.findIndex(
-			(task) => task.id === taskId,
-		);
-		if (
-			current === undefined ||
-			previousIndex === undefined ||
-			previousIndex < 0
-		) {
-			continue;
-		}
-		const previousTask = current.items[previousIndex];
-		if (!previousTask) continue;
-		const nextTask = { ...previousTask, completed, completedAt };
-		const filter = params.query?.filter;
-		const shouldRemove =
-			(filter === "open" && completed) ||
-			(filter === "completed" && !completed);
-		snapshot.push({
-			queryKey,
-			previousIndex,
-			previousTask,
-			optimisticTask: shouldRemove ? null : nextTask,
-			changedFields: ["completed", "completedAt"],
-		});
-		queryClient.setQueryData<ListTasksOutput>(queryKey, {
-			...current,
-			items: shouldRemove
-				? current.items.filter((task) => task.id !== taskId)
-				: current.items.map((task) => (task.id === taskId ? nextTask : task)),
-		});
-	}
-
-	return snapshot;
-}
-
-export async function optimisticallySetTaskSchedule(
-	queryClient: QueryClient,
-	taskId: string,
-	schedule: Pick<TaskWithPage, "dueDate" | "dueTime" | "reminderOffsetMinutes">,
-): Promise<TaskScheduleCacheSnapshot> {
-	const queryFilter = rq(listTasks).filter();
-	await queryClient.cancelQueries(queryFilter, {
-		revert: false,
-		silent: true,
-	});
-	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
-	const snapshot: TaskScheduleCacheSnapshot = [];
-
-	for (const {
-		queryKey,
-		data: current,
-		params: cacheParams,
-	} of cachedQueries) {
-		const previousIndex = current?.items.findIndex(
-			(task) => task.id === taskId,
-		);
-		if (
-			current === undefined ||
-			previousIndex === undefined ||
-			previousIndex < 0
-		) {
-			continue;
-		}
-		const previousTask = current.items[previousIndex];
-		if (!previousTask) continue;
-		const nextTask = { ...previousTask, ...schedule };
-		const params = listTasksCacheParams(cacheParams);
-		const movesOutsideDueRange =
-			params !== null &&
-			((params.dueOnOrAfter !== undefined &&
-				(nextTask.dueDate === null ||
-					nextTask.dueDate < params.dueOnOrAfter)) ||
-				(params.dueOnOrBefore !== undefined &&
-					(nextTask.dueDate === null ||
-						nextTask.dueDate > params.dueOnOrBefore)));
-		const items = movesOutsideDueRange
-			? current.items.filter((task) => task.id !== taskId)
-			: current.items
-					.map((task) => (task.id === taskId ? nextTask : task))
-					.sort(compareListedTasks);
-		snapshot.push({
-			queryKey,
-			previousIndex,
-			previousTask,
-			optimisticTask: movesOutsideDueRange ? null : nextTask,
-			changedFields: ["dueDate", "dueTime", "reminderOffsetMinutes"],
-		});
-		queryClient.setQueryData<ListTasksOutput>(queryKey, {
-			...current,
-			items,
-		});
-	}
-
-	return snapshot;
-}
-
 export async function optimisticallyPatchTask(
 	queryClient: QueryClient,
 	taskId: string,
 	patch: Partial<TaskWithPage>,
 	currentUserId?: string,
+	workspaceId?: string,
 ): Promise<TaskCacheSnapshot> {
-	const queryFilter = rq(listTasks).filter();
-	await queryClient.cancelQueries(queryFilter, {
-		revert: false,
-		silent: true,
-	});
+	const queryFilter = rq(listTasks).filter(
+		workspaceId ? { path: { workspaceId } } : undefined,
+	);
+	await queryClient.cancelQueries(queryFilter);
 	const cachedQueries = rq(listTasks).cacheEntries(queryClient);
 	const snapshot: TaskCacheSnapshot = [];
 	const changedFields = Object.keys(patch) as Array<keyof TaskWithPage>;
@@ -424,12 +288,12 @@ export async function optimisticallyPatchTask(
 export async function optimisticallyRemoveTask(
 	queryClient: QueryClient,
 	taskId: string,
+	workspaceId?: string,
 ): Promise<TaskCacheSnapshot> {
-	const queryFilter = rq(listTasks).filter();
-	await queryClient.cancelQueries(queryFilter, {
-		revert: false,
-		silent: true,
-	});
+	const queryFilter = rq(listTasks).filter(
+		workspaceId ? { path: { workspaceId } } : undefined,
+	);
+	await queryClient.cancelQueries(queryFilter);
 	const snapshot: TaskCacheSnapshot = [];
 
 	for (const { queryKey, data: current } of rq(listTasks).cacheEntries(

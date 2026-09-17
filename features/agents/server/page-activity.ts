@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
 import type { AppContext } from "@/app-context";
 import type { PageAgentActivity } from "@/features/agents/page-activity";
+import { workspaceChanges } from "@/features/collab/channels";
 import type { AgentPrincipal } from "@/lib/agent-capabilities";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
 
@@ -23,7 +24,11 @@ async function publish(
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
 		await Promise.race([
-			ctx.ports.workspaceEvents.publish(event),
+			ctx.ports.broadcast.publish(workspaceChanges, {
+				params: { workspaceId: event.workspaceId },
+				event: "changed",
+				data: event,
+			}),
 			new Promise<void>((resolve) => {
 				timer = setTimeout(resolve, timeoutMs);
 			}),
@@ -50,7 +55,7 @@ export async function startPageAgentActivity(input: {
 		!action ||
 		typeof args?.pageId !== "string" ||
 		typeof args.workspaceId !== "string" ||
-		!ctx.ports.workspaceEventSubscriptions.isConfigured()
+		!ctx.ports.workspaceEventStreamLeases.isConfigured()
 	)
 		return;
 

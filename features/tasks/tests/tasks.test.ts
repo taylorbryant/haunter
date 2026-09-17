@@ -1,5 +1,3 @@
-import { savePageContentUseCase } from "@/features/pages/use-cases/save-page-content";
-import { writeTestPageBody } from "@/features/pages/tests/write-test-page-body";
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
@@ -25,12 +23,13 @@ import {
 	createTestPageVersionRepository,
 	createTestWorkspaceEventPublisher,
 } from "@/features/pages/tests/helpers";
+import { writeTestPageBody } from "@/features/pages/tests/write-test-page-body";
 import { createPageUseCase } from "@/features/pages/use-cases";
+import { savePageContentUseCase } from "@/features/pages/use-cases/save-page-content";
 import { appPorts } from "@/infra/port-wiring";
 import type { AppTransactionPorts } from "@/ports";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
 import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
-import { createTaskIntegrationPorts } from "./task-integration-fixture";
 import { createTaskAssignmentDeliveryPort } from "../notifications/assigned";
 import type { UpdateTaskData } from "../ports";
 import { TASK_TITLE_MAX_LENGTH, TASK_TITLE_TOO_LONG_MESSAGE } from "../schemas";
@@ -43,6 +42,7 @@ import {
 } from "../use-cases";
 import { resolveSnoozedUntil } from "../use-cases/act-on-task-notification";
 import { createTestTaskRepository } from "./helpers";
+import { createTaskIntegrationPorts } from "./task-integration-fixture";
 
 function taskBlock(
 	id: string,
@@ -239,7 +239,7 @@ async function createFixture(
 			...taskIntegration,
 			taskAssignmentDelivery,
 			tasks,
-			workspaceEvents,
+			broadcast: workspaceEvents,
 			devtools: createInMemoryDevtools(),
 		},
 		transaction: {

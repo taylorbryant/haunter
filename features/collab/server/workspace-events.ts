@@ -1,5 +1,6 @@
 import "@beignet/core/server-only";
 import type { AppContext } from "@/app-context";
+import { workspaceChanges } from "@/features/collab/channels";
 import {
 	createWorkspaceCanvasEvent,
 	createWorkspacePageEvent,
@@ -14,7 +15,11 @@ async function publishSafely(
 	event: WorkspacePageEvent | WorkspaceTaskEvent | WorkspaceCanvasEvent,
 ) {
 	try {
-		await ctx.ports.workspaceEvents.publish(event);
+		await ctx.ports.broadcast.publish(workspaceChanges, {
+			params: { workspaceId: event.workspaceId },
+			event: "changed",
+			data: event,
+		});
 	} catch (error) {
 		ctx.ports.logger.warn("Failed to broadcast a workspace event", {
 			error,

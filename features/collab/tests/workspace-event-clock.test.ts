@@ -1,52 +1,20 @@
-import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import {
+	createWorkspaceEventClockFetch,
 	estimatedWorkspaceServerTime,
 	readWorkspaceEventClock,
-	type WorkspaceEventClock,
-} from "@/features/collab/client/event-clock";
-import { bindWorkspaceEvents } from "@/features/collab/client/sse";
-import {
-	createWorkspaceTaskEvent,
-	type WorkspaceEvent,
-} from "@/features/collab/workspace-events";
+} from "../client/event-clock";
+import { WORKSPACE_EVENT_TIME_HEADER } from "../headers";
 
-class TestEventSource extends EventTarget {
-	static instances: TestEventSource[] = [];
-	static onCreated: (() => void) | undefined;
-	closed = false;
-	constructor(readonly url: string) {
-		super();
-		TestEventSource.instances.push(this);
-		TestEventSource.onCreated?.();
-	}
-	close() {
-		this.closed = true;
-	}
-	emit(type: string, data: unknown) {
-		this.dispatchEvent(new MessageEvent(type, { data: JSON.stringify(data) }));
-	}
-}
-
-let restore: (() => void) | undefined;
-let unbind: (() => void) | undefined;
-beforeEach(() => {
-	const original = Object.getOwnPropertyDescriptor(globalThis, "EventSource");
-	Object.defineProperty(globalThis, "EventSource", {
-		configurable: true,
-		value: TestEventSource,
+function response(serverTime?: string, status = 200) {
+	return new Response("stream", {
+		status,
+		headers:
+			serverTime === undefined
+				? {}
+				: { [WORKSPACE_EVENT_TIME_HEADER]: serverTime },
 	});
-	restore = () => {
-		if (original) Object.defineProperty(globalThis, "EventSource", original);
-		else Reflect.deleteProperty(globalThis, "EventSource");
-	};
-	TestEventSource.instances = [];
-	TestEventSource.onCreated = undefined;
-});
-afterEach(() => {
-	unbind?.();
-	unbind = undefined;
-	restore?.();
-});
+}
 
 test("clock references use only server time and monotonic elapsed time", () => {
 	const clock = readWorkspaceEventClock({ serverTime: 1_000_000 }, 500);
@@ -66,93 +34,77 @@ test("clock references use only server time and monotonic elapsed time", () => {
 	}
 });
 
-test("a connection supplies its own reference and resets it on reconnect", async () => {
+test("each stream resets the clock and an obsolete response cannot overwrite it", async () => {
 	const now = spyOn(performance, "now").mockReturnValue(100);
-	const events: Array<{
-		event: WorkspaceEvent;
-		clock: WorkspaceEventClock | null;
-	}> = [];
-	let connected = 0;
-	let errors = 0;
-	const event = createWorkspaceTaskEvent({
-		workspaceId: "workspace",
-		taskId: "task",
+	const requests: Array<ReturnType<typeof Promise.withResolvers<Response>>> =
+		[];
+	const clock = createWorkspaceEventClockFetch(async () => {
+		const request = Promise.withResolvers<Response>();
+		requests.push(request);
+		return request.promise;
 	});
 	try {
-		unbind = bindWorkspaceEvents("workspace", {
-			onEvent(event, clock) {
-				events.push({ event, clock });
-			},
-			onConnected() {
-				connected += 1;
-			},
-			onConnectionError() {
-				errors += 1;
-			},
-		});
-		const first = TestEventSource.instances[0];
-		if (!first) throw new Error("Missing initial connection");
-		first.emit("connected", { serverTime: 1_000_000 });
-		first.emit("workspace-event", event);
-		expect(events.at(-1)?.clock).toEqual({
+		const first = clock.fetch("/api/broadcasts");
+		requests[0]?.resolve(response("1000000"));
+		await first;
+		expect(clock.getClock()).toEqual({
 			serverTime: 1_000_000,
 			receivedAt: 100,
 		});
-		const reconnect = Promise.withResolvers<void>();
-		TestEventSource.onCreated = () => reconnect.resolve();
-		first.emit("error", {});
-		expect(first.closed).toBe(true);
-		await reconnect.promise;
-		const second = TestEventSource.instances[1];
-		if (!second) throw new Error("Missing replacement connection");
-		second.emit("workspace-event", event);
-		expect(events.at(-1)?.clock).toBeNull();
+		const obsolete = clock.fetch("/api/broadcasts");
+		expect(clock.getClock()).toBeNull();
+		const controller = new AbortController();
+		const replacement = clock.fetch("/api/broadcasts", {
+			signal: controller.signal,
+		});
 		now.mockReturnValue(2_000);
-		second.emit("connected", { serverTime: 2_000_000 });
-		second.emit("workspace-event", event);
-		expect(events.at(-1)?.clock).toEqual({
+		requests[2]?.resolve(response("2000000"));
+		await replacement;
+		requests[1]?.resolve(response("0"));
+		await obsolete;
+		expect(clock.getClock()).toEqual({
 			serverTime: 2_000_000,
 			receivedAt: 2_000,
 		});
-		const count = events.length;
-		first.emit("connected", { serverTime: 0 });
-		first.emit("workspace-event", event);
-		first.emit("error", {});
-		expect(events).toHaveLength(count);
-		expect(second.closed).toBe(false);
-		expect(connected).toBe(2);
-		expect(errors).toBe(1);
-		unbind();
-		second.emit("workspace-event", event);
-		expect(events).toHaveLength(count);
+		controller.abort();
+		expect(clock.getClock()).toBeNull();
+		const last = clock.fetch("/api/broadcasts");
+		clock.clear();
+		requests[3]?.resolve(response("3000000"));
+		await last;
+		expect(clock.getClock()).toBeNull();
 	} finally {
 		now.mockRestore();
 	}
 });
 
-test("legacy or invalid clock references preserve ordinary workspace events without guessing browser time", () => {
-	const clocks: Array<WorkspaceEventClock | null> = [];
-	let connected = 0;
-	unbind = bindWorkspaceEvents("workspace", {
-		onEvent(_event, clock) {
-			clocks.push(clock);
-		},
-		onConnected() {
-			connected += 1;
-		},
-	});
-	const source = TestEventSource.instances[0];
-	if (!source) throw new Error("Missing connection");
-	const event = createWorkspaceTaskEvent({
-		workspaceId: "workspace",
-		taskId: "task",
-	});
-	for (const data of [{}, { serverTime: "invalid" }]) {
-		source.emit("connected", data);
-		source.emit("workspace-event", event);
+test("missing or invalid clock headers leave the stream usable without guessing browser time", async () => {
+	for (const value of [
+		undefined,
+		"",
+		"invalid",
+		"-1",
+		"Infinity",
+		"9e15",
+		"9000000000000000",
+	]) {
+		const stream = response(value);
+		const clock = createWorkspaceEventClockFetch(async () => stream);
+		expect(await clock.fetch("/api/broadcasts")).toBe(stream);
+		expect(clock.getClock()).toBeNull();
+		expect(await stream.text()).toBe("stream");
 	}
-	source.dispatchEvent(new MessageEvent("connected", { data: "invalid JSON" }));
-	source.emit("workspace-event", event);
-	expect(clocks).toEqual([null, null, null]);
-	expect(connected).toBe(3);
+});
+
+test("failed and aborted requests cannot supply a clock reference", async () => {
+	const controller = new AbortController();
+	controller.abort();
+	const clock = createWorkspaceEventClockFetch(async () => response("1000"));
+	await clock.fetch("/api/broadcasts", { signal: controller.signal });
+	expect(clock.getClock()).toBeNull();
+	const failed = createWorkspaceEventClockFetch(async () =>
+		response("1000", 401),
+	);
+	await failed.fetch("/api/broadcasts");
+	expect(failed.getClock()).toBeNull();
 });

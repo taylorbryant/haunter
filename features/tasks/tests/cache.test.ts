@@ -7,8 +7,6 @@ import {
 	optimisticallyAddTask,
 	optimisticallyPatchTask,
 	optimisticallyRemoveTask,
-	optimisticallySetTaskCompletion,
-	optimisticallySetTaskSchedule,
 	replaceOptimisticTask,
 	restoreTaskCreationCache,
 	restoreTasksCache,
@@ -70,18 +68,26 @@ test("task cache updates leave infinite and custom query data untouched", async 
 	queryClient.setQueryData(infiniteKey, infiniteData);
 	queryClient.setQueryData(customKey, summary);
 
-	const completion = await optimisticallySetTaskCompletion(
+	const completion = await optimisticallyPatchTask(
 		queryClient,
 		task.id,
-		true,
+		{ completed: true, completedAt: new Date().toISOString() },
+		task.userId,
+		task.workspaceId,
 	);
 	expect(completion).toHaveLength(1);
 	restoreTasksCache(queryClient, completion);
-	const schedule = await optimisticallySetTaskSchedule(queryClient, task.id, {
-		dueDate: "2026-08-01",
-		dueTime: "09:00",
-		reminderOffsetMinutes: null,
-	});
+	const schedule = await optimisticallyPatchTask(
+		queryClient,
+		task.id,
+		{
+			dueDate: "2026-08-01",
+			dueTime: "09:00",
+			reminderOffsetMinutes: null,
+		},
+		task.userId,
+		task.workspaceId,
+	);
 	restoreTasksCache(queryClient, schedule);
 	const patch = await optimisticallyPatchTask(
 		queryClient,
@@ -125,10 +131,12 @@ test("task completion updates every cached task view and can roll back", async (
 	queryClient.setQueryData(openKey, previousOpen);
 	queryClient.setQueryData(allKey, previousAll);
 
-	const snapshot = await optimisticallySetTaskCompletion(
+	const snapshot = await optimisticallyPatchTask(
 		queryClient,
 		task.id,
-		true,
+		{ completed: true, completedAt: new Date().toISOString() },
+		task.userId,
+		task.workspaceId,
 	);
 
 	expect(queryClient.getQueryData<ListTasksOutput>(openKey)).toEqual({
@@ -159,7 +167,13 @@ test("reopening a task immediately removes it from completed views", async () =>
 	queryClient.setQueryData(completedKey, output(true));
 	queryClient.setQueryData(allKey, output(true));
 
-	await optimisticallySetTaskCompletion(queryClient, task.id, false);
+	await optimisticallyPatchTask(
+		queryClient,
+		task.id,
+		{ completed: false, completedAt: null },
+		task.userId,
+		task.workspaceId,
+	);
 
 	expect(
 		queryClient.getQueryData<ListTasksOutput>(completedKey)?.items,
@@ -177,12 +191,20 @@ test("rolling back one task preserves another optimistic completion", async () =
 		hasMore: false,
 	});
 
-	const firstSnapshot = await optimisticallySetTaskCompletion(
+	const firstSnapshot = await optimisticallyPatchTask(
 		queryClient,
 		task.id,
-		true,
+		{ completed: true, completedAt: new Date().toISOString() },
+		task.userId,
+		task.workspaceId,
 	);
-	await optimisticallySetTaskCompletion(queryClient, otherTask.id, true);
+	await optimisticallyPatchTask(
+		queryClient,
+		otherTask.id,
+		{ completed: true, completedAt: new Date().toISOString() },
+		task.userId,
+		task.workspaceId,
+	);
 	restoreTasksCache(queryClient, firstSnapshot);
 
 	expect(queryClient.getQueryData<ListTasksOutput>(openKey)?.items).toEqual([
@@ -212,11 +234,17 @@ test("task schedule updates cached dates immediately and can roll back", async (
 	queryClient.setQueryData(todayKey, previousToday);
 	queryClient.setQueryData(allKey, previousAll);
 
-	const snapshot = await optimisticallySetTaskSchedule(queryClient, task.id, {
-		dueDate: "2026-08-03",
-		dueTime: "09:00",
-		reminderOffsetMinutes: 15,
-	});
+	const snapshot = await optimisticallyPatchTask(
+		queryClient,
+		task.id,
+		{
+			dueDate: "2026-08-03",
+			dueTime: "09:00",
+			reminderOffsetMinutes: 15,
+		},
+		task.userId,
+		task.workspaceId,
+	);
 
 	expect(queryClient.getQueryData<ListTasksOutput>(todayKey)?.items).toEqual(
 		[],
@@ -283,7 +311,7 @@ test("rolling back one field preserves a concurrent optimistic task field", asyn
 		hasMore: false,
 	});
 
-	const scheduleSnapshot = await optimisticallySetTaskSchedule(
+	const scheduleSnapshot = await optimisticallyPatchTask(
 		queryClient,
 		task.id,
 		{
@@ -291,6 +319,8 @@ test("rolling back one field preserves a concurrent optimistic task field", asyn
 			dueTime: "09:00",
 			reminderOffsetMinutes: 15,
 		},
+		task.userId,
+		task.workspaceId,
 	);
 	await optimisticallyPatchTask(queryClient, task.id, { title: "New title" });
 	restoreTasksCache(queryClient, scheduleSnapshot);
@@ -313,7 +343,7 @@ test("a failed metadata write does not resurrect a task removed afterward", asyn
 		hasMore: false,
 	});
 
-	const scheduleSnapshot = await optimisticallySetTaskSchedule(
+	const scheduleSnapshot = await optimisticallyPatchTask(
 		queryClient,
 		task.id,
 		{
@@ -321,6 +351,8 @@ test("a failed metadata write does not resurrect a task removed afterward", asyn
 			dueTime: "09:00",
 			reminderOffsetMinutes: 15,
 		},
+		task.userId,
+		task.workspaceId,
 	);
 	await optimisticallyRemoveTask(queryClient, task.id);
 	restoreTasksCache(queryClient, scheduleSnapshot);
