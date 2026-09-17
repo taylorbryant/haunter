@@ -43,11 +43,11 @@ const baseDatabaseAdapter = drizzleAdapter(db, {
 });
 const boundedOAuthDatabaseAdapter = (
 	options: Parameters<typeof baseDatabaseAdapter>[0],
-) => {
+): ReturnType<typeof baseDatabaseAdapter> => {
 	const adapter = baseDatabaseAdapter(options);
 	return {
 		...adapter,
-		create(input: Parameters<typeof adapter.create>[0]) {
+		create(input) {
 			// Better Auth's DCR request schema strips extension fields before
 			// persistence. The request wrapper carries the HMAC partition in
 			// AsyncLocalStorage, and this adapter boundary adds it only to the
