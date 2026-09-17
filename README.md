@@ -162,6 +162,13 @@ to catch registration drift.
 
 ## Deploy Haunter
 
+Vercel's install command rebuilds `node_modules` from the committed lockfile and
+clears TypeScript's incremental build-info files.
+Keep this clean install: restoring cached dependencies can leave obsolete nested
+ProseMirror packages that Bun's incremental install does not remove, causing
+incompatible editor types during the build. TypeScript can retain those errors
+after the stale packages are removed. The rest of Next's build cache stays enabled.
+
 Use [`.env.example`](.env.example) as the complete configuration reference.
 Configure the production environment before building and starting the app:
 
