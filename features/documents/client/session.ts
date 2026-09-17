@@ -13,7 +13,7 @@ import {
 	DOCUMENT_SCHEMA_VERSION,
 	pageDocumentName,
 } from "../model";
-import { receiptCoversDocument } from "../receipt";
+import { receiptCoversDocument, type PersistenceReceipt } from "../receipt";
 import {
 	LocalDocumentStore,
 	loadDocumentHead,
@@ -71,6 +71,7 @@ export class PageDocumentSession {
 	private flushOnSync = false;
 	private generationFlight: Promise<void> | null = null;
 	private refreshFlight: Promise<void> | null = null;
+	private receipt: PersistenceReceipt | null = null;
 	readonly identity;
 	constructor(
 		readonly options: {
@@ -198,9 +199,16 @@ export class PageDocumentSession {
 			});
 		}
 	}
-	private onUpdate = () => {
+	private onUpdate = (_update: Uint8Array, origin: unknown) => {
 		this.ready("server");
-		this.publish({ saved: false });
+		// Save receipts can arrive before the provider's batched document update.
+		// Recheck coverage so that update cannot leave an already saved page dirty.
+		this.publish({
+			saved:
+				origin === this.provider &&
+				this.receipt !== null &&
+				receiptCoversDocument(this.doc, this.receipt),
+		});
 	};
 	private connect() {
 		if (
@@ -289,8 +297,10 @@ export class PageDocumentSession {
 						Array.isArray(message.vector) &&
 						Array.isArray(message.deletions)
 					) {
+						const saved = receiptCoversDocument(this.doc, message);
+						this.receipt = message;
 						this.publish({
-							saved: receiptCoversDocument(this.doc, message),
+							saved,
 							revision: message.revision,
 							...(message.tasksChanged
 								? { tasksRevision: message.revision }
@@ -362,6 +372,7 @@ export class PageDocumentSession {
 				this.local.destroy();
 				previous.off("update", this.onUpdate);
 				this.doc = nextDoc;
+				this.receipt = null;
 				this.local = nextLocal;
 				this.publish({
 					generation,
