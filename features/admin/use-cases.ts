@@ -1,13 +1,27 @@
 import "@beignet/core/server-only";
+import { z } from "zod";
 import { appError } from "@/features/shared/errors";
 import { requireAdmin } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { useCase } from "@/lib/use-case";
-import { buildApprovalEmail } from "../emails/approval-email";
+import { buildApprovalEmail } from "./emails/approval-email";
 import {
 	ApproveWaitlistUserInputSchema,
 	ApproveWaitlistUserOutputSchema,
-} from "../schemas";
+	BootstrapAdminInputSchema,
+	BootstrapAdminResultSchema,
+	ListWaitlistOutputSchema,
+} from "./schemas";
+
+export const listWaitlistUseCase = useCase
+	.query("admin.listWaitlist")
+	.input(z.object({}))
+	.output(ListWaitlistOutputSchema)
+	.run(async ({ ctx }) => {
+		requireAdmin(ctx);
+		const items = await ctx.ports.adminUsers.listWaitlisted();
+		return { items };
+	});
 
 export const approveWaitlistUserUseCase = useCase
 	.command("admin.approveWaitlistUser")
@@ -43,3 +57,15 @@ export const approveWaitlistUserUseCase = useCase
 
 		return { user };
 	});
+
+/**
+ * One-time operator workflow. This deliberately has no HTTP contract: only the
+ * registered operational task can invoke it without an existing admin session.
+ */
+export const bootstrapAdminUseCase = useCase
+	.command("admin.bootstrap")
+	.input(BootstrapAdminInputSchema)
+	.output(BootstrapAdminResultSchema)
+	.run(async ({ ctx, input }) =>
+		ctx.ports.uow.transaction((tx) => tx.adminUsers.bootstrap(input.email)),
+	);
