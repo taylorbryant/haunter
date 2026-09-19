@@ -11,6 +11,7 @@ import {
 	SunIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { rq } from "@/client";
 import { draftRegistry } from "@/client/draft-registry";
 import { authClient } from "@/client/auth-client";
 import { authErrorMessage, reportUserError } from "@/client/error-feedback";
@@ -45,8 +46,8 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import { changelogStatusQueryOptions } from "@/features/changelog/client/queries";
 import { ChangelogDialog } from "@/features/changelog/components/changelog-dialog";
+import { getChangelogStatus } from "@/features/changelog/contracts";
 import type { ChangelogRelease } from "@/features/changelog/releases";
 import { useAfterFirstPaint } from "@/hooks/use-after-first-paint";
 import { isThemeMode, type ThemeMode } from "@/lib/themes";
@@ -119,7 +120,7 @@ export function NavUser({
 	const [changelogOpen, setChangelogOpen] = useState(false);
 	const afterFirstPaint = useAfterFirstPaint();
 	const changelogStatus = useQuery({
-		...changelogStatusQueryOptions(),
+		...rq(getChangelogStatus).queryOptions(),
 		enabled: afterFirstPaint,
 		meta: { errorMode: "silent" },
 	});

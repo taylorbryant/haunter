@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { rq } from "@/client";
 import { userErrorMessage } from "@/client/error-feedback";
 import { useDraftSafeRouter } from "@/client/use-draft-safe-router";
 import {
@@ -21,7 +22,7 @@ import {
 	invalidateCanvasNavigation,
 	invalidateCanvases,
 } from "@/features/canvases/client/queries";
-import { importRecoveryMutationOptions } from "../client/queries";
+import { importRecovery } from "../contracts";
 import { MAX_RECOVERY_FILE_BYTES, parseRecoveryFile } from "../recovery";
 
 type Selection = {
@@ -41,10 +42,9 @@ export function RecoveryImportDialog({
 	const [selection, setSelection] = useState<Selection | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const selectionVersion = useRef(0);
-	const mutation = useMutation({
-		...importRecoveryMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
+	const mutation = useMutation(
+		rq(importRecovery).mutationOptions({ meta: { errorMode: "inline" } }),
+	);
 	const queryClient = useQueryClient();
 	const router = useDraftSafeRouter();
 	const { isMobile, setOpenMobile, setSuppressMobileFinalFocus } = useSidebar();

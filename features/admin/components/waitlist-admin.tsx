@@ -1,14 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { rq } from "@/client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-	approveWaitlistUserMutationOptions,
-	invalidateWaitlist,
-	listWaitlistQueryOptions,
-} from "@/features/admin/client/queries";
+import { approveWaitlistUser, listWaitlist } from "@/features/admin/contracts";
 import type { WaitlistUser } from "@/features/admin/schemas";
 
 function initials(text: string) {
@@ -26,12 +23,13 @@ function formatJoined(iso: string): string {
 }
 
 export function WaitlistAdmin() {
-	const queryClient = useQueryClient();
-	const waitlistQuery = useQuery(listWaitlistQueryOptions());
-	const approveMutation = useMutation({
-		...approveWaitlistUserMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
+	const waitlistQuery = useQuery(rq(listWaitlist).queryOptions());
+	const approveMutation = useMutation(
+		rq(approveWaitlistUser).mutationOptions({
+			meta: { errorMode: "inline" },
+			invalidates: () => [rq(listWaitlist).contractFilter()],
+		}),
+	);
 	// The row currently being approved, so only its button shows a pending state.
 	const [approvingId, setApprovingId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -45,9 +43,6 @@ export function WaitlistAdmin() {
 		approveMutation.mutate(
 			{ path: { userId: user.id } },
 			{
-				onSuccess: async () => {
-					await invalidateWaitlist(queryClient);
-				},
 				onError: () => {
 					setError(`Could not approve ${user.email}. Please try again.`);
 				},
