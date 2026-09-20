@@ -1,6 +1,5 @@
 {
 	"bunVersion": "1.4.x",
-	"installCommand": "rm -rf node_modules && rm -f tsconfig.tsbuildinfo .next/cache/.tsbuildinfo && bun install --frozen-lockfile",
 	"crons": [
 		{
 			"path": "/api/cron/tasks/check-overdue",
