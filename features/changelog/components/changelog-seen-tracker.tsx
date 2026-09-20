@@ -2,11 +2,10 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import { rq } from "@/client";
 import { authClient } from "@/client/auth-client";
-import {
-	markChangelogSeenInCache,
-	markChangelogSeenMutationOptions,
-} from "@/features/changelog/client/queries";
+import { markChangelogSeenInCache } from "@/features/changelog/client/cache";
+import { markChangelogSeen } from "@/features/changelog/contracts";
 
 export function ChangelogSeenTracker({
 	enabled = true,
@@ -15,10 +14,9 @@ export function ChangelogSeenTracker({
 }) {
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
-	const mutation = useMutation({
-		...markChangelogSeenMutationOptions(),
-		meta: { errorMode: "silent" },
-	});
+	const mutation = useMutation(
+		rq(markChangelogSeen).mutationOptions({ meta: { errorMode: "silent" } }),
+	);
 	const started = useRef(false);
 
 	useEffect(() => {

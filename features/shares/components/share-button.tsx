@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	CheckIcon,
 	CopyIcon,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { rq } from "@/client";
 import { userErrorMessage } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { Button } from "@/components/ui/button";
@@ -28,11 +29,10 @@ import {
 } from "@/components/ui/popover";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
-	createPageShareMutationOptions,
-	getPageShareQueryOptions,
-	invalidatePageShare,
-	revokePageShareMutationOptions,
-} from "@/features/shares/client/queries";
+	createPageShare,
+	getPageShare,
+	revokePageShare,
+} from "@/features/shares/contracts";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 
@@ -48,7 +48,6 @@ export function SharePanel({
 	/** Defer fetching until the hosting surface is open. */
 	active: boolean;
 }) {
-	const queryClient = useQueryClient();
 	const [copied, setCopied] = useState(false);
 	const [flushError, setFlushError] = useState<string | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
@@ -64,36 +63,38 @@ export function SharePanel({
 	);
 
 	const shareQuery = useQuery({
-		...getPageShareQueryOptions(pageId),
+		...rq(getPageShare).queryOptions({ path: { pageId } }),
 		enabled: active,
 	});
-	const createMutation = useMutation({
-		...createPageShareMutationOptions(),
-		meta: { errorMode: "inline" },
-		onSuccess: () => {
-			setActionError(null);
-			void invalidatePageShare(queryClient, pageId);
-		},
-		onError: (error) => {
-			setActionError(
-				userErrorMessage(error, "The page could not be published."),
-			);
-		},
-	});
-	const revokeMutation = useMutation({
-		...revokePageShareMutationOptions(),
-		meta: { errorMode: "inline" },
-		onSuccess: () => {
-			setActionError(null);
-			setRevokeOpen(false);
-			void invalidatePageShare(queryClient, pageId);
-		},
-		onError: (error) => {
-			setActionError(
-				userErrorMessage(error, "The public link could not be revoked."),
-			);
-		},
-	});
+	const createMutation = useMutation(
+		rq(createPageShare).mutationOptions({
+			meta: { errorMode: "inline" },
+			invalidates: (_data, { path }) => [rq(getPageShare).filter({ path })],
+			onSuccess: () => {
+				setActionError(null);
+			},
+			onError: (error) => {
+				setActionError(
+					userErrorMessage(error, "The page could not be published."),
+				);
+			},
+		}),
+	);
+	const revokeMutation = useMutation(
+		rq(revokePageShare).mutationOptions({
+			meta: { errorMode: "inline" },
+			invalidates: (_data, { path }) => [rq(getPageShare).filter({ path })],
+			onSuccess: () => {
+				setActionError(null);
+				setRevokeOpen(false);
+			},
+			onError: (error) => {
+				setActionError(
+					userErrorMessage(error, "The public link could not be revoked."),
+				);
+			},
+		}),
+	);
 
 	const share = shareQuery.data?.share ?? null;
 	const shareUrl = share

@@ -1,10 +1,10 @@
 import "@beignet/core/server-only";
+import { requireActiveWorkspaceScope } from "@/lib/auth";
+import { useCase } from "@/lib/use-case";
 import {
 	ListWorkspaceMembersInputSchema,
 	ListWorkspaceMembersOutputSchema,
-} from "@/features/members/schemas";
-import { requireActiveWorkspaceScope } from "@/lib/auth";
-import { useCase } from "@/lib/use-case";
+} from "./schemas";
 
 export const listWorkspaceMembersUseCase = useCase
 	.query("members.listWorkspace")
