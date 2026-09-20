@@ -1,8 +1,8 @@
 # Editor dependency patches
 
-## BlockNote 0.54.0: native mobile input
+## BlockNote 0.54.2: native mobile input
 
-`@blocknote%2Fcore@0.54.0.patch` fixes the node-view mutation filter in the
+`@blocknote%2Fcore@0.54.2.patch` fixes the node-view mutation filter in the
 source, ESM bundle, and CommonJS bundle. Most of the patch's size comes from
 the minified CommonJS line.
 
@@ -21,8 +21,10 @@ existing editable element within its node view is also excluded.
 `features/pages/tests/editor-native-mutations.test.ts` tests the patched package
 source directly because the filter is not a public export. Browser verification
 must also exercise the distributed bundle when updating or removing this patch.
-Do not remove the older Tiptap mobile patches without verifying their separate
-React node-view freeze regression.
+Tiptap 3.31.3 includes the contentDOM-scoped mobile mutation fix, so its old
+3.27.1 patch is retired. The 3.30.0 patch remains for the version pinned by tldraw.
+BlockNote 0.54.2 narrows its upstream filter to Dark Reader mutations; our patch
+preserves the native-input and unrelated-UI filtering covered by these tests.
 
 Validation:
 

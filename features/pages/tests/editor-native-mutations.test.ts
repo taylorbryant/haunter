@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { NodeView, ViewMutationRecord } from "@tiptap/pm/view";
 // This is a regression test for our version-pinned dependency patch. BlockNote
 // does not expose its node-view mutation filter through the public package API.
-import { ignoreNonContentMutations } from "../../../node_modules/@blocknote/core/src/schema/nodeViewMutations";
+import { ignoreDarkReaderMutations } from "../../../node_modules/@blocknote/core/src/schema/nodeViewMutations";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 
 beforeEach(installTestDom);
@@ -14,7 +14,7 @@ afterEach(async () => {
 test("both patched BlockNote bundles remain valid JavaScript", async () => {
 	const entry = import.meta.resolve("@blocknote/core");
 	const transpiler = new Bun.Transpiler({ loader: "js" });
-	for (const filename of ["blocks-CzQLehlc.js", "blocks-CzkqclGj.cjs"]) {
+	for (const filename of ["blocks-Dol85hpH.js", "blocks-CTB_5Vyj.cjs"]) {
 		const source = await Bun.file(new URL(filename, entry)).text();
 		expect(() => transpiler.transformSync(source)).not.toThrow();
 	}
@@ -38,7 +38,7 @@ function fixture(originalIgnoreMutation?: NodeView["ignoreMutation"]) {
 		contentDOM,
 		ignoreMutation: originalIgnoreMutation,
 	};
-	ignoreNonContentMutations(view);
+	ignoreDarkReaderMutations(view);
 	return { dom, header, pre, contentDOM, view };
 }
 
