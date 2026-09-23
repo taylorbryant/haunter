@@ -8,7 +8,12 @@ export const AGENT_CAPABILITY_DESCRIPTIONS = {
 		"List every active page in one workspace as lightweight metadata, including hierarchy. Call list_workspaces first to get a workspaceId.",
 	search_pages:
 		"Full-text search across the pages of one workspace. Returns page ids and titles.",
-	read_page: "Read a page as markdown.",
+	read_page:
+		"Read a page with a body revision token. format defaults to markdown; use blocks for structured content with stable IDs, or both. Markdown is lossy for rich blocks: use blocks when editing existing content. Revision tokens cover saved state only.",
+	edit_page_blocks:
+		"Atomically update, insert, or delete page blocks by ID. Read the page first and pass its revision as expectedRevision; on REVISION_CONFLICT reread before retrying. Updates preserve omitted properties and children. Inserts assign IDs, use parentBlockId (omitted/null for root) and afterBlockId (null for beginning). Deleting a parent requires deleteChildren: true. Deletion requires Full access, or an active scoped replace_page_content grant for Agent Auth. Each successful batch saves a history snapshot. Common text blocks, task, callout, divider, and pageLink are editable; other rich blocks may be left unchanged or explicitly deleted.",
+	replace_page_content:
+		"Replace the entire page body with Markdown or structured blocks, preserving page metadata. Requires Full access and expectedRevision from read_page. Saves a history snapshot, reconciles tasks and links, and resets the document generation so old clients cannot merge replaced content back. Markdown creates new block IDs and cannot preserve rich content or task assignments; use structured blocks to retain IDs. Existing unsupported rich blocks must be supplied unchanged. An empty body is allowed. On REVISION_CONFLICT reread before retrying.",
 	create_page:
 		"Create a page in a workspace, optionally nested under another page and initialized from markdown. The page title is rendered separately above the body, so the markdown must contain body content only and must not repeat the page title as an opening heading. Call list_workspaces first to get a workspaceId.",
 	append_to_page:

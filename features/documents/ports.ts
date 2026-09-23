@@ -1,5 +1,6 @@
 import type { TenantScope } from "@beignet/core/ports";
 import type { BlockJson } from "@/features/content/schemas";
+import type { PageBlockOperation } from "@/features/pages/block-editing";
 
 export type StoredDocument = {
 	pageId: string;
@@ -17,7 +18,18 @@ export interface DocumentRepository {
 		scope: TenantScope,
 		pageId: string,
 		content: BlockJson[],
+		expectedRevision?: string,
 	): Promise<DocumentWriteResult & { documentGeneration: number }>;
+	editBlocks(
+		scope: TenantScope,
+		input: {
+			pageId: string;
+			expectedRevision: string;
+			operations: PageBlockOperation[];
+		},
+	): Promise<
+		DocumentWriteResult & { generation: number; insertedBlockIds: string[] }
+	>;
 	find(scope: TenantScope, pageId: string): Promise<StoredDocument | null>;
 	/** Read only newer snapshots for documents currently loaded by a worker. */
 	findChanged(

@@ -17,3 +17,7 @@ export { searchPagesUseCase } from "./search-pages";
 export { setPageFavoriteUseCase } from "./set-page-favorite";
 export { updatePageUseCase } from "./update-page";
 export { getPageMetadataUseCase } from "./get-page-metadata";
+
+export { readPageDocumentUseCase } from "./read-page-document";
+export { editPageBlocksUseCase } from "./edit-page-blocks";
+export { replacePageContentUseCase } from "./replace-page-content";

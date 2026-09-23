@@ -10,6 +10,8 @@ export type AgentPrincipal = {
 	remoteClientId?: string;
 	remoteClientName?: string | null;
 	authorizedWorkspaceIds?: readonly string[];
+	/** Derived only by a verified transport from current scoped grants. */
+	pageBlockDeletionAllowed?: boolean;
 };
 
 export const { defineAgentCapability, defineAgentCapabilityRegistry } =

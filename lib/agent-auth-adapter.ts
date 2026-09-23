@@ -42,6 +42,8 @@ export const agentCapabilityMetadata = {
 	read_page: workspaceScope,
 	create_page: workspaceScope,
 	append_to_page: workspaceScope,
+	edit_page_blocks: workspaceScope,
+	replace_page_content: workspaceScope,
 	update_page: workspaceScope,
 	archive_page: workspaceScope,
 	restore_page: workspaceScope,
@@ -63,7 +65,7 @@ export function createHaunterAgentAuthAdapter(
 		registry: agentCapabilityRegistry,
 		executor,
 		metadata: agentCapabilityMetadata,
-		principal({ agentSession }) {
+		principal({ agentSession, arguments: args }) {
 			if (!agentSession.userId) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -73,7 +75,42 @@ export function createHaunterAgentAuthAdapter(
 			return {
 				agentId: agentSession.agentId,
 				userId: agentSession.userId,
+				pageBlockDeletionAllowed: agentSession.agent.capabilityGrants.some(
+					(grant) =>
+						grant.capability === "replace_page_content" &&
+						grant.status === "active" &&
+						// Better Auth's verified session contains only unexpired effective grants.
+						allowsBlockDeletionScope(grant.constraints, args ?? {}),
+				),
 			};
 		},
+	});
+}
+
+/** A replacement grant permits deletion only within its explicit resource scope.
+ * Additional constraints that cannot be evaluated for a block edit fail closed. */
+function allowsBlockDeletionScope(
+	constraints: Record<string, unknown> | null,
+	args: Record<string, unknown>,
+) {
+	if (!constraints || !Object.hasOwn(constraints, "workspaceId")) return false;
+	return Object.entries(constraints).every(([key, rule]) => {
+		if (key !== "workspaceId" && key !== "pageId") return false;
+		const value = args[key];
+		if (typeof value !== "string") return false;
+		if (typeof rule === "string") return value === rule;
+		if (!rule || typeof rule !== "object" || Array.isArray(rule)) return false;
+		const operators = Object.entries(rule);
+		return (
+			operators.length > 0 &&
+			operators.every(([operator, operand]) => {
+				if (operator === "eq") return value === operand;
+				if (operator === "in")
+					return Array.isArray(operand) && operand.includes(value);
+				if (operator === "not_in")
+					return Array.isArray(operand) && !operand.includes(value);
+				return false;
+			})
+		);
 	});
 }

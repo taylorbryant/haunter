@@ -8,6 +8,7 @@ import * as schema from "@/infra/db/schema";
 import { PageContentSchema } from "@/features/pages/schemas";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import { appError } from "@/features/shared/errors";
+import { assertDocumentRevision } from "@/features/documents/revision";
 
 export function createDrizzleDocumentRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
@@ -38,16 +39,31 @@ export function createDrizzleDocumentRepository(
 				);
 			return row?.generation ?? null;
 		},
-		async restoreBody(scope, pageId, content) {
+		async restoreBody(scope, pageId, content, expectedRevision) {
 			const stored = await repository.find(scope, pageId);
 			if (!stored)
 				throw new Error(
 					"Page body is not migrated. Run the document migration before starting the app.",
 				);
 			const { seedPageBody, projectPageBody } = await import("./codec");
+			assertDocumentRevision(stored, expectedRevision);
+			if (expectedRevision !== undefined) {
+				const { validateReplacementBlocks } = await import("./block-edits");
+				const current = new Y.Doc();
+				try {
+					Y.applyUpdate(current, stored.state);
+					validateReplacementBlocks(content, projectPageBody(current));
+				} finally {
+					current.destroy();
+				}
+			}
 			const generation = stored.generation + 1;
 			const doc = seedPageBody(PageContentSchema.parse(content));
 			try {
+				if (expectedRevision !== undefined) {
+					const { validateDocumentUpdate } = await import("./validate-update");
+					validateDocumentUpdate(doc, new Uint8Array([0, 0]));
+				}
 				const projected = PageContentSchema.parse(projectPageBody(doc));
 				const saved = await repository.commit(scope, {
 					pageId,
@@ -114,6 +130,22 @@ export function createDrizzleDocumentRepository(
 				const { patchDocumentBlockProps } = await import("./mutations");
 				return patchDocumentBlockProps(doc, input);
 			});
+		},
+		async editBlocks(scope, input) {
+			let insertedBlockIds: string[] = [];
+			const saved = await mutate(
+				scope,
+				input.pageId,
+				async (doc) => {
+					const { editDocumentBlocks } = await import("./block-edits");
+					insertedBlockIds = editDocumentBlocks(doc, input.operations);
+					const { validateDocumentUpdate } = await import("./validate-update");
+					validateDocumentUpdate(doc, new Uint8Array([0, 0]));
+					return true;
+				},
+				input.expectedRevision,
+			);
+			return { ...saved, insertedBlockIds };
 		},
 		async find(scope, pageId) {
 			const [row] = await db
@@ -212,6 +244,7 @@ export function createDrizzleDocumentRepository(
 		scope: Parameters<DocumentRepository["find"]>[0],
 		pageId: string,
 		change: (doc: Y.Doc) => Promise<boolean>,
+		expectedRevision?: string,
 	) {
 		const [page] = await db
 			.select({ id: schema.pages.id })
@@ -229,6 +262,7 @@ export function createDrizzleDocumentRepository(
 			throw new Error(
 				"Page body is not migrated. Run the document migration before starting the app.",
 			);
+		assertDocumentRevision(stored, expectedRevision);
 		const doc = new Y.Doc();
 		try {
 			Y.applyUpdate(doc, stored.state);
@@ -248,7 +282,7 @@ export function createDrizzleDocumentRepository(
 				contentJson: JSON.stringify(content),
 				searchText: extractPageSearchText(content),
 			});
-			return { ...saved, content, found };
+			return { ...saved, content, found, generation: stored.generation };
 		} finally {
 			doc.destroy();
 		}

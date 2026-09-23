@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createBetterAuthAgentCapabilityTestContext } from "@beignet/agent-auth-better-auth/testing";
 import { AgentCapabilityError } from "@beignet/core/agent-capabilities";
+import { createTestDocumentReader } from "@/features/documents/tests/read-repository";
 import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestContextFactory,
@@ -93,6 +94,7 @@ async function createFixture() {
 			notificationInbox,
 			pageLinks,
 			pages,
+			documents: createTestDocumentReader(pages),
 			pageVersions,
 			...taskIntegration,
 			tasks,
