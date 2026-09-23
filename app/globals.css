@@ -723,6 +723,8 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
+		/* Anchor iOS Safari's absolute drawer backdrop to the full page. */
+		position: relative;
 		@apply bg-background text-foreground;
 	}
 	html {
