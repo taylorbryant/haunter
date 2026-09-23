@@ -9,6 +9,12 @@ import {
 } from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
+import {
+	EditPageBlocksInputSchema,
+	PageDocumentOutputSchema,
+	PageEditOutputSchema,
+	ReplacePageContentInputSchema,
+} from "./block-editing";
 
 const WorkspaceInput = z.object({ workspaceId: z.string().min(1) });
 const PageInput = WorkspaceInput.extend({ pageId: z.string().uuid() });
@@ -81,30 +87,92 @@ export const searchPagesCapability = defineAgentCapability("search_pages", {
 
 export const readPageCapability = defineAgentCapability("read_page", {
 	description: AGENT_CAPABILITY_DESCRIPTIONS.read_page,
-	input: PageInput,
-	output: z.object({
-		pageId: z.string().uuid(),
-		title: z.string(),
-		markdown: z.string(),
-		updatedAt: z.string(),
+	input: PageInput.extend({
+		format: z.enum(["markdown", "blocks", "both"]).optional(),
+	}),
+	output: PageDocumentOutputSchema.omit({ blocks: true }).extend({
+		markdown: z.string().optional(),
+		blocks: PageDocumentOutputSchema.shape.blocks.optional(),
 	}),
 	async handle({ ctx, input }) {
-		const [{ getPageUseCase }, { blocksToMarkdown }] = await Promise.all([
-			import("@/features/pages/use-cases"),
-			import("@/features/pages/lib/markdown"),
-		]);
-		const page = await getPageUseCase.run({
+		const [{ readPageDocumentUseCase }, { blocksToMarkdown }] =
+			await Promise.all([
+				import("@/features/pages/use-cases"),
+				import("@/features/pages/lib/markdown"),
+			]);
+		const page = await readPageDocumentUseCase.run({
 			ctx,
 			input: { id: input.pageId },
 		});
+		const { blocks, ...metadata } = page;
 		return {
-			pageId: page.id,
-			title: page.title,
-			markdown: blocksToMarkdown(page.content),
-			updatedAt: page.updatedAt,
+			...metadata,
+			...(input.format !== "blocks"
+				? { markdown: blocksToMarkdown(blocks) }
+				: {}),
+			...(input.format === "blocks" || input.format === "both"
+				? { blocks }
+				: {}),
 		};
 	},
 });
+
+export const editPageBlocksCapability = defineAgentCapability(
+	"edit_page_blocks",
+	{
+		description: AGENT_CAPABILITY_DESCRIPTIONS.edit_page_blocks,
+		input: PageInput.extend({
+			expectedRevision: EditPageBlocksInputSchema.shape.expectedRevision,
+			operations: EditPageBlocksInputSchema.shape.operations,
+		}),
+		output: PageEditOutputSchema,
+		async handle({ ctx, input, principal }) {
+			if (
+				input.operations.some((operation) => operation.op === "delete") &&
+				!principal.pageBlockDeletionAllowed
+			)
+				throw appError("Forbidden", {
+					message:
+						"Deleting blocks requires Full access (or a scoped replace_page_content grant for Agent Auth).",
+				});
+			const { editPageBlocksUseCase } = await import(
+				"@/features/pages/use-cases"
+			);
+			return editPageBlocksUseCase.run({
+				ctx,
+				input: {
+					id: input.pageId,
+					expectedRevision: input.expectedRevision,
+					operations: input.operations,
+				},
+			});
+		},
+	},
+);
+
+export const replacePageContentCapability = defineAgentCapability(
+	"replace_page_content",
+	{
+		description: AGENT_CAPABILITY_DESCRIPTIONS.replace_page_content,
+		input: ReplacePageContentInputSchema.omit({ id: true }).extend(
+			PageInput.shape,
+		),
+		output: PageEditOutputSchema,
+		async handle({ ctx, input }) {
+			const { replacePageContentUseCase } = await import(
+				"@/features/pages/use-cases"
+			);
+			return replacePageContentUseCase.run({
+				ctx,
+				input: {
+					id: input.pageId,
+					expectedRevision: input.expectedRevision,
+					content: input.content,
+				},
+			});
+		},
+	},
+);
 
 export const createPageCapability = defineAgentCapability("create_page", {
 	description: AGENT_CAPABILITY_DESCRIPTIONS.create_page,
@@ -286,6 +354,8 @@ export const pageAgentCapabilities = [
 	readPageCapability,
 	createPageCapability,
 	appendToPageCapability,
+	editPageBlocksCapability,
+	replacePageContentCapability,
 	updatePageCapability,
 	archivePageCapability,
 	restorePageCapability,

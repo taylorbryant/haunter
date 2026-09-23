@@ -186,6 +186,7 @@ export async function executeRemoteMcpCapability(
 				remoteClientId: input.clientId,
 				remoteClientName: connection.clientName,
 				authorizedWorkspaceIds: connection.workspaceIds,
+				pageBlockDeletionAllowed: connection.permissionProfile === "full",
 			},
 			input: input.arguments ?? {},
 			authorize({ name, input: parsedInput }) {

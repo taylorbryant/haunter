@@ -92,7 +92,11 @@ export function registerRemoteMcpTools(
 						"read_page",
 						"list_tasks",
 					].includes(capability.name),
-					destructiveHint: capability.name === "delete_task",
+					destructiveHint: [
+						"delete_task",
+						"edit_page_blocks",
+						"replace_page_content",
+					].includes(capability.name),
 					idempotentHint: [
 						"list_workspaces",
 						"list_workspace_members",
@@ -132,7 +136,15 @@ export function registerRemoteMcpTools(
 						content: [
 							{
 								type: "text",
-								text: safeToolErrorMessage(error),
+								text:
+									isAppError(error) && error.code === "REVISION_CONFLICT"
+										? JSON.stringify({
+												code: error.code,
+												message: error.message,
+												currentRevision: resultRecord(error.details)
+													?.currentRevision,
+											})
+										: safeToolErrorMessage(error),
 							},
 						],
 					};

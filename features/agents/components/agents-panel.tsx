@@ -66,6 +66,8 @@ const activityLabels: Record<string, string> = {
 	read_page: "Read a page",
 	create_page: "Created a page",
 	append_to_page: "Updated a page",
+	edit_page_blocks: "Edited page blocks",
+	replace_page_content: "Replaced a page body",
 	update_page: "Updated a page",
 	archive_page: "Archived a page",
 	restore_page: "Restored a page",

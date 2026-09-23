@@ -34,6 +34,8 @@ function activityResource(
 		"read_page",
 		"create_page",
 		"append_to_page",
+		"edit_page_blocks",
+		"replace_page_content",
 		"update_page",
 		"archive_page",
 		"restore_page",

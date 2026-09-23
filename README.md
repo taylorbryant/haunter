@@ -252,6 +252,9 @@ Browser-based MCP clients with a separate origin must be listed in
 `Origin` header. Apply the checked-in OAuth/MCP migrations before enabling the
 endpoint.
 
+For reading structured page content, editing blocks, and replacing page bodies,
+see the [MCP page editing API](docs/mcp-page-editing.md).
+
 ### Task reminders and push notifications
 
 Vercel registers the production schedules in `vercel.json`:

@@ -3,7 +3,11 @@ import { expect, test } from "bun:test";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import * as Y from "yjs";
 import { createTenantScope } from "@beignet/core/ports";
-import { appendToPageCapability } from "@/features/pages/agent-capabilities";
+import {
+	appendToPageCapability,
+	editPageBlocksCapability,
+} from "@/features/pages/agent-capabilities";
+import { readPageDocumentUseCase } from "@/features/pages/use-cases/read-page-document";
 import {
 	appendPageContentUseCase,
 	createPageUseCase,
@@ -368,7 +372,7 @@ async function until(condition: () => boolean | Promise<boolean>) {
 	}
 }
 
-test("an idle open editor receives MCP appends, task actions, and sidebar child creation", async () => {
+test("an open editor merges offline typing with MCP edits and receives other server writes", async () => {
 	const f = await fixture();
 	const tokens = createDocumentSessionTokens(
 		"server-writes-test-secret-at-least-32-characters",
@@ -429,6 +433,45 @@ test("an idle open editor receives MCP appends, task actions, and sidebar child 
 		expect(
 			projectPageBody(f.doc).filter((block) => block.id === child.id),
 		).toHaveLength(1);
+		const page = await readPageDocumentUseCase.run({
+			ctx: f.ctx,
+			input: { id: f.page.id },
+		});
+		const first = page.blocks[0];
+		if (!first) throw new Error("Missing fixture paragraph");
+		provider.disconnect();
+		await until(
+			() => provider.configuration.websocketProvider.status === "disconnected",
+		);
+		const pendingText = firstText(f.doc);
+		pendingText.insert(pendingText.length, " Unsaved offline sentence.");
+		await editPageBlocksCapability.handle({
+			capability: editPageBlocksCapability,
+			ctx: f.ctx,
+			principal: { agentId: "test-agent", userId: f.userId },
+			input: {
+				workspaceId: f.workspaceId,
+				pageId: f.page.id,
+				expectedRevision: page.revision,
+				operations: [
+					{
+						op: "update",
+						blockId: first.id,
+						content: [
+							{ type: "text", text: "MCP revised paragraph", styles: {} },
+						],
+					},
+				],
+			},
+		});
+		await provider.connect();
+		await until(
+			() =>
+				provider.isSynced &&
+				JSON.stringify(projectPageBody(f.doc)).includes(
+					"MCP revised paragraph Unsaved offline sentence.",
+				),
+		);
 		firstText(f.doc).insert(0, "Typing after external updates. ");
 		await until(async () =>
 			JSON.stringify(
@@ -436,6 +479,12 @@ test("an idle open editor receives MCP appends, task actions, and sidebar child 
 					?.content,
 			).includes("Typing after external updates."),
 		);
+		expect(
+			JSON.stringify(
+				(await f.database.repositories.pages.findById(f.scope, f.page.id))
+					?.content,
+			),
+		).toContain("MCP revised paragraph Unsaved offline sentence.");
 		expect(
 			(await f.database.repositories.tasks.findById(f.scope, f.task.id))
 				?.completed,

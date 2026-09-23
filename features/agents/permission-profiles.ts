@@ -21,6 +21,7 @@ const EDIT_CAPABILITIES = [
 	...VIEW_CAPABILITIES,
 	"create_page",
 	"append_to_page",
+	"edit_page_blocks",
 	"update_page",
 	"create_task",
 	"update_task",
@@ -33,6 +34,7 @@ export const ALL_HAUNTER_AGENT_CAPABILITIES = [
 	"archive_page",
 	"restore_page",
 	"delete_task",
+	"replace_page_content",
 ] as const;
 
 export type HaunterAgentCapability =
@@ -72,6 +74,7 @@ export const AGENT_PERMISSION_PROFILES = {
 		details: [
 			"Everything in View and edit",
 			"Archive and restore pages",
+			"Delete page blocks and replace page bodies",
 			"Delete tasks",
 		],
 		capabilities: ALL_HAUNTER_AGENT_CAPABILITIES,
@@ -90,6 +93,8 @@ const CAPABILITY_LABELS = {
 	list_tasks: "View tasks",
 	create_page: "Create pages",
 	append_to_page: "Add to pages",
+	edit_page_blocks: "Edit page blocks",
+	replace_page_content: "Replace page bodies and delete blocks",
 	update_page: "Edit pages",
 	create_task: "Create tasks",
 	update_task: "Edit tasks",
