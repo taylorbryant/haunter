@@ -2,6 +2,86 @@ import { expect, test } from "bun:test";
 import type { TLShape } from "tldraw";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 import { canvasFingerprint, normalizeCanvasSnapshot } from "../lib/document";
+import { prepareCanvasEdit } from "@/infra/canvases/shape-edits";
+
+test("agent-generated arrows render as native bindings and follow remote node moves", async () => {
+	installTestDom();
+	const {
+		Editor,
+		createTLStore,
+		defaultShapeUtils,
+		defaultBindingUtils,
+		getArrowInfo,
+	} = await import("tldraw");
+	const edit = prepareCanvasEdit(normalizeCanvasSnapshot({}), {
+		action: "edit",
+		canvasId: crypto.randomUUID(),
+		expectedRevision: "unused",
+		operations: [
+			{ op: "create", ref: "a", type: "rectangle", x: 0, y: 0 },
+			{ op: "create", ref: "b", type: "rectangle", x: 500, y: 0 },
+			{ op: "connect", ref: "link", fromId: "a", toId: "b" },
+		],
+	});
+	const store = createTLStore({
+		shapeUtils: defaultShapeUtils,
+		bindingUtils: defaultBindingUtils,
+		snapshot: edit.next,
+	});
+	const container = document.createElement("div");
+	document.body.append(container);
+	const editor = new Editor({
+		store,
+		shapeUtils: defaultShapeUtils,
+		bindingUtils: defaultBindingUtils,
+		tools: [],
+		getContainer: () => container,
+	});
+	try {
+		const arrow = editor.getShape(
+			edit.createdShapes.link as TLShape["id"],
+		) as import("tldraw").TLArrowShape;
+		const before = getArrowInfo(editor, arrow)!;
+		expect(before.isValid).toBe(true);
+		const moved = prepareCanvasEdit(store.getStoreSnapshot(), {
+			action: "edit",
+			canvasId: crypto.randomUUID(),
+			expectedRevision: "unused",
+			operations: [{ op: "update", shapeId: edit.createdShapes.b!, y: 300 }],
+		});
+		store.mergeRemoteChanges(() => store.put(moved.changed));
+		const after = getArrowInfo(
+			editor,
+			editor.getShape(arrow.id) as import("tldraw").TLArrowShape,
+		)!;
+		expect(after.isValid).toBe(true);
+		expect(after.end.point.y).toBeGreaterThan(before.end.point.y);
+		expect(editor.getBindingsFromShape(arrow, "arrow")).toHaveLength(2);
+		editor.updateShape({
+			id: edit.createdShapes.a as TLShape["id"],
+			type: "geo",
+			isLocked: true,
+		});
+		expect(() =>
+			prepareCanvasEdit(store.getStoreSnapshot(), {
+				action: "edit",
+				canvasId: crypto.randomUUID(),
+				expectedRevision: "unused",
+				operations: [
+					{
+						op: "update",
+						shapeId: edit.createdShapes.a!,
+						text: "Cannot modify",
+					},
+				],
+			}),
+		).toThrow("locked");
+	} finally {
+		editor.dispose();
+		container.remove();
+		await uninstallTestDom();
+	}
+});
 
 test("native tldraw undo retains unrelated remote shapes", async () => {
 	installTestDom();

@@ -31,6 +31,12 @@ not by itself prove that it has been saved to the database.
 Optional workspace live updates use a separate event stream to refresh lists
 and metadata. They do not carry page bodies or canvas edits.
 
+[Canvas MCP tools](mcp-canvas-editing.md) send authenticated commands to the same
+worker. Each batch saves a canvas history snapshot and commits before being
+sent to editors. Deploy migration `0044_thin_iceman.sql` and the updated worker
+before enabling these tools. The worker proxy must forward
+`POST /internal/canvas-command` alongside the WebSocket routes.
+
 ### Agent presence in page headers
 
 With [workspace live updates](../README.md#optional-services) enabled

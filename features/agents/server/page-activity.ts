@@ -9,6 +9,7 @@ const actions: Record<string, PageAgentActivity["action"]> = {
 	read_page: "read",
 	append_to_page: "append",
 	edit_page_blocks: "update",
+	create_canvas_block: "update",
 	replace_page_content: "update",
 	update_page: "update",
 	archive_page: "archive",

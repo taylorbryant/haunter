@@ -26,6 +26,7 @@ import { createDocumentSessionTokens } from "@/infra/documents/session-token";
 import { createDocumentMaintenance } from "@/infra/documents/migration";
 import * as schema from "@/infra/db/schema";
 import { projectCanvasRoom, canvasFingerprint } from "../lib/document";
+import { CanvasEditOutputSchema, CanvasReadOutputSchema } from "../editing";
 async function until(condition: () => boolean | Promise<boolean>) {
 	const deadline = Date.now() + 8000;
 	while (!(await condition())) {
@@ -156,6 +157,115 @@ function rename(
 	c.store.put([{ ...c.store.get(pageId)!, name }]);
 }
 
+test("agent edits reach live clients, preserve offline additions, and survive a worker restart", async () => {
+	const h = await harness();
+	try {
+		const a = h.client(),
+			b = h.client();
+		await until(() => a.loaded && b.loaded);
+		const read = () =>
+			h.engine
+				.execute(h.ctx, { action: "read", canvasId: h.canvas.id })
+				.then((v) => CanvasReadOutputSchema.parse(v));
+		const first = CanvasEditOutputSchema.parse(
+			await h.engine.execute(h.ctx, {
+				action: "edit",
+				canvasId: h.canvas.id,
+				expectedRevision: (await read()).revision,
+				operations: [
+					{
+						op: "create",
+						ref: "api",
+						type: "rectangle",
+						x: 0,
+						y: 0,
+						text: "API",
+					},
+					{ op: "create", ref: "db", type: "rectangle", x: 400, y: 0 },
+					{ op: "connect", ref: "arrow", fromId: "api", toId: "db" },
+				],
+			}),
+		);
+		const shapeId = first.createdShapes.api as TLRecord["id"];
+		await until(() => !!a.store.get(shapeId) && !!b.store.get(shapeId));
+		a.offline();
+		const offlineId = "shape:offline" as TLRecord["id"];
+		const original = a.store.get(shapeId)!;
+		a.store.put([{ ...original, id: offlineId, x: 800 } as TLRecord]);
+		await h.engine.execute(h.ctx, {
+			action: "edit",
+			canvasId: h.canvas.id,
+			expectedRevision: (await read()).revision,
+			operations: [{ op: "update", shapeId, text: "Gateway", x: 50 }],
+		});
+		a.online();
+		await until(
+			() =>
+				!!b.store.get(offlineId) &&
+				JSON.stringify(a.store.get(shapeId)).includes("Gateway"),
+		);
+		await h.engine.flush();
+		expect(a.store.getStoreSnapshot()).toEqual(b.store.getStoreSnapshot());
+		a.socket.close();
+		b.socket.close();
+		await h.restart();
+		const reloaded = h.client();
+		await until(() => reloaded.loaded);
+		expect(reloaded.store.get(offlineId)).toBeDefined();
+		expect(JSON.stringify(reloaded.store.get(shapeId))).toContain("Gateway");
+	} finally {
+		await h.stop();
+	}
+}, 20000);
+
+test("browser updates arriving during an agent SQL commit apply after that batch without being lost", async () => {
+	const h = await harness();
+	const original = h.ctx.ports.uow.transaction;
+	let release: () => void = () => {};
+	try {
+		const a = h.client();
+		await until(() => a.loaded);
+		const before = CanvasReadOutputSchema.parse(
+			await h.engine.execute(h.ctx, { action: "read", canvasId: h.canvas.id }),
+		);
+		let entered = false;
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		h.ctx.ports.uow.transaction = async (work) => {
+			entered = true;
+			await blocked;
+			return original(work);
+		};
+		const edit = h.engine.execute(h.ctx, {
+			action: "edit",
+			canvasId: h.canvas.id,
+			expectedRevision: before.revision,
+			operations: [
+				{ op: "create", ref: "node", type: "rectangle", x: 0, y: 0 },
+			],
+		});
+		await until(() => entered);
+		rename(a, "During agent commit");
+		release();
+		const result = CanvasEditOutputSchema.parse(await edit);
+		await until(
+			() => !!a.store.get(result.createdShapes.node as TLRecord["id"]),
+		);
+		await until(async () =>
+			JSON.stringify(
+				(await h.database.repositories.canvases.findById(h.scope, h.canvas.id))
+					?.snapshot,
+			).includes("During agent commit"),
+		);
+		expect(a.store.get(pageId)?.name).toBe("During agent commit");
+	} finally {
+		release();
+		h.ctx.ports.uow.transaction = original;
+		await h.stop();
+	}
+}, 15000);
+
 test("first-party clients sync, retain offline edits, and acknowledge durable database projections", async () => {
 	const h = await harness();
 	try {
@@ -219,7 +329,9 @@ test("read-only sessions reject edits and wrong-resource tokens", async () => {
 					.snapshot,
 			),
 		).not.toContain("Forbidden edit");
-		const [payload, encodedSignature] = h.tokens.issue(h.grant).token.split(".");
+		const [payload, encodedSignature] = h.tokens
+			.issue(h.grant)
+			.token.split(".");
 		const signature = Buffer.from(encodedSignature!, "base64url");
 		// Changing the last base64url character can affect only unused padding bits.
 		signature[0] = signature[0]! ^ 1;

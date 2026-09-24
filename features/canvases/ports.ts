@@ -1,4 +1,5 @@
 import type { TenantScope } from "@beignet/core/ports";
+import type { CanvasCommand, CanvasCommandOutput } from "./editing";
 import type {
 	Canvas,
 	CanvasListItem,
@@ -12,6 +13,24 @@ export type NewCanvas = {
 };
 
 export interface CanvasRepository {
+	saveHistory(
+		scope: TenantScope,
+		input: {
+			canvasId: string;
+			revision: number;
+			snapshotJson: string;
+			createdBy: string;
+		},
+	): Promise<string>;
+	listHistory(
+		scope: TenantScope,
+		canvasId: string,
+	): Promise<{ id: string; revision: number; createdAt: string }[]>;
+	findHistory(
+		scope: TenantScope,
+		canvasId: string,
+		id: string,
+	): Promise<{ snapshotJson: string; revision: number } | null>;
 	findSyncRoom(
 		scope: TenantScope,
 		id: string,
@@ -44,6 +63,14 @@ export interface CanvasRepository {
 	): Promise<{ updatedAt: string; snapshotUpdatedAt: string }>;
 	delete(scope: TenantScope, id: string): Promise<void>;
 	deleteByPageIds(scope: TenantScope, pageIds: string[]): Promise<void>;
+}
+
+export interface CanvasEditingPort {
+	execute(input: {
+		userId: string;
+		workspaceId: string;
+		command: CanvasCommand;
+	}): Promise<CanvasCommandOutput>;
 }
 
 export interface CanvasNavigationRepository {

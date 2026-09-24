@@ -9,6 +9,7 @@ export type AgentHostPermissionState =
 	| "custom";
 
 const VIEW_CAPABILITIES = [
+	"read_canvas",
 	"list_workspaces",
 	"list_workspace_members",
 	"list_pages",
@@ -19,6 +20,8 @@ const VIEW_CAPABILITIES = [
 
 const EDIT_CAPABILITIES = [
 	...VIEW_CAPABILITIES,
+	"create_canvas_block",
+	"edit_canvas",
 	"create_page",
 	"append_to_page",
 	"edit_page_blocks",
@@ -31,6 +34,7 @@ const EDIT_CAPABILITIES = [
 
 export const ALL_HAUNTER_AGENT_CAPABILITIES = [
 	...EDIT_CAPABILITIES,
+	"delete_canvas_shapes",
 	"archive_page",
 	"restore_page",
 	"delete_task",
@@ -50,9 +54,10 @@ type AgentPermissionProfileDefinition = {
 export const AGENT_PERMISSION_PROFILES = {
 	view: {
 		label: "View only",
-		description: "Find and read your pages and tasks.",
+		description: "Find and read your pages, canvases, and tasks.",
 		details: [
 			"View and search pages",
+			"Read canvas shapes and history",
 			"View tasks",
 			"View workspaces and members",
 		],
@@ -60,21 +65,24 @@ export const AGENT_PERMISSION_PROFILES = {
 	},
 	edit: {
 		label: "View and edit",
-		description: "Create and update pages and tasks.",
+		description: "Create and update pages, canvases, and tasks.",
 		details: [
 			"Everything in View only",
 			"Create and edit pages",
+			"Add canvas blocks and edit shapes",
 			"Create, update, complete, and reopen tasks",
 		],
 		capabilities: EDIT_CAPABILITIES,
 	},
 	full: {
 		label: "Full access",
-		description: "Manage pages and tasks, including destructive actions.",
+		description:
+			"Manage pages, canvases, and tasks, including destructive actions.",
 		details: [
 			"Everything in View and edit",
 			"Archive and restore pages",
 			"Delete page blocks and replace page bodies",
+			"Delete canvas shapes",
 			"Delete tasks",
 		],
 		capabilities: ALL_HAUNTER_AGENT_CAPABILITIES,
@@ -85,6 +93,10 @@ export const AGENT_PERMISSION_PROFILES = {
 >;
 
 const CAPABILITY_LABELS = {
+	create_canvas_block: "Add canvas blocks",
+	read_canvas: "Read canvases",
+	edit_canvas: "Edit canvas shapes",
+	delete_canvas_shapes: "Delete canvas shapes",
 	list_workspaces: "View workspaces",
 	list_workspace_members: "View workspace members",
 	list_pages: "View page lists",

@@ -85,6 +85,7 @@ export function registerRemoteMcpTools(
 				outputSchema: capability.output as ZodType,
 				annotations: {
 					readOnlyHint: [
+						"read_canvas",
 						"list_workspaces",
 						"list_workspace_members",
 						"list_pages",
@@ -93,11 +94,14 @@ export function registerRemoteMcpTools(
 						"list_tasks",
 					].includes(capability.name),
 					destructiveHint: [
+						"edit_canvas",
+						"delete_canvas_shapes",
 						"delete_task",
 						"edit_page_blocks",
 						"replace_page_content",
 					].includes(capability.name),
 					idempotentHint: [
+						"read_canvas",
 						"list_workspaces",
 						"list_workspace_members",
 						"list_pages",
@@ -137,7 +141,10 @@ export function registerRemoteMcpTools(
 							{
 								type: "text",
 								text:
-									isAppError(error) && error.code === "REVISION_CONFLICT"
+									isAppError(error) &&
+									["REVISION_CONFLICT", "CANVAS_REVISION_CONFLICT"].includes(
+										error.code,
+									)
 										? JSON.stringify({
 												code: error.code,
 												message: error.message,

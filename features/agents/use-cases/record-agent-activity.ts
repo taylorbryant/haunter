@@ -35,6 +35,7 @@ function activityResource(
 		"create_page",
 		"append_to_page",
 		"edit_page_blocks",
+		"create_canvas_block",
 		"replace_page_content",
 		"update_page",
 		"archive_page",

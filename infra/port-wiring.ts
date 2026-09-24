@@ -10,6 +10,7 @@ import { createDocumentSessionTokens } from "@/infra/documents/session-token";
 import { env } from "@/lib/env";
 import { mcpResourceUrl } from "@/lib/mcp-configuration";
 import type { AppPorts } from "@/ports";
+import { createCanvasEditingClient } from "@/infra/canvases/command-bridge";
 
 const gate = createGate({
 	policies: [pagePolicy, taskPolicy, canvasPolicy],
@@ -30,6 +31,10 @@ const gate = createGate({
  */
 export const appPorts = definePorts<AppPorts>()({
 	bound: {
+		canvasEditing: createCanvasEditingClient({
+			url: env.NEXT_PUBLIC_COLLABORATION_URL,
+			secret: env.BETTER_AUTH_SECRET,
+		}),
 		documentRecovery,
 		documentSessions: createDocumentSessionTokens(env.BETTER_AUTH_SECRET),
 		errorReporter: createNoopErrorReporter(),

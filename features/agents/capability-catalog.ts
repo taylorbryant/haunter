@@ -1,5 +1,13 @@
 /** Browser-safe capability copy shared by approval UI use cases and adapters. */
 export const AGENT_CAPABILITY_DESCRIPTIONS = {
+	create_canvas_block:
+		"Create a canvas and append its block to a page atomically. Requires expectedRevision from read_page; returns the new page revision, block ID, canvasId and canvasRevision. Saves page history. Use edit_canvas to populate it.",
+	read_canvas:
+		"Read native canvas pages, shapes, text, positions, properties and arrow bindings with a revision token. Get canvasId from read_page blocks (props.canvasId). Optional historyVersionId reads one of the last 50 snapshots saved before agent edits; its revision is historical and cannot authorize a current write. Reads include available history IDs. Requires the collaboration worker.",
+	edit_canvas:
+		"Atomically create rectangles, ellipses, diamonds, text and notes; update unlocked top-level geo/text/note/arrow shapes; connect nodes with native bound arrows. Pass expectedRevision from read_canvas; on CANVAS_REVISION_CONFLICT reread. Create/connect ref names can be used by later operations in the same batch. Coordinates are canvas units. Geometry defaults to 240x120, text width to 240, notes have native fixed size. Text updates replace rich text with plain text. Omitted fields are preserved. No automatic text measurement or layout. Each successful batch saves canvas history. Up to 100 operations; requires the collaboration worker.",
+	delete_canvas_shapes:
+		"Delete unlocked supported top-level shapes atomically with expectedRevision from read_canvas. Include any arrows connected to a deleted node in shapeIds; arrow bindings are removed automatically. Requires Full access or an explicit scoped Agent Auth grant. Saves canvas history. On CANVAS_REVISION_CONFLICT reread before retrying.",
 	list_workspaces:
 		"List the workspaces the acting user belongs to, with their role in each. Call this first to get workspaceId values for the other capabilities.",
 	list_workspace_members:
