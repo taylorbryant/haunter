@@ -22,6 +22,8 @@ import { checkDocumentAccess } from "@/infra/documents/access";
 import { projectPageBody, seedPageBody } from "@/infra/documents/codec";
 import { restorePageVersionUseCase } from "@/features/pages/use-cases/restore-page-version";
 import { importRecoveryUseCase } from "../use-cases/import-recovery";
+import { replacePageContentUseCase } from "@/features/pages/use-cases/replace-page-content";
+import { documentRevision } from "../revision";
 import { documentFixture, firstText, paragraph } from "./helpers";
 
 const original = { ...Dexie.dependencies };
@@ -130,7 +132,12 @@ test("active and offline browser sessions switch generations, keep recoverable e
 				right.getSnapshot().saved,
 		);
 		expect(firstText(right.doc).toString()).toBe("Restored body");
+		expect(right.getSnapshot().resetReason).toBe("restore");
+		expect(right.getSnapshot().recoveryNoticeDismissed).toBe(false);
 		const recoveryFile = await right.recoveryDownload();
+		await right.dismissRecoveryNotice();
+		expect(right.getSnapshot().recoveryNoticeDismissed).toBe(true);
+		expect(await right.recoveryDownload()).toBe(recoveryFile);
 		const bundle = parseRecoveryFile(recoveryFile);
 		const oldDoc = new Y.Doc();
 		Y.applyUpdate(
@@ -178,7 +185,30 @@ test("active and offline browser sessions switch generations, keep recoverable e
 		await until(() => reloaded.getSnapshot().saved);
 		expect(reloaded.getSnapshot().generation).toBe(1);
 		expect(reloaded.getSnapshot().recoveries).toEqual([0]);
+		expect(reloaded.getSnapshot().recoveryNoticeDismissed).toBe(true);
+		expect(reloaded.getSnapshot().resetReason).toBe("restore");
 		expect(firstText(reloaded.doc).toString()).toBe("New typing Restored body");
+		const current = await f.database.repositories.documents.find(
+			f.scope,
+			f.page.id,
+		);
+		if (!current) throw new Error("Missing document");
+		await replacePageContentUseCase.run({
+			ctx: f.ctx,
+			input: {
+				id: f.page.id,
+				expectedRevision: documentRevision(current),
+				content: { format: "blocks", blocks: [paragraph("Replacement body")] },
+			},
+		});
+		await until(
+			() =>
+				reloaded.getSnapshot().generation === 2 && reloaded.getSnapshot().saved,
+		);
+		expect(reloaded.getSnapshot().resetReason).toBe("replacement");
+		expect(reloaded.getSnapshot().recoveryNoticeDismissed).toBe(false);
+		expect(reloaded.getSnapshot().recoveries).toEqual([1, 0]);
+		expect(firstText(reloaded.doc).toString()).toBe("Replacement body");
 	} finally {
 		await Promise.all(sessions.map((session) => session.destroy(() => true)));
 		await stopDocumentServer(engine);

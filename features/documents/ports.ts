@@ -1,6 +1,7 @@
 import type { TenantScope } from "@beignet/core/ports";
 import type { BlockJson } from "@/features/content/schemas";
 import type { PageBlockOperation } from "@/features/pages/block-editing";
+import type { DocumentResetReason } from "./model";
 
 export type StoredDocument = {
 	pageId: string;
@@ -19,6 +20,7 @@ export interface DocumentRepository {
 		pageId: string,
 		content: BlockJson[],
 		expectedRevision?: string,
+		reason?: DocumentResetReason,
 	): Promise<DocumentWriteResult & { documentGeneration: number }>;
 	editBlocks(
 		scope: TenantScope,

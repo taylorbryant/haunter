@@ -162,6 +162,10 @@ imports downloaded recovery files into new pages. Restoring page history advance
 the document generation so old offline edits cannot overwrite the restored body.
 The prior local generation remains available as a recovery download, including
 its unsent edits; restoring also resets the editor's undo history.
+Whole-page replacements use the same protection. The recovery notice identifies
+replacement or restoration when known. Dismiss notice keeps the copies and
+collapses the message to Previous copies, where they can still be downloaded;
+a later reset shows the notice again when it creates another recovery copy.
 
 Browser copies are not account backups. Avoid clearing site data while unsynced
 work or recovery copies remain. If browser storage fails, keep the tab open and

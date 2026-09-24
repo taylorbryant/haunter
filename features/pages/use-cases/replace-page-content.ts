@@ -35,6 +35,7 @@ export const replacePageContentUseCase = useCase
 				input.id,
 				blocks,
 				input.expectedRevision,
+				"replacement",
 			);
 			return {
 				...result,

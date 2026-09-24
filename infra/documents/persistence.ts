@@ -3,10 +3,14 @@ import * as Y from "yjs";
 import type { AppContext } from "@/app-context";
 import { reconcilePageDerivations } from "@/features/pages/lib/apply-page-content";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
-import { PageContentSchema } from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
 import { checkpointPageBeforeWrite } from "@/features/pages/lib/checkpoint-page";
-import { projectPageBody } from "./codec";
+import {
+	assertMovePreservesBlocks,
+	documentBlockIds,
+	reconcileBlockMoves,
+} from "./move-conflicts";
+import { validateDocumentState } from "./validate-update";
 import { createPersistenceReceipt } from "@/features/documents/receipt";
 import { DocumentRestoredError } from "@/features/documents/restoration";
 import type { AssignmentChange } from "./assignment-attribution";
@@ -57,12 +61,13 @@ export async function persistPageBody(
 			const [newer] = await tx.documents.findChanged(scope, [
 				{ pageId: input.pageId, revision: input.baseRevision },
 			]);
+			const previousIds = documentBlockIds(merged);
 			if (newer) Y.applyUpdate(merged, newer.state);
+			if (reconcileBlockMoves(merged))
+				assertMovePreservesBlocks(previousIds, merged);
+			const content = validateDocumentState(merged);
 			const state = Y.encodeStateAsUpdate(merged);
-			if (state.length > 8 * 1024 * 1024)
-				throw new Error("Document exceeds the 8 MiB limit");
 			const receipt = createPersistenceReceipt(merged);
-			const content = PageContentSchema.parse(projectPageBody(merged));
 			const externalChanges = !!newer;
 			const page = await tx.pages.findById(scope, input.pageId);
 			if (!page) throw appError("PageNotFound");

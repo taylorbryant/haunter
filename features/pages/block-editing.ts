@@ -69,6 +69,14 @@ export const NewPageBlockSchema = z
 export const PageBlockOperationSchema = z.discriminatedUnion("op", [
 	z
 		.object({
+			op: z.literal("move"),
+			blockId: BlockIdSchema,
+			parentBlockId: BlockIdSchema.nullable().optional(),
+			afterBlockId: BlockIdSchema.nullable(),
+		})
+		.strict(),
+	z
+		.object({
 			op: z.literal("update"),
 			blockId: BlockIdSchema,
 			props: PropsSchema.optional(),

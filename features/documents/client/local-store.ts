@@ -4,7 +4,12 @@ import Dexie, { type Table } from "dexie";
 import * as Y from "yjs";
 
 type UpdateRow = { id?: number; key: string; update: Uint8Array };
-type DocumentHead = { key: string; generation: number; recoveries: number[] };
+type DocumentHead = {
+	key: string;
+	generation: number;
+	recoveries: number[];
+	dismissedRecoveryThrough?: number;
+};
 class DocumentDatabase extends Dexie {
 	updates!: Table<UpdateRow, number>;
 	heads!: Table<DocumentHead, string>;
@@ -44,6 +49,7 @@ export async function advanceDocumentGeneration(
 		if (state)
 			await db.updates.add({ key: documentCacheKey(key, from), update: state });
 		const next = {
+			...head,
 			key,
 			generation: Math.max(head.generation, to),
 			recoveries: [
@@ -53,6 +59,33 @@ export async function advanceDocumentGeneration(
 		await db.heads.put(next);
 		return next;
 	});
+}
+
+export async function dismissDocumentRecoveryNotice(
+	key: string,
+	generation: number,
+) {
+	const db = getDatabase();
+	return db.transaction("rw", db.heads, async () => {
+		const head = await loadDocumentHead(key);
+		const next = {
+			...head,
+			dismissedRecoveryThrough: Math.max(
+				head.dismissedRecoveryThrough ?? -1,
+				generation,
+			),
+		};
+		await db.heads.put(next);
+		return next;
+	});
+}
+
+export function isRecoveryNoticeDismissed(
+	head: Pick<DocumentHead, "recoveries" | "dismissedRecoveryThrough">,
+) {
+	return head.recoveries.every(
+		(generation) => generation <= (head.dismissedRecoveryThrough ?? -1),
+	);
 }
 
 export async function readDocumentRecovery(key: string, generation: number) {

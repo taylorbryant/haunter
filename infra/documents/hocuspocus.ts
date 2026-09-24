@@ -10,7 +10,8 @@ import { loadPageBody, persistPageBody } from "./persistence";
 import { DocumentRestoredError } from "@/features/documents/restoration";
 import { trackAssignmentChanges } from "./assignment-attribution";
 import { deliverTaskAssignmentNotifications } from "@/features/tasks/notifications/assigned";
-import { validateDocumentUpdate } from "./validate-update";
+import { prepareDocumentUpdate } from "./validate-update";
+import { DocumentMoveConflictError } from "./move-conflicts";
 import {
 	isAllowedCollaborationOrigin,
 	type CollaborationOriginOptions,
@@ -99,10 +100,23 @@ export function createDocumentServer(
 							const document = hocuspocus.documents.get(name);
 							if (!document || stored.revision <= (revisions.get(name) ?? 0))
 								continue;
+							let prepared: ReturnType<typeof prepareDocumentUpdate>;
+							try {
+								prepared = prepareDocumentUpdate(document, stored.state);
+							} catch (error) {
+								if (!(error instanceof DocumentMoveConflictError)) throw error;
+								document.broadcastStateless(
+									JSON.stringify({
+										type: "invalid-document",
+										reason: "move-conflict",
+									}),
+								);
+								continue;
+							}
 							revisions.set(name, stored.revision);
-							Y.applyUpdate(document, stored.state, {
+							Y.applyUpdate(document, prepared.update, {
 								source: "local",
-								skipStoreHooks: true,
+								skipStoreHooks: !prepared.repaired,
 							});
 							// Only acknowledge the committed snapshot, not any typing
 							// still pending in the in-memory document.
@@ -214,11 +228,26 @@ export function createDocumentServer(
 		},
 		async beforeSync({ context, type, document, payload, connection }) {
 			context.syncType = type;
-			if (type === 0 || connection.readOnly) return;
+			if ((type !== 1 && type !== 2) || connection.readOnly) return;
 			try {
-				validateDocumentUpdate(document, payload);
-			} catch {
-				connection.sendStateless(JSON.stringify({ type: "invalid-document" }));
+				const prepared = prepareDocumentUpdate(document, payload);
+				if (prepared.repaired) {
+					// Apply the payload and repair together. Hocuspocus will subsequently
+					// apply the original payload again, which is now an idempotent no-op.
+					Y.applyUpdate(document, prepared.update, {
+						source: "connection",
+						connection,
+					});
+				}
+			} catch (error) {
+				connection.sendStateless(
+					JSON.stringify({
+						type: "invalid-document",
+						...(error instanceof DocumentMoveConflictError
+							? { reason: "move-conflict" }
+							: {}),
+					}),
+				);
 				throw new Error("Invalid or unsupported document update");
 			}
 		},
@@ -273,9 +302,10 @@ export function createDocumentServer(
 					});
 				if (captured) attribution?.acknowledge(captured);
 				options.onStorageHealth?.(documentName, true);
-				Y.applyUpdate(document, state, {
+				const prepared = prepareDocumentUpdate(document, state);
+				Y.applyUpdate(document, prepared.update, {
 					source: "local",
-					skipStoreHooks: true,
+					skipStoreHooks: !prepared.repaired,
 				});
 				if (result.revision >= (revisions.get(documentName) ?? 0)) {
 					revisions.set(documentName, result.revision);
@@ -297,6 +327,17 @@ export function createDocumentServer(
 			} catch (error) {
 				if (error instanceof DocumentRestoredError) {
 					retireDocument(documentName, error.generation);
+					return;
+				}
+				if (error instanceof DocumentMoveConflictError) {
+					document.broadcastStateless(
+						JSON.stringify({
+							type: "invalid-document",
+							reason: "move-conflict",
+						}),
+					);
+					// This draft needs user resolution; it is not a worker/storage outage.
+					// No persistence receipt is sent, so clients retain their dirty copies.
 					return;
 				}
 				document.broadcastStateless(JSON.stringify({ type: "storage-error" }));

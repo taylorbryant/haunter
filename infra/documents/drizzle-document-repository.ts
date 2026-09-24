@@ -3,7 +3,10 @@ import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite"
 import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import * as Y from "yjs";
 import type { DocumentRepository } from "@/features/documents/ports";
-import { DOCUMENT_SCHEMA_VERSION } from "@/features/documents/model";
+import {
+	DOCUMENT_META,
+	DOCUMENT_SCHEMA_VERSION,
+} from "@/features/documents/model";
 import * as schema from "@/infra/db/schema";
 import { PageContentSchema } from "@/features/pages/schemas";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
@@ -39,7 +42,13 @@ export function createDrizzleDocumentRepository(
 				);
 			return row?.generation ?? null;
 		},
-		async restoreBody(scope, pageId, content, expectedRevision) {
+		async restoreBody(
+			scope,
+			pageId,
+			content,
+			expectedRevision,
+			reason = "restore",
+		) {
 			const stored = await repository.find(scope, pageId);
 			if (!stored)
 				throw new Error(
@@ -60,6 +69,7 @@ export function createDrizzleDocumentRepository(
 			const generation = stored.generation + 1;
 			const doc = seedPageBody(PageContentSchema.parse(content));
 			try {
+				doc.getMap(DOCUMENT_META).set("resetReason", reason);
 				if (expectedRevision !== undefined) {
 					const { validateDocumentUpdate } = await import("./validate-update");
 					validateDocumentUpdate(doc, new Uint8Array([0, 0]));

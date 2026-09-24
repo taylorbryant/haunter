@@ -20,6 +20,7 @@ import {
 import { createHaunterAgentAuthAdapter } from "@/lib/agent-auth-adapter";
 import { createRemoteMcpRequestHandler } from "@/server/remote-mcp";
 import { DocumentRestoredError } from "../restoration";
+import { DOCUMENT_META } from "../model";
 import { createTestAgentAdminRepository } from "@/features/agents/tests/helpers";
 import {
 	documentFixture,
@@ -114,6 +115,195 @@ async function fixture(
 const text = (value: string) => [
 	{ type: "text" as const, text: value, styles: {} },
 ];
+
+test("MCP moves swap canvas blocks without replacing the page or changing canvas references", async () => {
+	const f = await fixture("edit");
+	try {
+		const initial = await f.read();
+		await seedFixtureBody(
+			f,
+			[
+				...initial.blocks,
+				{
+					id: "canvas-two",
+					type: "canvas",
+					props: { canvasId: crypto.randomUUID() },
+					children: [],
+				},
+			],
+			true,
+		);
+		const before = await f.read();
+		const stored = await loadPageBody(f.ctx, f.workspaceId, f.page.id);
+		const result = await f.edit([
+			{ op: "move", blockId: "canvas", afterBlockId: "canvas-two" },
+		]);
+		const after = await f.read();
+		expect(after.blocks.map((b) => b.id)).toEqual([
+			"intro",
+			"task",
+			"parent",
+			"canvas-two",
+			"canvas",
+		]);
+		expect(after.blocks[3]).toEqual(before.blocks[4]);
+		expect(after.blocks[4]).toEqual(before.blocks[3]);
+		expect(result.insertedBlockIds).toEqual([]);
+		expect(result.tasksChanged).toBe(false);
+		expect(
+			(await loadPageBody(f.ctx, f.workspaceId, f.page.id)).generation,
+		).toBe(stored.generation);
+		expect(await checkDocumentAccess(f.grant, f.database.db)).toBe("owner");
+		expect(
+			(
+				await f.database.repositories.pageVersions.findById(
+					f.scope,
+					result.historyVersionId,
+				)
+			)?.content,
+		).toEqual(before.blocks);
+		await expect(
+			f.edit(
+				[{ op: "move", blockId: "canvas", afterBlockId: null }],
+				before.revision,
+			),
+		).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+	} finally {
+		await f.database.close();
+	}
+});
+
+test("moves preserve nested subtrees and task identity and support moving back to the page root", async () => {
+	const f = await fixture("edit");
+	try {
+		const before = await f.read();
+		const tasks = await f.database.repositories.tasks.listByPage(
+			f.scope,
+			f.page.id,
+		);
+		await f.edit([
+			{
+				op: "move",
+				blockId: "task",
+				parentBlockId: "parent",
+				afterBlockId: "child",
+			},
+			{ op: "move", blockId: "parent", afterBlockId: "canvas" },
+		]);
+		let after = await f.read();
+		expect(after.blocks.map((b) => b.id)).toEqual([
+			"intro",
+			"canvas",
+			"parent",
+		]);
+		expect(after.blocks[2]?.children).toEqual([
+			before.blocks[2]!.children[0],
+			before.blocks[1],
+		]);
+		expect(
+			(await f.database.repositories.tasks.listByPage(f.scope, f.page.id))[0]
+				?.id,
+		).toBe(tasks[0]?.id);
+		await f.edit([{ op: "move", blockId: "child", afterBlockId: null }]);
+		after = await f.read();
+		expect(after.blocks.map((b) => b.id)).toEqual([
+			"child",
+			"intro",
+			"canvas",
+			"parent",
+		]);
+		expect(after.blocks[3]?.children).toEqual([before.blocks[1]!]);
+		const same = await loadPageBody(f.ctx, f.workspaceId, f.page.id);
+		await f.edit([{ op: "move", blockId: "child", afterBlockId: null }]);
+		expect((await loadPageBody(f.ctx, f.workspaceId, f.page.id)).state).toEqual(
+			same.state,
+		);
+	} finally {
+		await f.database.close();
+	}
+});
+
+test("invalid moves roll back the entire batch and its history snapshot", async () => {
+	const f = await fixture("edit");
+	try {
+		const before = await f.read();
+		for (const operation of [
+			{
+				op: "move",
+				blockId: "parent",
+				parentBlockId: "child",
+				afterBlockId: null,
+			},
+			{
+				op: "move",
+				blockId: "parent",
+				parentBlockId: "parent",
+				afterBlockId: null,
+			},
+			{ op: "move", blockId: "intro", afterBlockId: "intro" },
+			{ op: "move", blockId: "canvas", afterBlockId: "child" },
+			{
+				op: "move",
+				blockId: "canvas",
+				parentBlockId: "missing",
+				afterBlockId: null,
+			},
+			{ op: "move", blockId: "canvas", afterBlockId: "missing" },
+			{ op: "move", blockId: "missing", afterBlockId: null },
+		]) {
+			await expect(
+				f.edit([
+					{ op: "update", blockId: "intro", content: text("Must roll back") },
+					operation,
+				]),
+			).rejects.toMatchObject({ code: "INVALID_PAGE_CONTENT" });
+			expect(await f.read()).toEqual(before);
+		}
+		expect(
+			await f.database.repositories.pageVersions.listMetaByPage(
+				f.scope,
+				f.page.id,
+			),
+		).toHaveLength(0);
+	} finally {
+		await f.database.close();
+	}
+});
+
+test("moving a canvas preserves concurrent typing in an untouched block", async () => {
+	const f = await fixture("edit");
+	const client = new Y.Doc();
+	try {
+		const stored = await loadPageBody(f.ctx, f.workspaceId, f.page.id);
+		Y.applyUpdate(client, stored.state);
+		firstText(client).insert(0, "Concurrent typing ");
+		await f.edit([{ op: "move", blockId: "canvas", afterBlockId: null }]);
+		const moved = await loadPageBody(f.ctx, f.workspaceId, f.page.id);
+		Y.applyUpdate(client, moved.state);
+		expect(projectPageBody(client).map((b) => b.id)).toEqual([
+			"canvas",
+			"intro",
+			"task",
+			"parent",
+		]);
+		expect(firstText(client).toString()).toContain(
+			"Concurrent typing Original paragraph",
+		);
+		await persistPageBody(f.ctx, {
+			workspaceId: f.workspaceId,
+			pageId: f.page.id,
+			doc: client,
+			generation: moved.generation,
+			baseRevision: moved.revision,
+		});
+		expect(JSON.stringify((await f.read()).blocks[1])).toContain(
+			"Concurrent typing Original paragraph",
+		);
+	} finally {
+		client.destroy();
+		await f.database.close();
+	}
+});
 
 test("MCP reads preserve the default Markdown response and expose blocks and body-only revisions", async () => {
 	const f = await fixture();
@@ -346,6 +536,15 @@ test("replacement preserves metadata, snapshots every call, and prevents old off
 			format: "markdown",
 			markdown: "## New body\n\n- [ ] New task",
 		});
+		const replacement = new Y.Doc();
+		Y.applyUpdate(
+			replacement,
+			(await loadPageBody(f.ctx, f.workspaceId, f.page.id)).state,
+		);
+		expect(replacement.getMap(DOCUMENT_META).get("resetReason")).toBe(
+			"replacement",
+		);
+		replacement.destroy();
 		expect((await f.read()).title).toBe(before.title);
 		expect(JSON.stringify((await f.read()).blocks)).toContain("New body");
 		expect(
