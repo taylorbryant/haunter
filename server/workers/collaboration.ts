@@ -1,4 +1,5 @@
 import { createCanvasSyncServer } from "@/infra/canvases/sync-server";
+import { createCanvasPreviewRenderer } from "@/infra/canvases/preview-renderer";
 import { checkDocumentAccess } from "@/infra/documents/access";
 import { createDocumentServer } from "@/infra/documents/hocuspocus";
 import {
@@ -81,7 +82,13 @@ const server = createDocumentServer({
 	...sharedOptions,
 	...origins,
 });
-const canvasServer = createCanvasSyncServer(sharedOptions);
+const canvasPreviewRenderer = createCanvasPreviewRenderer({
+	licenseKey: process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY,
+});
+const canvasServer = createCanvasSyncServer({
+	...sharedOptions,
+	previewRenderer: canvasPreviewRenderer,
+});
 let stopping = false;
 const transport = listenDocumentServer(server, {
 	canvases: canvasServer,
@@ -125,6 +132,7 @@ async function stop() {
 		await canvasServer.flush();
 		await stopDocumentServer(server);
 		await canvasServer.stop();
+		await canvasPreviewRenderer.stop();
 		await transport.stop(true);
 		clearInterval(heartbeat);
 		await lease.release();

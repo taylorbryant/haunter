@@ -12,6 +12,8 @@ import type { CanvasSyncServer } from "./sync-server";
 
 const MAX_BODY = 1_000_000;
 const publicErrors = {
+	INVALID_CANVAS_PREVIEW: "InvalidCanvasPreview",
+	CANVAS_PREVIEW_UNAVAILABLE: "CanvasPreviewUnavailable",
 	INVALID_CANVAS_EDIT: "InvalidCanvasEdit",
 	CANVAS_REVISION_CONFLICT: "CanvasRevisionConflict",
 	CANVAS_NOT_FOUND: "CanvasNotFound",
@@ -71,6 +73,8 @@ export function createCanvasEditingClient(options: {
 					const error = z
 						.object({
 							code: z.enum([
+								"INVALID_CANVAS_PREVIEW",
+								"CANVAS_PREVIEW_UNAVAILABLE",
 								"INVALID_CANVAS_EDIT",
 								"CANVAS_REVISION_CONFLICT",
 								"CANVAS_NOT_FOUND",

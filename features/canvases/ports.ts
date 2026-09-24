@@ -1,5 +1,10 @@
 import type { TenantScope } from "@beignet/core/ports";
-import type { CanvasCommand, CanvasCommandOutput } from "./editing";
+import type { TLStoreSnapshot } from "@tldraw/tlschema";
+import type {
+	CanvasCommand,
+	CanvasCommandOutput,
+	CanvasPreviewOutput,
+} from "./editing";
 import type {
 	Canvas,
 	CanvasListItem,
@@ -71,6 +76,13 @@ export interface CanvasEditingPort {
 		workspaceId: string;
 		command: CanvasCommand;
 	}): Promise<CanvasCommandOutput>;
+}
+
+export interface CanvasPreviewRenderer {
+	render(input: {
+		snapshot: TLStoreSnapshot;
+		command: Extract<CanvasCommand, { action: "preview" }>;
+	}): Promise<Omit<CanvasPreviewOutput, "canvasId" | "revision">>;
 }
 
 export interface CanvasNavigationRepository {

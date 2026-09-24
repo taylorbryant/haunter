@@ -6,6 +6,10 @@ import { APIError } from "better-auth/api";
 import type { JWTPayload } from "jose";
 import { createMcpHandler } from "mcp-handler";
 import type { ZodType } from "zod";
+import {
+	CanvasPreviewMetadataSchema,
+	CanvasPreviewOutputSchema,
+} from "@/features/canvases/editing";
 import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
 import type { McpConnectionRow } from "@/features/agents/ports";
 import { agentCapabilities } from "@/lib/agent-capability-registry";
@@ -82,9 +86,13 @@ export function registerRemoteMcpTools(
 			{
 				description: capability.description,
 				inputSchema: capability.input as ZodType,
-				outputSchema: capability.output as ZodType,
+				outputSchema:
+					capability.name === "preview_canvas"
+						? CanvasPreviewMetadataSchema
+						: (capability.output as ZodType),
 				annotations: {
 					readOnlyHint: [
+						"preview_canvas",
 						"read_canvas",
 						"list_workspaces",
 						"list_workspace_members",
@@ -101,6 +109,7 @@ export function registerRemoteMcpTools(
 						"replace_page_content",
 					].includes(capability.name),
 					idempotentHint: [
+						"preview_canvas",
 						"read_canvas",
 						"list_workspaces",
 						"list_workspace_members",
@@ -123,6 +132,17 @@ export function registerRemoteMcpTools(
 						},
 						{ getServer: input.getServer },
 					);
+					if (capability.name === "preview_canvas") {
+						const { image, ...metadata } =
+							CanvasPreviewOutputSchema.parse(result);
+						return {
+							content: [
+								{ type: "text" as const, text: JSON.stringify(metadata) },
+								{ type: "image" as const, ...image },
+							],
+							structuredContent: metadata,
+						};
+					}
 					return {
 						content: [
 							{

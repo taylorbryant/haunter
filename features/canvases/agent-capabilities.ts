@@ -12,10 +12,26 @@ import {
 	DeleteCanvasShapesInputSchema,
 	CanvasReadOutputSchema,
 	CanvasEditOutputSchema,
+	PreviewCanvasInputSchema,
+	CanvasPreviewOutputSchema,
 } from "./editing";
 const workspace = { workspaceId: z.string().min(1) };
 
 export const canvasAgentCapabilities = [
+	defineAgentCapability("preview_canvas", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.preview_canvas,
+		input: PreviewCanvasInputSchema.extend(workspace),
+		output: CanvasPreviewOutputSchema,
+		async handle({ ctx, input: { workspaceId: _, ...input } }) {
+			const { canvasCommandUseCase } = await import("./use-cases/edit-canvas");
+			return CanvasPreviewOutputSchema.parse(
+				await canvasCommandUseCase.run({
+					ctx,
+					input: { ...input, action: "preview" },
+				}),
+			);
+		},
+	}),
 	defineAgentCapability("create_canvas_block", {
 		description: AGENT_CAPABILITY_DESCRIPTIONS.create_canvas_block,
 		input: z.object({

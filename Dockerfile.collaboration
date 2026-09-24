@@ -3,6 +3,8 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY patches ./patches
 RUN bun install --frozen-lockfile
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN bunx --bun playwright install --with-deps chromium --only-shell
 COPY --chown=bun:bun . .
 ENV NODE_ENV=production COLLABORATION_HOST=0.0.0.0 COLLABORATION_PORT=1234
 RUN mkdir -p /app/storage && chown bun:bun /app/storage

@@ -4,9 +4,10 @@ import {
 	type RoomSnapshot,
 	type WebSocketMinimal,
 } from "@tldraw/sync-core";
-import type { TLRecord } from "@tldraw/tlschema";
+import type { TLRecord, TLStoreSnapshot } from "@tldraw/tlschema";
 import { createTenantScope } from "@beignet/core/ports";
 import type { AppContext } from "@/app-context";
+import type { CanvasPreviewRenderer } from "@/features/canvases/ports";
 import type { DocumentGrant } from "@/features/documents/ports";
 import {
 	canvasSchema,
@@ -18,6 +19,7 @@ import { canEditContent } from "@/lib/org-roles";
 import {
 	CanvasCommandSchema,
 	canvasRevision,
+	isCanvasWrite,
 	type CanvasCommand,
 	type CanvasCommandOutput,
 } from "@/features/canvases/editing";
@@ -64,6 +66,7 @@ export function createCanvasSyncServer(options: {
 	authorize(grant: DocumentGrant): Promise<{ ctx: AppContext; role: string }>;
 	workerOwnerId?: string;
 	canWrite?: () => boolean;
+	previewRenderer?: CanvasPreviewRenderer;
 	onStorageHealth?: (name: string, healthy: boolean) => void;
 }) {
 	const rooms = new Map<string, Promise<Entry>>();
@@ -246,7 +249,7 @@ export function createCanvasSyncServer(options: {
 			const canvas = await authorizeCanvas(
 				ctx,
 				command.canvasId,
-				command.action !== "read",
+				isCanvasWrite(command),
 			);
 			const user = requireUser(ctx);
 			const scope = requireActiveWorkspaceScope(ctx);
@@ -262,7 +265,9 @@ export function createCanvasSyncServer(options: {
 				},
 				ctx,
 			);
-			return serialize(entry, async () => {
+			const result = await serialize<
+				CanvasCommandOutput | { snapshot: TLStoreSnapshot; revision: string }
+			>(entry, async () => {
 				if (stopping || options.canWrite?.() === false)
 					throw appError("CanvasWorkerUnavailable");
 				if (refreshContext) ctx = await refreshContext();
@@ -270,9 +275,9 @@ export function createCanvasSyncServer(options: {
 					canvas.workspaceId,
 					user.id,
 				);
-				if (!role || (command.action !== "read" && !canEditContent(role)))
+				if (!role || (isCanvasWrite(command) && !canEditContent(role)))
 					throw appError("Forbidden");
-				await authorizeCanvas(ctx, canvas.id, command.action !== "read");
+				await authorizeCanvas(ctx, canvas.id, isCanvasWrite(command));
 				await persist(entry);
 				if (entry.deleted) throw appError("CanvasNotFound");
 				if (command.action === "read") {
@@ -310,11 +315,21 @@ export function createCanvasSyncServer(options: {
 					};
 				}
 				const currentRevision = canvasRevision(canvas.id, entry.revision);
-				if (command.expectedRevision !== currentRevision)
+				if (
+					command.expectedRevision !== undefined &&
+					command.expectedRevision !== currentRevision
+				)
 					throw appError("CanvasRevisionConflict", {
 						details: { currentRevision },
 					});
 				const before = projectCanvasRoom(entry.storage.getSnapshot());
+				if (command.action === "preview") {
+					// Detach from the live room before releasing its mutation queue.
+					return {
+						snapshot: structuredClone(before),
+						revision: currentRevision,
+					};
+				}
 				const edit = prepareCanvasEdit(before, command);
 				const staged = new InMemorySyncStorage<TLRecord>({
 					snapshot: entry.storage.getSnapshot(),
@@ -369,6 +384,21 @@ export function createCanvasSyncServer(options: {
 					historyVersionId: result.historyVersionId,
 				};
 			});
+			if (!("snapshot" in result)) return result;
+			if (command.action !== "preview" || !options.previewRenderer)
+				throw appError("CanvasPreviewUnavailable");
+			const preview = await options.previewRenderer.render({
+				snapshot: result.snapshot,
+				command,
+			});
+			// Rendering must not block edits, but revoked readers must not receive an image.
+			if (stopping || options.canWrite?.() === false)
+				throw appError("CanvasWorkerUnavailable");
+			if (refreshContext) ctx = await refreshContext();
+			if (!(await ctx.ports.members.findRole(canvas.workspaceId, user.id)))
+				throw appError("Forbidden");
+			await authorizeCanvas(ctx, canvas.id, false);
+			return { ...preview, canvasId: canvas.id, revision: result.revision };
 		},
 		async prepare(request: Request) {
 			if (stopping || options.canWrite?.() === false)

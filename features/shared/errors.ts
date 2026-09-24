@@ -1,6 +1,16 @@
 import { createAppError, defineErrors } from "@beignet/core/errors";
 
 export const errors = defineErrors({
+	InvalidCanvasPreview: {
+		code: "INVALID_CANVAS_PREVIEW",
+		status: 422,
+		message: "This canvas preview is not supported",
+	},
+	CanvasPreviewUnavailable: {
+		code: "CANVAS_PREVIEW_UNAVAILABLE",
+		status: 503,
+		message: "Canvas previews are temporarily unavailable. Try again shortly.",
+	},
 	InvalidCanvasEdit: {
 		code: "INVALID_CANVAS_EDIT",
 		status: 422,

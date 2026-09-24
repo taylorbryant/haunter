@@ -37,7 +37,10 @@ jobs:
       - name: Install dependencies
         run: bun ci
 
-      - name: Run tests
+      - name: Install canvas preview browser
+        run: bunx --bun playwright install --with-deps chromium --only-shell
+
+      - name: Run application tests
         run: bun run test
 
       - name: Build and verify packaged Yjs under Bun
