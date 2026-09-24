@@ -41,6 +41,29 @@ export const canvasSyncRooms = sqliteTable("canvas_sync_rooms", {
 	updatedAt: text("updated_at").notNull(),
 });
 
+export const canvasHistory = sqliteTable(
+	"canvas_history",
+	{
+		id: text("id").primaryKey(),
+		canvasId: text("canvas_id")
+			.notNull()
+			.references(() => canvases.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		revision: integer("revision").notNull(),
+		snapshot: text("snapshot").notNull(),
+		createdBy: text("created_by").notNull(),
+		createdAt: text("created_at").notNull(),
+	},
+	(table) => [
+		index("canvas_history_canvas_revision_idx").on(
+			table.canvasId,
+			table.revision,
+		),
+	],
+);
+
 // A single active collaboration worker per database; every worker save is fenced.
 export const collaborationWorkerLease = sqliteTable(
 	"collaboration_worker_lease",

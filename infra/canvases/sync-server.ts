@@ -12,8 +12,19 @@ import {
 	canvasSchema,
 	canvasFingerprint,
 	projectCanvasRoom,
+	normalizeCanvasSnapshot,
 } from "@/features/canvases/lib/document";
 import { canEditContent } from "@/lib/org-roles";
+import {
+	CanvasCommandSchema,
+	canvasRevision,
+	type CanvasCommand,
+	type CanvasCommandOutput,
+} from "@/features/canvases/editing";
+import { authorizeCanvas } from "@/features/canvases/lib/authorize-canvas";
+import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
+import { appError } from "@/features/shared/errors";
+import { prepareCanvasEdit, describeCanvas } from "./shape-edits";
 
 type Socket = Pick<WebSocketMinimal, "send" | "close" | "readyState">;
 type Entry = {
@@ -27,6 +38,8 @@ type Entry = {
 	flight: Promise<void>;
 	lastUsed: number;
 	deleted: boolean;
+	actions: Promise<unknown>;
+	pendingActions: number;
 };
 export type PreparedCanvasConnection = {
 	entry: Entry;
@@ -58,6 +71,18 @@ export function createCanvasSyncServer(options: {
 	let stopping = false;
 	const name = (grant: DocumentGrant) =>
 		`canvas:${grant.workspaceId}:${grant.pageId}`;
+	function serialize<T>(entry: Entry, action: () => Promise<T>): Promise<T> {
+		entry.pendingActions++;
+		const result = entry.actions
+			.catch(() => {})
+			.then(action)
+			.finally(() => {
+				entry.pendingActions--;
+				entry.lastUsed = Date.now();
+			});
+		entry.actions = result;
+		return result;
+	}
 	function persist(entry: Entry): Promise<void> {
 		const flight = entry.flight
 			.catch(() => {})
@@ -156,6 +181,8 @@ export function createCanvasSyncServer(options: {
 					flight: Promise.resolve(),
 					lastUsed: Date.now(),
 					deleted: false,
+					actions: Promise.resolve(),
+					pendingActions: 0,
 				};
 			})();
 			rooms.set(key, promise);
@@ -195,6 +222,7 @@ export function createCanvasSyncServer(options: {
 					await persist(entry);
 					if (
 						!entry.room.getNumActiveSessions() &&
+						entry.pendingActions === 0 &&
 						Date.now() - entry.lastUsed > 30_000 &&
 						rooms.get(key) === promise
 					) {
@@ -207,6 +235,141 @@ export function createCanvasSyncServer(options: {
 	}, 2000);
 	timer.unref();
 	return {
+		async execute(
+			ctx: AppContext,
+			raw: CanvasCommand,
+			refreshContext?: () => Promise<AppContext>,
+		): Promise<CanvasCommandOutput> {
+			const command = CanvasCommandSchema.parse(raw);
+			if (stopping || options.canWrite?.() === false)
+				throw appError("CanvasWorkerUnavailable");
+			const canvas = await authorizeCanvas(
+				ctx,
+				command.canvasId,
+				command.action !== "read",
+			);
+			const user = requireUser(ctx);
+			const scope = requireActiveWorkspaceScope(ctx);
+			const entry = await load(
+				{
+					kind: "canvas",
+					userId: user.id,
+					sessionId: "agent-command",
+					workspaceId: canvas.workspaceId,
+					pageId: canvas.id,
+					generation: 0,
+					expiresAt: Date.now() + 30_000,
+				},
+				ctx,
+			);
+			return serialize(entry, async () => {
+				if (stopping || options.canWrite?.() === false)
+					throw appError("CanvasWorkerUnavailable");
+				if (refreshContext) ctx = await refreshContext();
+				const role = await ctx.ports.members.findRole(
+					canvas.workspaceId,
+					user.id,
+				);
+				if (!role || (command.action !== "read" && !canEditContent(role)))
+					throw appError("Forbidden");
+				await authorizeCanvas(ctx, canvas.id, command.action !== "read");
+				await persist(entry);
+				if (entry.deleted) throw appError("CanvasNotFound");
+				if (command.action === "read") {
+					const history = await ctx.ports.canvases.listHistory(
+						scope,
+						canvas.id,
+					);
+					const version = command.historyVersionId
+						? await ctx.ports.canvases.findHistory(
+								scope,
+								canvas.id,
+								command.historyVersionId,
+							)
+						: null;
+					if (command.historyVersionId && !version)
+						throw appError("InvalidCanvasEdit", {
+							message: "This canvas history version is unavailable.",
+						});
+					return {
+						canvasId: canvas.id,
+						revision: canvasRevision(
+							canvas.id,
+							version?.revision ?? entry.revision,
+						),
+						...(version ? { historyVersionId: command.historyVersionId } : {}),
+						...describeCanvas(
+							version
+								? normalizeCanvasSnapshot(JSON.parse(version.snapshotJson))
+								: projectCanvasRoom(entry.storage.getSnapshot()),
+						),
+						history: history.map((v) => ({
+							...v,
+							revision: canvasRevision(canvas.id, v.revision),
+						})),
+					};
+				}
+				const currentRevision = canvasRevision(canvas.id, entry.revision);
+				if (command.expectedRevision !== currentRevision)
+					throw appError("CanvasRevisionConflict", {
+						details: { currentRevision },
+					});
+				const before = projectCanvasRoom(entry.storage.getSnapshot());
+				const edit = prepareCanvasEdit(before, command);
+				const staged = new InMemorySyncStorage<TLRecord>({
+					snapshot: entry.storage.getSnapshot(),
+				});
+				const apply = (storage: InMemorySyncStorage<TLRecord>) =>
+					storage.transaction((tx) => {
+						for (const id of edit.deleted) tx.delete(id);
+						for (const record of edit.changed) tx.set(record.id, record);
+					});
+				apply(staged);
+				const snapshot = staged.getSnapshot();
+				const roomJson = JSON.stringify(snapshot);
+				if (roomJson.length > 8 * 1024 * 1024)
+					throw appError("InvalidCanvasEdit", {
+						message: "Canvas exceeds the storage limit.",
+					});
+				const fingerprint = await canvasFingerprint(edit.next);
+				// Browser messages are queued while this transaction is pending. Save
+				// first, then publish the exact validated record diff to the live room.
+				const result = await ctx.ports.uow.transaction(async (tx) => {
+					if (options.workerOwnerId)
+						await tx.documents.assertWorkerLease(options.workerOwnerId);
+					const historyVersionId = await tx.canvases.saveHistory(scope, {
+						canvasId: canvas.id,
+						revision: entry.revision,
+						snapshotJson: JSON.stringify(before),
+						createdBy: user.id,
+					});
+					const saved = await tx.canvases.commitSyncRoom(scope, {
+						id: canvas.id,
+						baseRevision: entry.revision,
+						roomJson,
+						snapshotJson: JSON.stringify(edit.next),
+					});
+					return { historyVersionId, ...saved };
+				});
+				entry.revision = result.revision;
+				entry.savedClock = snapshot.documentClock ?? 0;
+				entry.fingerprint = fingerprint;
+				apply(entry.storage);
+				for (const connection of connections)
+					if (connection.entry === entry && !connection.closed)
+						entry.room.sendCustomMessage(connection.id, {
+							type: "canvas-saved",
+							fingerprint,
+							revision: entry.revision,
+						});
+				return {
+					canvasId: canvas.id,
+					revision: canvasRevision(canvas.id, entry.revision),
+					createdShapes: edit.createdShapes,
+					historyVersionId: result.historyVersionId,
+				};
+			});
+		},
 		async prepare(request: Request) {
 			if (stopping || options.canWrite?.() === false)
 				throw new Error("Worker unavailable");
@@ -267,29 +430,33 @@ export function createCanvasSyncServer(options: {
 		},
 		message(connection: CanvasConnection, message: string | Uint8Array) {
 			connection.incoming = connection.incoming
-				.then(async () => {
-					if (connection.closed) return;
-					if (stopping || options.canWrite?.() === false)
-						throw new Error("Worker unavailable");
-					if (connection.grant.expiresAt <= Date.now())
-						throw new Error("Expired");
-					if (Date.now() - connection.checkedAt >= 5000)
-						await check(connection);
-					connection.entry.lastUsed = Date.now();
-					connection.entry.room.handleSocketMessage(connection.id, message);
-					// Continue ingesting native updates while SQL is in flight. The next
-					// commit coalesces them; the outbound gate still waits for durability.
-					void persist(connection.entry)
-						.then(() => {
-							if (!connection.closed)
-								connection.entry.room.sendCustomMessage(connection.id, {
-									type: "canvas-saved",
-									fingerprint: connection.entry.fingerprint,
-									revision: connection.entry.revision,
-								});
-						})
-						.catch(() => close(connection, 1011, "Canvas storage unavailable"));
-				})
+				.then(() =>
+					serialize(connection.entry, async () => {
+						if (connection.closed) return;
+						if (stopping || options.canWrite?.() === false)
+							throw new Error("Worker unavailable");
+						if (connection.grant.expiresAt <= Date.now())
+							throw new Error("Expired");
+						if (Date.now() - connection.checkedAt >= 5000)
+							await check(connection);
+						connection.entry.lastUsed = Date.now();
+						connection.entry.room.handleSocketMessage(connection.id, message);
+						// Continue ingesting native updates while SQL is in flight. The next
+						// commit coalesces them; the outbound gate still waits for durability.
+						void persist(connection.entry)
+							.then(() => {
+								if (!connection.closed)
+									connection.entry.room.sendCustomMessage(connection.id, {
+										type: "canvas-saved",
+										fingerprint: connection.entry.fingerprint,
+										revision: connection.entry.revision,
+									});
+							})
+							.catch(() =>
+								close(connection, 1011, "Canvas storage unavailable"),
+							);
+					}),
+				)
 				.catch(() => close(connection));
 		},
 		close,
@@ -299,7 +466,11 @@ export function createCanvasSyncServer(options: {
 		},
 		async flush() {
 			await Promise.all(
-				[...rooms.values()].map(async (promise) => persist(await promise)),
+				[...rooms.values()].map(async (promise) => {
+					const entry = await promise;
+					await entry.actions.catch(() => {});
+					await persist(entry);
+				}),
 			);
 		},
 		async stop() {
@@ -308,7 +479,11 @@ export function createCanvasSyncServer(options: {
 				close(connection, 1012, "Collaboration restarting");
 			try {
 				await Promise.all(
-					[...rooms.values()].map(async (promise) => persist(await promise)),
+					[...rooms.values()].map(async (promise) => {
+						const entry = await promise;
+						await entry.actions.catch(() => {});
+						await persist(entry);
+					}),
 				);
 			} catch (error) {
 				stopping = false;

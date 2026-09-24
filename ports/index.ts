@@ -23,6 +23,7 @@ import type {
 import type { canvasPolicy } from "@/features/canvases/policy";
 import type {
 	CanvasNavigationRepository,
+	CanvasEditingPort,
 	CanvasRepository,
 } from "@/features/canvases/ports";
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
@@ -87,6 +88,7 @@ export type AppTransactionPorts = {
 export type AppGate = BoundGate<AppPolicies>;
 
 export type AppPorts = {
+	canvasEditing: CanvasEditingPort;
 	documentMaintenance: DocumentMaintenancePort;
 	documentRecovery: DocumentRecoveryPort;
 	documents: DocumentRepository;

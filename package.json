@@ -72,6 +72,7 @@
 		"@tldraw/sync": "5.4.2",
 		"@tldraw/sync-core": "5.4.2",
 		"@tldraw/tlschema": "5.4.2",
+		"@tldraw/utils": "5.4.2",
 		"@upstash/redis": "1.38.4",
 		"@vercel/blob": "2.8.0",
 		"better-auth": "1.7.5",

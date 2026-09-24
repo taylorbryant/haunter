@@ -10,6 +10,15 @@ export function createTestCanvasRepository(): CanvasRepository {
 	const canvases = new Map<string, Canvas>();
 
 	return {
+		async saveHistory() {
+			throw new Error("Use the database fixture for canvas history");
+		},
+		async listHistory() {
+			return [];
+		},
+		async findHistory() {
+			return null;
+		},
 		async findSyncRoom(scope, id) {
 			return canvases.get(id)?.workspaceId === tenantScopeId(scope)
 				? { roomJson: "{}", revision: 0 }

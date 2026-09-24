@@ -12,6 +12,9 @@ import { drizzle } from "drizzle-orm/libsql";
 import { databaseClient } from "@/infra/db/client";
 import * as schema from "@/infra/db/schema";
 import { createWorkerLease } from "@/infra/documents/worker-lease";
+import { createCanvasCommandHandler } from "@/infra/canvases/command-bridge";
+import { appError } from "@/features/shared/errors";
+import { and, eq, isNull, or } from "drizzle-orm";
 
 if (!env.NEXT_PUBLIC_COLLABORATION_URL)
 	throw new Error(
@@ -82,6 +85,30 @@ const canvasServer = createCanvasSyncServer(sharedOptions);
 let stopping = false;
 const transport = listenDocumentServer(server, {
 	canvases: canvasServer,
+	canvasCommands: createCanvasCommandHandler({
+		secret: env.BETTER_AUTH_SECRET,
+		canvases: canvasServer,
+		async authorize({ userId, workspaceId }) {
+			const db = drizzle(databaseClient, { schema });
+			const [member] = await db
+				.select({ role: schema.member.role })
+				.from(schema.member)
+				.innerJoin(schema.user, eq(schema.user.id, schema.member.userId))
+				.where(
+					and(
+						eq(schema.member.userId, userId),
+						eq(schema.member.organizationId, workspaceId),
+						or(isNull(schema.user.banned), eq(schema.user.banned, false)),
+						eq(schema.user.accessStatus, "approved"),
+					),
+				);
+			if (!member) throw appError("Forbidden");
+			return app.createServiceContext({
+				tenantId: workspaceId,
+				asUser: { id: userId, role: member.role },
+			});
+		},
+	}),
 	port: Number(process.env.COLLABORATION_PORT ?? 1234),
 	hostname: process.env.COLLABORATION_HOST ?? "127.0.0.1",
 	...origins,

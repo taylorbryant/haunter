@@ -36,6 +36,10 @@ const workspaceScope = {
  * definitions choose a grant scope before they can compile.
  */
 export const agentCapabilityMetadata = {
+	create_canvas_block: workspaceScope,
+	read_canvas: workspaceScope,
+	edit_canvas: workspaceScope,
+	delete_canvas_shapes: workspaceScope,
 	list_workspace_members: workspaceScope,
 	list_pages: workspaceScope,
 	search_pages: workspaceScope,

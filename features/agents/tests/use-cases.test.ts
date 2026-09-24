@@ -326,6 +326,7 @@ describe("agents.getPending", () => {
 	it("proposes an upgrade without forgetting the host's current profile", async () => {
 		const active = agentRow({
 			hostDefaultCapabilities: [
+				"read_canvas",
 				"list_workspaces",
 				"list_workspace_members",
 				"list_pages",

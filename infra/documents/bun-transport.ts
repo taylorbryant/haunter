@@ -18,6 +18,7 @@ export function listenDocumentServer(
 		canAcceptConnections?: () => boolean;
 		isReady?: () => boolean;
 		canvases?: CanvasSyncServer;
+		canvasCommands?: (request: Request) => Promise<Response>;
 	},
 ) {
 	return Bun.serve<{
@@ -30,6 +31,14 @@ export function listenDocumentServer(
 		hostname: options.hostname,
 		async fetch(request, server) {
 			if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+				if (
+					new URL(request.url).pathname === "/internal/canvas-command" &&
+					options.canvasCommands
+				) {
+					if (options.canAcceptConnections?.() === false)
+						return new Response("Worker unavailable", { status: 503 });
+					return options.canvasCommands(request);
+				}
 				if (new URL(request.url).pathname !== "/health")
 					return new Response("Not found", { status: 404 });
 				const ready =

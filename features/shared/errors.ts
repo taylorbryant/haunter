@@ -1,6 +1,22 @@
 import { createAppError, defineErrors } from "@beignet/core/errors";
 
 export const errors = defineErrors({
+	InvalidCanvasEdit: {
+		code: "INVALID_CANVAS_EDIT",
+		status: 422,
+		message: "This canvas edit is not supported",
+	},
+	CanvasRevisionConflict: {
+		code: "CANVAS_REVISION_CONFLICT",
+		status: 409,
+		message: "The canvas changed. Read it again before retrying this edit.",
+	},
+	CanvasWorkerUnavailable: {
+		code: "CANVAS_WORKER_UNAVAILABLE",
+		status: 503,
+		message:
+			"Canvas collaboration is temporarily unavailable. Read the canvas before retrying a write.",
+	},
 	BroadcastUnavailable: {
 		code: "BROADCAST_UNAVAILABLE",
 		status: 503,

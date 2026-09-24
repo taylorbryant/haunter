@@ -31,6 +31,71 @@ export function createDrizzleCanvasRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): CanvasRepository {
 	return {
+		async saveHistory(scope, input) {
+			const id = crypto.randomUUID();
+			await db.insert(schema.canvasHistory).values({
+				id,
+				canvasId: input.canvasId,
+				workspaceId: tenantScopeId(scope),
+				revision: input.revision,
+				snapshot: input.snapshotJson,
+				createdBy: input.createdBy,
+				createdAt: new Date().toISOString(),
+			});
+			const old = await db
+				.select({ id: schema.canvasHistory.id })
+				.from(schema.canvasHistory)
+				.where(
+					and(
+						eq(schema.canvasHistory.canvasId, input.canvasId),
+						eq(schema.canvasHistory.workspaceId, tenantScopeId(scope)),
+					),
+				)
+				.orderBy(desc(schema.canvasHistory.revision))
+				.limit(1_000)
+				.offset(50);
+			if (old.length)
+				await db.delete(schema.canvasHistory).where(
+					inArray(
+						schema.canvasHistory.id,
+						old.map((row) => row.id),
+					),
+				);
+			return id;
+		},
+		async listHistory(scope, canvasId) {
+			return db
+				.select({
+					id: schema.canvasHistory.id,
+					revision: schema.canvasHistory.revision,
+					createdAt: schema.canvasHistory.createdAt,
+				})
+				.from(schema.canvasHistory)
+				.where(
+					and(
+						eq(schema.canvasHistory.canvasId, canvasId),
+						eq(schema.canvasHistory.workspaceId, tenantScopeId(scope)),
+					),
+				)
+				.orderBy(desc(schema.canvasHistory.revision))
+				.limit(50);
+		},
+		async findHistory(scope, canvasId, id) {
+			const [row] = await db
+				.select({
+					snapshotJson: schema.canvasHistory.snapshot,
+					revision: schema.canvasHistory.revision,
+				})
+				.from(schema.canvasHistory)
+				.where(
+					and(
+						eq(schema.canvasHistory.id, id),
+						eq(schema.canvasHistory.canvasId, canvasId),
+						eq(schema.canvasHistory.workspaceId, tenantScopeId(scope)),
+					),
+				);
+			return row ?? null;
+		},
 		async findSyncRoom(scope, id) {
 			const [row] = await db
 				.select()
