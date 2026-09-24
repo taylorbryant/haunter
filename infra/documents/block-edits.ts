@@ -13,6 +13,7 @@ import { appError } from "@/features/shared/errors";
 import { seedPageBody, projectPageBody } from "./codec";
 import { updateInlineContent } from "./inline-edits";
 import { serverPageSchema } from "./page-schema";
+import { recordBlockMove } from "./move-conflicts";
 
 function invalid(message: string): never {
 	throw appError("InvalidPageContent", { message });
@@ -141,6 +142,18 @@ function newContainer(block: BlockJson): Y.XmlElement {
 	}
 }
 
+function childGroup(parent: Y.XmlElement): Y.XmlElement {
+	const existing = parent
+		.toArray()
+		.find(
+			(node) => node instanceof Y.XmlElement && node.nodeName === "blockGroup",
+		);
+	if (existing instanceof Y.XmlElement) return existing;
+	const group = new Y.XmlElement("blockGroup");
+	parent.insert(parent.length, [group]);
+	return group;
+}
+
 /** Mutate only addressed Yjs nodes. Never rebuild the document for a targeted edit. */
 export function editDocumentBlocks(
 	doc: Y.Doc,
@@ -149,21 +162,9 @@ export function editDocumentBlocks(
 	const insertedBlockIds: string[] = [];
 	for (const operation of operations) {
 		if (operation.op === "insert") {
-			let group = groupOf(doc);
-			if (operation.parentBlockId) {
-				const parent = containerOf(doc, operation.parentBlockId);
-				const existing = parent
-					.toArray()
-					.find(
-						(node) =>
-							node instanceof Y.XmlElement && node.nodeName === "blockGroup",
-					);
-				if (existing instanceof Y.XmlElement) group = existing;
-				else {
-					group = new Y.XmlElement("blockGroup");
-					parent.insert(parent.length, [group]);
-				}
-			}
+			const group = operation.parentBlockId
+				? childGroup(containerOf(doc, operation.parentBlockId))
+				: groupOf(doc);
 			let position = 0;
 			if (operation.afterBlockId !== null) {
 				const anchor = containerOf(doc, operation.afterBlockId);
@@ -185,6 +186,54 @@ export function editDocumentBlocks(
 			continue;
 		}
 		const container = containerOf(doc, operation.blockId);
+		if (operation.op === "move") {
+			const destinationParent = operation.parentBlockId
+				? containerOf(doc, operation.parentBlockId)
+				: null;
+			if (
+				destinationParent &&
+				(destinationParent === container ||
+					[...container.createTreeWalker(() => true)].includes(
+						destinationParent,
+					))
+			)
+				invalid(
+					"A block cannot be moved into itself or one of its descendants.",
+				);
+			if (operation.afterBlockId === operation.blockId)
+				invalid("A block cannot be its own move anchor.");
+			const group = destinationParent
+				? childGroup(destinationParent)
+				: groupOf(doc);
+			const anchor =
+				operation.afterBlockId === null
+					? null
+					: containerOf(doc, operation.afterBlockId);
+			if (anchor && anchor.parent !== group)
+				invalid("The move anchor must belong to the specified parent.");
+			const source = container.parent;
+			if (!(source instanceof Y.XmlElement)) invalid("Invalid block parent.");
+			if (
+				source !== group &&
+				source.length === 1 &&
+				source.parent instanceof Y.XmlElement
+			)
+				invalid(
+					"Moving the last child out of a nested block is not supported safely during collaboration. Leave another child in that parent before moving this block.",
+				);
+			const sourceIndex = source.toArray().indexOf(container);
+			let destinationIndex = anchor ? group.toArray().indexOf(anchor) + 1 : 0;
+			if (source === group && sourceIndex < destinationIndex)
+				destinationIndex--;
+			if (source === group && sourceIndex === destinationIndex) continue;
+			// Yjs integrated XML nodes cannot be reparented. Clone just this subtree,
+			// retaining BlockNote IDs, attributes, rich content, and canvas references.
+			const moved = container.clone();
+			source.delete(sourceIndex, 1);
+			group.insert(destinationIndex, [moved]);
+			recordBlockMove(doc, moved);
+			continue;
+		}
 		if (operation.op === "delete") {
 			const block = blockOf(doc, operation.blockId);
 			if (block.children.length && operation.deleteChildren !== true)

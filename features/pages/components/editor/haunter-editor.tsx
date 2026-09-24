@@ -49,6 +49,7 @@ import { downloadRecoveryDrafts } from "@/client/draft-export";
 import { useDurableDraftStorage } from "@/client/durable-draft-storage-provider";
 import { reportUserError } from "@/client/error-feedback";
 import { localDraftKey } from "@/client/local-drafts";
+import { DocumentRecoveryNotice } from "@/features/documents/components/document-recovery-notice";
 import { usePageDocument } from "@/features/documents/client/use-page-document";
 import type { PageDocumentSession } from "@/features/documents/client/session";
 import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
@@ -358,10 +359,6 @@ function CollaborativePageBody(
 	const queryClient = useQueryClient();
 	const storage = useDurableDraftStorage<BlockJson[]>();
 	const [oldDraft, setOldDraft] = useState<BlockJson[] | null>(null);
-	const [recoveryError, setRecoveryError] = useState<string | null>(null);
-	const [recoveryGeneration, setRecoveryGeneration] = useState<number | null>(
-		null,
-	);
 	useEffect(() => {
 		let active = true;
 		void storage
@@ -415,68 +412,8 @@ function CollaborativePageBody(
 	}, [snapshot.linksRevision, queryClient]);
 	return (
 		<>
-			{snapshot.recoveries.length > 0 && session ? (
-				<div
-					role="status"
-					className="mb-3 rounded-lg border p-3 text-sm md:mx-[54px]"
-				>
-					This page was restored. Previous copies, including pending edits, are
-					kept in this browser. Download a copy, then use Recover drafts in the
-					Pages menu to open it as a new page.
-					{snapshot.recoveries.length > 1 ? (
-						<label className="mt-2 flex items-center gap-2">
-							Recovery copy
-							<select
-								className="rounded-md border bg-background p-1"
-								value={recoveryGeneration ?? snapshot.recoveries[0]}
-								onChange={(event) =>
-									setRecoveryGeneration(Number(event.target.value))
-								}
-							>
-								{snapshot.recoveries.map((generation) => (
-									<option key={generation} value={generation}>
-										Before restore {generation + 1}
-									</option>
-								))}
-							</select>
-						</label>
-					) : null}
-					<Button
-						variant="outline"
-						size="sm"
-						className="mt-2"
-						onClick={() => {
-							setRecoveryError(null);
-							void session
-								.recoveryDownload(recoveryGeneration ?? snapshot.recoveries[0])
-								.then((file) => {
-									const url = URL.createObjectURL(
-										new Blob([file], { type: "application/json" }),
-									);
-									const link = document.createElement("a");
-									link.href = url;
-									link.download = "haunter-before-restore.json";
-									link.hidden = true;
-									document.body.append(link);
-									link.click();
-									link.remove();
-									setTimeout(() => URL.revokeObjectURL(url), 1000);
-								})
-								.catch(() =>
-									setRecoveryError(
-										"The recovery copy could not be downloaded. Keep this tab open and try again.",
-									),
-								);
-						}}
-					>
-						Download previous copy
-					</Button>
-					{recoveryError ? (
-						<p role="alert" className="mt-2 text-destructive">
-							{recoveryError}
-						</p>
-					) : null}
-				</div>
+			{session ? (
+				<DocumentRecoveryNotice snapshot={snapshot} session={session} />
 			) : null}
 
 			{oldDraft ? (

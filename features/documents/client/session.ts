@@ -12,6 +12,7 @@ import {
 	DOCUMENT_META,
 	DOCUMENT_SCHEMA_VERSION,
 	pageDocumentName,
+	type DocumentResetReason,
 } from "../model";
 import { receiptCoversDocument, type PersistenceReceipt } from "../receipt";
 import {
@@ -20,12 +21,16 @@ import {
 	documentCacheKey,
 	advanceDocumentGeneration,
 	readDocumentRecovery,
+	dismissDocumentRecoveryNotice,
+	isRecoveryNoticeDismissed,
 } from "./local-store";
 
 export type DocumentSnapshot = {
 	generation: number;
 	restoring: boolean;
 	recoveries: number[];
+	resetReason: DocumentResetReason | null;
+	recoveryNoticeDismissed: boolean;
 	ready: boolean;
 	connected: boolean;
 	saved: boolean;
@@ -48,6 +53,8 @@ export class PageDocumentSession {
 		generation: 0,
 		restoring: false,
 		recoveries: [],
+		resetReason: null,
+		recoveryNoticeDismissed: false,
 		ready: false,
 		connected: false,
 		saved: false,
@@ -142,6 +149,11 @@ export class PageDocumentSession {
 		for (const listener of this.listeners) listener();
 	}
 	private ready(source: "cache" | "server") {
+		const reason = this.doc.getMap(DOCUMENT_META).get("resetReason");
+		this.publish({
+			resetReason:
+				reason === "replacement" || reason === "restore" ? reason : null,
+		});
 		if (
 			!this.snapshot.ready &&
 			this.doc.getMap(DOCUMENT_META).get("schemaVersion") ===
@@ -163,6 +175,7 @@ export class PageDocumentSession {
 			this.publish({
 				generation: head.generation,
 				recoveries: head.recoveries,
+				recoveryNoticeDismissed: isRecoveryNoticeDismissed(head),
 			});
 			await this.local.load();
 			if (this.disposed) return;
@@ -283,7 +296,9 @@ export class PageDocumentSession {
 						this.publish({
 							saved: false,
 							error:
-								"This draft contains unsupported content or exceeds the document limits. Download a copy before correcting it and retrying.",
+								message.reason === "move-conflict"
+									? "Concurrent block moves need attention. Your local edits remain in this browser. Download your drafts before resolving the conflict and retrying."
+									: "This draft contains unsupported content or exceeds the document limits. Download a copy before correcting it and retrying.",
 						});
 						this.provider?.disconnect();
 					} else if (message.type === "storage-error") {
@@ -327,7 +342,7 @@ export class PageDocumentSession {
 			} catch {
 				this.publish({
 					error:
-						"The restored page could not be opened. Your previous copy is preserved. Retry when connected.",
+						"The updated page could not be opened. Your previous copy is preserved. Retry when connected.",
 				});
 			}
 		})().finally(() => {
@@ -377,6 +392,8 @@ export class PageDocumentSession {
 				this.publish({
 					generation,
 					recoveries: head.recoveries,
+					resetReason: null,
+					recoveryNoticeDismissed: isRecoveryNoticeDismissed(head),
 					ready: false,
 					readySource: null,
 					revision: 0,
@@ -403,6 +420,18 @@ export class PageDocumentSession {
 		});
 		return this.generationFlight;
 	}
+	async dismissRecoveryNotice() {
+		const latest = this.snapshot.recoveries[0];
+		if (latest === undefined) return;
+		const head = await dismissDocumentRecoveryNotice(this.identity.key, latest);
+		// A newer reset may have arrived while the dismissal was being saved.
+		this.publish({
+			recoveryNoticeDismissed: isRecoveryNoticeDismissed({
+				...head,
+				recoveries: this.snapshot.recoveries,
+			}),
+		});
+	}
 	async recoveryDownload(generation = this.snapshot.recoveries[0]) {
 		if (
 			generation === undefined ||
@@ -416,7 +445,7 @@ export class PageDocumentSession {
 				{
 					type: "page",
 					id: `${this.options.pageId}:g${generation}`,
-					title: `Recovered page — before restore ${generation + 1}`,
+					title: `Recovered page — previous copy ${generation + 1}`,
 					content: [],
 					collaborativeState: {
 						format: "haunter-yjs-v1",

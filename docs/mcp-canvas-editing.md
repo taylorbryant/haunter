@@ -30,6 +30,11 @@ To find an existing embedded canvas, call `read_page` with `format: "blocks"`
 and look for a block with `type: "canvas"` and `props.canvasId`. Existing standalone
 canvases can also be read and edited when you have their canvas ID.
 
+To reorder canvas blocks within a page, use the `move` operation in
+[`edit_page_blocks`](mcp-page-editing.md#edit-selected-blocks), using each page block's
+`id` rather than its `props.canvasId`. This preserves the drawings and avoids
+replacing the whole page body.
+
 ## Read a drawing
 
 Call `read_canvas` with `workspaceId` and `canvasId`. The response contains:

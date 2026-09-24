@@ -2,7 +2,14 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import Dexie from "dexie";
 import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 import * as Y from "yjs";
-import { LocalDocumentStore } from "../client/local-store";
+import {
+	LocalDocumentStore,
+	advanceDocumentGeneration,
+	dismissDocumentRecoveryNotice,
+	isRecoveryNoticeDismissed,
+	loadDocumentHead,
+	readDocumentRecovery,
+} from "../client/local-store";
 
 const original = { ...Dexie.dependencies };
 beforeAll(() => {
@@ -14,6 +21,26 @@ afterAll(() => {
 });
 
 describe("local collaborative persistence", () => {
+	test("dismissal retains recovery data and late dismissals cannot hide new copies", async () => {
+		const key = crypto.randomUUID();
+		const doc = new Y.Doc();
+		doc.getText("draft").insert(0, "Keep these edits");
+		try {
+			await advanceDocumentGeneration(key, 0, 1, Y.encodeStateAsUpdate(doc));
+			const before = await readDocumentRecovery(key, 0);
+			await dismissDocumentRecoveryNotice(key, 0);
+			expect(isRecoveryNoticeDismissed(await loadDocumentHead(key))).toBe(true);
+			expect(await readDocumentRecovery(key, 0)).toEqual(before);
+			await advanceDocumentGeneration(key, 1, 2, Y.encodeStateAsUpdate(doc));
+			await dismissDocumentRecoveryNotice(key, 0);
+			const head = await loadDocumentHead(key);
+			expect(head.generation).toBe(2);
+			expect(head.recoveries).toEqual([1, 0]);
+			expect(isRecoveryNoticeDismissed(head)).toBe(false);
+		} finally {
+			doc.destroy();
+		}
+	});
 	test("flush survives reload, including deletion-only changes", async () => {
 		const key = crypto.randomUUID();
 		const doc = new Y.Doc();
