@@ -38,6 +38,7 @@ const workspaceScope = {
 export const agentCapabilityMetadata = {
 	create_canvas_block: workspaceScope,
 	read_canvas: workspaceScope,
+	preview_canvas: workspaceScope,
 	edit_canvas: workspaceScope,
 	delete_canvas_shapes: workspaceScope,
 	list_workspace_members: workspaceScope,

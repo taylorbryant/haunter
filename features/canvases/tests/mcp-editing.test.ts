@@ -13,10 +13,20 @@ import { executeRemoteMcpCapability } from "@/server/agent-capabilities";
 import * as schema from "@/infra/db/schema";
 import { CanvasReadOutputSchema, CanvasEditOutputSchema } from "../editing";
 import { createCanvasBlockUseCase } from "../use-cases/create-canvas-block";
+import { CanvasPreviewOutputSchema } from "../editing";
+import type { CanvasPreviewRenderer } from "../ports";
+import { createCanvasPreviewRenderer } from "@/infra/canvases/preview-renderer";
+import { createRemoteMcpRequestHandler } from "@/server/remote-mcp";
+import {
+	CLIENT_CAPABILITIES_META_KEY,
+	CLIENT_INFO_META_KEY,
+	PROTOCOL_VERSION_META_KEY,
+} from "@modelcontextprotocol/server";
 
 async function fixture(
 	profile: McpConnectionRow["permissionProfile"] = "full",
 	role = "owner",
+	previewRenderer?: CanvasPreviewRenderer,
 ) {
 	const f = await documentFixture(role);
 	const connection: McpConnectionRow = {
@@ -40,6 +50,7 @@ async function fixture(
 		acquire: async () => null,
 	};
 	const engine = createCanvasSyncServer({
+		previewRenderer,
 		verify() {
 			throw new Error("Not a browser session");
 		},
@@ -111,6 +122,7 @@ async function fixture(
 		readPage,
 		edit,
 		connection,
+		server,
 		async stop() {
 			await engine.stop();
 			await transport.stop(true);
@@ -445,6 +457,220 @@ test("workspace viewers cannot create or edit canvases even with Full MCP access
 		});
 		expect((await f.read(canvas.id)).shapes).toEqual([]);
 		await expect(f.edit(canvas.id, diagram)).rejects.toThrow();
+	} finally {
+		await f.stop();
+	}
+});
+
+const blankPreview = {
+	pageId: "page:page",
+	shapeIds: [],
+	width: 1,
+	height: 1,
+	bounds: { x: 0, y: 0, width: 1, height: 1 },
+	image: {
+		mimeType: "image/png" as const,
+		data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aOAAAAABJRU5ErkJggg==",
+	},
+};
+
+test("hosted MCP returns a native PNG and metadata without duplicating image data in text", async () => {
+	const renderer = createCanvasPreviewRenderer();
+	const f = await fixture("full", "owner", renderer);
+	try {
+		const { canvasId } = await f.create();
+		const edited = await f.edit(canvasId, diagram);
+		const before = await f.read(canvasId);
+		const handler = createRemoteMcpRequestHandler({
+			connection: f.connection,
+			identity: { userId: f.userId, clientId: "client" },
+			getServer: async () => f.server,
+		});
+		const response = await handler(
+			new Request("https://haunter.test/mcp", {
+				method: "POST",
+				headers: {
+					Accept: "application/json",
+					"Content-Type": "application/json",
+					"Mcp-Method": "tools/call",
+					"Mcp-Name": "preview_canvas",
+					"Mcp-Protocol-Version": "2026-07-28",
+				},
+				body: JSON.stringify({
+					jsonrpc: "2.0",
+					id: "preview-test",
+					method: "tools/call",
+					params: {
+						name: "preview_canvas",
+						arguments: {
+							workspaceId: f.workspaceId,
+							canvasId,
+							expectedRevision: edited.revision,
+						},
+						_meta: {
+							[PROTOCOL_VERSION_META_KEY]: "2026-07-28",
+							[CLIENT_INFO_META_KEY]: {
+								name: "Preview test",
+								version: "1.0.0",
+							},
+							[CLIENT_CAPABILITIES_META_KEY]: {},
+						},
+					},
+				}),
+			}),
+		);
+		const { result, error } = await response.json();
+		expect(error).toBeUndefined();
+		expect(result.isError).toBeUndefined();
+		expect(result.content.map((part: { type: string }) => part.type)).toEqual([
+			"text",
+			"image",
+		]);
+		expect(result.content[1].mimeType).toBe("image/png");
+		const png = Buffer.from(result.content[1].data, "base64");
+		expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+		expect(png.readUInt32BE(16)).toBe(result.structuredContent.width);
+		expect(png.readUInt32BE(20)).toBe(result.structuredContent.height);
+		expect(result.structuredContent.revision).toBe(edited.revision);
+		expect(result.structuredContent.shapeIds).toHaveLength(3);
+		expect(JSON.parse(result.content[0].text)).toEqual(
+			result.structuredContent,
+		);
+		expect(result.structuredContent.image).toBeUndefined();
+		expect(await f.read(canvasId)).toEqual(before);
+	} finally {
+		await renderer.stop();
+		await f.stop();
+	}
+}, 30_000);
+
+test("View-only workspace readers can preview, but stale revisions and inaccessible canvases never render", async () => {
+	let calls = 0;
+	const f = await fixture("view", "viewer", {
+		render: async () => {
+			calls++;
+			return blankPreview;
+		},
+	});
+	try {
+		const canvas = await f.database.repositories.canvases.create(f.scope, {
+			userId: f.userId,
+			pageId: f.page.id,
+			title: "Read only",
+		});
+		const revision = (await f.read(canvas.id)).revision;
+		const preview = CanvasPreviewOutputSchema.parse(
+			await f.execute("preview_canvas", {
+				canvasId: canvas.id,
+				expectedRevision: revision,
+			}),
+		);
+		expect(preview.revision).toBe(revision);
+		expect(calls).toBe(1);
+		await expect(
+			f.execute("preview_canvas", {
+				canvasId: canvas.id,
+				expectedRevision: "stale",
+			}),
+		).rejects.toMatchObject({
+			code: "CANVAS_REVISION_CONFLICT",
+			details: { currentRevision: revision },
+		});
+		await expect(
+			f.execute("preview_canvas", {
+				canvasId: canvas.id,
+				workspaceId: "other",
+			}),
+		).rejects.toThrow();
+		await f.database.repositories.pages.setDeletedByIds(
+			f.scope,
+			[f.page.id],
+			new Date().toISOString(),
+		);
+		await expect(
+			f.execute("preview_canvas", { canvasId: canvas.id }),
+		).rejects.toMatchObject({ code: "CANVAS_NOT_FOUND" });
+		expect(calls).toBe(1);
+	} finally {
+		await f.stop();
+	}
+});
+
+test("slow previews release the edit queue and preserve their captured revision and snapshot", async () => {
+	const started =
+		Promise.withResolvers<Parameters<CanvasPreviewRenderer["render"]>[0]>();
+	const finish = Promise.withResolvers<void>();
+	const f = await fixture("full", "owner", {
+		render: async (input) => {
+			started.resolve(input);
+			await finish.promise;
+			return blankPreview;
+		},
+	});
+	try {
+		const { canvasId } = await f.create();
+		const before = await f.read(canvasId);
+		const pending = f.execute("preview_canvas", {
+			canvasId,
+			expectedRevision: before.revision,
+		});
+		const captured = await started.promise;
+		const edited = await f.edit(canvasId, diagram);
+		expect(edited.revision).not.toBe(before.revision);
+		expect(
+			Object.values(captured.snapshot.store).filter(
+				(r) => r.typeName === "shape",
+			),
+		).toHaveLength(0);
+		finish.resolve();
+		expect(CanvasPreviewOutputSchema.parse(await pending).revision).toBe(
+			before.revision,
+		);
+		expect((await f.read(canvasId)).revision).toBe(edited.revision);
+	} finally {
+		finish.resolve();
+		await f.stop();
+	}
+});
+
+test("revoking membership during rendering prevents the captured image from returning", async () => {
+	const started = Promise.withResolvers<void>();
+	const finish = Promise.withResolvers<void>();
+	const f = await fixture("full", "owner", {
+		render: async () => {
+			started.resolve();
+			await finish.promise;
+			return blankPreview;
+		},
+	});
+	try {
+		const { canvasId } = await f.create();
+		const pending = f.execute("preview_canvas", { canvasId });
+		const outcome = pending.then(
+			() => null,
+			(error: unknown) => error,
+		);
+		await started.promise;
+		await f.database.db
+			.delete(schema.member)
+			.where(eq(schema.member.userId, f.userId));
+		finish.resolve();
+		expect(await outcome).toMatchObject({ code: "FORBIDDEN" });
+	} finally {
+		finish.resolve();
+		await f.stop();
+	}
+});
+
+test("a worker without preview support returns a safe unavailable error without changing the canvas", async () => {
+	const f = await fixture();
+	try {
+		const { canvasId } = await f.create();
+		const before = await f.read(canvasId);
+		await expect(
+			f.execute("preview_canvas", { canvasId }),
+		).rejects.toMatchObject({ code: "CANVAS_PREVIEW_UNAVAILABLE" });
+		expect(await f.read(canvasId)).toEqual(before);
 	} finally {
 		await f.stop();
 	}

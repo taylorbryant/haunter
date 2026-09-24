@@ -10,6 +10,7 @@ export type AgentHostPermissionState =
 
 const VIEW_CAPABILITIES = [
 	"read_canvas",
+	"preview_canvas",
 	"list_workspaces",
 	"list_workspace_members",
 	"list_pages",
@@ -58,6 +59,7 @@ export const AGENT_PERMISSION_PROFILES = {
 		details: [
 			"View and search pages",
 			"Read canvas shapes and history",
+			"Preview canvas drawings",
 			"View tasks",
 			"View workspaces and members",
 		],
@@ -95,6 +97,7 @@ export const AGENT_PERMISSION_PROFILES = {
 const CAPABILITY_LABELS = {
 	create_canvas_block: "Add canvas blocks",
 	read_canvas: "Read canvases",
+	preview_canvas: "Preview canvases",
 	edit_canvas: "Edit canvas shapes",
 	delete_canvas_shapes: "Delete canvas shapes",
 	list_workspaces: "View workspaces",

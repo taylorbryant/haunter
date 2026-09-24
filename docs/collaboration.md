@@ -37,6 +37,12 @@ sent to editors. Deploy migration `0044_thin_iceman.sql` and the updated worker
 before enabling these tools. The worker proxy must forward
 `POST /internal/canvas-command` alongside the WebSocket routes.
 
+Canvas image previews also use this signed command route. The worker Docker
+image includes Chromium; local workers need
+`bunx --bun playwright install chromium --only-shell`. Previews render a detached
+snapshot outside the room's edit queue, allow one browser at a time, and do not
+change canvas history. See [preview limits and deployment](mcp-canvas-editing.md#preview-a-drawing).
+
 ### Agent presence in page headers
 
 With [workspace live updates](../README.md#optional-services) enabled
@@ -80,6 +86,7 @@ Configure these values before starting the worker:
 | `BETTER_AUTH_SECRET` | Same signing secret as Next |
 | `RESEND_API_KEY`, `RESEND_FROM` | Required by the shared app providers, including when booting the worker |
 | `NEXT_PUBLIC_COLLABORATION_URL` | Public worker URL, such as `wss://collab.example.com`; set at worker runtime and before building Next |
+| `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` | Pass the web app's tldraw license to the worker for canvas previews when configured |
 | `COLLABORATION_HOST`, `COLLABORATION_PORT` | Container defaults are `0.0.0.0` and `1234`; local defaults are `127.0.0.1` and `1234` |
 
 Match the app's optional Blob, Upstash, and Web Push configuration when those

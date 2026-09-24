@@ -1,5 +1,7 @@
 /** Browser-safe capability copy shared by approval UI use cases and adapters. */
 export const AGENT_CAPABILITY_DESCRIPTIONS = {
+	preview_canvas:
+		"Render a read-only PNG of a canvas using tldraw. Returns an image plus revision, pageId, shapeIds, pixel dimensions and bounds in canvas coordinates. Optional expectedRevision checks the captured state; use the revision from edit_canvas to inspect that edit. Specify pageId for multi-page canvases. Optional shapeIds focuses on up to 100 shapes and their descendants; arrows must be selected explicitly. Light theme, opaque background, at most 1600 pixels per side. Pages are limited to 1000 shapes; images, videos, embeds and bookmarks cannot be previewed. Hosted MCP returns native image content; Agent Auth returns base64 image data. Requires the collaboration worker with Chromium installed.",
 	create_canvas_block:
 		"Create a canvas and append its block to a page atomically. Requires expectedRevision from read_page; returns the new page revision, block ID, canvasId and canvasRevision. Saves page history. Use edit_canvas to populate it.",
 	read_canvas:

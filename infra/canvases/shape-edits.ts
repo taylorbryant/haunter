@@ -30,7 +30,7 @@ export function canvasText(value: unknown): string {
 /** A deliberately bounded native-shape adapter. No browser, arbitrary records or code execution. */
 export function prepareCanvasEdit(
 	snapshot: TLStoreSnapshot,
-	command: Exclude<CanvasCommand, { action: "read" }>,
+	command: Extract<CanvasCommand, { action: "edit" | "delete" }>,
 ) {
 	const records: Record<string, TLRecord> = { ...snapshot.store };
 	const createdShapes: Record<string, string> = {};

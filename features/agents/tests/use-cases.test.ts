@@ -327,6 +327,7 @@ describe("agents.getPending", () => {
 		const active = agentRow({
 			hostDefaultCapabilities: [
 				"read_canvas",
+				"preview_canvas",
 				"list_workspaces",
 				"list_workspace_members",
 				"list_pages",

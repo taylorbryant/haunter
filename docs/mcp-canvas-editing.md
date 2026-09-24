@@ -1,7 +1,8 @@
 # Edit canvases through MCP
 
-Add diagrams to pages with `create_canvas_block`, inspect them with `read_canvas`,
-and change their shapes with `edit_canvas`. These tools create native tldraw
+Add diagrams to pages with `create_canvas_block`, inspect their structure with
+`read_canvas`, see the rendered drawing with `preview_canvas`, and change their
+shapes with `edit_canvas`. These tools create native tldraw
 shapes that you can continue editing in Haunter.
 
 Each call requires a `workspaceId` from `list_workspaces`. Canvas reads and edits
@@ -92,7 +93,47 @@ An edit accepts up to 100 operations. Text is limited to 5,000 characters per
 operation; dimensions to 1–10,000 canvas units; coordinates to ±1,000,000.
 The command must fit within 1 MB. Saved drawings retain the existing canvas
 limits of 30,000 records and 5 MB of record JSON, with an 8 MiB room limit.
-There is no automatic layout, text measurement, image preview, or Mermaid import.
+There is no automatic layout, text sizing during edits, or Mermaid import.
+
+## Preview a drawing
+
+Call `preview_canvas` after an edit to check labels, spacing, and connections:
+
+```json
+{
+  "workspaceId": "YOUR_WORKSPACE_ID",
+  "canvasId": "YOUR_CANVAS_ID",
+  "expectedRevision": "REVISION_FROM_EDIT_CANVAS"
+}
+```
+
+Hosted MCP returns a native PNG image content item alongside text and structured
+metadata: `canvasId`, `revision`, `pageId`, `shapeIds`, pixel `width` and `height`,
+and `bounds` (`x`, `y`, `width`, `height`) in canvas coordinates. Agent Auth
+returns the same metadata with `image: { mimeType: "image/png", data: "BASE64" }`.
+
+- Omit `expectedRevision` to capture the latest durable state. If provided and
+  stale, the call fails with `CANVAS_REVISION_CONFLICT` before rendering.
+- A canvas with multiple tldraw pages requires `pageId` from `read_canvas`.
+- Optional `shapeIds` focuses on up to 100 shapes, including their descendants.
+  Arrows are included only when selected or inside a selected group/frame.
+  Omit `shapeIds` for the whole page; an empty array is invalid.
+- The preview uses tldraw's native renderer, bundled fonts, light theme, an
+  opaque background, 32 canvas units of padding, and at most 1600 pixels per
+  side. An empty page returns a blank 640 × 360 image.
+- Native geometry, text, notes, arrows, lines, freehand drawings, highlights,
+  groups and frames are supported. Selected images, videos, bookmarks, and
+  embeds return `INVALID_CANVAS_PREVIEW`. Use `shapeIds` to select supported
+  shapes on a mixed page. Pages are limited to 1000 shapes, including children.
+- Rendering uses a detached snapshot and does not hold the canvas editing
+  queue. The returned revision identifies that snapshot; newer edits can
+  arrive while it renders. A preview does not create history or alter shapes.
+
+The worker renders one preview at a time in a fresh browser context with no
+network access beyond locally served renderer assets and fonts. Images are
+returned directly and are not saved or published to a URL. A busy renderer,
+timeout, missing browser, or oversized image returns `CANVAS_PREVIEW_UNAVAILABLE`;
+retry after a short delay. Access is checked again before returning the image.
 
 ## Delete shapes
 
@@ -106,7 +147,7 @@ in the canvas editor. The operation deletes drawings, not the page's canvas bloc
 
 | Permission | Allowed canvas operations |
 | --- | --- |
-| View only | Read current drawings and retained history. |
+| View only | Read current drawings and retained history, and preview current drawings. |
 | View and edit | Also add canvas blocks, create shapes, update shapes, and connect nodes. |
 | Full access | Also delete shapes. |
 
@@ -143,6 +184,24 @@ equivalent of `NEXT_PUBLIC_COLLABORATION_URL` to reach
 well as its WebSocket routes. Both services must share `BETTER_AUTH_SECRET`;
 the route verifies a short-lived signature over the entire request. An older
 worker returns `CANVAS_WORKER_UNAVAILABLE` for canvas reads and edits.
+
+Previews require deploying both the updated web app and worker, with no new
+database migration beyond the canvas editing migration above. The worker
+Dockerfile installs Playwright's pinned Chromium headless shell and its system
+dependencies. For local workers and tests, install the browser once after
+`bun install` (repeat after upgrading Playwright):
+
+```sh
+bunx --bun playwright install chromium --only-shell
+```
+
+On Linux, add `--with-deps` to install system dependencies. Supply
+`NEXT_PUBLIC_TLDRAW_LICENSE_KEY` to the worker as well as the web app when using
+a tldraw license. The browser and tldraw bundle run only in the collaboration
+worker; the web app forwards authenticated requests. Browser startup has an
+8-second timeout and rendering a 15-second timeout within the command bridge's
+30-second request deadline. Monitor worker memory under preview load; each
+request starts a separate Chromium process with one render allowed at a time.
 
 Follow the [collaboration deployment guide](collaboration.md#worker-deployment)
 for worker configuration and the single-worker requirement.
