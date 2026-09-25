@@ -8,6 +8,7 @@ import {
 import type { PublishContextInput } from "../schemas";
 import type { LiveContextTracker } from "../client/tracker";
 import { act, useEffect } from "react";
+import { textEditingFixture } from "./helpers";
 
 const pageId = crypto.randomUUID();
 const canvasId = crypto.randomUUID();
@@ -82,6 +83,7 @@ test("real browser events retain selection on window blur but clear it on page i
 				canvasPageId: "page:one",
 				selectedShapeIds: ["shape:a"],
 				selectionCount: 1,
+				textEditing: textEditingFixture,
 			},
 			true,
 		),
@@ -94,6 +96,7 @@ test("real browser events retain selection on window blur but clear it on page i
 		await tracker!.flush();
 	});
 	expect(calls.at(-1)?.view?.canvas?.selectedShapeIds).toEqual(["shape:a"]);
+	expect(calls.at(-1)?.view?.canvas?.textEditing).toEqual(textEditingFixture);
 	fireEvent.pointerDown(view.getByText("Canvas"));
 	await act(async () => {
 		await tracker!.flush();

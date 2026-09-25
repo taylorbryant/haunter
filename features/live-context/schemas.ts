@@ -11,6 +11,37 @@ export const LIVE_CONTEXT_SEQUENCE_TTL_MS = Math.max(
 export const LIVE_CONTEXT_STALE_MS = 45_000;
 export const LIVE_CONTEXT_MAX_SESSIONS = 20;
 export const LIVE_CONTEXT_MAX_SHAPES = 100;
+export const LIVE_CONTEXT_MAX_SELECTED_TEXT = 2_000;
+
+const ShapeIdSchema = z
+	.string()
+	.regex(/^shape:.+/)
+	.max(200);
+const TextPositionSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+export const CanvasTextSelectionSchema = z
+	.object({
+		coordinateSystem: z.literal("prosemirror"),
+		kind: z.enum(["text", "all"]),
+		anchor: TextPositionSchema,
+		head: TextPositionSchema,
+		from: TextPositionSchema,
+		to: TextPositionSchema,
+		selectedText: z.string().max(LIVE_CONTEXT_MAX_SELECTED_TEXT),
+		truncated: z.boolean(),
+	})
+	.refine(
+		(value) =>
+			value.from === Math.min(value.anchor, value.head) &&
+			value.to === Math.max(value.anchor, value.head) &&
+			(value.from !== value.to ||
+				(value.selectedText === "" && !value.truncated)),
+	);
+export const CanvasTextEditingSchema = z.object({
+	shapeId: ShapeIdSchema,
+	// Null while the editor is initializing or its selection is unsupported.
+	selection: CanvasTextSelectionSchema.nullable(),
+});
+export type CanvasTextEditing = z.infer<typeof CanvasTextEditingSchema>;
 
 export const CanvasSelectionSchema = z
 	.object({
@@ -20,15 +51,10 @@ export const CanvasSelectionSchema = z
 			.regex(/^page:.+/)
 			.max(200)
 			.nullable(),
-		selectedShapeIds: z
-			.array(
-				z
-					.string()
-					.regex(/^shape:.+/)
-					.max(200),
-			)
-			.max(LIVE_CONTEXT_MAX_SHAPES),
+		selectedShapeIds: z.array(ShapeIdSchema).max(LIVE_CONTEXT_MAX_SHAPES),
 		selectionCount: z.number().int().min(0).max(30_000),
+		// Optional for older tabs and Redis entries; null means no rich-text edit.
+		textEditing: CanvasTextEditingSchema.nullable().optional(),
 	})
 	.refine(
 		(value) =>

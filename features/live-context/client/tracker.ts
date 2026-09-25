@@ -25,6 +25,7 @@ const emptyCanvas = (canvasId: string): CanvasSelection => ({
 	canvasPageId: null,
 	selectedShapeIds: [],
 	selectionCount: 0,
+	textEditing: null,
 });
 
 /** One instance per signed-in tab. Never persist its ID in shared localStorage

@@ -7,6 +7,7 @@ import { Redis as RedisConnection } from "ioredis";
 import { Redis, type Requester } from "@upstash/redis";
 import { createTenantScope } from "@beignet/core/ports";
 import { createRedisLiveContext } from "@/infra/live-context/redis-live-context";
+import { textEditingFixture } from "./helpers";
 import {
 	LIVE_CONTEXT_CLOCK_SKEW_MS,
 	LIVE_CONTEXT_MAX_SESSIONS,
@@ -281,4 +282,30 @@ test("preserves ordering state from an older preview deployment", async () => {
 	expect(await f.publish({ sequence: sequence - 1 })).toBe(false);
 	expect(await f.list()).toEqual([]);
 	expect(await f.publish({ sequence: sequence + 1 })).toBe(true);
+});
+
+test("round-trips text through Redis and accepts older tabs without retaining stale text", async () => {
+	const f = fixture();
+	const view = {
+		...f.input.view!,
+		canvas: { ...f.input.view!.canvas!, textEditing: textEditingFixture },
+	};
+	expect(await f.publish({ view })).toBe(true);
+	expect((await f.list())[0].view).toEqual(view);
+	// A newer report replaces the full context, even from an older tab that
+	// does not know about textEditing. Delayed selections cannot undo it.
+	expect(await f.publish({ sequence: 3 })).toBe(true);
+	expect(await f.publish({ sequence: 2, view })).toBe(false);
+	expect((await f.list())[0].view?.canvas).not.toHaveProperty("textEditing");
+	expect((await f.list())[0].view).toEqual(f.input.view);
+	expect(
+		await f.publish({
+			sequence: 4,
+			view: {
+				...view,
+				canvas: { ...view.canvas, textEditing: null },
+			},
+		}),
+	).toBe(true);
+	expect((await f.list())[0].view?.canvas?.textEditing).toBeNull();
 });

@@ -1,6 +1,24 @@
 import { tenantScopeId } from "@beignet/core/ports";
 import type { LiveContextPort } from "../ports";
-import { LIVE_CONTEXT_TTL_MS, type StoredContext } from "../schemas";
+import {
+	LIVE_CONTEXT_TTL_MS,
+	type StoredContext,
+	type CanvasTextEditing,
+} from "../schemas";
+
+export const textEditingFixture: CanvasTextEditing = {
+	shapeId: "shape:a",
+	selection: {
+		coordinateSystem: "prosemirror",
+		kind: "text",
+		anchor: 1,
+		head: 9,
+		from: 1,
+		to: 9,
+		selectedText: "Hello 😺",
+		truncated: false,
+	},
+};
 
 export function memoryContext(now = Date.now): LiveContextPort {
 	const entries = new Map<string, StoredContext>();

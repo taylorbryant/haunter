@@ -3,7 +3,7 @@ import { createTenantScope } from "@beignet/core/ports";
 import { documentFixture } from "@/features/documents/tests/helpers";
 import { createTestMcpConnectionRepository } from "@/features/agents/tests/helpers";
 import { executeRemoteMcpCapability } from "@/server/agent-capabilities";
-import { memoryContext } from "./helpers";
+import { memoryContext, textEditingFixture } from "./helpers";
 import {
 	publishLiveContextUseCase,
 	listActiveSessionsUseCase,
@@ -66,8 +66,9 @@ test("a viewer can publish their page and canvas context without changing docume
 			canvas: {
 				canvasId: canvas.id,
 				canvasPageId: "page:one",
-				selectedShapeIds: ["shape:local"],
+				selectedShapeIds: ["shape:a"],
 				selectionCount: 1,
+				textEditing: textEditingFixture,
 			},
 		};
 		await f.publish({ view });
@@ -244,17 +245,39 @@ test("View-only MCP discovers its own sessions and rejects workspace escalation 
 				},
 				{ getServer: async () => server },
 			);
-		await f.publish();
+		const canvas = await f.ctx.ports.canvases.create(f.scope, {
+			userId: f.userId,
+			pageId: f.page.id,
+			title: null,
+		});
+		await f.publish({
+			view: {
+				pageId: f.page.id,
+				canvas: {
+					canvasId: canvas.id,
+					canvasPageId: "page:one",
+					selectedShapeIds: ["shape:a"],
+					selectionCount: 1,
+					textEditing: textEditingFixture,
+				},
+			},
+		});
 		const list = ListActiveSessionsOutputSchema.parse(
 			await execute("list_active_sessions", {}),
 		);
 		expect(list.sessions[0].sessionId).toBe(f.input.sessionId);
 		expect(list.sessions[0]).not.toHaveProperty("view");
+		expect(JSON.stringify(list)).not.toContain("Hello");
 		expect(
 			GetActiveContextOutputSchema.parse(
 				await execute("get_active_context", { sessionId: f.input.sessionId }),
 			).context.view.pageId,
 		).toBe(f.page.id);
+		expect(
+			GetActiveContextOutputSchema.parse(
+				await execute("get_active_context", { sessionId: f.input.sessionId }),
+			).context.view.canvas?.textEditing,
+		).toEqual(textEditingFixture);
 		await expect(
 			execute("get_active_context", { sessionId: crypto.randomUUID() }),
 		).rejects.toMatchObject({ code: "ACTIVE_SESSION_NOT_FOUND" });

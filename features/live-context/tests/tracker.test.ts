@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { contextRoute, LiveContextTracker } from "../client/tracker";
+import { textEditingFixture } from "./helpers";
 import {
 	PublishContextInputSchema,
 	type PublishContextInput,
@@ -14,6 +15,7 @@ const selection: CanvasSelection = {
 	canvasPageId: "page:one",
 	selectedShapeIds: ["shape:a", "shape:b"],
 	selectionCount: 2,
+	textEditing: textEditingFixture,
 };
 function fixture() {
 	let now = 1000;
