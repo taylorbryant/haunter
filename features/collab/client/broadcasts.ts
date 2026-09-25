@@ -14,9 +14,13 @@ import {
 	receivePageAgentActivity,
 } from "@/features/agents/client/page-activity-cache";
 import { isPageAgentActivity } from "@/features/agents/page-activity";
+import {
+	clearCanvasAgentActivity,
+	receiveCanvasAgentActivity,
+} from "@/features/agents/client/canvas-activity-cache";
 import { listPages } from "@/features/pages/contracts";
 import type { PageMeta } from "@/features/pages/schemas";
-import { workspaceChanges } from "../channels";
+import { workspaceChanges, workspaceCanvasActivity } from "../channels";
 import {
 	isWorkspacePageEvent,
 	workspaceEventRemovesPage,
@@ -41,8 +45,10 @@ export function subscribeToWorkspaceChanges(options: {
 	refreshGate?: BroadcastRefreshGate;
 }) {
 	const { queryClient, userId, workspaceId } = options;
-	const clearPresence = () =>
+	const clearPagePresence = () =>
 		clearPageAgentActivity(queryClient, userId, workspaceId);
+	const clearCanvasPresence = () =>
+		clearCanvasAgentActivity(queryClient, userId, workspaceId);
 	const gate = options.refreshGate ?? createWorkspaceRefreshGate(queryClient);
 	const pages = rq(listPages).filter({ path: { workspaceId } });
 	let closed = false;
@@ -79,7 +85,8 @@ export function subscribeToWorkspaceChanges(options: {
 		)
 			options.onPageRemoved(pageId);
 	});
-	let subscription: BroadcastClientSubscription;
+	let subscription: BroadcastClientSubscription | undefined;
+	let canvasSubscription: BroadcastClientSubscription | undefined;
 	try {
 		subscription = createBroadcastQuerySubscription({
 			client: options.client,
@@ -113,26 +120,56 @@ export function subscribeToWorkspaceChanges(options: {
 			reconciles: workspaceReconciliationQueries(workspaceId),
 			onSync(info) {
 				if (closed) return;
-				clearPresence();
+				clearPagePresence();
 				requiredFetch = fetchSequence + 1;
 				pageToReconcile = options.getCurrentPageId();
 				options.onSync?.(info);
 			},
 			onStatusChange(status) {
-				if (!closed && status !== "connected") clearPresence();
+				if (!closed && status !== "connected") clearPagePresence();
+			},
+			onError: options.onError,
+		});
+		// Both channels share one SSE connection and admission lease. Activity is
+		// transient and must never invalidate document queries or reconcile pages.
+		canvasSubscription = options.client.subscribe(workspaceCanvasActivity, {
+			params: { workspaceId },
+			onEvent({ data }) {
+				if (closed || data.workspaceId !== workspaceId) return;
+				const clock = options.getClock();
+				if (clock)
+					receiveCanvasAgentActivity(
+						queryClient,
+						userId,
+						workspaceId,
+						data,
+						clock,
+					);
+			},
+			onSync() {
+				if (!closed) clearCanvasPresence();
+			},
+			onStatusChange(status) {
+				if (!closed && status !== "connected") clearCanvasPresence();
 			},
 			onError: options.onError,
 		});
 	} catch (error) {
+		closed = true;
 		stopCache();
-		clearPresence();
+		clearPagePresence();
+		clearCanvasPresence();
+		subscription?.unsubscribe();
+		canvasSubscription?.unsubscribe();
 		throw error;
 	}
 	return () => {
 		if (closed) return;
 		closed = true;
 		stopCache();
-		clearPresence();
-		subscription.unsubscribe();
+		clearPagePresence();
+		clearCanvasPresence();
+		subscription?.unsubscribe();
+		canvasSubscription?.unsubscribe();
 	};
 }

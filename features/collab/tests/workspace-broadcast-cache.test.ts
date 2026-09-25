@@ -9,6 +9,9 @@ import {
 	type CachedPageAgentActivity,
 } from "@/features/agents/client/page-activity-cache";
 import { activity } from "@/features/agents/tests/page-activity-fixture";
+import { canvasActivity } from "@/features/agents/tests/canvas-activity-fixture";
+import { canvasAgentActivityKey } from "@/features/agents/client/canvas-activity-cache";
+import { workspaceCanvasActivity } from "../channels";
 import type { WorkspaceEventClock } from "../client/event-clock";
 import {
 	getCanvasQueryOptions,
@@ -95,6 +98,47 @@ function fixture() {
 }
 
 describe("workspace broadcast cache", () => {
+	it("routes canvas activity without content invalidation and clears it on disconnect, renewal, and teardown", async () => {
+		const f = fixture();
+		const event = canvasActivity({ workspaceId: "workspace_1" });
+		const key = canvasAgentActivityKey("user_1", "workspace_1");
+		const otherKey = canvasAgentActivityKey("user_2", "workspace_1");
+		const canvasKey = getCanvasQueryOptions(event.canvasId).queryKey;
+		f.queryClient.setQueryData(canvasKey, {});
+		f.queryClient.setQueryData(otherKey, [event]);
+		await f.canvasEvent({ ...event, workspaceId: "workspace_2" });
+		expect(f.queryClient.getQueryData<unknown[]>(key)).toBeUndefined();
+		for (const status of ["reconnecting", "blocked", "closed"] as const) {
+			await f.canvasEvent(event);
+			expect(f.queryClient.getQueryData<unknown[]>(key)).toMatchObject([
+				{ phase: "active" },
+			]);
+			await f.canvasEvent({
+				...event,
+				phase: "completed",
+				changedShapeIds: ["shape:a"],
+			});
+			expect(f.queryClient.getQueryData<unknown[]>(key)).toMatchObject([
+				{ phase: "completed", changedShapeIds: ["shape:a"] },
+			]);
+			expect(f.queryClient.getQueryState(canvasKey)?.isInvalidated).toBe(false);
+			f.status(status, workspaceCanvasActivity.name);
+			expect(f.queryClient.getQueryData<unknown[]>(key)).toEqual([]);
+		}
+		await f.canvasEvent(event);
+		await f.sync();
+		// Readiness belongs to each channel; workspace reconciliation must not
+		// erase activity received on the independently ready canvas channel.
+		expect(f.queryClient.getQueryData<unknown[]>(key)).toHaveLength(1);
+		await f.sync(workspaceCanvasActivity.name);
+		expect(f.queryClient.getQueryData<unknown[]>(key)).toEqual([]);
+		await f.canvasEvent(event);
+		f.unsubscribe();
+		await f.canvasEvent(event);
+		expect(f.queryClient.getQueryData<unknown[]>(key)).toEqual([]);
+		expect(f.queryClient.getQueryData<unknown[]>(otherKey)).toEqual([event]);
+	});
+
 	it("receives presence immediately during a pending write without invalidating content", async () => {
 		const f = fixture();
 		const keys = [
@@ -168,6 +212,12 @@ describe("workspace broadcast cache", () => {
 		const f = fixture();
 		f.setClock(null);
 		await f.event(activity({ workspaceId: "workspace_1" }));
+		await f.canvasEvent(canvasActivity({ workspaceId: "workspace_1" }));
+		expect(
+			f.queryClient.getQueryData(
+				canvasAgentActivityKey("user_1", "workspace_1"),
+			),
+		).toBeUndefined();
 		expect(
 			f.queryClient.getQueryData(pageAgentActivityKey("user_1", "workspace_1")),
 		).toBeUndefined();

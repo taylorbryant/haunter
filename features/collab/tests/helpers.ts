@@ -8,7 +8,9 @@ import {
 	type BroadcastTransport,
 	createBroadcastPort,
 } from "@beignet/core/broadcasting/server";
-import type { workspaceChanges } from "../channels";
+import { workspaceChanges, workspaceCanvasActivity } from "../channels";
+import type { CanvasAgentActivity } from "@/features/agents/canvas-activity";
+import type { WorkspaceEvent } from "../workspace-events";
 
 export function deferred<T = void>() {
 	let resolve!: (value: T | PromiseLike<T>) => void;
@@ -64,19 +66,24 @@ export function memoryBroadcast() {
 export function controlledBroadcastClient() {
 	type Observer = {
 		onEvent(
-			event: InferChannelEvent<typeof workspaceChanges>,
+			event:
+				| InferChannelEvent<typeof workspaceChanges>
+				| InferChannelEvent<typeof workspaceCanvasActivity>,
 		): void | Promise<void>;
 		onSync(info: BroadcastConnectionInfo): void | Promise<void>;
 		onStatusChange?(status: BroadcastClientStatus): void;
 	};
-	let observer: Observer | undefined;
+	type ChannelName =
+		| typeof workspaceChanges.name
+		| typeof workspaceCanvasActivity.name;
+	const observers = new Map<ChannelName, Observer>();
 	const client: BroadcastClient = {
-		subscribe(_channel, options) {
-			// This fixture is only used by the workspace channel subscription.
-			observer = options as unknown as Observer;
+		subscribe(channel, options) {
+			const name = channel.name as ChannelName;
+			observers.set(name, options as unknown as Observer);
 			return {
 				unsubscribe() {
-					observer = undefined;
+					observers.delete(name);
 				},
 				getStatus: () => "connected",
 			};
@@ -85,15 +92,22 @@ export function controlledBroadcastClient() {
 		getStatus: () => "connected",
 		resume() {},
 		close() {
-			observer = undefined;
+			observers.clear();
 		},
 	};
 	return {
 		client,
-		event: (data: Parameters<Observer["onEvent"]>[0]["data"]) =>
-			observer?.onEvent({ event: "changed", data }),
-		sync: () => observer?.onSync({ reason: "interruption" }),
-		status: (status: BroadcastClientStatus) =>
-			observer?.onStatusChange?.(status),
+		event: (data: WorkspaceEvent) =>
+			observers.get(workspaceChanges.name)?.onEvent({ event: "changed", data }),
+		canvasEvent: (data: CanvasAgentActivity) =>
+			observers
+				.get(workspaceCanvasActivity.name)
+				?.onEvent({ event: "activity", data }),
+		sync: (channel: ChannelName = workspaceChanges.name) =>
+			observers.get(channel)?.onSync({ reason: "interruption" }),
+		status: (
+			status: BroadcastClientStatus,
+			channel: ChannelName = workspaceChanges.name,
+		) => observers.get(channel)?.onStatusChange?.(status),
 	};
 }

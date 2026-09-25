@@ -53,8 +53,9 @@ Locally selected shapes might not have finished syncing: if they are absent from
   an inaccessible resource. Discover sessions again.
 - `LIVE_CONTEXT_UNAVAILABLE` means context storage is unavailable.
 
-No text selections, caret positions, mouse coordinates, browser control, or
-canvas agent activity indicators are included in this release.
+Text selections, caret positions, mouse coordinates, and browser control are
+not included. See [Canvas agent activity](mcp-canvas-activity.md) for live
+operation feedback and changed-shape outlines.
 
 ## Deployment
 

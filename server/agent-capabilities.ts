@@ -8,6 +8,10 @@ import type { AppContext, AppRuntimePorts } from "@/app-context";
 import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
 import { startPageAgentActivity } from "@/features/agents/server/page-activity";
 import {
+	startCanvasAgentActivity,
+	type FinishCanvasActivity,
+} from "@/features/agents/server/canvas-activity";
+import {
 	recordAgentActivity,
 	recordMcpConnectionActivity,
 } from "@/features/agents/use-cases/record-agent-activity";
@@ -52,6 +56,7 @@ export async function createHaunterAgentCapabilityExecutor(
 		AppContext,
 		(phase: "completed" | "failed") => Promise<void>
 	>();
+	const canvasActivity = new WeakMap<AppContext, FinishCanvasActivity>();
 
 	const executor = createAgentCapabilityExecutor({
 		registry,
@@ -63,6 +68,12 @@ export async function createHaunterAgentCapabilityExecutor(
 					const finish = pageActivity.get(event.ctx);
 					pageActivity.delete(event.ctx);
 					await finish?.(event.phase === "end" ? "completed" : "failed");
+					const finishCanvas = canvasActivity.get(event.ctx);
+					canvasActivity.delete(event.ctx);
+					await finishCanvas?.(
+						event.phase === "end" ? "completed" : "failed",
+						event.phase === "end" ? event.output : undefined,
+					);
 				}
 				const error =
 					event.phase === "error" ? executionError(event.error) : null;
@@ -134,6 +145,13 @@ export async function createHaunterAgentCapabilityExecutor(
 				args: inputRecord(input),
 			});
 			if (finish) pageActivity.set(ctx, finish);
+			const finishCanvas = await startCanvasAgentActivity({
+				ctx,
+				principal,
+				capability: name,
+				args: inputRecord(input),
+			});
+			if (finishCanvas) canvasActivity.set(ctx, finishCanvas);
 			return ctx;
 		},
 	});
