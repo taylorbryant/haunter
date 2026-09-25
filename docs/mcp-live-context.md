@@ -44,6 +44,11 @@ Locally selected shapes might not have finished syncing: if they are absent from
   Never treat a partial selection as the complete target.
 - Up to 20 recent sessions are retained per user. A closed or reloaded tab can
   remain briefly if its final withdrawal cannot be delivered.
+- Reports expire two minutes after the browser queues them. Sequence tombstones
+  remain for 150 seconds after acceptance, preventing delayed reports from
+  undoing navigation even after a view expires. Redis checks report age at
+  execution time; reports more than 30 seconds in the future are rejected.
+  Devices with significantly incorrect clocks may not appear until corrected.
 - `ACTIVE_SESSION_NOT_FOUND` means the session expired, withdrew, or references
   an inaccessible resource. Discover sessions again.
 - `LIVE_CONTEXT_UNAVAILABLE` means context storage is unavailable.

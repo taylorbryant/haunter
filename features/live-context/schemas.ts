@@ -1,6 +1,13 @@
 import { z } from "zod";
 
 export const LIVE_CONTEXT_TTL_MS = 120_000;
+export const LIVE_CONTEXT_REPORT_MAX_AGE_MS = 120_000;
+export const LIVE_CONTEXT_CLOCK_SKEW_MS = 30_000;
+// Keep ordering state until any older report's acceptance window has closed.
+export const LIVE_CONTEXT_SEQUENCE_TTL_MS = Math.max(
+	LIVE_CONTEXT_TTL_MS,
+	LIVE_CONTEXT_REPORT_MAX_AGE_MS + LIVE_CONTEXT_CLOCK_SKEW_MS,
+);
 export const LIVE_CONTEXT_STALE_MS = 45_000;
 export const LIVE_CONTEXT_MAX_SESSIONS = 20;
 export const LIVE_CONTEXT_MAX_SHAPES = 100;
@@ -46,6 +53,7 @@ export const PublishContextInputSchema = GetActiveContextInputSchema.extend({
 	// An identity assertion prevents an old tab publishing under newly changed cookies.
 	expectedUserId: z.string().min(1).max(200),
 	sequence: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+	reportedAt: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
 	visible: z.boolean(),
 	focused: z.boolean(),
 	contextAgeMs: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
@@ -55,6 +63,7 @@ export const PublishContextInputSchema = GetActiveContextInputSchema.extend({
 export const StoredContextSchema = PublishContextInputSchema.omit({
 	expectedUserId: true,
 	contextAgeMs: true,
+	reportedAt: true,
 }).extend({
 	capturedAt: z.number(),
 	lastSeenAt: z.number(),

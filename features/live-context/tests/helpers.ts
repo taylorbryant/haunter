@@ -9,13 +9,13 @@ export function memoryContext(now = Date.now): LiveContextPort {
 		async publish(scope, userId, input) {
 			const key = userId + ":" + input.sessionId;
 			const previous = entries.get(key);
-			if (
-				previous &&
-				previous.expiresAt > now() &&
-				previous.sequence >= input.sequence
-			)
-				return false;
-			const { expectedUserId: _, contextAgeMs, ...value } = input;
+			if (previous && previous.sequence >= input.sequence) return false;
+			const {
+				expectedUserId: _,
+				reportedAt: _reportedAt,
+				contextAgeMs,
+				...value
+			} = input;
 			entries.set(key, {
 				...structuredClone(value),
 				workspaceId: tenantScopeId(scope),

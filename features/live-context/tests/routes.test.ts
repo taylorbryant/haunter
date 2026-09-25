@@ -38,6 +38,7 @@ test("the HTTP reporter requires an authenticated matching user and never accept
 		expectedUserId: f.userId,
 		sessionId: crypto.randomUUID(),
 		sequence: 1,
+		reportedAt: Date.now(),
 		contextAgeMs: 0,
 		visible: true,
 		focused: true,

@@ -5,6 +5,9 @@ import { createRedisLiveContext } from "@/infra/live-context/redis-live-context"
 import {
 	LIVE_CONTEXT_MAX_SESSIONS,
 	LIVE_CONTEXT_TTL_MS,
+	LIVE_CONTEXT_REPORT_MAX_AGE_MS,
+	LIVE_CONTEXT_CLOCK_SKEW_MS,
+	LIVE_CONTEXT_SEQUENCE_TTL_MS,
 	type PublishContextInput,
 } from "../schemas";
 
@@ -13,6 +16,7 @@ const input: PublishContextInput = {
 	expectedUserId: "user",
 	sessionId: crypto.randomUUID(),
 	sequence: 1,
+	reportedAt: 50_000,
 	contextAgeMs: 2000,
 	visible: true,
 	focused: true,
@@ -30,7 +34,6 @@ test("the actual Upstash SDK can roundtrip EVAL results with its default JSON de
 	const port = createRedisLiveContext({
 		redis: new Redis(requester),
 		prefix: "test",
-		now: () => 50_000,
 	});
 	const scope = createTenantScope({ id: "workspace" });
 	expect(await port.publish(scope, "user", input)).toBe(true);
@@ -38,22 +41,32 @@ test("the actual Upstash SDK can roundtrip EVAL results with its default JSON de
 	expect(args[0]).toBe("eval");
 	expect(args[2]).toBe(1);
 	expect(args[3]).toBe("test:live-context:user");
-	expect(args.at(-2)).toBe(LIVE_CONTEXT_MAX_SESSIONS);
-	expect(args.at(-1)).toBe(LIVE_CONTEXT_TTL_MS);
-	const stored = JSON.parse(args[6] as string);
-	expect(stored).toMatchObject({
+	expect(args.slice(6)).toEqual([
+		LIVE_CONTEXT_MAX_SESSIONS,
+		LIVE_CONTEXT_TTL_MS,
+		LIVE_CONTEXT_REPORT_MAX_AGE_MS,
+		LIVE_CONTEXT_CLOCK_SKEW_MS,
+		LIVE_CONTEXT_SEQUENCE_TTL_MS,
+	]);
+	const payload = JSON.parse(args[5] as string);
+	expect(payload.expectedUserId).toBeUndefined();
+	const timestamps = {
 		capturedAt: 48_000,
 		lastSeenAt: 50_000,
 		expiresAt: 170_000,
-		sequence: 1,
-	});
-	expect(stored.expectedUserId).toBeUndefined();
+	};
 	result = [
-		JSON.stringify(stored),
-		JSON.stringify({ ...stored, workspaceId: "other" }),
+		JSON.stringify({ payload: JSON.stringify(payload), ...timestamps }),
+		JSON.stringify({
+			payload: JSON.stringify({ ...payload, workspaceId: "other" }),
+			...timestamps,
+		}),
 		"bad-json",
 	];
-	expect(await port.list(scope, "user")).toEqual([stored]);
+	const { contextAgeMs: _, reportedAt: _reportedAt, ...stored } = payload;
+	expect(await port.list(scope, "user")).toEqual([
+		{ ...stored, ...timestamps },
+	]);
 	await port.list(scope, "another-user");
 	expect(requests.at(-1)?.[3]).toBe("test:live-context:another-user");
 });

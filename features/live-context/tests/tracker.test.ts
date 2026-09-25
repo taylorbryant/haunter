@@ -47,10 +47,25 @@ test("keeps the captured selection across blur and heartbeat without making it l
 	expect(calls.at(-1)).toMatchObject({
 		view: { pageId, canvas: selection },
 		contextAgeMs: 12_000,
+		reportedAt: 13_000,
 		visible: false,
 		focused: false,
 	});
 	expect(calls.at(-1)!.sequence).toBeGreaterThan(calls[0].sequence);
+});
+
+test("a queued report keeps its original timestamp while a new heartbeat gets a fresh one", async () => {
+	const { tracker, calls, advance } = fixture();
+	tracker.navigate(route);
+	advance(130_000);
+	await tracker.flush();
+	expect(calls[0]).toMatchObject({ reportedAt: 1000, contextAgeMs: 130_000 });
+	tracker.heartbeat();
+	await tracker.flush();
+	expect(calls[1]).toMatchObject({
+		reportedAt: 131_000,
+		contextAgeMs: 130_000,
+	});
 });
 
 test("switching canvases ignores background updates and cleanup from the old canvas", async () => {

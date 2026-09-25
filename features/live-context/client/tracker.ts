@@ -131,6 +131,7 @@ export class LiveContextTracker {
 			expectedUserId: this.userId,
 			sessionId: this.sessionId,
 			sequence: ++this.sequence,
+			reportedAt: this.pendingAt,
 			visible: this.visible,
 			focused: this.focused,
 			contextAgeMs: Math.max(0, this.now() - this.changedAt),
