@@ -100,6 +100,11 @@ is reflected in the browser session.
 
 ### Validate changes
 
+The tests require `redis-server` on your PATH (`brew install redis` on macOS,
+`sudo apt-get install redis-server` on Ubuntu), or an explicit
+`REDIS_SERVER_BINARY` path. Redis tests start a temporary instance with a private
+Unix socket and persistence disabled; they never use your configured Redis service.
+
 Run the full validation loop after making changes:
 
 ```bash
@@ -256,6 +261,8 @@ For reading structured page content, editing blocks, and replacing page bodies,
 see the [MCP page editing API](docs/mcp-page-editing.md).
 For native canvas creation, shape edits, connections, image previews, and history, see the
 [MCP canvas editing API](docs/mcp-canvas-editing.md).
+For discovering your open tabs, current page, and canvas selection, see
+[live session context](docs/mcp-live-context.md).
 
 ### Task reminders and push notifications
 

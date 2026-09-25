@@ -1,6 +1,16 @@
 import { createAppError, defineErrors } from "@beignet/core/errors";
 
 export const errors = defineErrors({
+	LiveContextUnavailable: {
+		code: "LIVE_CONTEXT_UNAVAILABLE",
+		status: 503,
+		message: "Live session context is unavailable. Try again shortly.",
+	},
+	ActiveSessionNotFound: {
+		code: "ACTIVE_SESSION_NOT_FOUND",
+		status: 404,
+		message: "This session is no longer available. List active sessions again.",
+	},
 	InvalidCanvasPreview: {
 		code: "INVALID_CANVAS_PREVIEW",
 		status: 422,

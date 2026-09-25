@@ -58,6 +58,7 @@ export interface CanvasRepository {
 	}>;
 
 	listStandalone(scope: TenantScope): Promise<CanvasListItem[]>;
+	findMetaById(scope: TenantScope, id: string): Promise<CanvasListItem | null>;
 	findById(scope: TenantScope, id: string): Promise<Canvas | null>;
 	create(scope: TenantScope, input: NewCanvas): Promise<Canvas>;
 	updateTitle(scope: TenantScope, id: string, title: string): Promise<Canvas>;

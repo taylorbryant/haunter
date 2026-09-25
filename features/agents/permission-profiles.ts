@@ -9,6 +9,8 @@ export type AgentHostPermissionState =
 	| "custom";
 
 const VIEW_CAPABILITIES = [
+	"list_active_sessions",
+	"get_active_context",
 	"read_canvas",
 	"preview_canvas",
 	"list_workspaces",
@@ -57,6 +59,7 @@ export const AGENT_PERMISSION_PROFILES = {
 		label: "View only",
 		description: "Find and read your pages, canvases, and tasks.",
 		details: [
+			"Read your open pages and canvas selections",
 			"View and search pages",
 			"Read canvas shapes and history",
 			"Preview canvas drawings",
@@ -95,6 +98,8 @@ export const AGENT_PERMISSION_PROFILES = {
 >;
 
 const CAPABILITY_LABELS = {
+	list_active_sessions: "View your active Haunter sessions",
+	get_active_context: "Read your current page and canvas selection",
 	create_canvas_block: "Add canvas blocks",
 	read_canvas: "Read canvases",
 	preview_canvas: "Preview canvases",

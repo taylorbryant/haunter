@@ -5,6 +5,7 @@ import { createRedisBroadcast } from "@beignet/provider-broadcast-redis";
 import { Redis } from "@upstash/redis";
 import { env } from "@/lib/env";
 import { createWorkspaceEventStreamLeases } from "./workspace-stream-leases";
+import { createRedisLiveContext } from "@/infra/live-context/redis-live-context";
 
 const unconfiguredBroadcast: BroadcastPort = {
 	async publish() {},
@@ -30,8 +31,19 @@ export const workspaceBroadcastProvider = createProvider()({
 						token: env.UPSTASH_REDIS_REST_TOKEN,
 					})
 				: null;
+		const contextRedis =
+			env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN
+				? new Redis({
+						url: env.UPSTASH_REDIS_REST_URL,
+						token: env.UPSTASH_REDIS_REST_TOKEN,
+					})
+				: null;
 		return {
 			ports: {
+				liveContext: createRedisLiveContext({
+					redis: contextRedis,
+					prefix: env.UPSTASH_WORKSPACE_EVENT_PREFIX,
+				}),
 				broadcast: broadcast ?? unconfiguredBroadcast,
 				workspaceEventStreamLeases: createWorkspaceEventStreamLeases({
 					redis: leaseRedis,

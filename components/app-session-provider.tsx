@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { SessionRecoveryProvider } from "./session-recovery-provider";
+import { LiveContextProvider } from "@/features/live-context/client/provider";
 
 export type AppSessionUser = {
 	id: string;
@@ -57,7 +58,13 @@ export function AppSessionProvider({
 				initial={value}
 				onVerified={onVerified}
 			>
-				{children}
+				<LiveContextProvider
+					key={value.user.id}
+					userId={value.user.id}
+					activeWorkspaceId={session.activeWorkspaceId}
+				>
+					{children}
+				</LiveContextProvider>
 			</SessionRecoveryProvider>
 		</AppSessionContext.Provider>
 	);

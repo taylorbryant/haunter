@@ -40,6 +40,11 @@ jobs:
       - name: Install canvas preview browser
         run: bunx --bun playwright install --with-deps chromium --only-shell
 
+      - name: Install Redis for isolated Lua regression tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes redis-server
+
       - name: Run application tests
         run: bun run test
 

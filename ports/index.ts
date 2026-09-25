@@ -56,6 +56,7 @@ import type {
 	TaskSourceDocumentPort,
 } from "@/features/tasks/ports";
 import type { AuthPort } from "./auth";
+import type { LiveContextPort } from "../features/live-context/ports";
 
 export type AppPolicies = [
 	typeof pagePolicy,
@@ -128,4 +129,5 @@ export type AppPorts = {
 	webPush: WebPushPort;
 	broadcast: BroadcastPort;
 	workspaceEventStreamLeases: WorkspaceEventStreamLeasePort;
+	liveContext: LiveContextPort;
 };

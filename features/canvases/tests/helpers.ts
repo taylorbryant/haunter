@@ -42,6 +42,12 @@ export function createTestCanvasRepository(): CanvasRepository {
 						canvas,
 				);
 		},
+		async findMetaById(scope, id: string) {
+			const canvas = canvases.get(id);
+			if (!canvas || canvas.workspaceId !== tenantScopeId(scope)) return null;
+			const { snapshot: _, snapshotUpdatedAt: __, ...meta } = canvas;
+			return meta;
+		},
 		async findById(scope, id: string) {
 			const canvas = canvases.get(id);
 			return canvas?.workspaceId === tenantScopeId(scope) ? canvas : null;

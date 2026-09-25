@@ -78,5 +78,6 @@ export const appPorts = definePorts<AppPorts>()({
 		"webPush",
 		"broadcast",
 		"workspaceEventStreamLeases",
+		"liveContext",
 	],
 });

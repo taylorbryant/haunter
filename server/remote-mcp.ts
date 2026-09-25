@@ -92,6 +92,8 @@ export function registerRemoteMcpTools(
 						: (capability.output as ZodType),
 				annotations: {
 					readOnlyHint: [
+						"list_active_sessions",
+						"get_active_context",
 						"preview_canvas",
 						"read_canvas",
 						"list_workspaces",
@@ -109,6 +111,8 @@ export function registerRemoteMcpTools(
 						"replace_page_content",
 					].includes(capability.name),
 					idempotentHint: [
+						"list_active_sessions",
+						"get_active_context",
 						"preview_canvas",
 						"read_canvas",
 						"list_workspaces",
