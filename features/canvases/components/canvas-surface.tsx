@@ -43,6 +43,8 @@ import {
 import { useRouter } from "next/navigation";
 import { useLiveContext } from "@/features/live-context/client/provider";
 import { observeCanvasContext } from "../client/live-context";
+import { AGENT_HIGHLIGHT_OVERLAYS } from "../client/agent-highlights";
+import { CanvasAgentActivity } from "./canvas-agent-activity";
 export type { CanvasSaveState } from "../client/save-state";
 type Props = {
 	canvasId: string;
@@ -292,6 +294,7 @@ function CollaborativeCanvasSurface({
 			/>
 			{store ? (
 				<TldrawWithFonts
+					overlayUtils={AGENT_HIGHLIGHT_OVERLAYS}
 					components={editable ? CANVAS_LIBRARY_COMPONENTS : undefined}
 					documentSnapshot={store.getStoreSnapshot()}
 					layoutKey={layoutKey}
@@ -317,7 +320,13 @@ function CollaborativeCanvasSurface({
 							setContextEditor(null);
 						};
 					}}
-				/>
+				>
+					<CanvasAgentActivity
+						userId={user.id}
+						workspaceId={workspaceId}
+						canvasId={canvasId}
+					/>
+				</TldrawWithFonts>
 			) : (
 				<CanvasLoading />
 			)}

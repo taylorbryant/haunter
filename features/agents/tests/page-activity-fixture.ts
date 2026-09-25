@@ -44,7 +44,7 @@ export function activity(
 export async function pageActivityFixture(
 	options: {
 		role?: string;
-		profile?: "view" | "edit";
+		profile?: "view" | "edit" | "full";
 		configured?: boolean;
 	} = {},
 ) {
@@ -121,6 +121,9 @@ export async function pageActivityFixture(
 		},
 	};
 	return {
+		server,
+		userId,
+		workspaceId,
 		page,
 		pages,
 		events,

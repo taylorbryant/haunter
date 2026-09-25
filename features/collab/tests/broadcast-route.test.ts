@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { z } from "zod";
+import { defineChannel } from "@beignet/core/broadcasting";
 import { BroadcastClientError } from "@beignet/core/broadcasting/client";
 import { createStaticAuth } from "@beignet/core/ports";
 import { defineRoutes } from "@beignet/core/server";
@@ -14,6 +16,13 @@ import {
 	type CachedPageAgentActivity,
 } from "@/features/agents/client/page-activity-cache";
 import { activity } from "@/features/agents/tests/page-activity-fixture";
+import { PageAgentActivitySchema } from "@/features/agents/page-activity";
+import { canvasActivityFixture } from "@/features/agents/tests/canvas-activity-fixture";
+import {
+	canvasAgentActivityKey,
+	type CachedCanvasAgentActivity,
+} from "@/features/agents/client/canvas-activity-cache";
+import { listTasksQueryOptions } from "@/features/tasks/client/queries";
 import { appPorts } from "@/infra/port-wiring";
 import { routeAuth } from "@/lib/route-auth";
 import type { AppTransactionPorts } from "@/ports";
@@ -30,12 +39,31 @@ import {
 } from "@/server/broadcast-admission";
 import { channels } from "@/server/broadcasts";
 import { type AppServiceContextInput, appContext } from "@/server/context";
-import { workspaceChanges } from "../channels";
+import { workspaceChanges, workspaceCanvasActivity } from "../channels";
+import {
+	WorkspacePageEventSchema,
+	WorkspaceTaskEventSchema,
+	WorkspaceCanvasEventSchema,
+} from "../schemas";
 import { subscribeToWorkspaceChanges } from "../client/broadcasts";
 import { WORKSPACE_EVENT_TIME_HEADER } from "../headers";
 import { withWorkspaceEventClock } from "../server/event-clock";
 import { createWorkspaceTaskEvent } from "../workspace-events";
 import { deferred, memoryBroadcast, until } from "./helpers";
+
+// Preserve the pre-canvas-activity client's union instead of importing the
+// current WorkspaceEventSchema, which would hide mixed-version regressions.
+const legacyWorkspaceChanges = defineChannel("workspace.changes", {
+	params: z.object({ workspaceId: z.string().min(1) }),
+	events: {
+		changed: z.discriminatedUnion("type", [
+			WorkspacePageEventSchema,
+			WorkspaceTaskEventSchema,
+			WorkspaceCanvasEventSchema,
+			PageAgentActivitySchema,
+		]),
+	},
+});
 
 async function fixture(
 	options: {
@@ -43,9 +71,11 @@ async function fixture(
 		full?: boolean;
 		configured?: boolean;
 		lifetime?: number;
+		workspaceId?: string;
 	} = {},
 ) {
 	const bus = memoryBroadcast();
+	const workspaceId = options.workspaceId ?? "workspace_1";
 	let member = true;
 	let acquired = 0;
 	let released = 0;
@@ -64,7 +94,7 @@ async function fixture(
 								email: "one@example.com",
 								accessStatus: ACCESS_STATUS_APPROVED,
 							},
-							session: { id: "session_1", activeOrganizationId: "workspace_1" },
+							session: { id: "session_1", activeOrganizationId: workspaceId },
 						},
 			),
 			members: {
@@ -117,27 +147,36 @@ async function fixture(
 			return withWorkspaceEventClock(await adapter.GET(request));
 		},
 	};
-	function request(workspaceId = "workspace_1") {
+	function request(requestedWorkspaceId = workspaceId) {
 		const url = new URL("http://beignet.test/api/broadcasts");
 		url.searchParams.set(
 			"subscriptions",
 			JSON.stringify({
 				version: 1,
 				channels: [
-					{ id: "one", name: workspaceChanges.name, params: { workspaceId } },
+					{
+						id: "one",
+						name: workspaceChanges.name,
+						params: { workspaceId: requestedWorkspaceId },
+					},
 				],
 			}),
 		);
 		return new Request(url);
 	}
-	const client = createAppBroadcastClient((input, init) =>
-		route.GET(new Request(new URL(String(input), "http://beignet.test"), init)),
-	);
+	const createClient = () =>
+		createAppBroadcastClient((input, init) =>
+			route.GET(
+				new Request(new URL(String(input), "http://beignet.test"), init),
+			),
+		);
+	const client = createClient();
 	return {
 		bus,
 		route,
 		request,
 		client,
+		createClient,
 		revoke: () => {
 			member = false;
 		},
@@ -151,6 +190,131 @@ async function fixture(
 }
 
 describe("workspace broadcast route", () => {
+	it("keeps legacy tabs connected while new tabs receive MCP canvas activity on the same stream", async () => {
+		const commands = await canvasActivityFixture();
+		const workspaceId = commands.workspaceId;
+		const f = await fixture({ workspaceId });
+		commands.ports.broadcast = f.bus.port;
+		const work = deferred();
+		const execute = commands.ports.canvasEditing.execute;
+		commands.ports.canvasEditing.execute = async (input) => {
+			await work.promise;
+			return execute(input);
+		};
+		const queryClient = new QueryClient();
+		const updatedClient = f.createClient();
+		const errors: unknown[] = [];
+		const legacyEvents: unknown[] = [];
+		const taskKey = listTasksQueryOptions(workspaceId, "open").queryKey;
+		const activityKey = canvasAgentActivityKey("user_1", workspaceId);
+		let legacyReady = 0;
+		const legacySubscription = f.client.subscribe(legacyWorkspaceChanges, {
+			params: { workspaceId },
+			onSync() {
+				legacyReady++;
+			},
+			onEvent({ data }) {
+				legacyEvents.push(data);
+			},
+			onError(error) {
+				errors.push(error);
+			},
+		});
+		const unsubscribe = subscribeToWorkspaceChanges({
+			client: updatedClient,
+			queryClient,
+			userId: "user_1",
+			workspaceId,
+			getClock: updatedClient.getClock,
+			getCurrentPageId: () => undefined,
+			onPageRemoved() {},
+			onError(error) {
+				errors.push(error);
+			},
+		});
+		let running: Promise<unknown> | undefined;
+		try {
+			await until(() => legacyReady === 1 && f.bus.subscriberCount() === 3);
+			// Two browser connections, despite the new client subscribing to two
+			// channels. Activity must not consume an additional connection lease.
+			expect(f.acquired()).toBe(2);
+			queryClient.setQueryData(taskKey, { items: [] });
+			const before = createWorkspaceTaskEvent({
+				workspaceId,
+				taskId: "before",
+			});
+			await f.bus.port.publish(workspaceChanges, {
+				params: { workspaceId },
+				event: "changed",
+				data: before,
+			});
+			await until(
+				() =>
+					legacyEvents.length === 1 &&
+					queryClient.getQueryState(taskKey)?.isInvalidated === true,
+			);
+			queryClient.setQueryData(taskKey, { items: [] });
+			running = commands.execute();
+			await until(
+				() =>
+					queryClient.getQueryData<CachedCanvasAgentActivity[]>(
+						activityKey,
+					)?.[0]?.phase === "active",
+			);
+			work.resolve();
+			await running;
+			await until(
+				() =>
+					queryClient.getQueryData<CachedCanvasAgentActivity[]>(
+						activityKey,
+					)?.[0]?.phase === "completed",
+			);
+			expect(
+				queryClient.getQueryData<CachedCanvasAgentActivity[]>(activityKey),
+			).toMatchObject([
+				{ canvasId: commands.canvas.id, changedShapeIds: ["shape:old"] },
+			]);
+			commands.ports.canvasEditing.execute = async () => {
+				throw new Error("Worker unavailable");
+			};
+			await expect(commands.execute()).rejects.toThrow();
+			await until(
+				() =>
+					queryClient
+						.getQueryData<CachedCanvasAgentActivity[]>(activityKey)
+						?.at(-1)?.phase === "failed",
+			);
+			expect(queryClient.getQueryState(taskKey)?.isInvalidated).toBe(false);
+			const after = createWorkspaceTaskEvent({ workspaceId, taskId: "after" });
+			await f.bus.port.publish(workspaceChanges, {
+				params: { workspaceId },
+				event: "changed",
+				data: after,
+			});
+			await until(
+				() =>
+					legacyEvents.length === 2 &&
+					queryClient.getQueryState(taskKey)?.isInvalidated === true,
+			);
+			expect(legacyEvents).toEqual([before, after]);
+			expect(errors).toEqual([]);
+			expect(f.client.getStatus()).toBe("connected");
+			expect(updatedClient.getStatus()).toBe("connected");
+			expect(f.acquired()).toBe(2);
+		} finally {
+			work.resolve();
+			await running?.catch(() => {});
+			legacySubscription.unsubscribe();
+			unsubscribe();
+			updatedClient.close();
+			queryClient.clear();
+			await f.close();
+		}
+		await until(
+			() => f.released() === f.acquired() && f.bus.subscriberCount() === 0,
+		);
+	});
+
 	it("delivers agent activity through the real stream and clears it on interruption", async () => {
 		const f = await fixture();
 		const queryClient = new QueryClient();
@@ -286,51 +450,57 @@ describe("workspace broadcast route", () => {
 		}
 	});
 
-	it("blocks cross-workspace access without subscribing", async () => {
-		const f = await fixture();
-		try {
-			const denied = deferred<unknown>();
-			f.client.subscribe(workspaceChanges, {
-				params: { workspaceId: "workspace_2" },
-				onSync() {
-					throw new Error("Unauthorized readiness");
-				},
-				onEvent() {},
-				onError: denied.resolve,
-			});
-			const error = await denied.promise;
-			expect(error).toBeInstanceOf(BroadcastClientError);
-			expect((error as BroadcastClientError).status).toBe(403);
-			await until(() => f.released() === 1);
-			expect(f.bus.subscriberCount()).toBe(0);
-		} finally {
-			await f.close();
-		}
-	});
+	it.each([workspaceChanges, workspaceCanvasActivity])(
+		"blocks cross-workspace access to $name without subscribing",
+		async (channel) => {
+			const f = await fixture();
+			try {
+				const denied = deferred<unknown>();
+				f.client.subscribe(channel, {
+					params: { workspaceId: "workspace_2" },
+					onSync() {
+						throw new Error("Unauthorized readiness");
+					},
+					onEvent() {},
+					onError: denied.resolve,
+				});
+				const error = await denied.promise;
+				expect(error).toBeInstanceOf(BroadcastClientError);
+				expect((error as BroadcastClientError).status).toBe(403);
+				await until(() => f.released() === 1);
+				expect(f.bus.subscriberCount()).toBe(0);
+			} finally {
+				await f.close();
+			}
+		},
+	);
 
-	it("renews automatically and rechecks revoked membership", async () => {
-		const f = await fixture({ lifetime: 120 });
-		try {
-			const reasons: string[] = [];
-			const denied = deferred<unknown>();
-			f.client.subscribe(workspaceChanges, {
-				params: { workspaceId: "workspace_1" },
-				onEvent() {},
-				onError: denied.resolve,
-				onSync(info) {
-					reasons.push(info.reason);
-					if (reasons.length === 2) f.revoke();
-				},
-			});
-			const error = await denied.promise;
-			expect(reasons).toEqual(["initial", "planned-renewal"]);
-			expect((error as BroadcastClientError).status).toBe(403);
-			await until(() => f.released() === f.acquired());
-			expect(f.bus.subscriberCount()).toBe(0);
-		} finally {
-			await f.close();
-		}
-	});
+	it.each([workspaceChanges, workspaceCanvasActivity])(
+		"renews $name automatically and rechecks revoked membership",
+		async (channel) => {
+			const f = await fixture({ lifetime: 120 });
+			try {
+				const reasons: string[] = [];
+				const denied = deferred<unknown>();
+				f.client.subscribe(channel, {
+					params: { workspaceId: "workspace_1" },
+					onEvent() {},
+					onError: denied.resolve,
+					onSync(info) {
+						reasons.push(info.reason);
+						if (reasons.length === 2) f.revoke();
+					},
+				});
+				const error = await denied.promise;
+				expect(reasons).toEqual(["initial", "planned-renewal"]);
+				expect((error as BroadcastClientError).status).toBe(403);
+				await until(() => f.released() === f.acquired());
+				expect(f.bus.subscriberCount()).toBe(0);
+			} finally {
+				await f.close();
+			}
+		},
+	);
 
 	it("cleans up an interrupted transport and reconciles after reconnect", async () => {
 		const f = await fixture();
