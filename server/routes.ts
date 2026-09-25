@@ -11,6 +11,7 @@ import { documentRoutes } from "@/features/documents/routes";
 import { shareRoutes } from "@/features/shares/routes";
 import { taskRoutes } from "@/features/tasks/routes";
 import { workspaceRoutes } from "@/features/workspaces/routes";
+import { liveContextRoutes } from "../features/live-context/routes";
 
 export const routes = defineRoutes<AppContext>([
 	adminRoutes,
@@ -23,5 +24,6 @@ export const routes = defineRoutes<AppContext>([
 	taskRoutes,
 	notificationRoutes,
 	canvasRoutes,
+	liveContextRoutes,
 ]);
 export const contracts = contractsFromRoutes(routes);

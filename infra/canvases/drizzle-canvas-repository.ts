@@ -176,6 +176,27 @@ export function createDrizzleCanvasRepository(
 
 			return rows;
 		},
+		async findMetaById(scope, id) {
+			const [row] = await db
+				.select({
+					id: schema.canvases.id,
+					userId: schema.canvases.userId,
+					workspaceId: schema.canvases.workspaceId,
+					pageId: schema.canvases.pageId,
+					title: schema.canvases.title,
+					createdAt: schema.canvases.createdAt,
+					updatedAt: schema.canvases.updatedAt,
+				})
+				.from(schema.canvases)
+				.where(
+					and(
+						eq(schema.canvases.id, id),
+						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
+					),
+				)
+				.limit(1);
+			return row ?? null;
+		},
 		async findById(scope, id: string) {
 			const [row] = await db
 				.select()

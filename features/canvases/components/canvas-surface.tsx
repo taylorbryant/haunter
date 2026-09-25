@@ -41,6 +41,8 @@ import {
 	importRecovery,
 } from "@/features/documents/contracts";
 import { useRouter } from "next/navigation";
+import { useLiveContext } from "@/features/live-context/client/provider";
+import { observeCanvasContext } from "../client/live-context";
 export type { CanvasSaveState } from "../client/save-state";
 type Props = {
 	canvasId: string;
@@ -78,6 +80,7 @@ function MemberCanvasSurface(props: Props) {
 			onRestart={() => setRetryKey((key) => key + 1)}
 			{...props}
 			workspaceId={canvasQuery.data.workspaceId}
+			pageId={canvasQuery.data.pageId}
 			user={currentUser}
 			editable={canEdit}
 		/>
@@ -92,6 +95,7 @@ function CanvasLoading() {
 }
 function CollaborativeCanvasSurface({
 	canvasId,
+	pageId,
 	workspaceId,
 	user,
 	editable,
@@ -100,10 +104,21 @@ function CollaborativeCanvasSurface({
 	onRestart,
 }: Props & {
 	onRestart: () => void;
+	pageId: string | null;
 	workspaceId: string;
 	user: { id: string; name: string };
 	editable: boolean;
 }) {
+	const liveContext = useLiveContext();
+	const [contextEditor, setContextEditor] = useState<Editor | null>(null);
+	useEffect(() => {
+		if (!contextEditor || !liveContext) return;
+		return observeCanvasContext(contextEditor, liveContext, {
+			workspaceId,
+			pageId,
+			canvasId,
+		});
+	}, [contextEditor, liveContext, workspaceId, pageId, canvasId]);
 	const { resolvedTheme } = useTheme();
 	const syncTheme = useCanvasTheme(resolvedTheme);
 	const storage = useDurableDraftStorage<TLStoreSnapshot>();
@@ -285,6 +300,7 @@ function CollaborativeCanvasSurface({
 					store={synced}
 					onMount={(value) => {
 						editor.current = value;
+						setContextEditor(value);
 						value.user.updateUserPreferences({
 							id: user.id,
 							name: user.name,
@@ -298,6 +314,7 @@ function CollaborativeCanvasSurface({
 						});
 						return () => {
 							editor.current = null;
+							setContextEditor(null);
 						};
 					}}
 				/>
