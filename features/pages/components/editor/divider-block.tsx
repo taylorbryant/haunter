@@ -12,7 +12,11 @@ export const dividerBlockSpec = createReactBlockSpec(
 	},
 	{
 		render: () => (
-			<div contentEditable={false} className="w-full py-1.5">
+			<div
+				contentEditable={false}
+				data-live-context-selectable=""
+				className="w-full py-1.5"
+			>
 				<Separator />
 			</div>
 		),

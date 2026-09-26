@@ -7,7 +7,7 @@ import { Redis as RedisConnection } from "ioredis";
 import { Redis, type Requester } from "@upstash/redis";
 import { createTenantScope } from "@beignet/core/ports";
 import { createRedisLiveContext } from "@/infra/live-context/redis-live-context";
-import { textEditingFixture } from "./helpers";
+import { textEditingFixture, pageSelectionFixture } from "./helpers";
 import {
 	LIVE_CONTEXT_CLOCK_SKEW_MS,
 	LIVE_CONTEXT_MAX_SESSIONS,
@@ -308,4 +308,24 @@ test("round-trips text through Redis and accepts older tabs without retaining st
 		}),
 	).toBe(true);
 	expect((await f.list())[0].view?.canvas?.textEditing).toBeNull();
+});
+
+test("page ranges round-trip through Redis, and clearing or older-client reports replace them completely", async () => {
+	const f = fixture();
+	const view = {
+		pageId: crypto.randomUUID(),
+		canvas: null,
+		pageSelection: pageSelectionFixture,
+	};
+	expect(await f.publish({ view })).toBe(true);
+	expect((await f.list())[0].view).toEqual(view);
+	expect(
+		await f.publish({ sequence: 3, view: { ...view, pageSelection: null } }),
+	).toBe(true);
+	expect(await f.publish({ sequence: 2, view })).toBe(false);
+	expect((await f.list())[0].view?.pageSelection).toBeNull();
+	expect(await f.publish({ sequence: 4, view })).toBe(true);
+	const oldView = { pageId: view.pageId, canvas: null };
+	expect(await f.publish({ sequence: 5, view: oldView })).toBe(true);
+	expect((await f.list())[0].view).toEqual(oldView);
 });

@@ -4,6 +4,7 @@ import {
 	LIVE_CONTEXT_TTL_MS,
 	type StoredContext,
 	type CanvasTextEditing,
+	type PageSelection,
 } from "../schemas";
 
 export const textEditingFixture: CanvasTextEditing = {
@@ -16,6 +17,22 @@ export const textEditingFixture: CanvasTextEditing = {
 		from: 1,
 		to: 9,
 		selectedText: "Hello 😺",
+		truncated: false,
+	},
+};
+
+export const pageSelectionFixture: PageSelection = {
+	activeBlockId: "block-two",
+	selectedBlockIds: ["block-one", "block-two"],
+	selectionCount: 2,
+	selection: {
+		coordinateSystem: "prosemirror",
+		kind: "text",
+		anchor: 3,
+		head: 24,
+		from: 3,
+		to: 24,
+		selectedText: "First paragraph\nSecond",
 		truncated: false,
 	},
 };

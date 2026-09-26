@@ -69,9 +69,12 @@ async function decorate(
 		...titles,
 		stale: Date.now() - entry.lastSeenAt > LIVE_CONTEXT_STALE_MS,
 		selectionComplete:
-			!entry.view.canvas ||
-			entry.view.canvas.selectionCount ===
-				entry.view.canvas.selectedShapeIds.length,
+			(!entry.view.canvas ||
+				entry.view.canvas.selectionCount ===
+					entry.view.canvas.selectedShapeIds.length) &&
+			(!entry.view.pageSelection ||
+				entry.view.pageSelection.selectionCount ===
+					entry.view.pageSelection.selectedBlockIds.length),
 	};
 }
 
@@ -112,7 +115,10 @@ export const listActiveSessionsUseCase = useCase
 					pageId: view.pageId,
 					canvasId: view.canvas?.canvasId ?? null,
 					canvasPageId: view.canvas?.canvasPageId ?? null,
-					selectionCount: view.canvas?.selectionCount ?? 0,
+					selectionCount:
+						view.canvas?.selectionCount ??
+						view.pageSelection?.selectionCount ??
+						0,
 				})),
 		};
 	});
