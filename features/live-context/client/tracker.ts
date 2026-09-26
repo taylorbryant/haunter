@@ -2,6 +2,8 @@ import {
 	type ActiveView,
 	type CanvasSelection,
 	type PublishContextInput,
+	type PageSelection,
+	LIVE_CONTEXT_MAX_BLOCKS,
 	LIVE_CONTEXT_MAX_SHAPES,
 } from "../schemas";
 
@@ -38,6 +40,7 @@ export class LiveContextTracker {
 	// A standalone route still identifies its canvas after the user clears
 	// context. Track permission for passive reports separately from that ID.
 	private activeCanvasId: string | null = null;
+	private activePageId: string | null = null;
 	private changedAt = 0;
 	private visible = false;
 	private focused = false;
@@ -58,8 +61,9 @@ export class LiveContextTracker {
 		const previous = this.route;
 		this.route = route;
 		this.activeCanvasId = route?.canvasId ?? null;
+		this.activePageId = null;
 		this.view = route?.pageId
-			? { pageId: route.pageId, canvas: null }
+			? { pageId: route.pageId, canvas: null, pageSelection: null }
 			: route?.canvasId
 				? { pageId: null, canvas: emptyCanvas(route.canvasId) }
 				: null;
@@ -92,8 +96,10 @@ export class LiveContextTracker {
 			return;
 		if (!activate && this.activeCanvasId !== selection.canvasId) return;
 		this.activeCanvasId = selection.canvasId;
+		this.activePageId = null;
 		const next: ActiveView = {
 			pageId,
+			pageSelection: null,
 			canvas: {
 				...selection,
 				selectedShapeIds: selection.selectedShapeIds.slice(
@@ -107,6 +113,41 @@ export class LiveContextTracker {
 		this.changedAt = this.now();
 		this.queue();
 	}
+	page(
+		workspaceId: string,
+		pageId: string,
+		selection: PageSelection,
+		activate: boolean,
+	) {
+		if (this.route?.workspaceId !== workspaceId || this.route.pageId !== pageId)
+			return;
+		if (!activate && this.activePageId !== pageId) return;
+		this.activePageId = pageId;
+		this.activeCanvasId = null;
+		const next: ActiveView = {
+			pageId,
+			canvas: null,
+			pageSelection: {
+				...selection,
+				selectedBlockIds: selection.selectedBlockIds.slice(
+					0,
+					LIVE_CONTEXT_MAX_BLOCKS,
+				),
+			},
+		};
+		if (JSON.stringify(next) === JSON.stringify(this.view)) return;
+		this.view = next;
+		this.changedAt = this.now();
+		this.queue();
+	}
+	clearPage(pageId?: string) {
+		if (!this.view?.pageSelection || (pageId && this.view.pageId !== pageId))
+			return;
+		this.activePageId = null;
+		this.view = { ...this.view, pageSelection: null };
+		this.changedAt = this.now();
+		this.queue();
+	}
 	clearCanvas(canvasId?: string) {
 		if (
 			!this.view?.canvas ||
@@ -115,7 +156,7 @@ export class LiveContextTracker {
 			return;
 		this.activeCanvasId = null;
 		this.view = this.route?.pageId
-			? { pageId: this.route.pageId, canvas: null }
+			? { pageId: this.route.pageId, canvas: null, pageSelection: null }
 			: this.route?.canvasId
 				? { pageId: null, canvas: emptyCanvas(this.route.canvasId) }
 				: null;
@@ -124,6 +165,7 @@ export class LiveContextTracker {
 	}
 	withdraw() {
 		this.activeCanvasId = null;
+		this.activePageId = null;
 		this.view = null;
 		this.changedAt = this.now();
 		this.queue();

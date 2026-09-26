@@ -11,6 +11,7 @@ export const LIVE_CONTEXT_SEQUENCE_TTL_MS = Math.max(
 export const LIVE_CONTEXT_STALE_MS = 45_000;
 export const LIVE_CONTEXT_MAX_SESSIONS = 20;
 export const LIVE_CONTEXT_MAX_SHAPES = 100;
+export const LIVE_CONTEXT_MAX_BLOCKS = 100;
 export const LIVE_CONTEXT_MAX_SELECTED_TEXT = 2_000;
 
 const ShapeIdSchema = z
@@ -18,7 +19,7 @@ const ShapeIdSchema = z
 	.regex(/^shape:.+/)
 	.max(200);
 const TextPositionSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
-export const CanvasTextSelectionSchema = z
+const TextSelectionSchema = z
 	.object({
 		coordinateSystem: z.literal("prosemirror"),
 		kind: z.enum(["text", "all"]),
@@ -36,12 +37,33 @@ export const CanvasTextSelectionSchema = z
 			(value.from !== value.to ||
 				(value.selectedText === "" && !value.truncated)),
 	);
+export const CanvasTextSelectionSchema = TextSelectionSchema;
 export const CanvasTextEditingSchema = z.object({
 	shapeId: ShapeIdSchema,
 	// Null while the editor is initializing or its selection is unsupported.
-	selection: CanvasTextSelectionSchema.nullable(),
+	selection: TextSelectionSchema.nullable(),
 });
 export type CanvasTextEditing = z.infer<typeof CanvasTextEditingSchema>;
+
+const BlockIdSchema = z.string().min(1).max(200);
+export const PageSelectionSchema = z
+	.object({
+		activeBlockId: BlockIdSchema.nullable(),
+		selectedBlockIds: z.array(BlockIdSchema).max(LIVE_CONTEXT_MAX_BLOCKS),
+		selectionCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+		// Text/all ranges use the same coordinates as canvas text, but refer to
+		// the entire local page document. Node/cell selections have no text range.
+		selection: TextSelectionSchema.nullable(),
+	})
+	.refine(
+		(value) =>
+			value.selectionCount >= value.selectedBlockIds.length &&
+			new Set(value.selectedBlockIds).size === value.selectedBlockIds.length &&
+			(!value.selection ||
+				value.selection.from !== value.selection.to ||
+				value.selectionCount === 0),
+	);
+export type PageSelection = z.infer<typeof PageSelectionSchema>;
 
 export const CanvasSelectionSchema = z
 	.object({
@@ -66,8 +88,14 @@ export const ActiveViewSchema = z
 	.object({
 		pageId: z.uuid().nullable(),
 		canvas: CanvasSelectionSchema.nullable(),
+		// Optional for older browsers and cached reports.
+		pageSelection: PageSelectionSchema.nullable().optional(),
 	})
-	.refine((value) => value.pageId !== null || value.canvas !== null);
+	.refine((value) => value.pageId !== null || value.canvas !== null)
+	.refine(
+		(value) =>
+			!value.pageSelection || (value.pageId !== null && value.canvas === null),
+	);
 
 export const WorkspaceContextInputSchema = z.object({
 	workspaceId: z.string().min(1).max(200),

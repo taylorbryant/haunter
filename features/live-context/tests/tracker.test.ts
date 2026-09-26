@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { contextRoute, LiveContextTracker } from "../client/tracker";
-import { textEditingFixture } from "./helpers";
+import { textEditingFixture, pageSelectionFixture } from "./helpers";
 import {
 	PublishContextInputSchema,
 	type PublishContextInput,
@@ -35,6 +35,72 @@ function fixture() {
 		},
 	};
 }
+
+test("page context retains capture age on blur and is mutually exclusive with canvas context", async () => {
+	const { tracker, calls, advance } = fixture();
+	tracker.navigate(route);
+	tracker.page("workspace", pageId, pageSelectionFixture, false);
+	await tracker.flush();
+	expect(calls.at(-1)?.view?.pageSelection).toBeNull();
+	tracker.page("workspace", pageId, pageSelectionFixture, true);
+	await tracker.flush();
+	advance(8000);
+	tracker.presence(false, false);
+	tracker.heartbeat();
+	await tracker.flush();
+	expect(calls.at(-1)).toMatchObject({
+		contextAgeMs: 8000,
+		view: { pageSelection: pageSelectionFixture, canvas: null },
+	});
+	tracker.canvas("workspace", pageId, selection, true);
+	tracker.page("workspace", pageId, pageSelectionFixture, false);
+	tracker.clearPage(pageId);
+	await tracker.flush();
+	expect(calls.at(-1)?.view).toEqual({
+		pageId,
+		canvas: selection,
+		pageSelection: null,
+	});
+	tracker.page("workspace", pageId, pageSelectionFixture, true);
+	tracker.canvas("workspace", pageId, selection, false);
+	tracker.clearCanvas(canvasId);
+	await tracker.flush();
+	expect(calls.at(-1)?.view).toEqual({
+		pageId,
+		canvas: null,
+		pageSelection: pageSelectionFixture,
+	});
+});
+
+test("clearing, navigation and withdrawal prevent passive page reports from restoring context", async () => {
+	const { tracker, calls } = fixture();
+	tracker.navigate(route);
+	tracker.page("workspace", pageId, pageSelectionFixture, true);
+	tracker.clearPage();
+	tracker.page("workspace", pageId, pageSelectionFixture, false);
+	await tracker.flush();
+	expect(calls.at(-1)?.view?.pageSelection).toBeNull();
+	tracker.page("workspace", pageId, pageSelectionFixture, true);
+	tracker.withdraw();
+	tracker.page("workspace", pageId, pageSelectionFixture, false);
+	await tracker.flush();
+	expect(calls.at(-1)?.view).toBeNull();
+	const nextPage = crypto.randomUUID();
+	tracker.navigate({ ...route, pageId: nextPage });
+	tracker.page("workspace", pageId, pageSelectionFixture, true);
+	tracker.page("other-workspace", nextPage, pageSelectionFixture, true);
+	tracker.page("workspace", nextPage, pageSelectionFixture, false);
+	await tracker.flush();
+	expect(calls.at(-1)?.view).toEqual({
+		pageId: nextPage,
+		canvas: null,
+		pageSelection: null,
+	});
+	tracker.page("workspace", nextPage, pageSelectionFixture, true);
+	tracker.clearPage(pageId);
+	await tracker.flush();
+	expect(calls.at(-1)?.view?.pageSelection).toEqual(pageSelectionFixture);
+});
 
 test("keeps the captured selection across blur and heartbeat without making it look newly selected", async () => {
 	const { tracker, calls, advance } = fixture();
@@ -82,7 +148,11 @@ test("switching canvases ignores background updates and cleanup from the old can
 	expect(calls.at(-1)?.view?.canvas?.canvasId).toBe(other.canvasId);
 	tracker.clearCanvas();
 	await tracker.flush();
-	expect(calls.at(-1)?.view).toEqual({ pageId, canvas: null });
+	expect(calls.at(-1)?.view).toEqual({
+		pageId,
+		canvas: null,
+		pageSelection: null,
+	});
 });
 
 test("navigation clears selection and refuses callbacks from an old page or workspace", async () => {
@@ -94,7 +164,11 @@ test("navigation clears selection and refuses callbacks from an old page or work
 	tracker.canvas("workspace", pageId, selection, true);
 	tracker.canvas("other-workspace", nextId, selection, true);
 	await tracker.flush();
-	expect(calls.at(-1)?.view).toEqual({ pageId: nextId, canvas: null });
+	expect(calls.at(-1)?.view).toEqual({
+		pageId: nextId,
+		canvas: null,
+		pageSelection: null,
+	});
 	tracker.navigate(null);
 	await tracker.flush();
 	expect(calls.at(-1)?.view).toBeNull();

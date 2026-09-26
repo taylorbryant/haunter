@@ -3,7 +3,11 @@ import { createTenantScope } from "@beignet/core/ports";
 import { documentFixture } from "@/features/documents/tests/helpers";
 import { createTestMcpConnectionRepository } from "@/features/agents/tests/helpers";
 import { executeRemoteMcpCapability } from "@/server/agent-capabilities";
-import { memoryContext, textEditingFixture } from "./helpers";
+import {
+	memoryContext,
+	textEditingFixture,
+	pageSelectionFixture,
+} from "./helpers";
 import {
 	publishLiveContextUseCase,
 	listActiveSessionsUseCase,
@@ -278,6 +282,41 @@ test("View-only MCP discovers its own sessions and rejects workspace escalation 
 				await execute("get_active_context", { sessionId: f.input.sessionId }),
 			).context.view.canvas?.textEditing,
 		).toEqual(textEditingFixture);
+		await f.publish({
+			sequence: 2,
+			view: {
+				pageId: f.page.id,
+				canvas: null,
+				pageSelection: pageSelectionFixture,
+			},
+		});
+		expect(
+			GetActiveContextOutputSchema.parse(
+				await execute("get_active_context", { sessionId: f.input.sessionId }),
+			).context.view.pageSelection,
+		).toEqual(pageSelectionFixture);
+		const pageList = ListActiveSessionsOutputSchema.parse(
+			await execute("list_active_sessions", {}),
+		);
+		expect(pageList.sessions[0]).toMatchObject({
+			selectionCount: 2,
+			selectionComplete: true,
+		});
+		expect(JSON.stringify(pageList)).not.toContain("First paragraph");
+		expect(pageList.sessions[0]).not.toHaveProperty("pageSelection");
+		await f.publish({
+			sequence: 3,
+			view: {
+				pageId: f.page.id,
+				canvas: null,
+				pageSelection: {
+					...pageSelectionFixture,
+					selectionCount: 101,
+					selectedBlockIds: Array.from({ length: 100 }, (_, i) => "block-" + i),
+				},
+			},
+		});
+		expect((await f.get()).context.selectionComplete).toBe(false);
 		await expect(
 			execute("get_active_context", { sessionId: crypto.randomUUID() }),
 		).rejects.toMatchObject({ code: "ACTIVE_SESSION_NOT_FOUND" });
