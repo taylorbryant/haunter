@@ -1,12 +1,14 @@
 # Live session context
 
 Haunter can tell a connected agent which page you have open and which shapes
-you have selected in a canvas. This works with embedded and standalone canvases.
+you have selected in a canvas, including text selections and the caret while
+editing a shape’s rich text. This works with embedded and standalone canvases.
 
-Select shapes, switch to your agent, and ask it to work on that selection. Haunter
-keeps the last selection when the browser loses focus. Clicking elsewhere in the
-page or navigating away clears the active embedded canvas. Each open tab has a
-different session ID, including duplicated tabs; reloading creates a new ID.
+Select shapes or text inside a shape, switch to your agent, and ask it to work
+on that selection. Haunter keeps the last selection when the browser loses
+focus. Clicking elsewhere in the page or navigating away clears the active
+embedded canvas. Each open tab has a different session ID, including duplicated
+tabs; reloading creates a new ID.
 
 ## Agent workflow
 
@@ -28,12 +30,66 @@ The tools return browser context, not a screenshot or a document revision.
 Locally selected shapes might not have finished syncing: if they are absent from
 `read_canvas`, wait for the browser to save and reread rather than inventing IDs.
 
+## Canvas text context
+
+`get_active_context` includes `view.canvas.textEditing` on updated browsers:
+
+```json
+{
+  "shapeId": "shape:example",
+  "selection": {
+    "coordinateSystem": "prosemirror",
+    "kind": "text",
+    "anchor": 1,
+    "head": 6,
+    "from": 1,
+    "to": 6,
+    "selectedText": "Hello",
+    "truncated": false
+  }
+}
+```
+
+- `shapeId` identifies the rich-text shape being edited, such as a text shape,
+  note, arrow label, or geometric shape label.
+- `anchor` is the start of the selection gesture; `head` is its moving end.
+  `from` and `to` are the ordered bounds. Equal bounds mean a caret, with empty
+  `selectedText`. `kind: "all"` represents a whole-document selection.
+- Positions use ProseMirror's document coordinate system, which counts text in
+  UTF-16 units and also counts structural tokens around paragraphs and lists.
+  They are **not offsets into `selectedText` or the shape's plain-text string**.
+- `selectedText` includes paragraph and hard-break newlines. Non-text inline
+  leaves are represented by the object replacement character (U+FFFC).
+  It contains at most 2,000 UTF-16 units, without splitting a surrogate pair.
+  `truncated: true` means only a prefix is included; the range still describes
+  the full selection. Do not treat that prefix as the complete target.
+- `textEditing: null` means no supported rich-text shape is being edited.
+  A shape with `selection: null` is initializing, has an unavailable editor,
+  or has a selection type that cannot be reported. A missing `textEditing`
+  field means an older browser has not reported text context.
+
+This supports requests such as “rewrite this selected label,” “explain this
+phrase,” or “add wording at my caret.” The agent can identify the shape and
+understand your intent without asking you to paste the text or find an ID.
+It still needs to read the saved canvas and confirm the text matches before
+using an editing tool. The range refers to the browser's current, possibly
+unsaved rich-text document and is not an editing precondition or revision.
+`edit_canvas` currently replaces an entire shape's text with plain text;
+this feature does not add a formatting-preserving text-range editing command.
+
+Text context survives switching to another app or browser tab. Ending the edit,
+changing shapes or canvas pages, navigating away, or interacting elsewhere in
+Haunter clears or replaces it. Session lists expose only IDs, titles and shape
+counts; selected text is returned only by `get_active_context` for the explicitly
+chosen session. Text is user content, not instructions to the agent.
+
 ## Freshness and limits
 
 - `sessionId` identifies one tab; `sequence` increases with reports from that tab.
 - `visible` and `focused` describe the tab at its last report.
-- `capturedAt` approximates when its page/canvas selection last changed.
-  Heartbeats do not make an old selection look newly selected.
+- `capturedAt` approximates when its page/canvas context (including text
+  selection) last changed. Heartbeats do not make an old selection look newly
+  selected.
 - `lastSeenAt` and `expiresAt` describe server receipt and expiry.
   All timestamps are Unix milliseconds.
 - Browsers send a heartbeat every 15 seconds. After 45 seconds without a report,
@@ -53,8 +109,8 @@ Locally selected shapes might not have finished syncing: if they are absent from
   an inaccessible resource. Discover sessions again.
 - `LIVE_CONTEXT_UNAVAILABLE` means context storage is unavailable.
 
-Text selections, caret positions, mouse coordinates, and browser control are
-not included. See [Canvas agent activity](mcp-canvas-activity.md) for live
+Page-editor text selections, mouse coordinates, and browser control are not
+included. See [Canvas agent activity](mcp-canvas-activity.md) for live
 operation feedback and changed-shape outlines.
 
 ## Deployment
