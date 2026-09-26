@@ -27,7 +27,9 @@ export function observeCanvasContext(
 		);
 	};
 	const activate = () => report(true);
-	const textChanged = () => report(editor.getInstanceState().isFocused);
+	// tldraw's logical focus can outlive DOM focus. Passive updates must not
+	// reactivate context cleared by an interaction elsewhere in the page.
+	const textChanged = () => report(false);
 	let textEditor: ReturnType<Editor["getRichTextEditor"]> = null;
 	const detachTextEditor = () => {
 		textEditor?.off("transaction", textChanged);
@@ -43,11 +45,10 @@ export function observeCanvasContext(
 			textEditor?.on("transaction", textChanged);
 			textEditor?.on("unmount", textChanged);
 		}
-		report(editor.getInstanceState().isFocused);
+		report(false);
 	});
 	container.addEventListener("pointerdown", activate, true);
 	container.addEventListener("focusin", activate, true);
-	if (identity.pageId === null) report(true);
 	return () => {
 		stop();
 		detachTextEditor();

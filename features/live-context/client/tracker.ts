@@ -35,6 +35,9 @@ export class LiveContextTracker {
 	private sequence = 0;
 	private route: ContextRoute | null = null;
 	private view: ActiveView | null = null;
+	// A standalone route still identifies its canvas after the user clears
+	// context. Track permission for passive reports separately from that ID.
+	private activeCanvasId: string | null = null;
 	private changedAt = 0;
 	private visible = false;
 	private focused = false;
@@ -54,6 +57,7 @@ export class LiveContextTracker {
 		if (JSON.stringify(route) === JSON.stringify(this.route)) return;
 		const previous = this.route;
 		this.route = route;
+		this.activeCanvasId = route?.canvasId ?? null;
 		this.view = route?.pageId
 			? { pageId: route.pageId, canvas: null }
 			: route?.canvasId
@@ -86,7 +90,8 @@ export class LiveContextTracker {
 			this.route.canvasId !== selection.canvasId
 		)
 			return;
-		if (!activate && this.view?.canvas?.canvasId !== selection.canvasId) return;
+		if (!activate && this.activeCanvasId !== selection.canvasId) return;
+		this.activeCanvasId = selection.canvasId;
 		const next: ActiveView = {
 			pageId,
 			canvas: {
@@ -108,6 +113,7 @@ export class LiveContextTracker {
 			(canvasId && this.view.canvas.canvasId !== canvasId)
 		)
 			return;
+		this.activeCanvasId = null;
 		this.view = this.route?.pageId
 			? { pageId: this.route.pageId, canvas: null }
 			: this.route?.canvasId
@@ -117,6 +123,7 @@ export class LiveContextTracker {
 		this.queue();
 	}
 	withdraw() {
+		this.activeCanvasId = null;
 		this.view = null;
 		this.changedAt = this.now();
 		this.queue();

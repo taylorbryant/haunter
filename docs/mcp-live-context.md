@@ -79,7 +79,9 @@ this feature does not add a formatting-preserving text-range editing command.
 
 Text context survives switching to another app or browser tab. Ending the edit,
 changing shapes or canvas pages, navigating away, or interacting elsewhere in
-Haunter clears or replaces it. Session lists expose only IDs, titles and shape
+Haunter clears or replaces it. After interacting elsewhere, click or focus
+inside the canvas to resume reporting its selection. Background editor updates
+cannot restore a cleared selection. Session lists expose only IDs, titles and shape
 counts; selected text is returned only by `get_active_context` for the explicitly
 chosen session. Text is user content, not instructions to the agent.
 

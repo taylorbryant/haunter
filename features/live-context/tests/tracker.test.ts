@@ -100,6 +100,37 @@ test("navigation clears selection and refuses callbacks from an old page or work
 	expect(calls.at(-1)?.view).toBeNull();
 });
 
+test("standalone context accepts initial reports, but clearing and withdrawal reject passive updates", async () => {
+	const { tracker, calls, advance } = fixture();
+	const standalone = { workspaceId: "workspace", pageId: null, canvasId };
+	tracker.navigate(standalone);
+	tracker.canvas("workspace", null, selection, false);
+	await tracker.flush();
+	expect(calls.at(-1)?.view?.canvas).toEqual(selection);
+	tracker.clearCanvas();
+	await tracker.flush();
+	const cleared = structuredClone(calls.at(-1)!.view);
+	advance(5000);
+	tracker.canvas("workspace", null, selection, false);
+	tracker.navigate(standalone);
+	tracker.heartbeat();
+	await tracker.flush();
+	expect(calls.at(-1)?.view).toEqual(cleared);
+	expect(calls.at(-1)?.contextAgeMs).toBe(5000);
+	tracker.canvas("workspace", null, selection, true);
+	await tracker.flush();
+	expect(calls.at(-1)?.view?.canvas).toEqual(selection);
+	tracker.withdraw();
+	tracker.canvas("workspace", null, selection, false);
+	await tracker.flush();
+	expect(calls.at(-1)?.view).toBeNull();
+	tracker.navigate(null);
+	tracker.navigate(standalone);
+	tracker.canvas("workspace", null, selection, false);
+	await tracker.flush();
+	expect(calls.at(-1)?.view?.canvas).toEqual(selection);
+});
+
 test("standalone canvases have an internal canvas page, and oversized selections are explicit", async () => {
 	const { tracker, calls } = fixture();
 	tracker.navigate({ workspaceId: "workspace", pageId: null, canvasId });
