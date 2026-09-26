@@ -13,6 +13,7 @@ import { getBrowserSessionRecovery } from "@/client/session-recovery";
 import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
 import { publishLiveContext } from "../contracts";
 import { contextRoute, LiveContextTracker } from "./tracker";
+import { isPageContextTarget } from "./page-target";
 
 const LiveContext = createContext<LiveContextTracker | null>(null);
 export const useLiveContext = () => useContext(LiveContext);
@@ -68,12 +69,12 @@ export function LiveContextProvider({
 			);
 		const interact = (event: Event) => {
 			// Browser blur/visibility changes retain the last meaningful selection.
-			// Actual interaction elsewhere in Haunter clears the active embedded canvas.
-			if (
-				event.target instanceof Element &&
-				!event.target.closest("[data-live-context-canvas]")
-			)
-				tracker.clearCanvas();
+			// The innermost editor owns context: embedded canvases take precedence
+			// over the surrounding page. Titles, dialogs and controls clear both.
+			if (!(event.target instanceof Element)) return;
+			const canvas = event.target.closest("[data-live-context-canvas]");
+			if (!canvas) tracker.clearCanvas();
+			if (canvas || !isPageContextTarget(event.target)) tracker.clearPage();
 		};
 		const hide = () => {
 			tracker.withdraw();

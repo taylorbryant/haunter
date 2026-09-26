@@ -53,6 +53,8 @@ import { DocumentRecoveryNotice } from "@/features/documents/components/document
 import { usePageDocument } from "@/features/documents/client/use-page-document";
 import type { PageDocumentSession } from "@/features/documents/client/session";
 import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
+import { useLiveContext } from "@/features/live-context/client/provider";
+import { observePageContext } from "@/features/pages/client/live-context";
 import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
@@ -553,6 +555,11 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 			: editorOptions,
 	);
 	useSyncEditorCodeTheme(editor, resolvedTheme);
+	const liveContext = useLiveContext();
+	useEffect(() => {
+		if (!liveContext) return;
+		return observePageContext(editor, liveContext, { workspaceId, pageId });
+	}, [editor, liveContext, workspaceId, pageId]);
 	useEffect(
 		() => registerTaskCreator(editor, currentUserId),
 		[editor, currentUserId],

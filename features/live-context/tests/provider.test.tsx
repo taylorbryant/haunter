@@ -8,7 +8,7 @@ import {
 import type { PublishContextInput } from "../schemas";
 import type { LiveContextTracker } from "../client/tracker";
 import { act, useEffect } from "react";
-import { textEditingFixture } from "./helpers";
+import { textEditingFixture, pageSelectionFixture } from "./helpers";
 
 const pageId = crypto.randomUUID();
 const canvasId = crypto.randomUUID();
@@ -26,8 +26,16 @@ function Probe() {
 	return (
 		<>
 			<button type="button">Page text</button>
-			<div data-live-context-canvas={canvasId}>
-				<button type="button">Canvas</button>
+			<div data-live-context-page={pageId}>
+				<p>Editor paragraph</p>
+				<input aria-label="Block input" />
+				<div contentEditable={false} data-live-context-selectable="">
+					<hr />
+					<button type="button">Block control</button>
+					<div data-live-context-canvas={canvasId}>
+						<button type="button">Canvas</button>
+					</div>
+				</div>
 			</div>
 		</>
 	);
@@ -129,6 +137,39 @@ test("navigation publishes the new page and leaving the workspace withdraws cont
 	);
 	await waitFor(() => expect(calls.at(-1)?.view).toBeNull());
 	expect(tracker).toBeNull();
+});
+
+test("page context survives blur and editor interaction but clears for nested canvases, inputs and outside UI", async () => {
+	const view = render(
+		<LiveContextProvider userId="user" activeWorkspaceId="workspace">
+			<Probe />
+		</LiveContextProvider>,
+	);
+	await waitFor(() => expect(calls.length).toBeGreaterThan(0));
+	for (const event of ["pointerDown", "focusIn"] as const) {
+		for (const target of [
+			"Canvas",
+			"Page text",
+			"Block input",
+			"Block control",
+		]) {
+			tracker!.page("workspace", pageId, pageSelectionFixture, true);
+			await tracker!.flush();
+			fireEvent.blur(window);
+			fireEvent[event](view.getByText("Editor paragraph"));
+			fireEvent[event](view.getByRole("separator"));
+			await tracker!.flush();
+			expect(calls.at(-1)?.view?.pageSelection).toEqual(pageSelectionFixture);
+			fireEvent[event](
+				target === "Block input"
+					? view.getByLabelText(target)
+					: view.getByText(target),
+			);
+			tracker!.page("workspace", pageId, pageSelectionFixture, false);
+			await tracker!.flush();
+			expect(calls.at(-1)?.view?.pageSelection).toBeNull();
+		}
+	}
 });
 
 test("the first report waits for the parent session effect instead of disappearing until the next heartbeat", async () => {
