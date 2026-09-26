@@ -218,3 +218,67 @@ test("bounds selected text without splitting surrogate pairs and does not invent
 	editor.deleteShape(a);
 	expect(await context()).toBeNull();
 });
+
+test.each([false, true])(
+	"cleared context stays cleared across passive editor events and resumes on interaction (standalone=%s)",
+	async (standalone) => {
+		stop();
+		const pageId = standalone ? null : crypto.randomUUID();
+		tracker.navigate({
+			workspaceId: "workspace",
+			pageId,
+			canvasId: standalone ? canvasId : null,
+		});
+		const { observeCanvasContext } = await import("../client/live-context");
+		const observe = () =>
+			observeCanvasContext(editor, tracker, {
+				workspaceId: "workspace",
+				pageId,
+				canvasId,
+			});
+		stop = observe();
+		const text = await edit();
+		const container = editor.getContainer();
+		editor.focus();
+		container.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+		text.commands.setTextSelection({ from: 1, to: 4 });
+		expect((await context())?.selection?.selectedText).toBe("Hi ");
+		const outside = document.createElement("button");
+		document.body.append(outside);
+
+		for (const resumeEvent of ["pointerdown", "focusin"]) {
+			// Moving DOM focus does not reset tldraw's logical focus flag. The
+			// provider clears context on this outside interaction independently.
+			outside.focus();
+			expect(editor.getIsFocused()).toBe(true);
+			tracker.clearCanvas();
+			await tracker.flush();
+			const cleared = structuredClone(calls.at(-1)!.view);
+			expect(cleared?.canvas?.textEditing ?? null).toBeNull();
+			now += 12_000;
+			text.view.dispatch(text.state.tr.setMeta("background-update", true));
+			await tracker.flush();
+			expect(calls.at(-1)?.view).toEqual(cleared);
+			// Store changes and observer reattachment must not reactivate either.
+			editor.updateShape({ id: a, type: "text", x: now });
+			await tracker.flush();
+			expect(calls.at(-1)?.view).toEqual(cleared);
+			tracker.heartbeat();
+			await tracker.flush();
+			expect(calls.at(-1)?.contextAgeMs).toBe(12_000);
+			stop();
+			stop = observe();
+			await tracker.flush();
+			expect(calls.at(-1)?.view).toEqual(cleared);
+			container.dispatchEvent(new Event(resumeEvent, { bubbles: true }));
+			expect((await context())?.selection?.selectedText).toBe("Hi ");
+			expect(calls.at(-1)?.contextAgeMs).toBe(0);
+		}
+		tracker.clearCanvas();
+		await tracker.flush();
+		const cleared = structuredClone(calls.at(-1)!.view);
+		text.destroy();
+		await tracker.flush();
+		expect(calls.at(-1)?.view).toEqual(cleared);
+	},
+);
