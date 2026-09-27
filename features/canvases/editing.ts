@@ -82,6 +82,19 @@ export const EditCanvasInputSchema = CanvasTargetSchema.extend({
 	expectedRevision: CanvasRevisionSchema,
 	operations: z.array(CanvasOperationSchema).min(1).max(100),
 });
+export const InsertCanvasLibraryItemInputSchema = CanvasTargetSchema.extend({
+	expectedRevision: CanvasRevisionSchema,
+	itemId: z.string().min(1).max(100),
+	itemVersion: z.number().int().positive(),
+	pageId: z
+		.string()
+		.regex(/^page:.+/)
+		.max(200)
+		.optional(),
+	x: Coordinate,
+	y: Coordinate,
+	scale: z.number().finite().min(0.1).max(4).default(1),
+});
 export const DeleteCanvasShapesInputSchema = CanvasTargetSchema.extend({
 	expectedRevision: CanvasRevisionSchema,
 	shapeIds: z.array(ShapeId).min(1).max(100),
@@ -102,11 +115,16 @@ export const CanvasCommandSchema = z.discriminatedUnion("action", [
 	ReadCanvasInputSchema.extend({ action: z.literal("read") }),
 	PreviewCanvasInputSchema.extend({ action: z.literal("preview") }),
 	EditCanvasInputSchema.extend({ action: z.literal("edit") }),
+	InsertCanvasLibraryItemInputSchema.extend({
+		action: z.literal("insert-library"),
+	}),
 	DeleteCanvasShapesInputSchema.extend({ action: z.literal("delete") }),
 ]);
 export type CanvasCommand = z.infer<typeof CanvasCommandSchema>;
 export const isCanvasWrite = (command: CanvasCommand) =>
-	command.action === "edit" || command.action === "delete";
+	command.action === "edit" ||
+	command.action === "delete" ||
+	command.action === "insert-library";
 export type CanvasOperation = z.infer<typeof CanvasOperationSchema>;
 export const CanvasReadOutputSchema = z.object({
 	canvasId: z.uuid(),
@@ -149,6 +167,17 @@ export const CanvasEditOutputSchema = z.object({
 	createdShapes: z.record(z.string(), z.string()),
 	historyVersionId: z.uuid(),
 });
+export const InsertCanvasLibraryItemOutputSchema = z.object({
+	canvasId: z.uuid(),
+	revision: CanvasRevisionSchema,
+	historyVersionId: z.uuid(),
+	itemId: z.string(),
+	itemVersion: z.number().int().positive(),
+	pageId: z.string(),
+	rootShapeId: ShapeId,
+	groupId: ShapeId.nullable(),
+	shapeIdsByKey: z.record(z.string(), ShapeId),
+});
 export const CanvasPreviewMetadataSchema = z.object({
 	canvasId: z.uuid(),
 	revision: CanvasRevisionSchema,
@@ -173,6 +202,7 @@ export type CanvasPreviewOutput = z.infer<typeof CanvasPreviewOutputSchema>;
 export const CanvasCommandOutputSchema = z.union([
 	CanvasReadOutputSchema,
 	CanvasEditOutputSchema,
+	InsertCanvasLibraryItemOutputSchema,
 	CanvasPreviewOutputSchema,
 ]);
 export type CanvasCommandOutput = z.infer<typeof CanvasCommandOutputSchema>;

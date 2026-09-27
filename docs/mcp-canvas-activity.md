@@ -1,8 +1,8 @@
 # Canvas agent activity
 
-When a connected agent uses `read_canvas`, `preview_canvas`, `edit_canvas`, or
-`delete_canvas_shapes`, the open canvas shows the agent's name, the workspace
-member who connected it, and the action in progress. This works in embedded and
+When a connected agent uses `read_canvas`, `preview_canvas`, `edit_canvas`,
+`insert_canvas_library_item`, or `delete_canvas_shapes`, the open canvas shows
+the agent's name, the workspace member who connected it, and the action in progress. This works in embedded and
 standalone canvases, for remote MCP connections and registered Agent Auth agents.
 
 Successful calls briefly show completion feedback; unsuccessful calls show

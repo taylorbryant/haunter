@@ -7,6 +7,8 @@ import {
 	PageRevisionSchema,
 } from "@/features/pages/block-editing";
 import {
+	InsertCanvasLibraryItemInputSchema,
+	InsertCanvasLibraryItemOutputSchema,
 	ReadCanvasInputSchema,
 	EditCanvasInputSchema,
 	DeleteCanvasShapesInputSchema,
@@ -15,9 +17,38 @@ import {
 	PreviewCanvasInputSchema,
 	CanvasPreviewOutputSchema,
 } from "./editing";
+import {
+	SearchCanvasLibraryInputSchema,
+	SearchCanvasLibraryOutputSchema,
+} from "./library-schemas";
 const workspace = { workspaceId: z.string().min(1) };
 
 export const canvasAgentCapabilities = [
+	defineAgentCapability("search_canvas_library", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.search_canvas_library,
+		input: SearchCanvasLibraryInputSchema,
+		output: SearchCanvasLibraryOutputSchema,
+		async handle({ ctx, input }) {
+			const { searchCanvasLibraryUseCase } = await import(
+				"./use-cases/search-canvas-library"
+			);
+			return searchCanvasLibraryUseCase.run({ ctx, input });
+		},
+	}),
+	defineAgentCapability("insert_canvas_library_item", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.insert_canvas_library_item,
+		input: InsertCanvasLibraryItemInputSchema.extend(workspace),
+		output: InsertCanvasLibraryItemOutputSchema,
+		async handle({ ctx, input: { workspaceId: _, ...input } }) {
+			const { canvasCommandUseCase } = await import("./use-cases/edit-canvas");
+			return InsertCanvasLibraryItemOutputSchema.parse(
+				await canvasCommandUseCase.run({
+					ctx,
+					input: { ...input, action: "insert-library" },
+				}),
+			);
+		},
+	}),
 	defineAgentCapability("preview_canvas", {
 		description: AGENT_CAPABILITY_DESCRIPTIONS.preview_canvas,
 		input: PreviewCanvasInputSchema.extend(workspace),

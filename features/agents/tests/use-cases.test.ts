@@ -328,6 +328,7 @@ describe("agents.getPending", () => {
 			hostDefaultCapabilities: [
 				"list_active_sessions",
 				"get_active_context",
+				"search_canvas_library",
 				"read_canvas",
 				"preview_canvas",
 				"list_workspaces",

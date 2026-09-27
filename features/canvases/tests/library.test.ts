@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { TLGeoShapeProps } from "tldraw";
+import type { TLGeoShapeProps, TLArrowShapeProps } from "tldraw";
 import {
 	CANVAS_LIBRARY_ITEMS,
 	getCanvasLibraryInsertionLayout,
@@ -140,6 +140,17 @@ describe("canvas library", () => {
 		});
 
 		for (const [index, element] of entry.elements.entries()) {
+			if (element.kind === "arrow") {
+				const props = materialized.shapes[index].props as TLArrowShapeProps;
+				const full = materializeCanvasLibraryItem(entry, { x: 0, y: 0 }).shapes[
+					index
+				].props as TLArrowShapeProps;
+				expect(props.end).toEqual({
+					x: full.end.x * scale,
+					y: full.end.y * scale,
+				});
+				expect(props.bend).toBe(full.bend * scale);
+			}
 			if (element.kind !== "geo") continue;
 			const shape = materialized.shapes[index];
 			expect(shape.type).toBe("geo");

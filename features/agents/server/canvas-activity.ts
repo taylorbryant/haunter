@@ -3,6 +3,8 @@ import type { AppContext } from "@/app-context";
 import {
 	CanvasEditOutputSchema,
 	EditCanvasInputSchema,
+	InsertCanvasLibraryItemInputSchema,
+	InsertCanvasLibraryItemOutputSchema,
 } from "@/features/canvases/editing";
 import { workspaceCanvasActivity } from "@/features/collab/channels";
 import type { AgentPrincipal } from "@/lib/agent-capabilities";
@@ -13,6 +15,7 @@ const actions: Record<string, CanvasAgentActivity["action"]> = {
 	read_canvas: "read",
 	preview_canvas: "preview",
 	edit_canvas: "edit",
+	insert_canvas_library_item: "edit",
 	delete_canvas_shapes: "delete",
 };
 const TIMEOUT_MS = 1_000;
@@ -50,6 +53,20 @@ function changedShapes(
 	output: unknown,
 	canvasId: string,
 ): string[] {
+	const insertion = InsertCanvasLibraryItemInputSchema.safeParse(args);
+	const inserted = InsertCanvasLibraryItemOutputSchema.safeParse(output);
+	if (
+		insertion.success &&
+		inserted.success &&
+		inserted.data.canvasId === canvasId
+	) {
+		return [
+			...new Set([
+				inserted.data.rootShapeId,
+				...Object.values(inserted.data.shapeIdsByKey),
+			]),
+		].slice(0, 100);
+	}
 	const input = EditCanvasInputSchema.safeParse(args);
 	const result = CanvasEditOutputSchema.safeParse(output);
 	if (!input.success || !result.success || result.data.canvasId !== canvasId)

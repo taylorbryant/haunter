@@ -27,6 +27,7 @@ import { authorizeCanvas } from "@/features/canvases/lib/authorize-canvas";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { appError } from "@/features/shared/errors";
 import { prepareCanvasEdit, describeCanvas } from "./shape-edits";
+import { prepareCanvasLibraryInsertion } from "./library-insertion";
 
 type Socket = Pick<WebSocketMinimal, "send" | "close" | "readyState">;
 type Entry = {
@@ -330,7 +331,10 @@ export function createCanvasSyncServer(options: {
 						revision: currentRevision,
 					};
 				}
-				const edit = prepareCanvasEdit(before, command);
+				const edit =
+					command.action === "insert-library"
+						? prepareCanvasLibraryInsertion(before, command)
+						: prepareCanvasEdit(before, command);
 				const staged = new InMemorySyncStorage<TLRecord>({
 					snapshot: entry.storage.getSnapshot(),
 				});
@@ -380,7 +384,9 @@ export function createCanvasSyncServer(options: {
 				return {
 					canvasId: canvas.id,
 					revision: canvasRevision(canvas.id, entry.revision),
-					createdShapes: edit.createdShapes,
+					...("insertion" in edit
+						? edit.insertion
+						: { createdShapes: edit.createdShapes }),
 					historyVersionId: result.historyVersionId,
 				};
 			});

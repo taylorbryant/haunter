@@ -259,7 +259,7 @@ endpoint.
 
 For reading structured page content, editing blocks, and replacing page bodies,
 see the [MCP page editing API](docs/mcp-page-editing.md).
-For native canvas creation, shape edits, connections, image previews, and history, see the
+For native canvas creation, library templates, shape edits, connections, image previews, and history, see the
 [MCP canvas editing API](docs/mcp-canvas-editing.md).
 For discovering your open tabs, current page, and canvas selection, see
 [live session context](docs/mcp-live-context.md) and
