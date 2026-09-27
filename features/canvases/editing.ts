@@ -38,6 +38,9 @@ export const CanvasOperationSchema = z.discriminatedUnion("op", [
 			height: Dimension.optional(),
 			text: Text.optional(),
 			color: Color.optional(),
+			// New shapes may join an existing group/frame. Coordinates are local
+			// to that parent; pageId, when supplied, must match its ancestor page.
+			parentId: ShapeId.optional(),
 			pageId: z
 				.string()
 				.regex(/^page:.+/)

@@ -4,6 +4,175 @@ import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 import { canvasFingerprint, normalizeCanvasSnapshot } from "../lib/document";
 import { prepareCanvasEdit } from "@/infra/canvases/shape-edits";
 
+test("MCP edits actual grouped library templates without changing their transforms, selection or undo history", async () => {
+	installTestDom();
+	const {
+		Editor,
+		createTLStore,
+		defaultShapeUtils,
+		defaultBindingUtils,
+		tipTapDefaultExtensions,
+		defaultAddFontsFromNode,
+		SelectTool,
+		getArrowInfo,
+	} = await import("tldraw");
+	const { CANVAS_LIBRARY_ITEMS, materializeCanvasLibraryItem } = await import(
+		"../lib/library"
+	);
+	const store = createTLStore({
+		shapeUtils: defaultShapeUtils,
+		bindingUtils: defaultBindingUtils,
+		snapshot: normalizeCanvasSnapshot({}),
+	});
+	const container = document.createElement("div");
+	document.body.append(container);
+	const editor = new Editor({
+		store,
+		shapeUtils: defaultShapeUtils,
+		bindingUtils: defaultBindingUtils,
+		options: {
+			text: {
+				tipTapConfig: { extensions: tipTapDefaultExtensions },
+				addFontsFromNode: defaultAddFontsFromNode,
+			},
+		},
+		tools: [SelectTool],
+		initialState: "select",
+		getContainer: () => container,
+	});
+	try {
+		const template = CANVAS_LIBRARY_ITEMS.find(
+			(item) => item.id === "mobile-app-screen",
+		)!;
+		const materialized = materializeCanvasLibraryItem(template, {
+			x: 200,
+			y: 300,
+		});
+		editor.createShapes(materialized.shapes);
+		editor.groupShapes(materialized.shapeIds, {
+			groupId: materialized.groupId,
+		});
+		const frameId = "shape:frame" as TLShape["id"];
+		editor.createShape({
+			id: frameId,
+			type: "frame",
+			x: 100,
+			y: 200,
+			props: { w: 1500, h: 1500 },
+		});
+		editor.reparentShapes([materialized.groupId], frameId);
+		editor.updateShape({ id: frameId, type: "frame", rotation: Math.PI / 6 });
+		editor.updateShape({
+			id: materialized.groupId,
+			type: "group",
+			rotation: Math.PI / 3,
+		});
+		editor.select(materialized.groupId);
+		const label = materialized.shapeIds
+			.map((id) => editor.getShape(id)!)
+			.find((shape) => shape.type === "text")!;
+		const boxes = materialized.shapeIds
+			.map((id) => editor.getShape(id)!)
+			.filter((shape) => shape.type === "geo");
+		editor.markHistoryStoppingPoint("local move");
+		editor.updateShape({ id: boxes[1].id, type: "geo", x: boxes[1].x + 10 });
+		editor.undo();
+		expect(editor.getCanRedo()).toBe(true);
+		const before = normalizeCanvasSnapshot({ ...store.getStoreSnapshot() });
+		const labelBefore = editor.getShapePageTransform(label).point();
+		const result = prepareCanvasEdit(before, {
+			action: "edit",
+			canvasId: "canvas",
+			expectedRevision: "unused",
+			operations: [
+				{
+					op: "update",
+					shapeId: label.id,
+					x: label.x + 15,
+					y: label.y + 20,
+					text: "Tasks",
+					color: "blue",
+				},
+				{ op: "update", shapeId: boxes[0].id, width: 600 },
+				{
+					op: "create",
+					ref: "button",
+					type: "rectangle",
+					parentId: materialized.groupId,
+					x: 700,
+					y: 400,
+					text: "Add task",
+				},
+				{ op: "connect", ref: "link", fromId: boxes[0].id, toId: "button" },
+			],
+		});
+		store.mergeRemoteChanges(() => store.put(result.changed));
+		expect(normalizeCanvasSnapshot({ ...store.getStoreSnapshot() })).toEqual(
+			result.next,
+		);
+		expect(editor.getShape(materialized.groupId)).toEqual(
+			before.store[materialized.groupId] as TLShape,
+		);
+		expect(editor.getShape(frameId)).toEqual(before.store[frameId] as TLShape);
+		expect(editor.getSelectedShapeIds()).toEqual([materialized.groupId]);
+		expect(editor.getCanRedo()).toBe(true);
+		editor.redo();
+		expect(editor.getShape(boxes[1].id)?.x).toBe(boxes[1].x + 10);
+		expect(
+			editor.getShape(result.createdShapes.button as TLShape["id"]),
+		).toBeDefined();
+		editor.undo();
+		expect(normalizeCanvasSnapshot({ ...store.getStoreSnapshot() })).toEqual(
+			result.next,
+		);
+		const labelAfter = editor.getShapePageTransform(label.id).point();
+		expect(labelAfter.x - labelBefore.x).toBeCloseTo(-20);
+		expect(labelAfter.y - labelBefore.y).toBeCloseTo(15);
+		const updated = editor.getShape(label.id) as import("tldraw").TLTextShape;
+		expect(updated.props.font).toBe(
+			(label as import("tldraw").TLTextShape).props.font,
+		);
+		expect(updated.meta).toEqual(label.meta);
+		const arrow = editor.getShape(
+			result.createdShapes.link as TLShape["id"],
+		) as import("tldraw").TLArrowShape;
+		const arrowBefore = getArrowInfo(editor, arrow)!;
+		expect(arrowBefore.isValid).toBe(true);
+		expect(arrow.parentId).toBe(materialized.groupId);
+		const moved = prepareCanvasEdit(result.next, {
+			action: "edit",
+			canvasId: "canvas",
+			expectedRevision: "unused",
+			operations: [
+				{ op: "update", shapeId: result.createdShapes.button, y: 700 },
+			],
+		});
+		store.mergeRemoteChanges(() => store.put(moved.changed));
+		const arrowAfter = getArrowInfo(editor, arrow)!;
+		expect(arrowAfter.isValid).toBe(true);
+		expect(arrowAfter.end.point.y).not.toBe(arrowBefore.end.point.y);
+		const deletion = prepareCanvasEdit(moved.next, {
+			action: "delete",
+			canvasId: "canvas",
+			expectedRevision: "unused",
+			shapeIds: [result.createdShapes.button, result.createdShapes.link],
+		});
+		store.mergeRemoteChanges(() => {
+			store.remove(deletion.deleted);
+			store.put(deletion.changed);
+		});
+		expect(normalizeCanvasSnapshot({ ...store.getStoreSnapshot() })).toEqual(
+			deletion.next,
+		);
+		expect(editor.getShape(materialized.groupId)).toBeDefined();
+		expect(editor.getShape(label.id)?.parentId).toBe(materialized.groupId);
+	} finally {
+		editor.dispose();
+		container.remove();
+		await uninstallTestDom();
+	}
+});
+
 test("agent-generated arrows render as native bindings and follow remote node moves", async () => {
 	installTestDom();
 	const {

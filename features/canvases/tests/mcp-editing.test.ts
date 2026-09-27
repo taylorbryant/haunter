@@ -17,6 +17,9 @@ import { CanvasPreviewOutputSchema } from "../editing";
 import type { CanvasPreviewRenderer } from "../ports";
 import { createCanvasPreviewRenderer } from "@/infra/canvases/preview-renderer";
 import { createRemoteMcpRequestHandler } from "@/server/remote-mcp";
+import type { TLRecord, TLShape } from "@tldraw/tlschema";
+import { prepareCanvasEdit } from "@/infra/canvases/shape-edits";
+import { normalizeCanvasSnapshot } from "../lib/document";
 import {
 	CLIENT_CAPABILITIES_META_KEY,
 	CLIENT_INFO_META_KEY,
@@ -149,6 +152,148 @@ const diagram = [
 		text: "query",
 	},
 ];
+
+test("MCP customizes grouped drawings through the signed worker bridge with history, revisions and deletion permissions", async () => {
+	const f = await fixture("edit");
+	try {
+		const canvas = await f.database.repositories.canvases.create(f.scope, {
+			userId: f.userId,
+			pageId: f.page.id,
+			title: "Grouped drawing",
+		});
+		const initial = prepareCanvasEdit(normalizeCanvasSnapshot({}), {
+			action: "edit",
+			canvasId: canvas.id,
+			expectedRevision: "unused",
+			operations: ["a", "b", "c"].map((ref, index) => ({
+				op: "create",
+				ref,
+				type: "rectangle",
+				x: index * 300,
+				y: 0,
+				text: ref,
+			})),
+		});
+		const records = initial.next.store as Record<string, TLRecord>;
+		const groupId = "shape:template" as TLShape["id"];
+		records[groupId] = {
+			...(records[initial.createdShapes.a] as TLShape),
+			id: groupId,
+			type: "group",
+			x: 100,
+			y: 200,
+			rotation: Math.PI / 4,
+			props: {},
+			meta: { libraryItem: "test" },
+		};
+		for (const id of Object.values(initial.createdShapes))
+			records[id] = { ...(records[id] as TLShape), parentId: groupId };
+		await f.database.repositories.canvases.initializeSnapshot(
+			f.scope,
+			canvas.id,
+			JSON.stringify(initial.next),
+		);
+		const before = await f.read(canvas.id);
+		const result = await f.edit(
+			canvas.id,
+			[
+				{
+					op: "update",
+					shapeId: initial.createdShapes.a,
+					text: "Gateway",
+					x: 40,
+					width: 300,
+					color: "blue",
+				},
+				{
+					op: "create",
+					ref: "button",
+					type: "rectangle",
+					parentId: groupId,
+					x: 900,
+					y: 200,
+					text: "Add task",
+				},
+				{
+					op: "connect",
+					ref: "link",
+					fromId: initial.createdShapes.a,
+					toId: "button",
+				},
+			],
+			before.revision,
+		);
+		const current = await f.read(canvas.id);
+		expect(
+			current.shapes.find((shape) => shape.id === initial.createdShapes.a),
+		).toMatchObject({
+			parentId: groupId,
+			text: "Gateway",
+			x: 40,
+			props: { w: 300, color: "blue" },
+		});
+		expect(
+			current.shapes.find((shape) => shape.id === result.createdShapes.button),
+		).toMatchObject({ parentId: groupId, text: "Add task" });
+		expect(
+			current.shapes.find((shape) => shape.id === result.createdShapes.link),
+		).toMatchObject({ parentId: groupId });
+		expect(current.shapes.find((shape) => shape.id === groupId)).toEqual(
+			before.shapes.find((shape) => shape.id === groupId)!,
+		);
+		expect(current.bindings).toHaveLength(2);
+		expect((await f.read(canvas.id, result.historyVersionId)).shapes).toEqual(
+			before.shapes,
+		);
+		await expect(
+			f.edit(
+				canvas.id,
+				[{ op: "update", shapeId: initial.createdShapes.a, text: "Stale" }],
+				before.revision,
+			),
+		).rejects.toMatchObject({ code: "CANVAS_REVISION_CONFLICT" });
+		await expect(
+			f.edit(canvas.id, [
+				{
+					op: "update",
+					shapeId: initial.createdShapes.a,
+					text: "Must roll back",
+				},
+				{
+					op: "create",
+					ref: "bad",
+					type: "text",
+					parentId: "shape:missing",
+					x: 0,
+					y: 0,
+				},
+			]),
+		).rejects.toMatchObject({ code: "INVALID_CANVAS_EDIT" });
+		expect(await f.read(canvas.id)).toEqual(current);
+		const deletion = {
+			canvasId: canvas.id,
+			expectedRevision: current.revision,
+			shapeIds: [result.createdShapes.button, result.createdShapes.link],
+		};
+		await expect(f.execute("delete_canvas_shapes", deletion)).rejects.toThrow();
+		f.connection.permissionProfile = "full";
+		await f.execute("delete_canvas_shapes", deletion);
+		const removed = await f.read(canvas.id);
+		expect(removed.shapes).toHaveLength(4);
+		expect(removed.bindings).toEqual([]);
+		expect(removed.shapes.find((shape) => shape.id === groupId)).toBeDefined();
+		await expect(
+			f.execute("delete_canvas_shapes", {
+				canvasId: canvas.id,
+				expectedRevision: removed.revision,
+				shapeIds: [initial.createdShapes.a, initial.createdShapes.b],
+			}),
+		).rejects.toMatchObject({ code: "INVALID_CANVAS_EDIT" });
+		expect(await f.read(canvas.id)).toEqual(removed);
+	} finally {
+		await f.stop();
+	}
+});
 
 test("MCP creates page canvas blocks, native diagrams, targeted edits and durable history through the signed bridge", async () => {
 	const f = await fixture();

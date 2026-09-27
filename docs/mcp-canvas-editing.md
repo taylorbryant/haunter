@@ -79,15 +79,53 @@ same batch can use. The response maps these names to native IDs in `createdShape
 
 | Operation | Fields and behavior |
 | --- | --- |
-| `create` | Requires `ref`, `type`, `x`, and `y`. Types: `rectangle`, `ellipse`, `diamond`, `text`, `note`. Optional `text`, `color`, and tldraw `pageId`. Specify `pageId` when the canvas has multiple pages. Geometry accepts `width` and `height`, defaulting to 240 × 120. Text accepts `width`, defaulting to 240. Notes use their native fixed size and reject dimensions. |
-| `update` | Requires `shapeId` and at least one of `x`, `y`, `text`, `color`, `width`, or `height`. Omitted fields stay unchanged. Only geometry and text accept width; only geometry accepts height. Text replaces the label's rich text with plain text. |
-| `connect` | Requires `ref`, `fromId`, and `toId`; optional `text` and `color`. Creates a bound arrow between distinct nodes on the same canvas page. Connections follow nodes when they move. Arrows cannot connect to other arrows. |
+| `create` | Requires `ref`, `type`, `x`, and `y`. Types: `rectangle`, `ellipse`, `diamond`, `text`, `note`. Optional `text`, `color`, and tldraw `pageId`. Set `parentId` to an existing group or frame to add a child; otherwise specify `pageId` when the canvas has multiple pages. If both are supplied, the parent must belong to that page. Geometry accepts `width` and `height`, defaulting to 240 × 120. Text accepts `width`, defaulting to 240. Notes use their native fixed size and reject dimensions. |
+| `update` | Requires `shapeId` and at least one of `x`, `y`, `text`, `color`, `width`, or `height`. Positions are relative to the shape's immediate parent, as returned by `read_canvas`. Omitted fields, parent IDs and rotations stay unchanged. Only geometry and text accept width; only geometry accepts height. Text replaces the label's rich text with plain text. |
+| `connect` | Requires `ref`, `fromId`, and `toId`; optional `text` and `color`. Creates a bound arrow between distinct nodes sharing the same immediate parent: a page, group, or frame. The arrow is created under that parent and follows the nodes when they move. Arrows cannot connect to other arrows. |
 
 Updates and connections support unlocked `geo`, `text`, `note`, and `arrow`
-shapes directly on a tldraw page. Move a connected node to change an arrow's path;
-the API does not translate arrows. Use the canvas editor for groups, frames,
-images, freehand drawings, rich text formatting, rotation, and other shape types.
-Locked and nested shapes are rejected.
+leaf shapes on a tldraw page or inside groups and frames, including nested groups.
+A lock on any ancestor blocks edits, creation, connections and deletion inside it.
+Move a connected node to change an arrow's path; the API does not translate arrows.
+Use the canvas editor to create or transform group/frame containers, reparent
+shapes, or edit images, freehand drawings, rich text formatting, rotation and
+other unsupported shape types.
+
+## Customize a grouped template
+
+Templates inserted from Haunter's library are groups. Read the canvas to find
+the group's ID and its child shapes, then target those child IDs with the same
+editing tools. For example:
+
+```json
+{
+  "workspaceId": "YOUR_WORKSPACE_ID",
+  "canvasId": "YOUR_CANVAS_ID",
+  "expectedRevision": "REVISION_FROM_READ_CANVAS",
+  "operations": [
+    { "op": "update", "shapeId": "shape:heading", "text": "My tasks" },
+    { "op": "update", "shapeId": "shape:panel", "width": 500 },
+    {
+      "op": "create", "ref": "button", "type": "rectangle",
+      "parentId": "shape:template-group", "x": 24, "y": 400,
+      "width": 180, "height": 48, "text": "Add task"
+    }
+  ]
+}
+```
+
+Use actual shape IDs from `read_canvas` in place of these examples. Create and
+update `x`/`y` values are in the immediate parent's coordinate system. On a page,
+these are canvas coordinates; inside a rotated group or frame, the parent
+transform determines where they appear. Dimensions are local to the shape.
+Read the ancestor records when planning a layout; screen or whole-page positions
+must not be passed as child-local positions.
+
+Edits preserve group membership, ancestor transforms, metadata and omitted
+properties. Connections across different parents are rejected. The API does not
+change grouping automatically, so an agent can customize the content while you
+continue moving and selecting the template as a group. It does not yet offer
+library discovery or template insertion.
 
 Colors are `black`, `grey`, `light-violet`, `violet`, `blue`, `light-blue`,
 `yellow`, `orange`, `green`, `light-green`, `light-red`, `red`, and `white`.
@@ -145,8 +183,12 @@ retry after a short delay. Access is checked again before returning the image.
 `delete_canvas_shapes` requires Full access and accepts `workspaceId`, `canvasId`,
 `expectedRevision`, and `shapeIds` (up to 100 native IDs). Include connected arrows
 in the same deletion batch when deleting their target nodes. Deleting an arrow
-also removes its bindings. Unsupported, locked, or nested shapes must be removed
-in the canvas editor. The operation deletes drawings, not the page's canvas block.
+also removes its bindings. Nested leaf shapes can be deleted, but every affected
+group must retain at least two direct children. A batch that would dissolve a
+group is rejected in full; ungroup or remove that group in the canvas editor.
+Frames may be left empty. Group/frame containers, unsupported shapes, and shapes
+with a lock on themselves or any ancestor cannot be deleted through this tool.
+The operation deletes drawings, not the page's canvas block.
 
 ## Conflicts, permissions, and history
 
@@ -181,6 +223,11 @@ included. Concurrent edits to the same shape property follow tldraw's normal
 conflict behavior and should be reviewed after reconnection.
 
 ## Deployment
+
+For nested-shape editing, deploy the updated collaboration worker first, then
+the web app/MCP. This extension needs no database migration. Older workers reject
+nested edits and the new `create.parentId` field; existing top-level calls keep
+working with the updated worker.
 
 Apply migration `0044_thin_iceman.sql` before deploying these tools, then deploy
 both Next.js and the collaboration worker. The web server uses the HTTP(S)
