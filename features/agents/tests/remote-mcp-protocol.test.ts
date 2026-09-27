@@ -21,9 +21,11 @@ const connection: McpConnectionRow = {
 	updatedAt: new Date("2026-08-06T00:00:00.000Z"),
 };
 
-function createHandler() {
+function createHandler(
+	profile: McpConnectionRow["permissionProfile"] = "view",
+) {
 	return createRemoteMcpRequestHandler({
-		connection,
+		connection: { ...connection, permissionProfile: profile },
 		identity: { userId: connection.userId, clientId: connection.clientId },
 		getServer: async () => {
 			throw new Error(
@@ -121,6 +123,8 @@ describe("remote MCP protocol", () => {
 
 		expect(response.status).toBe(200);
 		expect(names).toContain("read_page");
+		expect(names).toContain("search_canvas_library");
+		expect(names).not.toContain("insert_canvas_library_item");
 		expect(names).toContain("list_tasks");
 		expect(names).not.toContain("update_page");
 		expect(names).not.toContain("delete_task");
@@ -183,4 +187,37 @@ describe("remote MCP protocol", () => {
 		expect(allowed).toContain("Mcp-Name");
 		expect(allowed).toContain("Mcp-Protocol-Version");
 	});
+});
+
+test("MCP advertises library search as read-only and insertion only for editors", async () => {
+	const body = await json(
+		await createHandler("edit")(modernRequest("tools/list")),
+	);
+	const tools = body.result?.tools as Array<{
+		name: string;
+		annotations: Record<string, unknown>;
+		inputSchema: { required: string[] };
+	}>;
+	expect(
+		tools.find((tool) => tool.name === "search_canvas_library")?.annotations,
+	).toMatchObject({ readOnlyHint: true, idempotentHint: true });
+	const insert = tools.find(
+		(tool) => tool.name === "insert_canvas_library_item",
+	);
+	expect(insert?.annotations).toMatchObject({
+		readOnlyHint: false,
+		idempotentHint: false,
+		destructiveHint: false,
+	});
+	expect(insert?.inputSchema.required).toEqual(
+		expect.arrayContaining([
+			"workspaceId",
+			"canvasId",
+			"itemId",
+			"itemVersion",
+			"expectedRevision",
+			"x",
+			"y",
+		]),
+	);
 });

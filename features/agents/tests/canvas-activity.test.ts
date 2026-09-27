@@ -184,3 +184,23 @@ test("Agent Auth uses the verified owner's registered agent name", async () => {
 		userId: f.userId,
 	});
 });
+
+test("library insertion publishes edit activity and highlights the group and named parts on the opt-in channel", async () => {
+	const f = await canvasActivityFixture();
+	await f.execute("insert_canvas_library_item", {
+		itemId: "client",
+		itemVersion: 8,
+		expectedRevision: "v1",
+		x: 0,
+		y: 0,
+	});
+	expect(f.events.map((event) => [event.action, event.phase])).toEqual([
+		["edit", "active"],
+		["edit", "completed"],
+	]);
+	expect(f.events[1].changedShapeIds).toEqual([
+		"shape:group",
+		"shape:title",
+		"shape:surface",
+	]);
+});

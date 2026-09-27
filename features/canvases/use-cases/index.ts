@@ -9,3 +9,4 @@ export { recordCanvasViewUseCase } from "./record-canvas-view";
 export { saveCanvasSnapshotUseCase } from "./save-canvas-snapshot";
 export { setCanvasFavoriteUseCase } from "./set-canvas-favorite";
 export { updateCanvasUseCase } from "./update-canvas";
+export { searchCanvasLibraryUseCase } from "./search-canvas-library";

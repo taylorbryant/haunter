@@ -1,3 +1,5 @@
+import { createHaunterAgentAuthAdapter } from "@/lib/agent-auth-adapter";
+import { createBetterAuthAgentCapabilityTestContext } from "@beignet/agent-auth-better-auth/testing";
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { documentFixture } from "@/features/documents/tests/helpers";
@@ -9,9 +11,18 @@ import {
 	createCanvasCommandHandler,
 	createCanvasEditingClient,
 } from "@/infra/canvases/command-bridge";
-import { executeRemoteMcpCapability } from "@/server/agent-capabilities";
+import {
+	createHaunterAgentCapabilityExecutor,
+	executeRemoteMcpCapability,
+} from "@/server/agent-capabilities";
 import * as schema from "@/infra/db/schema";
-import { CanvasReadOutputSchema, CanvasEditOutputSchema } from "../editing";
+import {
+	CanvasReadOutputSchema,
+	CanvasEditOutputSchema,
+	InsertCanvasLibraryItemOutputSchema,
+} from "../editing";
+import { SearchCanvasLibraryOutputSchema } from "../library-schemas";
+import { CANVAS_LIBRARY_ITEMS } from "../lib/library";
 import { createCanvasBlockUseCase } from "../use-cases/create-canvas-block";
 import { CanvasPreviewOutputSchema } from "../editing";
 import type { CanvasPreviewRenderer } from "../ports";
@@ -133,6 +144,203 @@ async function fixture(
 		},
 	};
 }
+
+const libraryItem = CANVAS_LIBRARY_ITEMS.find(
+	(item) => item.id === "request-flow",
+)!;
+const libraryArgs = {
+	itemId: libraryItem.id,
+	itemVersion: libraryItem.version,
+	x: 200,
+	y: 300,
+	scale: 0.5,
+};
+
+test("MCP searches the shared catalog, inserts templates through the worker, and edits named parts with revision/history safety", async () => {
+	const f = await fixture("edit");
+	try {
+		const search = SearchCanvasLibraryOutputSchema.parse(
+			await f.execute("search_canvas_library", {
+				query: "REQUEST",
+				kind: "template",
+				category: "architecture",
+			}),
+		);
+		expect(search.items.map((item) => item.id)).toContain(libraryItem.id);
+		expect(
+			search.items.find((item) => item.id === libraryItem.id),
+		).toMatchObject({
+			version: libraryItem.version,
+			shapeCount: libraryItem.elements.length,
+			description: libraryItem.description,
+		});
+		const { canvasId, canvasRevision } = await f.create();
+		const before = await f.read(canvasId);
+		const args = { ...libraryArgs, canvasId, expectedRevision: canvasRevision };
+		for (const invalid of [
+			{ itemId: "missing" },
+			{ itemVersion: libraryItem.version + 1 },
+			{ scale: 0 },
+			{ scale: 5 },
+			{ x: 1_000_001 },
+			{ pageId: "page:missing" },
+			{ shapes: [] },
+		]) {
+			await expect(
+				f.execute("insert_canvas_library_item", { ...args, ...invalid }),
+			).rejects.toThrow();
+			expect(await f.read(canvasId)).toEqual(before);
+		}
+		const competing = await Promise.allSettled([
+			f.execute("insert_canvas_library_item", args),
+			f.execute("insert_canvas_library_item", args),
+		]);
+		expect(
+			competing.filter((result) => result.status === "fulfilled"),
+		).toHaveLength(1);
+		expect(
+			competing.find((result) => result.status === "rejected"),
+		).toMatchObject({ reason: { code: "CANVAS_REVISION_CONFLICT" } });
+		const successful = competing.find(
+			(result) => result.status === "fulfilled",
+		);
+		if (successful?.status !== "fulfilled")
+			throw new Error("Expected insertion");
+		const inserted = InsertCanvasLibraryItemOutputSchema.parse(
+			successful.value,
+		);
+		expect(inserted.groupId).toBe(inserted.rootShapeId);
+		expect(Object.keys(inserted.shapeIdsByKey)).toEqual(
+			libraryItem.elements.map((element) => element.key),
+		);
+		const read = await f.read(canvasId);
+		expect(read.revision).toBe(inserted.revision);
+		expect(read.shapes).toHaveLength(libraryItem.elements.length + 1);
+		expect(read.bindings).toHaveLength(6);
+		expect(read.history.map((version) => version.id)).toEqual([
+			inserted.historyVersionId,
+		]);
+		expect((await f.read(canvasId, inserted.historyVersionId)).shapes).toEqual(
+			before.shapes,
+		);
+		await f.edit(
+			canvasId,
+			[
+				{
+					op: "update",
+					shapeId: inserted.shapeIdsByKey.endpoint,
+					text: "Payments API",
+				},
+			],
+			inserted.revision,
+		);
+		expect(
+			(await f.read(canvasId)).shapes.find(
+				(shape) => shape.id === inserted.shapeIdsByKey.endpoint,
+			)?.text,
+		).toBe("Payments API");
+		const second = InsertCanvasLibraryItemOutputSchema.parse(
+			await f.execute("insert_canvas_library_item", {
+				...args,
+				expectedRevision: (await f.read(canvasId)).revision,
+			}),
+		);
+		expect(
+			new Set([
+				...Object.values(inserted.shapeIdsByKey),
+				...Object.values(second.shapeIdsByKey),
+			]).size,
+		).toBe(libraryItem.elements.length * 2);
+	} finally {
+		await f.stop();
+	}
+});
+
+test("library discovery is available to readers; insertion respects MCP profile, workspace membership and archived parents", async () => {
+	const f = await fixture("view");
+	try {
+		const canvas = await f.database.repositories.canvases.create(f.scope, {
+			userId: f.userId,
+			pageId: f.page.id,
+			title: "Library",
+		});
+		const before = await f.read(canvas.id);
+		const args = {
+			...libraryArgs,
+			canvasId: canvas.id,
+			expectedRevision: before.revision,
+		};
+		const all = SearchCanvasLibraryOutputSchema.parse(
+			await f.execute("search_canvas_library", {}),
+		);
+		expect(all.total).toBe(CANVAS_LIBRARY_ITEMS.length);
+		const page = SearchCanvasLibraryOutputSchema.parse(
+			await f.execute("search_canvas_library", { limit: 2, offset: 2 }),
+		);
+		expect(page.items).toEqual(all.items.slice(2, 4));
+		expect(page.total).toBe(all.total);
+		await expect(f.execute("insert_canvas_library_item", args)).rejects.toThrow(
+			"does not allow",
+		);
+		await expect(
+			f.execute("search_canvas_library", { workspaceId: "other" }),
+		).rejects.toThrow("cannot access");
+		await expect(
+			f.execute("search_canvas_library", { limit: 51 }),
+		).rejects.toThrow();
+		f.connection.permissionProfile = "edit";
+		await expect(
+			f.execute("insert_canvas_library_item", {
+				...args,
+				workspaceId: "other",
+			}),
+		).rejects.toThrow("cannot access");
+		await f.database.repositories.pages.setDeletedByIds(
+			f.scope,
+			[f.page.id],
+			new Date().toISOString(),
+		);
+		await expect(
+			f.execute("insert_canvas_library_item", args),
+		).rejects.toMatchObject({ code: "CANVAS_NOT_FOUND" });
+		await f.database.db
+			.delete(schema.member)
+			.where(eq(schema.member.userId, f.userId));
+		await expect(f.execute("search_canvas_library", {})).rejects.toThrow(
+			"not a member",
+		);
+		await expect(f.execute("insert_canvas_library_item", args)).rejects.toThrow(
+			"not a member",
+		);
+	} finally {
+		await f.stop();
+	}
+});
+
+test("failed library insertion commits publish no drawing or history", async () => {
+	const f = await fixture();
+	try {
+		const { canvasId } = await f.create();
+		const before = await f.read(canvasId);
+		const original = f.ctx.ports.uow.transaction;
+		f.ctx.ports.uow.transaction = (fn) =>
+			original(async (tx) => {
+				await fn(tx);
+				throw new Error("Rollback insertion");
+			});
+		await expect(
+			f.execute("insert_canvas_library_item", {
+				...libraryArgs,
+				canvasId,
+				expectedRevision: before.revision,
+			}),
+		).rejects.toThrow();
+		f.ctx.ports.uow.transaction = original;
+		expect(await f.read(canvasId)).toEqual(before);
+	} finally {
+		await f.stop();
+	}
+});
 
 const diagram = [
 	{ op: "create", ref: "api", type: "rectangle", x: 0, y: 0, text: "API" },
@@ -602,6 +810,13 @@ test("workspace viewers cannot create or edit canvases even with Full MCP access
 		});
 		expect((await f.read(canvas.id)).shapes).toEqual([]);
 		await expect(f.edit(canvas.id, diagram)).rejects.toThrow();
+		await expect(
+			f.execute("insert_canvas_library_item", {
+				...libraryArgs,
+				canvasId: canvas.id,
+				expectedRevision: (await f.read(canvas.id)).revision,
+			}),
+		).rejects.toThrow();
 	} finally {
 		await f.stop();
 	}
@@ -624,7 +839,13 @@ test("hosted MCP returns a native PNG and metadata without duplicating image dat
 	const f = await fixture("full", "owner", renderer);
 	try {
 		const { canvasId } = await f.create();
-		const edited = await f.edit(canvasId, diagram);
+		const edited = InsertCanvasLibraryItemOutputSchema.parse(
+			await f.execute("insert_canvas_library_item", {
+				...libraryArgs,
+				canvasId,
+				expectedRevision: (await f.read(canvasId)).revision,
+			}),
+		);
 		const before = await f.read(canvasId);
 		const handler = createRemoteMcpRequestHandler({
 			connection: f.connection,
@@ -677,7 +898,9 @@ test("hosted MCP returns a native PNG and metadata without duplicating image dat
 		expect(png.readUInt32BE(16)).toBe(result.structuredContent.width);
 		expect(png.readUInt32BE(20)).toBe(result.structuredContent.height);
 		expect(result.structuredContent.revision).toBe(edited.revision);
-		expect(result.structuredContent.shapeIds).toHaveLength(3);
+		expect(result.structuredContent.shapeIds).toHaveLength(
+			libraryItem.elements.length + 1,
+		);
 		expect(JSON.parse(result.content[0].text)).toEqual(
 			result.structuredContent,
 		);
@@ -816,6 +1039,66 @@ test("a worker without preview support returns a safe unavailable error without 
 			f.execute("preview_canvas", { canvasId }),
 		).rejects.toMatchObject({ code: "CANVAS_PREVIEW_UNAVAILABLE" });
 		expect(await f.read(canvasId)).toEqual(before);
+	} finally {
+		await f.stop();
+	}
+});
+
+test("Agent Auth library tools require explicit workspace constraints and execute the same insertion workflow", async () => {
+	const f = await fixture();
+	try {
+		const { canvasId, canvasRevision } = await f.create();
+		const adapter = createHaunterAgentAuthAdapter(() =>
+			createHaunterAgentCapabilityExecutor({ getServer: async () => f.server }),
+		);
+		if (!adapter.onExecute) throw new Error("Missing Agent Auth executor");
+		for (const capability of [
+			"search_canvas_library",
+			"insert_canvas_library_item",
+		]) {
+			const args =
+				capability === "search_canvas_library"
+					? { workspaceId: f.workspaceId, query: libraryItem.id }
+					: {
+							...libraryArgs,
+							workspaceId: f.workspaceId,
+							canvasId,
+							expectedRevision: canvasRevision,
+						};
+			await expect(
+				adapter.onExecute(
+					createBetterAuthAgentCapabilityTestContext({
+						capability,
+						arguments: args,
+						constraints: null,
+						agentId: "agent_test",
+						userId: f.userId,
+					}),
+				),
+			).rejects.toThrow("missing required constraints");
+			const result = await adapter.onExecute(
+				createBetterAuthAgentCapabilityTestContext({
+					capability,
+					arguments: args,
+					constraints: { workspaceId: f.workspaceId },
+					agentId: "agent_test",
+					userId: f.userId,
+				}),
+			);
+			if (capability === "search_canvas_library") {
+				expect(SearchCanvasLibraryOutputSchema.parse(result).items[0].id).toBe(
+					libraryItem.id,
+				);
+			} else {
+				expect(
+					InsertCanvasLibraryItemOutputSchema.parse(result).shapeIdsByKey
+						.endpoint,
+				).toStartWith("shape:");
+			}
+		}
+		expect((await f.read(canvasId)).shapes).toHaveLength(
+			libraryItem.elements.length + 1,
+		);
 	} finally {
 		await f.stop();
 	}

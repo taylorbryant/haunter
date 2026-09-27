@@ -2,8 +2,9 @@
 
 Add diagrams to pages with `create_canvas_block`, inspect their structure with
 `read_canvas`, see the rendered drawing with `preview_canvas`, and change their
-shapes with `edit_canvas`. These tools create native tldraw
-shapes that you can continue editing in Haunter.
+shapes with `edit_canvas`. Use `search_canvas_library` and
+`insert_canvas_library_item` to start from built-in templates and components.
+These tools create native tldraw shapes that you can continue editing in Haunter.
 
 Each call requires a `workspaceId` from `list_workspaces`. Canvas reads and edits
 require a running collaboration worker. Page and canvas revisions are separate:
@@ -91,6 +92,74 @@ Use the canvas editor to create or transform group/frame containers, reparent
 shapes, or edit images, freehand drawings, rich text formatting, rotation and
 other unsupported shape types.
 
+## Find and insert library items
+
+Library tools are available after deploying this release. Search requires View
+only access and does not need the collaboration worker. Insertion requires View
+and edit access and an updated worker.
+
+Call `search_canvas_library` to find a template or component:
+
+```json
+{
+  "workspaceId": "YOUR_WORKSPACE_ID",
+  "query": "mobile",
+  "kind": "template",
+  "category": "wireframes"
+}
+```
+
+`query`, `kind`, and `category` are optional. Search matches IDs, names,
+descriptions, categories and keywords without case sensitivity. Omit `query` to
+browse. `kind` accepts `component` or `template`; `category` accepts `architecture`
+or `wireframes`. Results include `total` matches and `items` with `id`, `version`,
+`name`, `description`, `keywords`, `kind`, `category`, nominal `width`/`height` at
+scale 1, and `shapeCount` excluding the group. `limit` defaults to 50 (maximum 50);
+`offset` defaults to 0. Increase `offset` to read subsequent results.
+
+Read the destination canvas, then call `insert_canvas_library_item`. Use the item
+ID and version from search and the canvas revision from `read_canvas`:
+
+```json
+{
+  "workspaceId": "YOUR_WORKSPACE_ID",
+  "canvasId": "YOUR_CANVAS_ID",
+  "expectedRevision": "REVISION_FROM_READ_CANVAS",
+  "itemId": "mobile-app-screen",
+  "itemVersion": 8,
+  "x": 200,
+  "y": 300,
+  "scale": 1
+}
+```
+
+The example uses library version 8; always pass the version returned by search.
+`x` and `y` position the library item's origin in canvas page coordinates, within
+±1,000,000 units. `scale` defaults to 1 and accepts 0.1–4. The nominal dimensions
+from search help reserve space; rendered text can extend beyond them. Specify
+`pageId` from `read_canvas` when the canvas has multiple tldraw pages. Insertion
+places the item on that page; it does not insert into an existing group/frame,
+automatically avoid overlapping shapes, or change your selection or viewport.
+
+The response includes `canvasId`, `revision`, `historyVersionId`, `itemId`,
+`itemVersion`, `pageId`, `rootShapeId`, `groupId`, and `shapeIdsByKey`. Multi-shape
+items are grouped; for a single-shape item, `groupId` is null and `rootShapeId`
+identifies that shape. `shapeIdsByKey` maps names from the template, such as
+`title` or `submit-label`, to native shape IDs. These are ordinary editable shapes,
+not linked instances that update when the library changes.
+
+Use a returned part ID in `edit_canvas` to change its label, color, or supported
+geometry. Use the insertion response's `revision` as `expectedRevision` for that
+edit. To inspect the whole insertion with `preview_canvas`, pass
+`shapeIds: [rootShapeId]`; its descendants and bound arrows are included.
+
+Each insertion saves the prior drawing in history. A failed insertion publishes
+no partial shapes or bindings. Stale canvas revisions return
+`CANVAS_REVISION_CONFLICT`; read again before retrying. Unknown item IDs and
+version mismatches return `INVALID_CANVAS_EDIT`. Search again on a version
+mismatch; if the returned version is still rejected, check that the worker and
+web app have matching releases.
+
 ## Customize a grouped template
 
 Templates inserted from Haunter's library are groups. Read the canvas to find
@@ -124,8 +193,7 @@ must not be passed as child-local positions.
 Edits preserve group membership, ancestor transforms, metadata and omitted
 properties. Connections across different parents are rejected. The API does not
 change grouping automatically, so an agent can customize the content while you
-continue moving and selecting the template as a group. It does not yet offer
-library discovery or template insertion.
+continue moving and selecting the template as a group.
 
 Colors are `black`, `grey`, `light-violet`, `violet`, `blue`, `light-blue`,
 `yellow`, `orange`, `green`, `light-green`, `light-red`, `red`, and `white`.
@@ -194,17 +262,18 @@ The operation deletes drawings, not the page's canvas block.
 
 | Permission | Allowed canvas operations |
 | --- | --- |
-| View only | Read current drawings and retained history, and preview current drawings. |
-| View and edit | Also add canvas blocks, create shapes, update shapes, and connect nodes. |
+| View only | Search library items, read current drawings and retained history, and preview current drawings. |
+| View and edit | Also add canvas blocks, insert library items, create shapes, update shapes, and connect nodes. |
 | Full access | Also delete shapes. |
 
 Local Agent Auth requires an explicit workspace-scoped grant for each tool.
 Workspace membership and content permissions still apply. Canvases attached to
 archived pages cannot be read or edited through these tools.
 
-Canvas writes return `canvasId`, `revision`, `createdShapes`, and
-`historyVersionId`. Each successful batch saves its previous drawing in canvas
-history, which retains the latest 50 agent snapshots. Read an older drawing by
+`edit_canvas` and `delete_canvas_shapes` return `canvasId`, `revision`,
+`createdShapes`, and `historyVersionId`. Library insertion returns the named
+shape mapping described above. Each successful batch saves its previous drawing
+in canvas history, which retains the latest 50 agent snapshots. Read an older drawing by
 passing its `historyVersionId` to `read_canvas`. Its returned revision describes
 that older drawing and cannot authorize a current edit. You can inspect old
 properties and use them to prepare targeted corrections against a fresh read.
@@ -223,6 +292,12 @@ included. Concurrent edits to the same shape property follow tldraw's normal
 conflict behavior and should be reviewed after reconnection.
 
 ## Deployment
+
+For library search and insertion, deploy the collaboration worker first, then
+the web app/MCP. No database migration is required for this extension. Older
+workers do not accept library insertion commands. Item versions prevent a worker
+from silently inserting a different template than the one returned by search.
+Existing drawings keep their stored records when the catalog changes.
 
 For nested-shape editing, deploy the updated collaboration worker first, then
 the web app/MCP. This extension needs no database migration. Older workers reject

@@ -43,6 +43,18 @@ export async function canvasActivityFixture(
 	});
 	f.ports.canvasEditing = {
 		async execute({ command }) {
+			if (command.action === "insert-library")
+				return {
+					canvasId: canvas.id,
+					revision: "v2",
+					historyVersionId: crypto.randomUUID(),
+					itemId: command.itemId,
+					itemVersion: command.itemVersion,
+					pageId: "page:one",
+					rootShapeId: "shape:group",
+					groupId: "shape:group",
+					shapeIdsByKey: { title: "shape:title", surface: "shape:surface" },
+				};
 			if (command.action === "preview")
 				return {
 					canvasId: canvas.id,

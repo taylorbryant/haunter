@@ -1,15 +1,15 @@
 import {
 	createShapeId,
-	type Editor,
-	type JsonObject,
 	type TLBindingCreate,
 	type TLShapeId,
 	type TLShapePartial,
 	toRichText,
-} from "tldraw";
+} from "@tldraw/tlschema";
+import type { Editor } from "tldraw";
+import type { JsonObject } from "@tldraw/utils";
 
 export const CANVAS_LIBRARY_PANEL_WIDTH = 320;
-const LIBRARY_ITEM_VERSION = 7;
+const LIBRARY_ITEM_VERSION = 8;
 
 export type CanvasLibraryKind = "component" | "template";
 export type CanvasLibraryCategory = "architecture" | "wireframes";
@@ -66,6 +66,7 @@ export type CanvasLibraryItem = {
 	id: string;
 	version: number;
 	name: string;
+	description: string;
 	kind: CanvasLibraryKind;
 	category: CanvasLibraryCategory;
 	keywords: string[];
@@ -106,6 +107,7 @@ function architectureNode({
 		id,
 		version: LIBRARY_ITEM_VERSION,
 		name,
+		description: `${name}: ${subtitle}.`,
 		kind: "component",
 		category: "architecture",
 		keywords,
@@ -247,6 +249,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "browser-frame",
 		name: "Browser frame",
+		description: "Desktop browser window with address bar and content area.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["desktop", "window", "web", "page"],
@@ -317,6 +320,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "phone-frame",
 		name: "Phone frame",
+		description: "Phone outline with status bar and screen area.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["mobile", "device", "screen", "app"],
@@ -364,6 +368,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "top-navigation",
 		name: "Top navigation",
+		description: "Horizontal app navigation with branding and actions.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["header", "navbar", "menu", "links"],
@@ -444,6 +449,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "sidebar-navigation",
 		name: "Sidebar navigation",
+		description: "Vertical app navigation with menu items.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["sidebar", "menu", "navigation", "rail"],
@@ -521,6 +527,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "tabs",
 		name: "Tabs",
+		description: "Horizontal tab bar for switching views.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["navigation", "sections", "switcher"],
@@ -591,6 +598,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "button",
 		name: "Button",
+		description: "Primary action button with an editable label.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["action", "cta", "submit"],
@@ -624,6 +632,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "input-field",
 		name: "Input field",
+		description: "Single-line text input with label and placeholder.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["form", "text", "field", "label"],
@@ -669,6 +678,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "select-field",
 		name: "Select field",
+		description: "Labeled dropdown selection field.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["form", "dropdown", "picker", "option"],
@@ -726,6 +736,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "card",
 		name: "Card",
+		description: "Content card with heading, body and action.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["panel", "content", "summary"],
@@ -804,6 +815,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "table",
 		name: "Table or list",
+		description: "Tabular list with column headings and rows.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["rows", "data", "list", "grid"],
@@ -894,6 +906,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "dialog",
 		name: "Dialog",
+		description: "Modal dialog with title, content and actions.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["modal", "overlay", "confirmation"],
@@ -1006,6 +1019,8 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "bottom-sheet",
 		name: "Bottom sheet",
+		description:
+			"Mobile sheet with a handle, heading and content placeholders.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["drawer", "mobile", "panel", "sheet"],
@@ -1076,6 +1091,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "checkbox",
 		name: "Checkbox",
+		description: "Checkbox control with an editable label.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["form", "selection", "checked", "option"],
@@ -1120,6 +1136,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "radio-group",
 		name: "Radio group",
+		description: "Radio buttons for mutually exclusive choices.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["form", "selection", "choice", "option"],
@@ -1176,6 +1193,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "toggle-switch",
 		name: "Toggle switch",
+		description: "On/off switch with an editable label.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["form", "setting", "switch", "boolean"],
@@ -1222,6 +1240,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "textarea",
 		name: "Textarea",
+		description: "Multiline text field with label and placeholder.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["form", "multiline", "field", "description"],
@@ -1267,6 +1286,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "search-field",
 		name: "Search field",
+		description: "Search input with a search icon and placeholder.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["form", "query", "filter", "find"],
@@ -1315,6 +1335,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "dropdown-menu",
 		name: "Dropdown menu",
+		description: "Popup menu containing action items.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["popover", "menu", "actions", "options"],
@@ -1365,6 +1386,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "alert-banner",
 		name: "Alert or banner",
+		description: "Inline notification with title and supporting text.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["notice", "message", "warning", "status"],
@@ -1421,6 +1443,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "toast",
 		name: "Toast notification",
+		description: "Compact notification with a message and close control.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["feedback", "message", "success", "notification"],
@@ -1489,6 +1512,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "badge",
 		name: "Badge",
+		description: "Small status label.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["status", "tag", "chip", "label"],
@@ -1524,6 +1548,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "avatar",
 		name: "Avatar",
+		description: "Profile placeholder with a head-and-shoulders icon.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["user", "profile", "person", "identity"],
@@ -1574,6 +1599,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "task-row",
 		name: "List or task row",
+		description: "List row with checkbox, title and supporting details.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["list", "task", "todo", "item", "row"],
@@ -1653,6 +1679,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "breadcrumbs",
 		name: "Breadcrumbs",
+		description: "Hierarchical navigation trail.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["navigation", "hierarchy", "path", "trail"],
@@ -1721,6 +1748,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "toolbar",
 		name: "Toolbar",
+		description: "Horizontal row of editing actions.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["actions", "controls", "editor", "formatting"],
@@ -1769,6 +1797,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "side-sheet",
 		name: "Side sheet",
+		description: "Side panel with heading, content and actions.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["drawer", "panel", "overlay", "details"],
@@ -1870,6 +1899,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "mobile-bottom-navigation",
 		name: "Mobile bottom navigation",
+		description: "Bottom tab navigation for mobile screens.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["mobile", "navigation", "tab bar", "footer"],
@@ -1928,6 +1958,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "empty-state",
 		name: "Empty state",
+		description: "Empty content placeholder with message and action.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["blank", "zero state", "onboarding", "placeholder"],
@@ -1997,6 +2028,7 @@ const wireframeComponents: CanvasLibraryItem[] = [
 	item({
 		id: "loading-skeleton",
 		name: "Loading skeleton",
+		description: "Placeholder blocks representing loading content.",
 		kind: "component",
 		category: "wireframes",
 		keywords: ["loading", "placeholder", "progress", "skeleton"],
@@ -2064,6 +2096,7 @@ type TemplateEdge = {
 function architectureTemplate({
 	id,
 	name,
+	description,
 	keywords,
 	width,
 	height,
@@ -2072,6 +2105,7 @@ function architectureTemplate({
 }: {
 	id: string;
 	name: string;
+	description: string;
 	keywords: string[];
 	width: number;
 	height: number;
@@ -2081,6 +2115,7 @@ function architectureTemplate({
 	return item({
 		id,
 		name,
+		description,
 		kind: "template",
 		category: "architecture",
 		keywords,
@@ -2120,6 +2155,8 @@ const templates: CanvasLibraryItem[] = [
 	architectureTemplate({
 		id: "request-flow",
 		name: "Request and response",
+		description:
+			"Client, API endpoint, service and database connected by request and query arrows.",
 		keywords: ["client", "api", "service", "database", "sync"],
 		width: 1320,
 		height: 180,
@@ -2148,6 +2185,8 @@ const templates: CanvasLibraryItem[] = [
 	architectureTemplate({
 		id: "async-worker-flow",
 		name: "Queue and worker",
+		description:
+			"API endpoint, queue, worker and database connected by publish, consume and persist arrows.",
 		keywords: ["async", "event", "queue", "job", "worker"],
 		width: 1320,
 		height: 180,
@@ -2181,6 +2220,8 @@ const templates: CanvasLibraryItem[] = [
 	architectureTemplate({
 		id: "state-change-map",
 		name: "State change map",
+		description:
+			"Request flow branching from a service into table reads, writes and an event.",
 		keywords: ["endpoint", "tables", "mutation", "database", "state"],
 		width: 1480,
 		height: 500,
@@ -2225,6 +2266,8 @@ const templates: CanvasLibraryItem[] = [
 	item({
 		id: "desktop-app-shell",
 		name: "Desktop app shell",
+		description:
+			"Desktop application layout with navigation and a main content area.",
 		kind: "template",
 		category: "wireframes",
 		keywords: ["desktop", "dashboard", "sidebar", "header", "layout"],
@@ -2348,6 +2391,8 @@ const templates: CanvasLibraryItem[] = [
 	item({
 		id: "mobile-app-screen",
 		name: "Mobile app screen",
+		description:
+			"Mobile screen with status bar, header, card, list rows and home indicator.",
 		kind: "template",
 		category: "wireframes",
 		keywords: ["mobile", "phone", "screen", "navigation"],
@@ -2452,6 +2497,7 @@ const templates: CanvasLibraryItem[] = [
 	item({
 		id: "form-dialog-flow",
 		name: "Form dialog",
+		description: "Form dialog with labeled fields and submission controls.",
 		kind: "template",
 		category: "wireframes",
 		keywords: ["modal", "form", "input", "submit", "confirmation"],
@@ -2591,13 +2637,21 @@ export const CANVAS_LIBRARY_ITEMS = [
 
 export function searchCanvasLibraryItems(
 	query: string,
-	kind: CanvasLibraryKind,
+	kind?: CanvasLibraryKind,
+	category?: CanvasLibraryCategory,
 ): CanvasLibraryItem[] {
 	const normalized = query.trim().toLocaleLowerCase();
 	return CANVAS_LIBRARY_ITEMS.filter((entry) => {
-		if (entry.kind !== kind) return false;
+		if (kind && entry.kind !== kind) return false;
+		if (category && entry.category !== category) return false;
 		if (normalized === "") return true;
-		return [entry.name, entry.category, ...entry.keywords]
+		return [
+			entry.id,
+			entry.name,
+			entry.description,
+			entry.category,
+			...entry.keywords,
+		]
 			.join(" ")
 			.toLocaleLowerCase()
 			.includes(normalized);
@@ -2618,6 +2672,7 @@ export type MaterializedCanvasLibraryItem = {
 	shapes: TLShapePartial[];
 	bindings: TLBindingCreate[];
 	shapeIds: TLShapeId[];
+	shapeIdsByKey: Record<string, TLShapeId>;
 	groupId: TLShapeId;
 	rootMeta: JsonObject;
 };
@@ -2643,6 +2698,7 @@ export function materializeCanvasLibraryItem(
 			haunterLibraryItemVersion: entry.version,
 			haunterLibraryKind: entry.kind,
 			haunterLibraryRole: element.role,
+			haunterLibraryKey: element.key,
 		};
 
 		if (element.kind === "geo") {
@@ -2666,6 +2722,9 @@ export function materializeCanvasLibraryItem(
 					verticalAlign: "middle",
 					richText: toRichText(element.label ?? ""),
 					growY: 0,
+					url: "",
+					flipX: false,
+					flipY: false,
 					scale,
 				},
 			} as TLShapePartial;
@@ -2744,8 +2803,8 @@ export function materializeCanvasLibraryItem(
 				arrowheadStart: "none",
 				arrowheadEnd: "arrow",
 				start: { x: 0, y: 0 },
-				end: { x: to.x - from.x, y: to.y - from.y },
-				bend: element.bend ?? 0,
+				end: { x: (to.x - from.x) * scale, y: (to.y - from.y) * scale },
+				bend: (element.bend ?? 0) * scale,
 				richText: toRichText(element.label ?? ""),
 				labelPosition: 0.5,
 				scale,
@@ -2758,6 +2817,7 @@ export function materializeCanvasLibraryItem(
 		shapes,
 		bindings,
 		shapeIds: [...ids.values()],
+		shapeIdsByKey: Object.fromEntries(ids),
 		groupId: createShapeId(),
 		rootMeta: {
 			haunterLibraryItemId: entry.id,

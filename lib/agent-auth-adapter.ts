@@ -39,6 +39,8 @@ export const agentCapabilityMetadata = {
 	list_active_sessions: workspaceScope,
 	get_active_context: workspaceScope,
 	create_canvas_block: workspaceScope,
+	search_canvas_library: workspaceScope,
+	insert_canvas_library_item: workspaceScope,
 	read_canvas: workspaceScope,
 	preview_canvas: workspaceScope,
 	edit_canvas: workspaceScope,
