@@ -1,5 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
 import type { BlockNoteEditor as BlockNoteEditorType } from "@blocknote/core";
+import { act, within } from "@testing-library/react/pure";
+import userEvent from "@testing-library/user-event";
 import * as Y from "yjs";
 import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
@@ -18,6 +20,8 @@ const docs: Y.Doc[] = [];
 
 beforeAll(async () => {
 	installTestDom();
+	// Happy DOM has no layout hit testing for BlockNote's hover side menu.
+	document.elementsFromPoint = () => [];
 	// Match next.config.js: the editor and its plugins must share the same
 	// ProseMirror view classes instead of Bun's nested dependency copies.
 	const view = await import("prosemirror-view");
@@ -27,8 +31,10 @@ beforeAll(async () => {
 	({ editorSchema } = await import("../components/editor/schema"));
 });
 
-afterEach(() => {
-	for (const editor of editors.splice(0)) editor._tiptapEditor.destroy();
+afterEach(async () => {
+	await act(async () => {
+		for (const editor of editors.splice(0)) editor._tiptapEditor.destroy();
+	});
 	for (const doc of docs.splice(0)) doc.destroy();
 	document.body.replaceChildren();
 });
@@ -76,6 +82,86 @@ function reopenDocument(source: Y.Doc) {
 	);
 	return { doc, editor, container: mountEditor(editor) };
 }
+
+async function mountCodeMenuEditor(onlyCode = false) {
+	const editor = BlockNoteEditor.create({
+		schema: editorSchema,
+		initialContent: [
+			{ id: "code", type: "codeBlock", content: "SELECT 1;\nSELECT 2;" },
+			...(onlyCode
+				? []
+				: [
+						{ id: "following", type: "paragraph" as const, content: "Keep me" },
+					]),
+		],
+	});
+	await act(async () => {
+		mountEditor(editor);
+	});
+	const user = userEvent.setup({ document });
+	return { editor, user, ui: within(document.body) };
+}
+
+test("code menu deletes its whole block, preserves other selected blocks, and supports undo", async () => {
+	const { editor, user, ui } = await mountCodeMenuEditor();
+	const before = editor.document;
+	editor.setSelection("code", "following");
+	await user.click(ui.getByRole("button", { name: "Code block options" }));
+	await user.click(ui.getByRole("menuitem", { name: "Delete code block" }));
+	expect(editor.getBlock("code")).toBeUndefined();
+	expect(editor.getBlock("following")).toEqual(before[1]);
+	expect(ui.queryByRole("menu")).toBeNull();
+	await act(async () => {
+		editor.undo();
+	});
+	expect(editor.document).toEqual(before);
+});
+
+test("deleting the last code block leaves an editable paragraph", async () => {
+	const { editor, user, ui } = await mountCodeMenuEditor(true);
+	await user.click(ui.getByRole("button", { name: "Code block options" }));
+	await user.click(ui.getByRole("menuitem", { name: "Delete code block" }));
+	expect(editor.getBlock("code")).toBeUndefined();
+	expect(editor.document[0]?.type).toBe("paragraph");
+	typeText(editor, "New text");
+	expect(editor.document[0]?.content).toEqual([
+		{ type: "text", text: "New text", styles: {} },
+	]);
+});
+
+test("code options support keyboard dismissal and disappear when editing is disabled", async () => {
+	const { editor, user, ui } = await mountCodeMenuEditor();
+	const trigger = ui.getByRole("button", { name: "Code block options" });
+	trigger.focus();
+	await user.keyboard("{Enter}");
+	expect(ui.getByRole("menuitem", { name: "Delete code block" })).toBeDefined();
+	await user.keyboard("{Escape}");
+	expect(ui.queryByRole("menu")).toBeNull();
+	expect(document.activeElement).toBe(trigger);
+	await user.click(trigger);
+	await act(async () => {
+		editor.isEditable = false;
+	});
+	expect(ui.queryByRole("menu")).toBeNull();
+	expect(ui.queryByRole("button", { name: "Code block options" })).toBeNull();
+	expect(editor.getBlock("code")).toBeDefined();
+	expect(ui.getByRole("button", { name: "Expand code" })).toBeDefined();
+	await act(async () => {
+		editor.isEditable = true;
+	});
+	expect(ui.getByRole("button", { name: "Code block options" })).toBeDefined();
+});
+
+test("removing a code block elsewhere cleans up its open menu", async () => {
+	const { editor, user, ui } = await mountCodeMenuEditor();
+	await user.click(ui.getByRole("button", { name: "Code block options" }));
+	expect(ui.getByRole("menuitem", { name: "Delete code block" })).toBeDefined();
+	await act(async () => {
+		editor.removeBlocks(["code"]);
+	});
+	expect(ui.queryByRole("menu")).toBeNull();
+	expect(editor.getBlock("following")).toBeDefined();
+});
 
 test.each([
 	["", "text"],
