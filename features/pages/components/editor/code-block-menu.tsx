@@ -65,7 +65,7 @@ function CodeBlockMenu({
 					}}
 				>
 					<Trash2Icon aria-hidden="true" />
-					Delete code block
+					Delete
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

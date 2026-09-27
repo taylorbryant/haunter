@@ -107,7 +107,7 @@ test("code menu deletes its whole block, preserves other selected blocks, and su
 	const before = editor.document;
 	editor.setSelection("code", "following");
 	await user.click(ui.getByRole("button", { name: "Code block options" }));
-	await user.click(ui.getByRole("menuitem", { name: "Delete code block" }));
+	await user.click(ui.getByRole("menuitem", { name: "Delete" }));
 	expect(editor.getBlock("code")).toBeUndefined();
 	expect(editor.getBlock("following")).toEqual(before[1]);
 	expect(ui.queryByRole("menu")).toBeNull();
@@ -120,7 +120,7 @@ test("code menu deletes its whole block, preserves other selected blocks, and su
 test("deleting the last code block leaves an editable paragraph", async () => {
 	const { editor, user, ui } = await mountCodeMenuEditor(true);
 	await user.click(ui.getByRole("button", { name: "Code block options" }));
-	await user.click(ui.getByRole("menuitem", { name: "Delete code block" }));
+	await user.click(ui.getByRole("menuitem", { name: "Delete" }));
 	expect(editor.getBlock("code")).toBeUndefined();
 	expect(editor.document[0]?.type).toBe("paragraph");
 	typeText(editor, "New text");
@@ -134,7 +134,7 @@ test("code options support keyboard dismissal and disappear when editing is disa
 	const trigger = ui.getByRole("button", { name: "Code block options" });
 	trigger.focus();
 	await user.keyboard("{Enter}");
-	expect(ui.getByRole("menuitem", { name: "Delete code block" })).toBeDefined();
+	expect(ui.getByRole("menuitem", { name: "Delete" })).toBeDefined();
 	await user.keyboard("{Escape}");
 	expect(ui.queryByRole("menu")).toBeNull();
 	expect(document.activeElement).toBe(trigger);
@@ -155,7 +155,7 @@ test("code options support keyboard dismissal and disappear when editing is disa
 test("removing a code block elsewhere cleans up its open menu", async () => {
 	const { editor, user, ui } = await mountCodeMenuEditor();
 	await user.click(ui.getByRole("button", { name: "Code block options" }));
-	expect(ui.getByRole("menuitem", { name: "Delete code block" })).toBeDefined();
+	expect(ui.getByRole("menuitem", { name: "Delete" })).toBeDefined();
 	await act(async () => {
 		editor.removeBlocks(["code"]);
 	});
