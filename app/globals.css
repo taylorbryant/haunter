@@ -1174,7 +1174,7 @@ html[data-keyboard-nav="true"]
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	.haunter-code-block-expand {
+	:is(.haunter-code-block-expand, .haunter-code-block-options) {
 	display: flex;
 	width: 28px;
 	height: 28px;
@@ -1204,17 +1204,36 @@ html[data-keyboard-nav="true"]
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	.haunter-code-block-expand:hover {
+	:is(.haunter-code-block-expand, .haunter-code-block-options):hover {
 	background-color: color-mix(in oklab, currentColor 10%, transparent);
 	color: var(--prosemirror-highlight, var(--code-block-foreground, #f8f8f2));
 }
 
 .bn-shadcn
 	.bn-block-content[data-content-type="codeBlock"]
-	.haunter-code-block-expand
+	:is(.haunter-code-block-expand, .haunter-code-block-options)
 	svg {
 	width: 16px;
 	height: 16px;
+}
+
+.haunter-code-block-menu {
+	display: flex;
+	flex-shrink: 0;
+}
+
+.haunter-code-block-menu:empty {
+	display: none;
+}
+
+@media (pointer: coarse) {
+	.bn-shadcn
+		.bn-block-content[data-content-type="codeBlock"]
+		:is(.haunter-code-block-expand, .haunter-code-block-options) {
+		/* Separate touch targets: enlarged hit areas must not overlap. */
+		width: 44px !important;
+		height: 44px !important;
+	}
 }
 
 html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {

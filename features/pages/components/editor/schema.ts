@@ -19,6 +19,7 @@ import {
 	getCodeBlockIndentPositions,
 	getCodeBlockUnindentRanges,
 } from "./code-block-indent";
+import { mountCodeBlockMenu } from "./code-block-menu";
 import { getHaunterHighlighter } from "./code-theme";
 import { dividerBlockSpec } from "./divider-block";
 import { mentionSpec } from "./mention";
@@ -289,6 +290,10 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			};
 			expandButton.addEventListener("click", handleExpand);
 			header.appendChild(expandButton);
+			const destroyMenu =
+				this.renderType === "nodeView"
+					? mountCodeBlockMenu(header, args[1], block.id)
+					: undefined;
 
 			if (pre) {
 				pre.style.setProperty("order", "2");
@@ -304,6 +309,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				...rendered,
 				destroy: () => {
 					expandButton.removeEventListener("click", handleExpand);
+					destroyMenu?.();
 					rendered.destroy?.();
 				},
 			};
