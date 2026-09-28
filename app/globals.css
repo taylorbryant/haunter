@@ -854,10 +854,26 @@
 	color: var(--muted-foreground);
 }
 
-/* Notion block rhythm: BlockNote already pads content 3px block-wise;
-   add Notion's 1px block margins on top. */
+/* Keep list rows compact; BlockNote already pads content 3px block-wise. */
 .bn-shadcn .bn-block-outer {
 	margin-block: 1px;
+}
+
+/* Separate paragraphs more clearly than lines within a paragraph or list.
+   Match only the block's own content so a nested paragraph cannot add space
+   around its parent list item. Adjacent paragraph margins collapse. */
+.haunter-editor
+	.bn-block-outer:has(> .bn-block > [data-content-type="paragraph"]) {
+	margin-block: 8px;
+}
+
+/* Keep the editor edges and the start/end of nested groups snug. */
+.haunter-editor .bn-block-group > .bn-block-outer:first-child {
+	margin-block-start: 1px;
+}
+
+.haunter-editor .bn-block-group > .bn-block-outer:last-child {
+	margin-block-end: 1px;
 }
 
 /* Notion cycles unordered list markers by nesting depth:
