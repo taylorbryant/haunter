@@ -1,6 +1,7 @@
 import {
 	EditorMessageSchema,
 	type EditorOutput,
+	type CanvasSelection,
 	validateEditorOutput,
 } from "./editor-schema";
 
@@ -20,6 +21,8 @@ export function createEditorFrame(
 		ready(value: boolean): void;
 		contextChanged(): void;
 		selection(text: string, page: EditorOutput): Promise<void>;
+		openCanvas(canvasId: string): Promise<void>;
+		openPage(pageId: string): Promise<void>;
 		metadata(
 			value: { title: string; icon: string | null },
 			page: EditorOutput,
@@ -29,6 +32,7 @@ export function createEditorFrame(
 	const { frame } = options;
 	let page: EditorOutput | undefined;
 	let nonce = "";
+	let canvasSelection: CanvasSelection | undefined;
 	let mounted = false;
 	let ready = false;
 	let status: "opening" | "ready" | "unavailable" = "opening";
@@ -95,6 +99,7 @@ export function createEditorFrame(
 		frame.src = "about:blank";
 		frame.inert = false;
 		page = undefined;
+		canvasSelection = undefined;
 		mounted = false;
 		ready = false;
 		status = "opening";
@@ -122,7 +127,7 @@ export function createEditorFrame(
 				),
 			12_000,
 		);
-		options.status("Opening page…");
+		options.status(next.canvasId ? "Opening canvas…" : "Opening page…");
 	}
 	async function handleMessage(event: MessageEvent) {
 		if (
@@ -141,7 +146,9 @@ export function createEditorFrame(
 			try {
 				const handoff = await bridge.callTool("authorize_haunter_editor", {
 					workspaceId: selected.workspaceId,
-					pageId: selected.pageId,
+					...(selected.canvasId
+						? { canvasId: selected.canvasId }
+						: { pageId: selected.pageId }),
 					challenge: message.challenge,
 				});
 				if (selected === page && selectedNonce === nonce)
@@ -162,15 +169,21 @@ export function createEditorFrame(
 		} else if (message.type === "haunter/editor/status") {
 			clearTimeout(loadingTimer);
 			ready = message.status === "ready";
-			status = ready ? "ready" : "unavailable";
+			status = ready
+				? "ready"
+				: message.status === "opening"
+					? "opening"
+					: "unavailable";
 			if (!ready) saveStatus = "unknown";
 			mounted ||= ready;
 			options.status(
 				ready
 					? ""
-					: message.status === "sign-in-required"
-						? "Reconnect Haunter to authorize this editor, then retry."
-						: "This Haunter account cannot open the selected page.",
+					: message.status === "opening"
+						? "Opening canvas…"
+						: message.status === "sign-in-required"
+							? "Reconnect Haunter to authorize this editor, then retry."
+							: "This Haunter account cannot open the selected page.",
 			);
 			send({ type: "haunter/editor/theme", theme });
 			send({
@@ -185,6 +198,28 @@ export function createEditorFrame(
 				flush.resolve(message);
 				flush = undefined;
 			}
+		} else if (
+			message.type === "haunter/editor/open-canvas" &&
+			ready &&
+			!flush &&
+			!page.canvasId
+		) {
+			await options.openCanvas(message.canvasId);
+		} else if (
+			message.type === "haunter/editor/open-page" &&
+			ready &&
+			!flush &&
+			page.canvasId &&
+			message.pageId === page.pageId
+		) {
+			await options.openPage(message.pageId);
+		} else if (
+			message.type === "haunter/editor/canvas-selection" &&
+			ready &&
+			page.canvasId
+		) {
+			canvasSelection = message.selection;
+			options.contextChanged();
 		} else if (message.type === "haunter/editor/metadata") {
 			options.metadata(message, page);
 		} else if (message.type === "haunter/editor/save-status") {
@@ -204,7 +239,12 @@ export function createEditorFrame(
 	window.addEventListener("message", listener);
 	return {
 		get context() {
-			return { page, status, saveStatus };
+			return {
+				page,
+				status,
+				saveStatus,
+				canvasSelection: status === "ready" ? canvasSelection : undefined,
+			};
 		},
 		initialize,
 		save,

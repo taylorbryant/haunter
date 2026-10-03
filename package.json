@@ -11,6 +11,7 @@
 		"build:mcp-app": "bun scripts/build-mcp-app.ts",
 		"preview:mcp-app": "bun scripts/preview-mcp-editor.ts",
 		"preview:mcp-editor": "bun scripts/preview-mcp-editor.ts",
+		"verify:mcp-canvas": "bun scripts/verify-mcp-canvas.ts",
 		"verify:mcp-editor": "bun scripts/verify-mcp-editor.ts",
 		"start": "next start",
 		"lint": "biome lint .",

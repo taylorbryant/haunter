@@ -252,6 +252,7 @@ const server = Bun.serve({
 				workspaceId: f.workspaceId,
 				pageId: f.page.id,
 				secondPageId: secondPage.id,
+				canvasId: canvas.id,
 				secondWorkspaceId,
 				webUrl: `${appOrigin}/w/${f.workspaceId}/p/${f.page.id}`,
 			});

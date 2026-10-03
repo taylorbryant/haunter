@@ -1,6 +1,6 @@
 # Haunter's real editor in an MCP App
 
-The MCP workspace opens the existing React `PageEditor` in an embedded route. It uses
+The MCP workspace opens the existing React `PageEditor` and tldraw `CanvasSurface` in embedded routes. It uses
 the same APIs, workspace roles, IndexedDB recovery, authenticated document
 sessions, BlockNote editor, and collaboration worker as the web app.
 
@@ -8,11 +8,11 @@ The `open_haunter_editor` tool accepts a workspace ID and page ID. It checks the
 MCP connection's current page access before returning an editor destination.
 `open_haunter` opens the workspace browser; both tools share the same UI.
 Its UI resource is `ui://haunter/workspace/v2`. The editor authenticates through
-the approved MCP connection and a dedicated page-scoped session. Existing
+the approved MCP connection and a dedicated page- or canvas-scoped session. Existing
 connections open read-only. Writable editing requires both a non-view MCP
 profile and explicit **Allow editing in the embedded editor** consent. Current
 workspace roles continue to apply. This consent permits changing and removing
-content in the opened page; it does not add destructive agent tools.
+content in the opened page or canvas; it does not add destructive agent tools.
 
 ## Run the proof
 
@@ -59,7 +59,7 @@ connection. Restart the preview before running it again or using the editor.
 - Page switches and returning Home retain pending edits and attached context.
 - Workspace switching opens a new page-scoped session in the selected workspace.
 - A disconnected collaboration socket blocks navigation and keeps the draft editable.
-- Existing canvases, links, and mentions offer the web app without calling unsupported APIs.
+- Existing canvas blocks open the real canvas editor in the panel. Links and mentions offer the web app.
 - Leaving an expanded code dialog retains its edits in the shared document.
 - The ordinary web editor sees panel edits; web edits sync back to the panel.
 - Explicitly selected live text reaches the MCP host's conversation context.
@@ -75,18 +75,44 @@ The local host uses a synthetic MCP connection, rather than a full OAuth
 installation. Workspace event streaming/live-session context is disabled in
 this fixture; document collaboration and explicit selection context are real.
 This release hides uploads, subpage/canvas creation, page mention insertion,
-task assignment/date controls, and history. Existing canvas/link/mention blocks
-retain their stored content and offer the web app. Rich-text and inline code
+task assignment/date controls, and history. Existing canvas blocks open in the panel;
+links and mentions retain their stored content and offer the web app. Rich-text and inline code
 editing, title/icon updates, and task text/checkboxes remain available.
 Recovery after forced host termination and an installed ChatGPT/Codex plugin
 still require verification in the target host.
+
+## Embedded canvases
+
+`open_haunter_canvas({ workspaceId, canvasId })` opens a page-backed or standalone
+canvas after checking current MCP access. The agent can create a canvas with
+`create_canvas_block`, then pass the returned ID to the opener. Canvas blocks in
+an embedded page have an **Open canvas** button; **Back to page** waits for saving.
+
+The panel uses Haunter's native tldraw tools and local component/template library.
+It shares canvas ID, parent page ID (when present), current tldraw page ID, selected
+shape IDs (up to 100), total selection count, completeness and save status.
+It does not automatically share drawing contents or selected text. The agent should
+call `read_canvas` for saved shapes and the latest revision before `edit_canvas`.
+Selection and editing availability clear when leaving the canvas or losing access.
+An explicit page attachment remains a fixed snapshot while browsing a canvas.
+
+Run `bun run verify:mcp-canvas` against a fresh local preview to exercise drawing,
+MCP editing, web/panel synchronization, navigation, offline saving, host theme,
+narrow layout and agent creation followed by opening. Screenshots are written to
+`/private/tmp/haunter-canvas-proof`. Run this before `verify:mcp-editor`, which
+revokes the disposable connection at the end.
+
+Canvas recovery copies can be downloaded from the panel. Recovering a copy as a
+new canvas still uses the regular web app. Canvas history, agent activity overlays,
+and a canvas browser are outside this embedded release; existing canvas IDs can
+be opened directly with the tool.
 
 ## Embedded authentication
 
 1. The iframe generates a random proof secret and passes only its SHA-256
    challenge through the exact-origin, source, nonce, and request-ID bridge.
 2. The app-only `authorize_haunter_editor` MCP tool checks the live connection,
-   approved workspace, membership, and page. Its result contains only a public
+   approved workspace, membership, and the requested page or canvas (including its parent page). Its result contains only a public
    handoff ID. Possessing this ID does not grant access.
 3. The iframe posts the ID and proof secret directly to Haunter. The database
    consumes the handoff atomically, within 60 seconds, and issues a random
@@ -97,7 +123,9 @@ still require verification in the target host.
    The server checks current user approval, connection, OAuth consent, workspace
    scope, membership, page availability and expiry. The credential permits only
    page body/metadata reads, title/icon changes, view tracking, document sessions and its
-   own verification endpoint. Other API operations and other pages are denied.
+   own verification endpoint. A canvas credential permits only its own canvas read,
+   collaboration session, and verification endpoint. It cannot read its parent page,
+   open another canvas, or call account APIs. Navigation requires a new handoff.
 6. Collaboration tokens reference the embedded session and stable connection.
    The worker checks embedded access before accepting each message. Revocation
    blocks subsequent updates; updates accepted while authorized finish saving,
@@ -110,7 +138,9 @@ still require verification in the target host.
 
 `drizzle/0045_blushing_frank_castle.sql` adds the session table and defaults all
 existing connections to read-only embedded access. Apply this migration to the
-target database before deploying. The local proof and tests use migrated,
+target database before deploying. `0046_right_mauler.sql` adds canvas scopes while
+preserving existing page sessions. Deploy the web app and collaboration worker
+with both migrations applied. The local proof and tests use migrated,
 disposable databases; they do not migrate the production database.
 
 The automated auth tests cover concurrent single-use redemption, invalid proofs,

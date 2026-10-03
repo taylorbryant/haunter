@@ -14,8 +14,6 @@ export async function checkDocumentAccess(
 	if (grant.expiresAt <= Date.now())
 		throw new Error("Document session expired");
 	if (grant.embeddedSessionId) {
-		if (grant.kind === "canvas")
-			throw new Error("Invalid embedded document session");
 		const identity = await createEmbeddedEditorSessionRepository(db).findActive(
 			grant.embeddedSessionId,
 		);
@@ -24,10 +22,25 @@ export async function checkDocumentAccess(
 			identity.connectionId !== grant.sessionId ||
 			identity.user.id !== grant.userId ||
 			identity.workspaceId !== grant.workspaceId ||
-			identity.pageId !== grant.pageId
+			(grant.kind === "canvas"
+				? identity.canvasId !== grant.pageId
+				: identity.pageId !== grant.pageId)
 		)
 			throw new Error("Embedded document access is no longer available");
-		await checkGeneration(grant, db);
+		if (grant.kind === "canvas") {
+			const [room] = await db
+				.select({ id: schema.canvasSyncRooms.canvasId })
+				.from(schema.canvasSyncRooms)
+				.where(
+					and(
+						eq(schema.canvasSyncRooms.canvasId, grant.pageId),
+						eq(schema.canvasSyncRooms.workspaceId, grant.workspaceId),
+					),
+				)
+				.limit(1);
+			if (!room || grant.generation !== 0)
+				throw new Error("Canvas access is no longer available");
+		} else await checkGeneration(grant, db);
 		return identity.role;
 	}
 	if (grant.kind === "canvas") return checkCanvasAccess(grant, db);

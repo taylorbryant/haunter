@@ -187,7 +187,7 @@ try {
 	);
 
 	await editorFrame
-		.getByRole("button", { name: "Canvas · Open in Haunter", exact: true })
+		.getByRole("button", { name: "Open canvas", exact: true })
 		.waitFor();
 	await editorFrame
 		.getByRole("button", { name: "Linked page · Open in Haunter", exact: true })

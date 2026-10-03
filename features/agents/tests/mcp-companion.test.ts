@@ -370,3 +370,53 @@ test("revocation and removed membership invalidate existing mention resources", 
 		await f.database.close();
 	}
 });
+
+test("the canvas opener returns a scoped destination for view connections and rejects inaccessible canvases", async () => {
+	const { createCanvasSyncServer } = await import(
+		"@/infra/canvases/sync-server"
+	);
+	const { validateEditorOutput } = await import("../mcp-app/editor-schema");
+	const f = await fixture();
+	const engine = createCanvasSyncServer({
+		verify() {
+			throw new Error("No socket in this test");
+		},
+		authorize: async () => ({ ctx: f.ctx, role: "viewer" }),
+	});
+	f.ctx.ports.canvasEditing = {
+		execute: ({ command }) => engine.execute(f.ctx, command),
+	};
+	try {
+		const canvas = await f.ctx.ports.canvases.create(f.scope, {
+			userId: f.userId,
+			pageId: null,
+			title: "System design",
+		});
+		const opened = await f.call("open_haunter_canvas", {
+			workspaceId: f.workspaceId,
+			canvasId: canvas.id,
+		});
+		expect(opened.result?.isError).toBeUndefined();
+		expect(
+			validateEditorOutput(opened.result?.structuredContent),
+		).toMatchObject({
+			canvasId: canvas.id,
+			pageId: null,
+			title: "System design",
+		});
+		const inaccessible = await f.call("open_haunter_canvas", {
+			workspaceId: f.workspaceId,
+			canvasId: crypto.randomUUID(),
+		});
+		expect(inaccessible.result?.isError).toBeTrue();
+		f.connection.workspaceIds = [];
+		const removed = await f.call("open_haunter_canvas", {
+			workspaceId: f.workspaceId,
+			canvasId: canvas.id,
+		});
+		expect(removed.result?.isError).toBeTrue();
+	} finally {
+		await engine.stop();
+		await f.database.close();
+	}
+});

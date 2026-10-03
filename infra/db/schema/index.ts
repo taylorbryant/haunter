@@ -494,7 +494,8 @@ export const embeddedEditorSession = sqliteTable(
 		workspaceId: text("workspace_id")
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
-		pageId: text("page_id").notNull(),
+		pageId: text("page_id"),
+		canvasId: text("canvas_id"),
 		challenge: text("challenge").notNull(),
 		writable: integer("writable", { mode: "boolean" }).notNull(),
 		credentialHash: text("credential_hash"),

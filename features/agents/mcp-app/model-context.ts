@@ -1,10 +1,13 @@
+import type { CanvasSelection } from "./editor-schema";
 import { z } from "zod";
 import { ContextPageSchema, type ContextPage } from "./schemas";
 
 export type CurrentPageContext = {
 	workspaceId: string;
 	workspaceName: string;
-	pageId: string;
+	pageId: string | null;
+	canvasId?: string;
+	canvas?: CanvasSelection;
 	title: string;
 	url: string;
 	source: string;
@@ -58,7 +61,9 @@ export function createCompanionContext(options: {
 						? [
 								"Current Haunter view (automatic metadata; no page body):",
 								JSON.stringify(view),
-								"Use this page for references such as ‘this page’. Read its source or call read_page for the latest saved content; unsaved edits are not included.",
+								view.canvasId
+									? "Use this canvas for references such as ‘this canvas’ or ‘these shapes’. Selection IDs describe the live editor; no drawing or selected text is included. Call read_canvas for the latest saved shapes and revision before edit_canvas. Unsaved changes are not included; wait when saveStatus is unsaved."
+									: "Use this page for references such as ‘this page’. Read its source or call read_page for the latest saved content; unsaved edits are not included.",
 							].join("\n")
 						: "No Haunter page is currently open in this panel.",
 				},

@@ -9,14 +9,25 @@ import { Button } from "@/components/ui/button";
 import { GhostLogo } from "@/components/ghost-logo";
 import { createEmbeddedEditorAuth } from "../client/embedded-editor-auth";
 import type { EmbeddedEditorIdentity } from "../embedded-editor-session";
+import { readBridge, send } from "./embedded-editor-frame";
+import dynamic from "next/dynamic";
 import { EmbeddedPageEditor } from "./embedded-page-editor";
+const EmbeddedCanvasEditor = dynamic(
+	() =>
+		import("./embedded-canvas-editor").then(
+			(module) => module.EmbeddedCanvasEditor,
+		),
+	{ ssr: false },
+);
 
 export function EmbeddedEditorBootstrap({
 	workspaceId,
 	pageId,
+	canvasId,
 }: {
 	workspaceId: string;
-	pageId: string;
+	pageId?: string;
+	canvasId?: string;
 }) {
 	const [auth] = useState(createEmbeddedEditorAuth);
 	const [identity, setIdentity] = useState<EmbeddedEditorIdentity>();
@@ -31,24 +42,34 @@ export function EmbeddedEditorBootstrap({
 			.renew()
 			.then((next) => {
 				if (!active) return;
-				if (next.workspaceId !== workspaceId || next.pageId !== pageId)
-					throw new Error("Haunter authorized a different page.");
+				if (
+					next.workspaceId !== workspaceId ||
+					(canvasId
+						? next.canvasId !== canvasId || next.pageId !== null
+						: next.pageId !== pageId || next.canvasId !== undefined)
+				)
+					throw new Error("Haunter authorized a different document.");
 				uninstall = installSessionCredential(() => auth.token());
 				setIdentity(next);
 			})
 			.catch((cause: unknown) => {
-				if (active)
+				if (active) {
+					send(readBridge(), {
+						type: "haunter/editor/status",
+						status: "access-denied",
+					});
 					setError(
 						cause instanceof Error
 							? cause.message
 							: "Haunter could not open the editor.",
 					);
+				}
 			});
 		return () => {
 			active = false;
 			uninstall?.();
 		};
-	}, [auth, workspaceId, pageId, attempt]);
+	}, [auth, workspaceId, pageId, canvasId, attempt]);
 	if (!identity)
 		return (
 			<main className="grid min-h-svh place-content-center gap-4 bg-background p-6 text-foreground">
@@ -76,11 +97,18 @@ export function EmbeddedEditorBootstrap({
 				verifySession={(signal, recover) => auth.verify(signal, recover)}
 			>
 				<ActiveWorkspaceHintProvider value={identity.workspaceId}>
-					<EmbeddedPageEditor
-						workspaceId={workspaceId}
-						pageId={pageId}
-						scoped
-					/>
+					{canvasId ? (
+						<EmbeddedCanvasEditor
+							workspaceId={workspaceId}
+							canvasId={canvasId}
+						/>
+					) : pageId ? (
+						<EmbeddedPageEditor
+							workspaceId={workspaceId}
+							pageId={pageId}
+							scoped
+						/>
+					) : null}
 				</ActiveWorkspaceHintProvider>
 			</AppSessionProvider>
 		</DeviceTimeProvider>

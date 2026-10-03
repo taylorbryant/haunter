@@ -11,14 +11,69 @@ export const EditorInputSchema = ContextPageSchema.pick({
 	workspaceId: true,
 	pageId: true,
 });
-export const EditorOutputSchema = EditorInputSchema.extend({
+export const PageEditorOutputSchema = EditorInputSchema.extend({
+	canvasId: z.never().optional(),
 	title: z.string(),
 	editorUrl: z.url(),
 	webUrl: z.url(),
 });
+export const CanvasEditorInputSchema = z.object({
+	workspaceId: z.string().min(1),
+	canvasId: z.uuid(),
+});
+export const CanvasEditorOutputSchema = CanvasEditorInputSchema.extend({
+	pageId: z.uuid().nullable(),
+	title: z.string(),
+	editorUrl: z.url(),
+	webUrl: z.url(),
+});
+export const EditorOutputSchema = z.union([
+	CanvasEditorOutputSchema,
+	PageEditorOutputSchema,
+]);
+export type PageEditorOutput = z.infer<typeof PageEditorOutputSchema>;
 export type EditorOutput = z.infer<typeof EditorOutputSchema>;
 
+export const CanvasSelectionSchema = z
+	.object({
+		canvasPageId: z
+			.string()
+			.regex(/^page:.+/)
+			.max(200),
+		selectedShapeIds: z
+			.array(
+				z
+					.string()
+					.regex(/^shape:.+/)
+					.max(200),
+			)
+			.max(100),
+		selectionCount: z.number().int().nonnegative(),
+		selectionComplete: z.boolean(),
+	})
+	.refine(
+		(value) =>
+			value.selectionCount >= value.selectedShapeIds.length &&
+			value.selectionComplete ===
+				(value.selectionCount === value.selectedShapeIds.length),
+	);
+export type CanvasSelection = z.infer<typeof CanvasSelectionSchema>;
 export const EditorMessageSchema = z.discriminatedUnion("type", [
+	z.object({
+		type: z.literal("haunter/editor/canvas-selection"),
+		nonce: z.string(),
+		selection: CanvasSelectionSchema,
+	}),
+	z.object({
+		type: z.literal("haunter/editor/open-canvas"),
+		nonce: z.string(),
+		canvasId: z.uuid(),
+	}),
+	z.object({
+		type: z.literal("haunter/editor/open-page"),
+		nonce: z.string(),
+		pageId: z.uuid(),
+	}),
 	z.object({
 		type: z.literal("haunter/editor/save-status"),
 		nonce: z.string(),
@@ -39,7 +94,7 @@ export const EditorMessageSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("haunter/editor/status"),
 		nonce: z.string(),
-		status: z.enum(["ready", "sign-in-required", "access-denied"]),
+		status: z.enum(["opening", "ready", "sign-in-required", "access-denied"]),
 	}),
 	z.object({ type: z.literal("haunter/editor/open-web"), nonce: z.string() }),
 	z.object({
@@ -62,12 +117,19 @@ export function editorPaths(workspaceId: string, pageId: string) {
 	return { webPath, editorPath: `/embed${webPath}` };
 }
 
+export function canvasEditorPaths(workspaceId: string, canvasId: string) {
+	CanvasEditorInputSchema.parse({ workspaceId, canvasId });
+	const webPath = `/w/${workspacePathSegment(workspaceId)}/c/${canvasId}`;
+	return { webPath, editorPath: `/embed${webPath}` };
+}
 /** URLs come from the server, and still have to match the intended page. */
 export function validateEditorOutput(input: unknown) {
 	const output = EditorOutputSchema.parse(input);
 	const editor = new URL(output.editorUrl);
 	const web = new URL(output.webUrl);
-	const paths = editorPaths(output.workspaceId, output.pageId);
+	const paths = output.canvasId
+		? canvasEditorPaths(output.workspaceId, output.canvasId)
+		: editorPaths(output.workspaceId, output.pageId!);
 	if (
 		!["https:", "http:"].includes(editor.protocol) ||
 		(editor.protocol === "http:" &&
@@ -88,7 +150,7 @@ export function validateEditorOutput(input: unknown) {
 	return output;
 }
 
-export function selectionContextText(page: EditorOutput, text: string) {
+export function selectionContextText(page: PageEditorOutput, text: string) {
 	return [
 		`Selected text from Haunter: ${page.title}`,
 		`Source: ${pageResourceUri(page.workspaceId, page.pageId)}`,

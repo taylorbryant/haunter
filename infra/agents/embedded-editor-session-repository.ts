@@ -43,24 +43,47 @@ export function createEmbeddedEditorSessionRepository(
 					eq(schema.member.organizationId, table.workspaceId),
 				),
 			)
-			.innerJoin(
-				schema.pages,
-				and(
-					eq(schema.pages.id, table.pageId),
-					eq(schema.pages.workspaceId, table.workspaceId),
-				),
-			)
 			.where(
 				and(
 					eq(table.id, id),
 					gt(table.expiresAt, new Date()),
-					isNull(schema.pages.deletedAt),
 					or(isNull(schema.user.banned), eq(schema.user.banned, false)),
 					eq(schema.user.accessStatus, "approved"),
 				),
 			)
 			.limit(1);
 		if (!row || !row.session.credentialHash) return null;
+		const target = row.session;
+		if (Boolean(target.pageId) === Boolean(target.canvasId)) return null;
+		let pageId = target.pageId;
+		if (target.canvasId) {
+			const [canvas] = await db
+				.select({ pageId: schema.canvases.pageId })
+				.from(schema.canvases)
+				.where(
+					and(
+						eq(schema.canvases.id, target.canvasId),
+						eq(schema.canvases.workspaceId, target.workspaceId),
+					),
+				)
+				.limit(1);
+			if (!canvas) return null;
+			pageId = canvas.pageId;
+		}
+		if (pageId) {
+			const [page] = await db
+				.select({ id: schema.pages.id })
+				.from(schema.pages)
+				.where(
+					and(
+						eq(schema.pages.id, pageId),
+						eq(schema.pages.workspaceId, target.workspaceId),
+						isNull(schema.pages.deletedAt),
+					),
+				)
+				.limit(1);
+			if (!page) return null;
+		}
 		const connection = await createDrizzleMcpConnectionRepository(
 			db,
 		).findActive(row.user.id, row.clientId);
@@ -80,6 +103,7 @@ export function createEmbeddedEditorSessionRepository(
 			connectionId: row.session.connectionId,
 			workspaceId: row.session.workspaceId,
 			pageId: row.session.pageId,
+			...(row.session.canvasId ? { canvasId: row.session.canvasId } : {}),
 			expiresAt: row.session.expiresAt.getTime(),
 			role: writable ? row.role : "viewer",
 			user: row.user,

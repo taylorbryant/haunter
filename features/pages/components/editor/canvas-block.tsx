@@ -202,7 +202,17 @@ export const canvasBlockSpec = createReactBlockSpec(
 			if (embedded)
 				return (
 					<div contentEditable={false} className="my-2 rounded border p-4">
-						<EmbeddedFeatureLink label="Canvas" />
+						{embedded.openCanvas && block.props.canvasId ? (
+							<button
+								type="button"
+								className="rounded px-1 py-0.5 underline underline-offset-4"
+								onClick={() => embedded.openCanvas?.(block.props.canvasId)}
+							>
+								Open canvas
+							</button>
+						) : (
+							<EmbeddedFeatureLink label="Canvas" />
+						)}
 					</div>
 				);
 			const canvasId = block.props.canvasId;

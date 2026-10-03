@@ -82,8 +82,9 @@ Page titles, icons, rich text, lists, tables, code, and callouts use the same
 editor, save flow, and collaborative document as the web app. Existing task
 text and checkboxes remain part of that document. Uploads, creating subpages or
 canvases, page mentions, task assignment/due-date controls, and history are not
-available in this first embedded release. Existing canvases, page links, and
-mentions offer **Open in Haunter**; their stored content is preserved.
+available in this embedded release. Existing canvas blocks offer **Open canvas**,
+which opens the real canvas editor in the panel. Page links and mentions offer
+**Open in Haunter**; their stored content is preserved.
 
 Searching filters the sidebar without closing your editor. Leaving a page for
 another page, workspace, Home, or Refresh waits for a confirmed save. If saving
@@ -101,6 +102,26 @@ The page browser shows up to 100 pages at a time; use search to find more.
 Only pages in currently approved workspaces are available. Use **Refresh** after
 changing a connection's workspace access. If the panel says the connection is
 inactive, reconnect through the host and approve the intended workspaces.
+
+## Editing canvases
+
+Ask the assistant to open a canvas, or click **Open canvas** on a page's canvas
+block. Drawing tools, text, shapes, the component/template library, and live
+collaboration use the same editor as the web app. **Back to page** waits for a
+confirmed save; offline changes keep the canvas open until they sync.
+
+The assistant receives the current canvas and selected shape IDs automatically
+when the host supports context updates. You can ask it to edit “these shapes.”
+It reads the saved canvas and revision through `read_canvas`, then applies changes
+through `edit_canvas`; the updates appear in the open editor. Drawing content and
+selected text are not automatically attached. Selected IDs are limited to 100,
+with a total count and completeness flag for larger selections.
+
+The assistant can call `create_canvas_block` on a page and then
+`open_haunter_canvas` with the returned ID. It can also open existing standalone
+canvases by ID. Each canvas has its own scoped session under your existing
+connection consent and current workspace role. Canvas browsing and history
+remain available in the regular web app.
 
 ## Try the local preview
 

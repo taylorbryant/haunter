@@ -5,6 +5,7 @@ import { createContext, useContext } from "react";
 /** A scoped editor can edit its page, but cannot call other feature APIs. */
 export const EmbeddedEditorContext = createContext<{
 	openInHaunter(): void;
+	openCanvas?(canvasId: string): void;
 } | null>(null);
 export const useEmbeddedEditor = () => useContext(EmbeddedEditorContext);
 

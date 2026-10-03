@@ -83,9 +83,14 @@ export function createCompanion(bridge: CompanionBridge) {
 						workspaceId: page.workspaceId,
 						workspaceName: workspace.name,
 						pageId: page.pageId,
+						...(page.canvasId
+							? { canvasId: page.canvasId, canvas: state.canvasSelection }
+							: {}),
 						title: page.title,
 						url: page.webUrl,
-						source: pageResourceUri(page.workspaceId, page.pageId),
+						source: page.canvasId
+							? page.webUrl
+							: pageResourceUri(page.workspaceId, page.pageId!),
 						editorStatus: state.status,
 						saveStatus: state.saveStatus,
 					}
@@ -100,14 +105,20 @@ export function createCompanion(bridge: CompanionBridge) {
 			updateControls();
 		},
 		contextChanged: updateCurrentView,
+		openCanvas,
+		openPage,
 		metadata(value, selected) {
 			if (!page || page.editorUrl !== selected.editorUrl) return;
 			page = { ...page, title: value.title };
 			workspacePages = workspacePages.map((item) =>
-				item.pageId === page?.pageId ? { ...item, ...value } : item,
+				!page?.canvasId && item.pageId === page?.pageId
+					? { ...item, ...value }
+					: item,
 			);
 			visiblePages = visiblePages.map((item) =>
-				item.pageId === page?.pageId ? { ...item, ...value } : item,
+				!page?.canvasId && item.pageId === page?.pageId
+					? { ...item, ...value }
+					: item,
 			);
 			renderNavigation();
 			updateBreadcrumbs();
@@ -116,6 +127,7 @@ export function createCompanion(bridge: CompanionBridge) {
 		async selection(text, selected) {
 			if (
 				!page ||
+				selected.canvasId !== undefined ||
 				selected.editorUrl !== page.editorUrl ||
 				!bridge.canUseContext()
 			)
@@ -162,12 +174,13 @@ export function createCompanion(bridge: CompanionBridge) {
 		get<HTMLButtonElement>("back").disabled = busy;
 		web.hidden = !page;
 		web.disabled = busy;
-		useContext.hidden = !page;
+		useContext.hidden = !page || !!page.canvasId;
 		useContext.disabled = !page || !ready || busy || !bridge.canUseContext();
 		removeContext.hidden = !attached;
 		removeContext.disabled = busy;
 		const isCurrent =
 			page &&
+			!page.canvasId &&
 			attached?.workspaceId === page.workspaceId &&
 			attached.pageId === page.pageId;
 		useContext.textContent = isCurrent ? "Update context" : "Use as context";
@@ -180,7 +193,9 @@ export function createCompanion(bridge: CompanionBridge) {
 					: attached
 						? "Editing and browsing do not change this attachment."
 						: page
-							? "Page details are shared automatically. Use as context to attach its saved content."
+							? page.canvasId
+								? "Canvas and selected shapes are shared automatically. Ask about this canvas to work on it."
+								: "Page details are shared automatically. Use as context to attach its saved content."
 							: "Choose a page to add it to this conversation.",
 		);
 		message(
@@ -188,7 +203,7 @@ export function createCompanion(bridge: CompanionBridge) {
 			attached
 				? `Using “${attached.title || "Untitled page"}” in this conversation.`
 				: page && bridge.canUseContext() && !context.error
-					? `Current page: “${page.title || "Untitled page"}”.`
+					? `Current ${page.canvasId ? "canvas" : "page"}: “${page.title || "Untitled page"}”.`
 					: "No page content attached.",
 		);
 		get("context-tray").dataset.attached = String(!!attached);
@@ -216,7 +231,7 @@ export function createCompanion(bridge: CompanionBridge) {
 		for (const button of get("page-list").querySelectorAll<HTMLButtonElement>(
 			"button[data-page-id]",
 		)) {
-			if (button.dataset.pageId === page?.pageId)
+			if (!page?.canvasId && button.dataset.pageId === page?.pageId)
 				button.setAttribute("aria-current", "page");
 			else button.removeAttribute("aria-current");
 		}
@@ -230,7 +245,12 @@ export function createCompanion(bridge: CompanionBridge) {
 			root.textContent = workspace.name;
 			root.addEventListener("click", () => home.click());
 			container.append(root);
-			for (const ancestor of pageAncestors(workspacePages, page.pageId)) {
+			const ancestors = pageAncestors(workspacePages, page.pageId ?? "");
+			const parent = page.canvasId
+				? workspacePages.find((item) => item.pageId === page?.pageId)
+				: undefined;
+			if (parent) ancestors.push(parent);
+			for (const ancestor of ancestors) {
 				const separator = document.createElement("span");
 				separator.className = "breadcrumb-separator";
 				separator.setAttribute("aria-hidden", "true");
@@ -280,14 +300,14 @@ export function createCompanion(bridge: CompanionBridge) {
 		page = next;
 		get("empty-preview").hidden = true;
 		shell?.classList.add("has-page");
-		for (const ancestor of pageAncestors(workspacePages, next.pageId))
+		for (const ancestor of pageAncestors(workspacePages, next.pageId ?? ""))
 			expanded.add(ancestor.pageId);
 		renderNavigation();
 		updateBreadcrumbs();
 		updateCurrentView();
 	}
 	async function openPage(pageId: string) {
-		if (!workspace || page?.pageId === pageId) return;
+		if (!workspace || (!page?.canvasId && page?.pageId === pageId)) return;
 		const workspaceId = workspace.id;
 		await action(async () => {
 			message("page-status", "Opening page…");
@@ -296,6 +316,18 @@ export function createCompanion(bridge: CompanionBridge) {
 			);
 			if (next.workspaceId !== workspaceId || next.pageId !== pageId)
 				throw new Error("Haunter returned a different page. Try again.");
+			await showPage(next);
+		});
+	}
+	async function openCanvas(canvasId: string) {
+		if (!workspace) return;
+		const workspaceId = workspace.id;
+		await action(async () => {
+			const next = validateEditorOutput(
+				await bridge.callTool("open_haunter_canvas", { workspaceId, canvasId }),
+			);
+			if (next.workspaceId !== workspaceId || next.canvasId !== canvasId)
+				throw new Error("Haunter returned a different canvas. Try again.");
 			await showPage(next);
 		});
 	}
@@ -492,7 +524,10 @@ export function createCompanion(bridge: CompanionBridge) {
 			await loadPages();
 			get("home-title").focus({ preventScroll: true });
 		});
-	get("back").addEventListener("click", () => void goHome());
+	get("back").addEventListener("click", () => {
+		if (page?.canvasId && page.pageId) void openPage(page.pageId);
+		else void goHome();
+	});
 	home.addEventListener("click", () => void goHome());
 	web.addEventListener("click", () => {
 		if (page)
@@ -506,7 +541,14 @@ export function createCompanion(bridge: CompanionBridge) {
 				);
 	});
 	useContext.addEventListener("click", () => {
-		if (!page || !workspace || !ready || !bridge.canUseContext()) return;
+		if (
+			!page ||
+			page.canvasId !== undefined ||
+			!workspace ||
+			!ready ||
+			!bridge.canUseContext()
+		)
+			return;
 		const selected = page;
 		const selectedWorkspace = workspace;
 		void action(async () => {

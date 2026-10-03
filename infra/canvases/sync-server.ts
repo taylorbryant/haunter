@@ -299,6 +299,8 @@ export function createCanvasSyncServer(options: {
 						});
 					return {
 						canvasId: canvas.id,
+						pageId: canvas.pageId,
+						title: canvas.title,
 						revision: canvasRevision(
 							canvas.id,
 							version?.revision ?? entry.revision,
@@ -473,7 +475,10 @@ export function createCanvasSyncServer(options: {
 							throw new Error("Worker unavailable");
 						if (connection.grant.expiresAt <= Date.now())
 							throw new Error("Expired");
-						if (Date.now() - connection.checkedAt >= 5000)
+						if (
+							connection.grant.embeddedSessionId ||
+							Date.now() - connection.checkedAt >= 5000
+						)
 							await check(connection);
 						connection.entry.lastUsed = Date.now();
 						connection.entry.room.handleSocketMessage(connection.id, message);

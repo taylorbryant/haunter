@@ -7,19 +7,31 @@ import {
 	recordPageView,
 	updatePage,
 } from "@/features/pages/contracts";
-import { openDocumentSession } from "@/features/documents/contracts";
+import { getCanvas } from "@/features/canvases/contracts";
+import {
+	openCanvasSession,
+	openDocumentSession,
+} from "@/features/documents/contracts";
 import {
 	exchangeEmbeddedEditor,
 	verifyEmbeddedEditor,
 } from "@/features/agents/contracts";
 import { appError } from "@/features/shared/errors";
 
-/** A verified embedded identity still has authority over only one page. */
+/** A verified embedded identity still has authority over only one page or canvas. */
 export const embeddedEditorAuthHooks: ServerHook<AppContext> = {
 	beforeHandle({ ctx, contract, path, body }) {
 		if (!ctx.embeddedEditor) return;
 		const grant = ctx.embeddedEditor;
 		if (contract.name === verifyEmbeddedEditor.name) return;
+		if (grant.canvasId) {
+			if (
+				![getCanvas.name, openCanvasSession.name].includes(contract.name) ||
+				(path as { id?: string } | undefined)?.id !== grant.canvasId
+			)
+				throw appError("Forbidden");
+			return;
+		}
 		const allowed = [
 			getPage,
 			getPageMetadata,

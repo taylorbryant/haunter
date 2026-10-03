@@ -10,7 +10,9 @@ import { canEditContent } from "@/lib/org-roles";
 export const authorizeEmbeddedEditorUseCase = useCase
 	.command("agents.authorizeEmbeddedEditor")
 	.input(
-		EmbeddedEditorAuthorizationSchema.extend({ clientId: z.string().min(1) }),
+		EmbeddedEditorAuthorizationSchema.safeExtend({
+			clientId: z.string().min(1),
+		}),
 	)
 	.output(z.object({ id: z.uuid() }))
 	.run(async ({ ctx, input }) => {
@@ -23,17 +25,27 @@ export const authorizeEmbeddedEditorUseCase = useCase
 			throw appError("Forbidden");
 		const role = await ctx.ports.members.findRole(input.workspaceId, user.id);
 		if (!role) throw appError("Forbidden");
-		const page = await ctx.ports.pages.findMetaById(
-			createTenantScope({ id: input.workspaceId }),
-			input.pageId,
-		);
-		if (!page || page.deletedAt !== null) throw appError("Forbidden");
-		await ctx.gate.authorize("pages.read", page);
+		const scope = createTenantScope({ id: input.workspaceId });
+		if (input.canvasId) {
+			const canvas = await ctx.ports.canvases.findById(scope, input.canvasId);
+			if (!canvas) throw appError("Forbidden");
+			await ctx.gate.authorize("canvases.read", canvas);
+			if (canvas.pageId) {
+				const parent = await ctx.ports.pages.findMetaById(scope, canvas.pageId);
+				if (!parent || parent.deletedAt !== null) throw appError("Forbidden");
+				await ctx.gate.authorize("pages.read", parent);
+			}
+		} else {
+			const page = await ctx.ports.pages.findMetaById(scope, input.pageId!);
+			if (!page || page.deletedAt !== null) throw appError("Forbidden");
+			await ctx.gate.authorize("pages.read", page);
+		}
 		return ctx.ports.embeddedEditorSessions.create({
 			connectionId: connection.id,
 			userId: user.id,
 			workspaceId: input.workspaceId,
 			pageId: input.pageId,
+			canvasId: input.canvasId,
 			challenge: input.challenge,
 			writable:
 				connection.embeddedEditorAccess === "edit" &&

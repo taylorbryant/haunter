@@ -41,21 +41,23 @@ export async function embeddedEditorFixture(
 		now,
 	});
 	if (!connection) throw new Error("Missing connection");
-	async function handoff() {
+	async function handoff(
+		target: { pageId: string } | { canvasId: string } = { pageId: f.page.id },
+	) {
 		const proofSecret = challenge(crypto.randomUUID());
 		const result = await authorizeEmbeddedEditorUseCase.run({
 			ctx: f.ctx,
 			input: {
 				clientId: "embedded-client",
 				workspaceId: f.workspaceId,
-				pageId: f.page.id,
+				...target,
 				challenge: challenge(proofSecret),
 			},
 		});
 		return { ...result, proofSecret };
 	}
-	async function login() {
-		const grant = await handoff();
+	async function login(target?: { pageId: string } | { canvasId: string }) {
+		const grant = await handoff(target);
 		const session = await f.ctx.ports.embeddedEditorSessions.exchange(grant);
 		if (!session) throw new Error("Missing embedded session");
 		return session;

@@ -323,6 +323,13 @@
       "when": 1790994130713,
       "tag": "0045_blushing_frank_castle",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "6",
+      "when": 1791065679262,
+      "tag": "0046_right_mauler",
+      "breakpoints": true
     }
   ]
 }

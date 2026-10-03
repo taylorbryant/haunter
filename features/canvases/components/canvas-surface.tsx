@@ -7,10 +7,12 @@ import { useSync, type UseSyncConnectFn } from "@tldraw/sync";
 import { AuthenticatedCanvasSocket } from "../client/authenticated-socket";
 import {
 	atom,
+	createTLCurrentUser,
 	UserRecordType,
 	inlineBase64AssetStore,
 	type Editor,
 	type TLStoreSnapshot,
+	type TLUserPreferences,
 } from "tldraw";
 import { apiClient } from "@/client";
 import { draftRegistry } from "@/client/draft-registry";
@@ -50,6 +52,8 @@ type Props = {
 	canvasId: string;
 	onSaveStateChange?: (state: CanvasSaveState) => void;
 	layoutKey?: string;
+	embedded?: boolean;
+	onEditorChange?: (editor: Editor | null) => void;
 };
 export default function CanvasSurface(props: Props) {
 	const shareToken = useSharedPageToken();
@@ -102,6 +106,8 @@ function CollaborativeCanvasSurface({
 	user,
 	editable,
 	layoutKey,
+	embedded = false,
+	onEditorChange,
 	onSaveStateChange,
 	onRestart,
 }: Props & {
@@ -121,8 +127,24 @@ function CollaborativeCanvasSurface({
 			canvasId,
 		});
 	}, [contextEditor, liveContext, workspaceId, pageId, canvasId]);
-	const { resolvedTheme } = useTheme();
-	const syncTheme = useCanvasTheme(resolvedTheme);
+	useEffect(() => {
+		onEditorChange?.(contextEditor);
+	}, [contextEditor, onEditorChange]);
+	const { forcedTheme, resolvedTheme } = useTheme();
+	const syncTheme = useCanvasTheme(forcedTheme ?? resolvedTheme);
+	// The host's theme must not overwrite the regular web canvas's preferences.
+	const [embeddedUser] = useState(() => {
+		if (!embedded) return undefined;
+		const preferences = atom<TLUserPreferences>("embedded canvas preferences", {
+			id: user.id,
+			name: user.name,
+			color: "#8b5cf6",
+		});
+		return createTLCurrentUser({
+			userPreferences: preferences,
+			setUserPreferences: (next) => preferences.set(next),
+		});
+	});
 	const storage = useDurableDraftStorage<TLStoreSnapshot>();
 	const adapter = useRef<AuthenticatedCanvasSocket | null>(null);
 	const recovery = useRef<CanvasSyncRecovery | null>(null);
@@ -291,9 +313,11 @@ function CollaborativeCanvasSurface({
 				workspaceId={workspaceId}
 				userId={user.id}
 				initialFingerprint={initialFingerprint}
+				embedded={embedded}
 			/>
 			{store ? (
 				<TldrawWithFonts
+					user={embeddedUser}
 					overlayUtils={AGENT_HIGHLIGHT_OVERLAYS}
 					components={editable ? CANVAS_LIBRARY_COMPONENTS : undefined}
 					documentSnapshot={store.getStoreSnapshot()}
@@ -321,11 +345,13 @@ function CollaborativeCanvasSurface({
 						};
 					}}
 				>
-					<CanvasAgentActivity
-						userId={user.id}
-						workspaceId={workspaceId}
-						canvasId={canvasId}
-					/>
+					{!embedded && (
+						<CanvasAgentActivity
+							userId={user.id}
+							workspaceId={workspaceId}
+							canvasId={canvasId}
+						/>
+					)}
 				</TldrawWithFonts>
 			) : (
 				<CanvasLoading />
@@ -384,11 +410,13 @@ function CanvasRecoveryCopies({
 	workspaceId,
 	userId,
 	initialFingerprint,
+	embedded,
 }: {
 	canvasId: string;
 	workspaceId: string;
 	userId: string;
 	initialFingerprint: string | null;
+	embedded: boolean;
 }) {
 	const storage = useDurableDraftStorage<TLStoreSnapshot>();
 	const router = useRouter();
@@ -449,11 +477,12 @@ function CanvasRecoveryCopies({
 		>
 			<span>
 				{error ??
-					`An unsynced drawing copy from ${new Date(copy.updatedAt).toLocaleString()} is saved in this browser.${copies.length > 1 ? ` ${copies.length} copies are available, newest first.` : ""} Recover it as a separate canvas to keep both versions.`}
+					`An unsynced drawing copy from ${new Date(copy.updatedAt).toLocaleString()} is saved in this browser.${copies.length > 1 ? ` ${copies.length} copies are available, newest first.` : ""} ${embedded ? "Download a copy to recover it in Haunter." : "Recover it as a separate canvas to keep both versions."}`}
 			</span>
 			<Button
 				size="sm"
 				disabled={busy}
+				hidden={embedded}
 				onClick={async () => {
 					setBusy(true);
 					setError(null);

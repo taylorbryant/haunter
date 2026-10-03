@@ -95,10 +95,11 @@ export function createEmbeddedEditorAuth() {
 				(originalIdentity.user.id !== identity.user.id ||
 					originalIdentity.connectionId !== identity.connectionId ||
 					originalIdentity.workspaceId !== identity.workspaceId ||
-					originalIdentity.pageId !== identity.pageId)
+					originalIdentity.pageId !== identity.pageId ||
+					originalIdentity.canvasId !== identity.canvasId)
 			)
 				throw new Error(
-					"The connected Haunter account or page changed. Reopen the editor.",
+					"The connected Haunter account or document changed. Reopen the editor.",
 				);
 			originalIdentity ??= identity;
 			credential = { token: result.token, identity };
