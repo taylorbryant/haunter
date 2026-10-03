@@ -28,7 +28,11 @@ function useNow(intervalMs: number) {
 	return now;
 }
 
-export function HeaderSaveIndicator() {
+export function HeaderSaveIndicator({
+	historyEnabled = true,
+}: {
+	historyEnabled?: boolean;
+}) {
 	const pathname = usePathname();
 	const fallbackState = usePageSaveState();
 	const registry = useDraftRegistry();
@@ -36,7 +40,7 @@ export function HeaderSaveIndicator() {
 	const canEdit = useCanEditWorkspace();
 	const [historyOpen, setHistoryOpen] = useState(false);
 
-	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
+	const workspaceId = pathname.match(/^(?:\/embed)?\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 	const { synced } = useWorkspaceRouteSync(workspaceId);
 	const page = useCachedPage(pageId);
@@ -86,7 +90,8 @@ export function HeaderSaveIndicator() {
 
 	const className =
 		"ml-auto shrink-0 whitespace-nowrap text-muted-foreground text-xs tabular-nums";
-	const canOpenHistory = page !== undefined && canEdit && synced;
+	const canOpenHistory =
+		historyEnabled && page !== undefined && canEdit && synced;
 
 	if (!canOpenHistory) {
 		return <span className={className}>{label}</span>;

@@ -50,6 +50,7 @@ export type McpConnectionRow = {
 	clientId: string;
 	clientName: string | null;
 	permissionProfile: "view" | "edit" | "full";
+	embeddedEditorAccess?: "view" | "edit";
 	status: McpConnectionStatus;
 	workspaceIds: string[];
 	lastUsedAt: Date | null;
@@ -117,6 +118,7 @@ export interface McpConnectionRepository {
 		userId: string;
 		clientId: string;
 		permissionProfile: McpConnectionRow["permissionProfile"];
+		embeddedEditorAccess?: "view" | "edit";
 		workspaceIds: string[];
 		now: Date;
 	}): Promise<McpConnectionRow | null>;

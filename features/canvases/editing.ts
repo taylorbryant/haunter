@@ -128,6 +128,8 @@ export const isCanvasWrite = (command: CanvasCommand) =>
 export type CanvasOperation = z.infer<typeof CanvasOperationSchema>;
 export const CanvasReadOutputSchema = z.object({
 	canvasId: z.uuid(),
+	pageId: z.uuid().nullable().optional(),
+	title: z.string().nullable().optional(),
 	revision: CanvasRevisionSchema,
 	historyVersionId: z.uuid().optional(),
 	pages: z.array(z.object({ id: z.string(), name: z.string() })),

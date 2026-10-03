@@ -1,4 +1,6 @@
 import "@beignet/core/server-only";
+import { authorizeEmbeddedEditorUseCase } from "@/features/agents/use-cases/authorize-embedded-editor";
+import { appError } from "@/features/shared/errors";
 import { AgentCapabilityError } from "@beignet/core/agent-capabilities";
 import { isAppError } from "@beignet/core/errors";
 import type { McpServer } from "@modelcontextprotocol/server";
@@ -12,6 +14,9 @@ import {
 } from "@/features/canvases/editing";
 import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
 import type { McpConnectionRow } from "@/features/agents/ports";
+import { registerMcpCompanion } from "@/features/agents/server/mcp-companion";
+import { registerMcpEditor } from "@/features/agents/server/mcp-editor";
+import { env } from "@/lib/env";
 import { agentCapabilities } from "@/lib/agent-capability-registry";
 import {
 	type AgentCapabilityServer,
@@ -79,6 +84,53 @@ export function registerRemoteMcpTools(
 	},
 ) {
 	const allowed = allowedRemoteMcpCapabilities(input.connection);
+	if (
+		["list_workspaces", "list_pages", "search_pages", "read_page"].every(
+			(name) => allowed.has(name),
+		)
+	) {
+		registerMcpEditor(server, {
+			appOrigin: env.APP_URL,
+			authorize: async (args) => {
+				const runtime = await input.getServer();
+				const role = await runtime.ports.members.findRole(
+					args.workspaceId,
+					input.identity.userId,
+				);
+				if (!role) throw appError("Forbidden");
+				const ctx = await runtime.createServiceContext({
+					tenantId: args.workspaceId,
+					asUser: { id: input.identity.userId, role },
+				});
+				return authorizeEmbeddedEditorUseCase.run({
+					ctx,
+					input: {
+						...args,
+						clientId: input.identity.clientId,
+					},
+				});
+			},
+			execute: (capability, args) =>
+				executeRemoteMcpCapability(
+					{ capability, arguments: args, ...input.identity },
+					{ getServer: input.getServer },
+				),
+			errorMessage: safeToolErrorMessage,
+		});
+		registerMcpCompanion(server, {
+			appOrigin: env.APP_URL,
+			execute: (capability, args) =>
+				executeRemoteMcpCapability(
+					{
+						capability,
+						arguments: args,
+						...input.identity,
+					},
+					{ getServer: input.getServer },
+				),
+			errorMessage: safeToolErrorMessage,
+		});
+	}
 	for (const capability of agentCapabilities) {
 		if (!allowed.has(capability.name)) continue;
 		server.registerTool(

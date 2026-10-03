@@ -257,6 +257,14 @@ Browser-based MCP clients with a separate origin must be listed in
 `Origin` header. Apply the checked-in OAuth/MCP migrations before enabling the
 endpoint.
 
+For browsing and editing pages in the embedded workspace, sharing context,
+and mentioning pages in supporting hosts, see the
+[page companion guide](docs/mcp-page-companion.md).
+
+For the actual web editor running in an MCP App, including the local browser
+verification and deployment requirements, see the
+[real editor proof](docs/mcp-editor-proof.md).
+
 For reading structured page content, editing blocks, and replacing page bodies,
 see the [MCP page editing API](docs/mcp-page-editing.md).
 For native canvas creation, library templates, shape edits, connections, image previews, and history, see the

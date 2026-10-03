@@ -19,6 +19,7 @@ import {
 	installSessionRecovery,
 	SessionRecovery,
 	type SessionSnapshot,
+	type VerifiedSession,
 } from "@/client/session-recovery";
 import {
 	SESSION_CHANGE_EVENT,
@@ -39,15 +40,24 @@ export function useProtectedRequestsEnabled() {
 export function SessionRecoveryProvider({
 	initial,
 	onVerified,
+	verifySession,
+	embedded = false,
 	children,
 }: {
 	initial: AppSessionValue;
+	embedded?: boolean;
+	verifySession?: (
+		signal: AbortSignal,
+		recover: boolean,
+	) => Promise<VerifiedSession | null>;
 	onVerified(value: {
 		activeWorkspaceId: string | null;
 		workspaceRole: string | null;
 	}): void;
 	children: ReactNode;
 }) {
+	const verifyRef = useRef(verifySession);
+	verifyRef.current = verifySession;
 	const latest = useRef(initial);
 	latest.current = initial;
 	const onVerifiedRef = useRef(onVerified);
@@ -58,8 +68,9 @@ export function SessionRecoveryProvider({
 			new SessionRecovery(
 				initial.user.id,
 				(signal, recover) => {
+					if (verifyRef.current) return verifyRef.current(signal, recover);
 					const workspaceId =
-						window.location.pathname.match(/^\/w\/([^/]+)/)?.[1] ??
+						window.location.pathname.match(/^(?:\/embed)?\/w\/([^/]+)/)?.[1] ??
 						latest.current.activeWorkspaceId;
 					return verifyBrowserSession({
 						userId: initial.user.id,
@@ -216,6 +227,12 @@ export function SessionRecoveryProvider({
 			: "Your session expired. Your changes are saved in this browser. Sign in to sync them.";
 	else if (state.blocked && !message)
 		message = "Checking your sign-in. Your draft will stay open.";
+	if (embedded && state.blocked && !storageFailed) {
+		message =
+			state.status === "checking"
+				? "Checking your Haunter connection. Your draft will stay open."
+				: "Editor access could not be verified. Check your connection or reconnect Haunter in your host app, then check again. Your draft stays in this browser.";
+	}
 	return (
 		<RecoveryContext.Provider value={state}>
 			<div
@@ -237,7 +254,7 @@ export function SessionRecoveryProvider({
 						aria-live="polite"
 					>
 						<p className="min-w-48 flex-1">{message}</p>
-						{state.blocked ? (
+						{state.blocked && !embedded ? (
 							<Button
 								type="button"
 								size="sm"
@@ -250,11 +267,14 @@ export function SessionRecoveryProvider({
 								Sign in
 							</Button>
 						) : null}
-						{state.status === "error" || state.status === "access-lost" ? (
+						{(embedded && state.blocked) ||
+						state.status === "error" ||
+						state.status === "access-lost" ? (
 							<Button
 								type="button"
 								size="sm"
 								variant="outline"
+								disabled={state.status === "checking"}
 								onClick={() => void recovery.recheck()}
 							>
 								Check again
@@ -282,13 +302,15 @@ export function SessionRecoveryProvider({
 				<span className="sr-only" role="status">
 					{!state.blocked && syncing ? "Syncing your changes" : ""}
 				</span>
-				<SessionRecoveryDialog
-					email={initial.user.email}
-					open={dialogOpen}
-					onOpenChange={setDialogOpen}
-					onAuthenticated={() => recovery.recheck()}
-					restoreFocus={restoreFocus}
-				/>
+				{embedded ? null : (
+					<SessionRecoveryDialog
+						email={initial.user.email}
+						open={dialogOpen}
+						onOpenChange={setDialogOpen}
+						onAuthenticated={() => recovery.recheck()}
+						restoreFocus={restoreFocus}
+					/>
+				)}
 			</div>
 		</RecoveryContext.Provider>
 	);

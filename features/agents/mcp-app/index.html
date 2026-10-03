@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Haunter</title>
+		<!-- styles -->
+	</head>
+	<body>
+		<main class="companion" aria-label="Haunter workspace">
+			<aside class="sidebar" aria-label="Workspace navigation">
+				<div class="sidebar-header"><div class="workspace-switcher">
+					<span class="workspace-mark" aria-hidden="true"><!-- icon:ghost --></span>
+					<label class="sr-only" for="workspace">Workspace</label>
+					<select id="workspace" name="workspace" disabled><option value="">Loading workspaces…</option></select>
+					<span class="workspace-chevron" aria-hidden="true"><!-- icon:chevron-down --></span>
+				</div><button class="icon-button" id="refresh" type="button" aria-label="Refresh" title="Refresh workspace and access" disabled><!-- icon:refresh --></button></div>
+				<search><form id="search-form" class="search-row">
+					<span aria-hidden="true"><!-- icon:search --></span>
+					<label class="sr-only" for="query">Search pages</label>
+					<input id="query" name="query" type="search" maxlength="200" autocomplete="off" placeholder="Search pages…" disabled />
+					<button class="icon-button" id="search" type="submit" aria-label="Search" title="Search" disabled><!-- icon:arrow-right --></button>
+				</form></search>
+				<button class="nav-link" id="home" type="button" aria-current="page"><!-- icon:home --><span>Home</span></button>
+				<div class="pages-heading"><h2 id="list-heading">Pages</h2><span id="page-count"></span></div>
+				<p class="list-status" id="list-status" role="status"></p>
+				<nav id="page-list" aria-label="Pages"></nav>
+				<div class="sidebar-footer"><span class="haunter-brand"><!-- icon:ghost -->Haunter</span></div>
+			</aside>
+			<section class="workspace-content">
+				<header class="toolbar">
+					<button class="icon-button back" id="back" type="button" aria-label="Back to pages" title="Back to pages"><!-- icon:panel-left --></button>
+					<nav id="breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"><span>Home</span></nav>
+					<div class="toolbar-actions">
+<button class="btn" id="editor-web" type="button" hidden>Open in Haunter</button>
+						<button class="btn btn-primary" id="use-context" type="button" aria-describedby="context-help" disabled hidden>Use as context</button>
+					</div>
+				</header>
+				<div class="notice connection-status" id="connection-status" role="status">Connecting to Haunter…</div>
+				<section class="detail" aria-label="Haunter page" id="detail">
+					<div class="home-view" id="empty-preview">
+						<header><h1 id="home-title" tabindex="-1">Home</h1><p class="muted" id="home-date"></p></header>
+						<section class="recent-section" aria-labelledby="recent-heading"><h2 id="recent-heading">Recently updated</h2><div id="recent-pages" class="recent-pages"></div><p id="home-status" class="muted">Your workspace pages will appear here.</p></section>
+						<div class="home-hint"><span aria-hidden="true"><!-- icon:message --></span><p>Open a page to read or edit it, then share it with your conversation.</p></div>
+					</div>
+<iframe id="real-editor" title="Haunter page editor" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" hidden></iframe>
+				</section>
+				<p class="notice page-status" id="page-status" role="status"></p>
+				<footer class="context-tray" id="context-tray">
+					<span class="context-icon" aria-hidden="true"><!-- icon:message --></span>
+					<div class="context-copy"><p id="context-status" role="status">No page content attached.</p><p class="muted" id="context-help">Choose a page to add it to this conversation.</p></div>
+					<button class="icon-button" id="remove-context" type="button" aria-label="Remove context" title="Remove context" hidden><!-- icon:close --></button>
+				</footer>
+			</section>
+		</main>
+		<template id="icon-page"><!-- icon:page --></template>
+		<template id="icon-chevron"><!-- icon:chevron-right --></template>
+		<!-- script -->
+	</body>
+</html>

@@ -316,6 +316,20 @@
       "when": 1790214192266,
       "tag": "0044_thin_iceman",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1790994130713,
+      "tag": "0045_blushing_frank_castle",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "6",
+      "when": 1791065679262,
+      "tag": "0046_right_mauler",
+      "breakpoints": true
     }
   ]
 }

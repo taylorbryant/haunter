@@ -5,6 +5,10 @@ import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { CanvasSaveState } from "@/features/canvases/components/canvas-surface";
 import { cn } from "@/lib/utils";
+import {
+	useEmbeddedEditor,
+	EmbeddedFeatureLink,
+} from "./embedded-editor-context";
 import { CanvasBlockHeader } from "./canvas-block-header";
 
 // tldraw is a ~MB chunk: load it only when a canvas block actually renders.
@@ -193,7 +197,24 @@ export const canvasBlockSpec = createReactBlockSpec(
 		// Don't let ProseMirror node-select the block (the blue outline) when the
 		// canvas is tapped — all interaction belongs to tldraw.
 		meta: { selectable: false },
-		render: ({ block }) => {
+		render: function CanvasBlock({ block }) {
+			const embedded = useEmbeddedEditor();
+			if (embedded)
+				return (
+					<div contentEditable={false} className="my-2 rounded border p-4">
+						{embedded.openCanvas && block.props.canvasId ? (
+							<button
+								type="button"
+								className="rounded px-1 py-0.5 underline underline-offset-4"
+								onClick={() => embedded.openCanvas?.(block.props.canvasId)}
+							>
+								Open canvas
+							</button>
+						) : (
+							<EmbeddedFeatureLink label="Canvas" />
+						)}
+					</div>
+				);
 			const canvasId = block.props.canvasId;
 
 			return (

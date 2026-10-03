@@ -6,6 +6,7 @@ const GrantSchema = z.object({
 	kind: z.enum(["page", "canvas"]).optional(),
 	userId: z.string().min(1),
 	sessionId: z.string().min(1),
+	embeddedSessionId: z.uuid().optional(),
 	workspaceId: z.string().min(1),
 	pageId: z.uuid(),
 	generation: z.number().int().nonnegative(),

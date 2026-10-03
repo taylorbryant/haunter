@@ -3,6 +3,10 @@
 import { createReactInlineContentSpec } from "@blocknote/react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import {
+	useEmbeddedEditor,
+	EmbeddedFeatureLink,
+} from "./embedded-editor-context";
 import { listPagesQueryOptions } from "@/features/pages/client/queries";
 
 function MentionChip({
@@ -13,8 +17,13 @@ function MentionChip({
 	workspaceId: string;
 }) {
 	// Shares the sidebar tree's query, so renames update mentions live.
-	const pagesQuery = useQuery(listPagesQueryOptions(workspaceId));
+	const embedded = useEmbeddedEditor();
+	const pagesQuery = useQuery({
+		...listPagesQueryOptions(workspaceId),
+		enabled: !embedded,
+	});
 	const page = pagesQuery.data?.items.find((item) => item.id === pageId);
+	if (embedded) return <EmbeddedFeatureLink label="Page mention" />;
 
 	if (!page) {
 		return (

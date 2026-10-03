@@ -220,7 +220,10 @@ export function createDocumentServer(
 				throw new Error("Collaboration worker unavailable");
 			if (context.grant.expiresAt <= Date.now())
 				throw new Error("Document session expired");
-			if (Date.now() - context.checkedAt >= 5000) {
+			if (
+				context.grant.embeddedSessionId ||
+				Date.now() - context.checkedAt >= 5000
+			) {
 				const next = await options.authorize(context.grant);
 				Object.assign(context, next, { checkedAt: Date.now() });
 				connection.readOnly = !canEditContent(next.role);
@@ -290,6 +293,10 @@ export function createDocumentServer(
 		},
 		async onStoreDocument({ document, documentName, lastContext }) {
 			try {
+				// Authorization is checked before accepting each embedded message.
+				// Persist those accepted updates even if access changes during debounce:
+				// they are already shared with other editors. Rechecking only lastContext
+				// here cannot undo them and can strand unrelated, authorized web edits.
 				const attribution = attributions.get(documentName);
 				const captured = attribution?.capture();
 				const { state, assignmentNotifications, ...result } =

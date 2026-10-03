@@ -13,7 +13,9 @@ export type ContextRoute = {
 	canvasId: string | null;
 };
 export function contextRoute(pathname: string): ContextRoute | null {
-	const match = pathname.match(/^\/w\/([^/]+)(?:\/(p|c)\/([^/]+))?(?:\/|$)/);
+	const match = pathname.match(
+		/^(?:\/embed)?\/w\/([^/]+)(?:\/(p|c)\/([^/]+))?(?:\/|$)/,
+	);
 	if (!match) return null;
 	return {
 		workspaceId: match[1],

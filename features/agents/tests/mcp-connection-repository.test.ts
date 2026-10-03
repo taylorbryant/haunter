@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { oauthProvider } from "@better-auth/oauth-provider";
 import * as schema from "@/infra/db/schema";
 import { createTestDatabase } from "@/infra/db/test-database";
 import { ACCESS_STATUS_APPROVED } from "@/ports/auth";
@@ -64,6 +66,66 @@ describe("hosted MCP connection repository", () => {
 				await repository.findActive("user_mcp", "oauth_client"),
 			).toMatchObject({ id: connection.id });
 			expect(await repository.listByUser("user_mcp")).toHaveLength(1);
+
+			for (const scopes of [
+				[],
+				["openid"],
+				["haunter:mcp:extra", "prefix:haunter:mcp"],
+				{ scope: "haunter:mcp" },
+				["haunter:mcp", 1],
+				"haunter:mcp",
+				"not-json",
+				JSON.stringify(JSON.stringify(["haunter:mcp"])),
+			]) {
+				await database.db
+					.update(schema.oauthConsent)
+					.set({ scopes })
+					.where(eq(schema.oauthConsent.id, "consent_test"));
+				expect(
+					await repository.findActive("user_mcp", "oauth_client"),
+				).toBeNull();
+				expect(await repository.listByUser("user_mcp")).toEqual([]);
+			}
+			// Invalid storage must fail closed without a JSON SQL error.
+			await database.client.execute({
+				sql: 'UPDATE "oauth_consent" SET scopes = ? WHERE id = ?',
+				args: ["invalid-json", "consent_test"],
+			});
+			expect(
+				await repository.findActive("user_mcp", "oauth_client"),
+			).toBeNull();
+			expect(await repository.listByUser("user_mcp")).toEqual([]);
+
+			// Exercise the real provider's SQLite array serialization, not just Drizzle fixtures.
+			const adapter = drizzleAdapter(database.db, {
+				provider: "sqlite",
+				schema,
+			})({
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						scopes: ["openid", "haunter:mcp"],
+					}),
+				],
+			});
+			for (const scopes of [["openid", "haunter:mcp"], ["openid"]]) {
+				await adapter.update({
+					model: "oauthConsent",
+					where: [{ field: "id", value: "consent_test" }],
+					update: { scopes },
+				});
+				expect(
+					Boolean(await repository.findActive("user_mcp", "oauth_client")),
+				).toBe(scopes.includes("haunter:mcp"));
+				expect(await repository.listByUser("user_mcp")).toHaveLength(
+					scopes.includes("haunter:mcp") ? 1 : 0,
+				);
+			}
+			await database.db
+				.update(schema.oauthConsent)
+				.set({ scopes: ["haunter:mcp"] })
+				.where(eq(schema.oauthConsent.id, "consent_test"));
 
 			await repository.recordActivity({
 				id: crypto.randomUUID(),

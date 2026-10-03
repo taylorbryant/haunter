@@ -1,3 +1,4 @@
+import type { EmbeddedEditorIdentity } from "@/features/agents/embedded-editor-session";
 import type { ActivityActor, ActivityTenant } from "@beignet/core/ports";
 import type { TraceContext } from "@beignet/core/tracing";
 import type { DevtoolsPort } from "@beignet/devtools";
@@ -18,6 +19,7 @@ export type AppContext = {
 	requestId: string;
 	actor: ActivityActor;
 	auth: AuthSession | null;
+	embeddedEditor?: EmbeddedEditorIdentity;
 	gate: AppGate;
 	ports: AppRuntimePorts;
 	tenant?: ActivityTenant;
