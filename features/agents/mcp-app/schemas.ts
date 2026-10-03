@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ListPagesInputSchema } from "@/features/pages/schemas";
 
 export const COMPANION_URI = "ui://haunter/workspace/v1";
 export const PAGE_RESOURCE_TEMPLATE =
@@ -6,7 +7,17 @@ export const PAGE_RESOURCE_TEMPLATE =
 export const MAX_CONTEXT_CHARACTERS = 60_000;
 export const MAX_MENTION_RESULTS = 20;
 
-const WorkspaceIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
+const WorkspaceIdSchema = ListPagesInputSchema.shape.workspaceId;
+// URL parsers normalize even percent-encoded dot segments. Other workspace IDs
+// keep the app's contract and are escaped only when placed in a URL path.
+const WorkspacePathIdSchema = WorkspaceIdSchema.refine(
+	(id) => id !== "." && id !== "..",
+	"Workspace ID cannot be a dot path segment.",
+);
+
+export function workspacePathSegment(workspaceId: string) {
+	return encodeURIComponent(WorkspacePathIdSchema.parse(workspaceId));
+}
 export const WorkspaceListSchema = z.object({
 	workspaces: z.array(
 		z.object({ id: WorkspaceIdSchema, name: z.string(), role: z.string() }),
@@ -43,17 +54,18 @@ export const ContextPageSchema = CompanionPageSchema.omit({
 export type ContextPage = z.infer<typeof ContextPageSchema>;
 
 export function pageResourceUri(workspaceId: string, pageId: string) {
-	WorkspaceIdSchema.parse(workspaceId);
 	z.uuid().parse(pageId);
-	return `haunter://workspaces/${workspaceId}/pages/${pageId}`;
+	return `haunter://workspaces/${workspacePathSegment(workspaceId)}/pages/${encodeURIComponent(pageId)}`;
 }
 
 export function parsePageResourceUri(uri: string) {
-	const match = /^haunter:\/\/workspaces\/([^/]+)\/pages\/([^/]+)$/.exec(uri);
+	const match = /^haunter:\/\/workspaces\/([^/?#]+)\/pages\/([^/?#]+)$/.exec(
+		uri,
+	);
 	if (!match) throw new Error("Invalid Haunter page resource.");
 	return {
-		workspaceId: WorkspaceIdSchema.parse(match[1]),
-		pageId: z.uuid().parse(match[2]),
+		workspaceId: WorkspacePathIdSchema.parse(decodeURIComponent(match[1])),
+		pageId: z.uuid().parse(decodeURIComponent(match[2])),
 	};
 }
 

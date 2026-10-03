@@ -9,6 +9,7 @@ import type { McpConnectionRow } from "@/features/agents/ports";
 import {
 	COMPANION_URI,
 	pageResourceUri,
+	parsePageResourceUri,
 } from "@/features/agents/mcp-app/schemas";
 import { createTestMcpConnectionRepository } from "@/features/agents/tests/helpers";
 import {
@@ -18,11 +19,14 @@ import {
 } from "@/features/documents/tests/helpers";
 import * as schema from "@/infra/db/schema";
 import { createRemoteMcpRequestHandler } from "@/server/remote-mcp";
-import { EDITOR_URI } from "@/features/agents/mcp-app/editor-schema";
+import {
+	EDITOR_URI,
+	editorPaths,
+} from "@/features/agents/mcp-app/editor-schema";
 import { env } from "@/lib/env";
 
-async function fixture() {
-	const f = await documentFixture("viewer");
+async function fixture(workspaceId?: string) {
+	const f = await documentFixture("viewer", workspaceId);
 	await seedFixtureBody(f, [paragraph("Launch plan from the saved page.")]);
 	const connection: McpConnectionRow = {
 		id: "companion-connection",
@@ -112,6 +116,45 @@ async function fixture() {
 	};
 }
 
+test("workspace IDs round-trip through the MCP browser, editor and encoded page resources", async () => {
+	const f = await fixture("team.alpha / 文档?%#");
+	try {
+		const opened = await f.call("open_haunter");
+		expect(opened.result?.structuredContent?.workspaces).toEqual([
+			expect.objectContaining({ id: f.workspaceId }),
+		]);
+		const uri = `haunter://workspaces/${encodeURIComponent(f.workspaceId)}/pages/${f.page.id}`;
+		expect(pageResourceUri(f.workspaceId, f.page.id)).toBe(uri);
+		expect(parsePageResourceUri(uri)).toEqual({
+			workspaceId: f.workspaceId,
+			pageId: f.page.id,
+		});
+		const mentions = await f.call("search_mentions", { query: "" });
+		expect(mentions.result?.structuredContent?.items?.[0]?.uri).toBe(uri);
+		const page = await f.rpc("resources/read", { uri });
+		expect(page.error).toBeUndefined();
+		expect(page.result?.contents?.[0]?.text).toContain(
+			"Launch plan from the saved page.",
+		);
+		const editor = await f.call("open_haunter_editor", {
+			workspaceId: f.workspaceId,
+			pageId: f.page.id,
+		});
+		expect(editor.result?.structuredContent?.editorUrl).toBe(
+			`${new URL(env.APP_URL).origin}/embed/w/${encodeURIComponent(f.workspaceId)}/p/${f.page.id}`,
+		);
+		for (const malformed of [
+			uri.replace("team.alpha", "%ZZ"),
+			`${uri}?extra=true`,
+			`${uri}#fragment`,
+		]) {
+			expect(() => parsePageResourceUri(malformed)).toThrow();
+		}
+	} finally {
+		await f.database.close();
+	}
+});
+
 test("real editor opens an authorized page and only allows Haunter's own iframe origin", async () => {
 	const f = await fixture();
 	try {
@@ -152,6 +195,30 @@ test("real editor opens an authorized page and only allows Haunter's own iframe 
 		).toBeTrue();
 	} finally {
 		await f.database.close();
+	}
+});
+
+test("resource and editor paths reject dot segments without reinterpreting literal percent-encoded IDs", () => {
+	const pageId = crypto.randomUUID();
+	for (const workspaceId of [".", ".."]) {
+		expect(() => pageResourceUri(workspaceId, pageId)).toThrow();
+		expect(() => editorPaths(workspaceId, pageId)).toThrow();
+		for (const segment of [
+			workspaceId,
+			workspaceId.replaceAll(".", "%2e"),
+			workspaceId.replaceAll(".", "%2E"),
+		]) {
+			expect(() =>
+				parsePageResourceUri(`haunter://workspaces/${segment}/pages/${pageId}`),
+			).toThrow();
+		}
+	}
+	for (const workspaceId of ["team.alpha", "%2e%2e", "team%2Fone"]) {
+		const uri = pageResourceUri(workspaceId, pageId);
+		expect(parsePageResourceUri(new URL(uri).href)).toEqual({
+			workspaceId,
+			pageId,
+		});
 	}
 });
 

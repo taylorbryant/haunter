@@ -1,11 +1,10 @@
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
 import { createStaticAuth } from "@beignet/core/ports";
+import { embeddedEditorFixture as fixture } from "./embedded-editor-fixture";
+import { eq } from "drizzle-orm";
 import { defineRoutes, createCsrfHooks } from "@beignet/core/server";
 import { createTestApp } from "@beignet/web/testing";
 import type { AppContext } from "@/app-context";
-import { documentFixture } from "@/features/documents/tests/helpers";
 import { openDocumentSessionUseCase } from "@/features/documents/use-cases/open-document-session";
 import { documentRoutes } from "@/features/documents/routes";
 import { pageRoutes } from "@/features/pages/routes";
@@ -16,64 +15,6 @@ import { appContext, type AppServiceContextInput } from "@/server/context";
 import { embeddedEditorAuthHooks } from "@/server/embedded-editor-auth";
 import { embeddedEditorRoutes } from "../routes";
 import { authorizeEmbeddedEditorUseCase } from "../use-cases/authorize-embedded-editor";
-
-const challenge = (secret: string) =>
-	createHash("sha256").update(secret).digest("base64url");
-async function fixture(
-	access: "view" | "edit" = "edit",
-	profile: "view" | "edit" = "edit",
-) {
-	const f = await documentFixture();
-	f.ctx.ports.auth = createStaticAuth(null);
-	f.ctx.ports.documentSessions = createDocumentSessionTokens(
-		"embedded-test-secret",
-	);
-	const now = new Date();
-	await f.database.db.insert(schema.oauthClient).values({
-		id: "embedded-oauth",
-		clientId: "embedded-client",
-		name: "Embedded tests",
-		redirectUris: ["https://host.test/callback"],
-	});
-	await f.database.db.insert(schema.oauthConsent).values({
-		id: "embedded-consent",
-		clientId: "embedded-client",
-		userId: f.userId,
-		scopes: ["haunter:mcp"],
-		createdAt: now,
-		updatedAt: now,
-	});
-	const connection = await f.ctx.ports.mcpConnections.authorize({
-		id: crypto.randomUUID(),
-		userId: f.userId,
-		clientId: "embedded-client",
-		permissionProfile: profile,
-		embeddedEditorAccess: access,
-		workspaceIds: [f.workspaceId],
-		now,
-	});
-	if (!connection) throw new Error("Missing connection");
-	async function handoff() {
-		const proofSecret = challenge(crypto.randomUUID());
-		const result = await authorizeEmbeddedEditorUseCase.run({
-			ctx: f.ctx,
-			input: {
-				clientId: "embedded-client",
-				workspaceId: f.workspaceId,
-				pageId: f.page.id,
-				challenge: challenge(proofSecret),
-			},
-		});
-		return { ...result, proofSecret };
-	}
-	async function login() {
-		const grant = await handoff();
-		const session = await f.ctx.ports.embeddedEditorSessions.exchange(grant);
-		if (!session) throw new Error("Missing embedded session");
-		return session;
-	}
-	return { ...f, connection, handoff, login };
-}
 
 test("handoff requires the iframe proof, is consumed once across concurrent exchanges, and stores no credential", async () => {
 	const f = await fixture();
@@ -294,6 +235,74 @@ test("browser session expiry does not affect embedded auth, while membership, co
 		await f.database.close();
 	}
 });
+
+test.each(["direct", "adapter"] as const)(
+	"removing MCP scope from %s consent rejects credentials and handoffs without affecting browser access",
+	async (storage) => {
+		const f = await fixture();
+		// Browser auth is deliberately valid: denied embedded auth must not fall back to it.
+		f.ctx.ports.auth = createStaticAuth(f.ctx.auth);
+		const app = await createTestApp<
+			AppContext,
+			AppContext["ports"],
+			AppServiceContextInput
+		>({
+			ports: f.ctx.ports,
+			context: appContext,
+			hooks: [embeddedEditorAuthHooks],
+			routes: defineRoutes<AppContext>([pageRoutes]),
+		});
+		try {
+			const setScopes = async (scopes: string[]) => {
+				await f.database.db
+					.update(schema.oauthConsent)
+					.set({
+						scopes: storage === "adapter" ? JSON.stringify(scopes) : scopes,
+					})
+					.where(eq(schema.oauthConsent.id, "embedded-consent"));
+			};
+			await setScopes(["openid", "haunter:mcp", "offline_access"]);
+			const session = await f.login();
+			const pending = await f.handoff();
+			const grant = {
+				...f.grant,
+				sessionId: f.connection.id,
+				embeddedSessionId: session.identity.id,
+			};
+			const read = (embedded: boolean) =>
+				app.fetch(`http://beignet.test/api/pages/${f.page.id}/metadata`, {
+					headers: embedded
+						? { authorization: `HaunterEmbed ${session.token}` }
+						: {},
+				});
+			expect((await read(true)).status).toBe(200);
+			expect(await checkDocumentAccess(grant, f.database.db)).toBe("owner");
+			for (const scopes of [
+				["openid"],
+				[],
+				["haunter:mcp:extra", "prefix:haunter:mcp"],
+			]) {
+				await setScopes(scopes);
+				expect((await read(true)).status).toBe(401);
+				expect((await read(false)).status).toBe(200);
+				await expect(
+					checkDocumentAccess(grant, f.database.db),
+				).rejects.toThrow();
+				expect(await checkDocumentAccess(f.grant, f.database.db)).toBe("owner");
+				await expect(f.handoff()).rejects.toMatchObject({ code: "FORBIDDEN" });
+			}
+			expect(
+				await f.ctx.ports.embeddedEditorSessions.exchange(pending),
+			).toBeNull();
+			expect(
+				await f.database.db.select().from(schema.oauthConsent),
+			).toHaveLength(1);
+		} finally {
+			await app.stop();
+			await f.database.close();
+		}
+	},
+);
 
 test("read-only consent and view connections remain read-only even for a workspace owner", async () => {
 	for (const [access, profile] of [

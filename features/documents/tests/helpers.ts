@@ -17,10 +17,12 @@ import { createTestDatabase } from "@/infra/db/test-database";
 import { appPorts } from "@/infra/port-wiring";
 import type { AppTransactionPorts } from "@/ports";
 
-export async function documentFixture(role = "owner") {
+export async function documentFixture(
+	role = "owner",
+	workspaceId = "document-workspace",
+) {
 	const database = await createTestDatabase();
-	const userId = "document-user",
-		workspaceId = "document-workspace";
+	const userId = "document-user";
 	const now = new Date();
 	await database.db.insert(schema.user).values({
 		id: userId,

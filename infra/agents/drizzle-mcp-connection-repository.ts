@@ -1,6 +1,17 @@
 import "@beignet/core/server-only";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { and, desc, eq, exists, inArray, isNull, lt, or } from "drizzle-orm";
+import {
+	and,
+	desc,
+	eq,
+	exists,
+	inArray,
+	isNull,
+	lt,
+	or,
+	sql,
+	type SQLWrapper,
+} from "drizzle-orm";
 import type {
 	McpConnectionActivityWrite,
 	McpConnectionRepository,
@@ -58,10 +69,20 @@ export function createDrizzleMcpConnectionRepository(
 		}));
 	}
 
-	function hasOAuthConsent(userId: string, clientId: string) {
+	function hasOAuthConsent(
+		userId: string | SQLWrapper,
+		clientId: string | SQLWrapper,
+	) {
 		// The app profile is written immediately before the browser submits
 		// Better Auth's consent form. Requiring both records keeps an interrupted
 		// handoff from activating the connection (or reactivating an old JWT).
+		// SQLite's Better Auth adapter stringifies arrays before Drizzle's JSON
+		// column encodes them. Unwrap that one layer while retaining direct arrays.
+		const decoded = sql`CASE WHEN json_valid(${schema.oauthConsent.scopes})
+			THEN json_extract(${schema.oauthConsent.scopes}, '$') ELSE NULL END`;
+		const scopes = sql`CASE WHEN json_valid(${decoded}) THEN
+			CASE WHEN json_type(${decoded}) = 'array' THEN ${decoded} ELSE '[]' END
+			ELSE '[]' END`;
 		return exists(
 			db
 				.select({ id: schema.oauthConsent.id })
@@ -70,6 +91,8 @@ export function createDrizzleMcpConnectionRepository(
 					and(
 						eq(schema.oauthConsent.userId, userId),
 						eq(schema.oauthConsent.clientId, clientId),
+						sql`EXISTS (SELECT 1 FROM json_each(${scopes}) WHERE type = 'text' AND value = ${"haunter:mcp"})`,
+						sql`NOT EXISTS (SELECT 1 FROM json_each(${scopes}) WHERE type <> 'text')`,
 					),
 				),
 		);
@@ -180,19 +203,9 @@ export function createDrizzleMcpConnectionRepository(
 					and(
 						eq(schema.mcpConnection.userId, userId),
 						eq(schema.mcpConnection.status, "active"),
-						exists(
-							db
-								.select({ id: schema.oauthConsent.id })
-								.from(schema.oauthConsent)
-								.where(
-									and(
-										eq(schema.oauthConsent.userId, schema.mcpConnection.userId),
-										eq(
-											schema.oauthConsent.clientId,
-											schema.mcpConnection.clientId,
-										),
-									),
-								),
+						hasOAuthConsent(
+							schema.mcpConnection.userId,
+							schema.mcpConnection.clientId,
 						),
 					),
 				)

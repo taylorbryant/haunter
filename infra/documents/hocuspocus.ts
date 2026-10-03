@@ -293,12 +293,10 @@ export function createDocumentServer(
 		},
 		async onStoreDocument({ document, documentName, lastContext }) {
 			try {
-				if (lastContext.grant.embeddedSessionId) {
-					const current = await options.authorize(lastContext.grant);
-					if (!canEditContent(current.role))
-						throw new Error("Embedded editor is read-only");
-					Object.assign(lastContext, current);
-				}
+				// Authorization is checked before accepting each embedded message.
+				// Persist those accepted updates even if access changes during debounce:
+				// they are already shared with other editors. Rechecking only lastContext
+				// here cannot undo them and can strand unrelated, authorized web edits.
 				const attribution = attributions.get(documentName);
 				const captured = attribution?.capture();
 				const { state, assignmentNotifications, ...result } =

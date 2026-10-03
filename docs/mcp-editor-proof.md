@@ -99,8 +99,12 @@ still require verification in the target host.
    page body/metadata reads, title/icon changes, view tracking, document sessions and its
    own verification endpoint. Other API operations and other pages are denied.
 6. Collaboration tokens reference the embedded session and stable connection.
-   The worker checks embedded access on each message and before storing a write;
-   ordinary browser collaboration keeps its existing auth path. Reauthorization
+   The worker checks embedded access before accepting each message. Revocation
+   blocks subsequent updates; updates accepted while authorized finish saving,
+   even if access changes during the save debounce. Accepted updates are already
+   shared with other editors, so persistence never rolls back that shared document
+   or depends on the last editor retaining access. Ordinary browser collaboration
+   keeps its existing auth path. Reauthorization
    and disconnect delete existing embedded sessions, preventing old credentials
    from reviving on reconnect.
 
@@ -111,7 +115,11 @@ disposable databases; they do not migrate the production database.
 
 The automated auth tests cover concurrent single-use redemption, invalid proofs,
 expiry, cross-page/API boundaries, read-only credentials, membership downgrade,
-OAuth consent removal, disconnect, reconnection and collaboration scope.
+OAuth consent deletion and scope removal, disconnect, reconnection and collaboration
+scope. Consent checks require exact `haunter:mcp` membership in both direct and
+Better Auth-encoded scope arrays. Mixed web/embedded collaboration tests verify
+that accepted edits save through revocation while later embedded edits are rejected
+and web edits continue saving.
 
 ## Host and deployment requirements
 

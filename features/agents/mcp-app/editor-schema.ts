@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { ContextPageSchema, pageResourceUri } from "./schemas";
+import {
+	ContextPageSchema,
+	pageResourceUri,
+	workspacePathSegment,
+} from "./schemas";
 
 export { COMPANION_URI as EDITOR_URI } from "./schemas";
 export const MAX_SELECTION_CHARACTERS = 12_000;
@@ -49,7 +53,7 @@ export const EditorMessageSchema = z.discriminatedUnion("type", [
 
 export function editorPaths(workspaceId: string, pageId: string) {
 	EditorInputSchema.parse({ workspaceId, pageId });
-	const webPath = `/w/${encodeURIComponent(workspaceId)}/p/${pageId}`;
+	const webPath = `/w/${workspacePathSegment(workspaceId)}/p/${pageId}`;
 	return { webPath, editorPath: `/embed${webPath}` };
 }
 
