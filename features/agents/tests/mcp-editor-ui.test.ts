@@ -50,13 +50,15 @@ test("only the active frame, origin, and nonce can enable the editor or share a 
 	f.emit("haunter/editor/status", { status: "ready" });
 	expect(element<HTMLButtonElement>("use-context").disabled).toBeFalse();
 	f.emit("haunter/editor/selection", { text: "Selected live text." });
-	await waitFor(() => expect(f.contexts).toHaveLength(1));
+	await waitFor(() => expect(f.contexts.at(-1)?.page).toBeDefined());
 	expect(f.calls.filter((call) => call.name === "read_page")).toHaveLength(1);
-	expect(f.contexts[0]?.text).toContain(
+	expect(f.contexts.at(-1)?.text).toContain(
 		"may include changes that have not been saved yet",
 	);
 	element("remove-context").click();
-	await waitFor(() => expect(f.contexts.at(-1)?.text).toBe(""));
+	await waitFor(() => expect(f.contexts.at(-1)?.page).toBeUndefined());
+	expect(f.contexts.at(-1)?.view?.pageId).toBe(destination().pageId);
+	expect(f.contexts.at(-1)?.text).not.toContain("Selected live text.");
 });
 
 test("failed and stale save receipts cannot discard edits; successful switching rotates the nonce", async () => {

@@ -7,7 +7,7 @@ sessions, BlockNote editor, and collaboration worker as the web app.
 The `open_haunter_editor` tool accepts a workspace ID and page ID. It checks the
 MCP connection's current page access before returning an editor destination.
 `open_haunter` opens the workspace browser; both tools share the same UI.
-Its UI resource is `ui://haunter/workspace/v1`. The editor authenticates through
+Its UI resource is `ui://haunter/workspace/v2`. The editor authenticates through
 the approved MCP connection and a dedicated page-scoped session. Existing
 connections open read-only. Writable editing requires both a non-view MCP
 profile and explicit **Allow editing in the embedded editor** consent. Current

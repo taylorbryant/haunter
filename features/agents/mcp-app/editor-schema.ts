@@ -20,6 +20,11 @@ export type EditorOutput = z.infer<typeof EditorOutputSchema>;
 
 export const EditorMessageSchema = z.discriminatedUnion("type", [
 	z.object({
+		type: z.literal("haunter/editor/save-status"),
+		nonce: z.string(),
+		status: z.enum(["unknown", "saved", "unsaved"]),
+	}),
+	z.object({
 		type: z.literal("haunter/editor/metadata"),
 		nonce: z.string(),
 		title: z.string().max(10000),

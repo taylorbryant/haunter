@@ -1,6 +1,10 @@
 import { waitFor } from "@testing-library/react";
 import { createCompanion, type CompanionBridge } from "../mcp-app/controller";
 import type { ContextPage } from "../mcp-app/schemas";
+import type {
+	ContextSnapshot,
+	CurrentPageContext,
+} from "../mcp-app/model-context";
 
 export const template = await Bun.file(
 	new URL("../mcp-app/index.html", import.meta.url),
@@ -35,7 +39,13 @@ export const element = <T extends HTMLElement = HTMLButtonElement>(
 	id: string,
 ) => document.getElementById(id) as T;
 export function fixture(overrides: Partial<CompanionBridge> = {}) {
-	const contexts: Array<{ text: string; page?: ContextPage }> = [];
+	const contexts: Array<
+		ContextSnapshot & {
+			text: string;
+			page?: ContextPage;
+			view?: CurrentPageContext;
+		}
+	> = [];
 	const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
 	const links: string[] = [];
 	const messages: Array<Record<string, unknown>> = [];
@@ -101,8 +111,14 @@ export function fixture(overrides: Partial<CompanionBridge> = {}) {
 	};
 	const companion = createCompanion({
 		canUseContext: () => true,
-		async setContext(text, page) {
-			contexts.push({ text, page });
+		async setContext(snapshot) {
+			contexts.push({
+				...snapshot,
+				text: snapshot.content.map((item) => item.text).join("\n\n"),
+				page: snapshot.structuredContent.haunterPage ?? undefined,
+				view: snapshot.structuredContent.haunterView ?? undefined,
+			});
+			return { updateId: `update-${contexts.length}` };
 		},
 		async openLink(url) {
 			links.push(url);

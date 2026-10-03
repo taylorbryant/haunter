@@ -18,7 +18,10 @@ The panel reads pages with your Haunter permissions.
    open Haunter's page companion.
 4. Select a workspace. Open a recently updated page from **Home**, browse the
    nested **Pages** list, or search for a page. Expand a parent to see its children.
-5. Click **Use as context**, then ask your question in the conversation.
+5. Ask about **this page**. The panel automatically shares the current page's
+   title, workspace name and ID, page ID, source URI, web URL, editor availability,
+   and save status. The assistant can use those references to read the saved page.
+   Click **Use as context** when you want to attach a fixed content snapshot.
 
 The panel adds a saved snapshot with the page title, workspace, source URI,
 update time, and document revision. Adding another page replaces the snapshot
@@ -31,13 +34,28 @@ browser first, then the document; use **Back to pages** to return. The conversat
 context stays attached while you browse. The panel follows the host's light or
 dark mode using Haunter's own theme colors and ghost mark.
 
-Context does not update automatically when you edit a page in Haunter. Click
-**Update context** to read and attach the current saved version. Use **Remove
-context** to clear the panel's attachment. Hosts with OpenAI model-context
-extensions also reflect attachment removal from the host interface.
+Current-page metadata follows navigation, renames, and save-status changes. It
+does not include the page body or your selection. Returning Home, switching
+workspaces, refreshing, or completing the host's close handshake clears the current
+page. Failed navigation keeps the existing page current. Access failures mark the
+editor unavailable; save status can be unknown while loading or reconnecting.
 
-If the host does not support context updates, you can browse and edit permitted pages;
-the attachment button is disabled with an explanation.
+An explicitly attached snapshot does not update automatically when you edit a page. Click
+**Update context** to read and attach the current saved version. Use **Remove
+context** to clear the panel's content attachment while retaining current-page
+awareness. Browsing another page keeps the snapshot attached to its original page.
+Hosts with OpenAI model-context extensions also reflect attachment removal from
+the host interface; subsequent navigation shares metadata without restoring the
+removed content. Context updates apply to future conversation turns and do not
+trigger an assistant response on every click or keystroke.
+
+If the host does not support text context updates, you can browse and edit permitted
+pages, but automatic awareness is unavailable and the attachment button is disabled.
+Hosts with text-only support receive the same page details in text; hosts supporting
+structured context also receive separate `haunterView` and `haunterPage` fields for
+the current view and explicit attachment. Metadata belongs to that panel's host
+context; association with a particular thread depends on the host. A forced panel
+destruction can prevent the close handshake from clearing its current-page metadata.
 
 ## Mention a page
 

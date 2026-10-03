@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 import { draftRegistry } from "@/client/draft-registry";
+import { useDraftRegistry } from "@/client/use-draft-registry";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
 import { CreateDialogProvider } from "@/components/create-dialog-provider";
@@ -160,6 +161,30 @@ export function EmbeddedPageEditor({
 	const [selection, setSelection] = useState("");
 	const [contextAvailable, setContextAvailable] = useState(false);
 	const page = useCachedPage(pageId);
+	const registry = useDraftRegistry();
+	const drafts = registry
+		.entries()
+		.filter(
+			(entry) =>
+				entry.identity.workspaceId === workspaceId &&
+				entry.identity.resourceId === pageId &&
+				entry.identity.resourceType !== "canvas",
+		);
+	const snapshots = drafts.map((entry) => entry.getSnapshot());
+	const saveStatus =
+		!page || !drafts.some((entry) => entry.identity.resourceType === "page")
+			? "unknown"
+			: snapshots.some((draft) => draft.dirty || !draft.locallySaved)
+				? "unsaved"
+				: snapshots.some((draft) => draft.error || draft.validationError)
+					? "unknown"
+					: "saved";
+	useEffect(() => {
+		send(readBridge(), {
+			type: "haunter/editor/save-status",
+			status: saveStatus,
+		});
+	}, [saveStatus]);
 	useEffect(() => {
 		if (page?.title !== undefined)
 			send(readBridge(), {

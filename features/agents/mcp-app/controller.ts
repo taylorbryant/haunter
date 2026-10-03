@@ -1,4 +1,5 @@
 import { createEditorFrame } from "./editor-controller";
+import { createCompanionContext, type ContextSnapshot } from "./model-context";
 import {
 	EditorOutputSchema,
 	type EditorOutput,
@@ -15,11 +16,10 @@ import {
 	CompanionPageSchema,
 	type CompanionPageItem,
 	type CompanionWorkspace,
-	ContextPageSchema,
-	type ContextPage,
 	MAX_CONTEXT_CHARACTERS,
 	PageListSchema,
 	pageContextText,
+	pageResourceUri,
 	WorkspaceListSchema,
 } from "./schemas";
 
@@ -27,7 +27,7 @@ export type CompanionBridge = {
 	callTool(name: string, args: Record<string, unknown>): Promise<unknown>;
 	openLink(url: string): Promise<void>;
 	canUseContext(): boolean;
-	setContext(text: string, page?: ContextPage): Promise<void>;
+	setContext(snapshot: ContextSnapshot): Promise<{ updateId: string } | void>;
 };
 
 export function createCompanion(bridge: CompanionBridge) {
@@ -51,11 +51,11 @@ export function createCompanion(bridge: CompanionBridge) {
 	const expanded = new Set<string>();
 	let workspace: CompanionWorkspace | undefined;
 	let page: EditorOutput | undefined;
-	let attached: ContextPage | undefined;
 	let listVersion = 0;
 	let busy = false;
 	let ready = false;
 	let disposed = false;
+	let closing = false;
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	const message = (id: string, text: string) => {
 		get(id).textContent = text;
@@ -70,6 +70,28 @@ export function createCompanion(bridge: CompanionBridge) {
 			: new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
 					new Date(value),
 				);
+	const context = createCompanionContext({
+		...bridge,
+		changed: updateControls,
+	});
+	function updateCurrentView() {
+		if (closing || disposed) return;
+		const state = editor.context;
+		context.setView(
+			page && workspace && state.page?.editorUrl === page.editorUrl
+				? {
+						workspaceId: page.workspaceId,
+						workspaceName: workspace.name,
+						pageId: page.pageId,
+						title: page.title,
+						url: page.webUrl,
+						source: pageResourceUri(page.workspaceId, page.pageId),
+						editorStatus: state.status,
+						saveStatus: state.saveStatus,
+					}
+				: undefined,
+		);
+	}
 	const editor = createEditorFrame(bridge, {
 		frame: get<HTMLIFrameElement>("real-editor"),
 		status: (text) => message("page-status", text),
@@ -77,8 +99,9 @@ export function createCompanion(bridge: CompanionBridge) {
 			ready = value;
 			updateControls();
 		},
-		metadata(value) {
-			if (!page) return;
+		contextChanged: updateCurrentView,
+		metadata(value, selected) {
+			if (!page || page.editorUrl !== selected.editorUrl) return;
 			page = { ...page, title: value.title };
 			workspacePages = workspacePages.map((item) =>
 				item.pageId === page?.pageId ? { ...item, ...value } : item,
@@ -88,6 +111,7 @@ export function createCompanion(bridge: CompanionBridge) {
 			);
 			renderNavigation();
 			updateBreadcrumbs();
+			updateCurrentView();
 		},
 		async selection(text, selected) {
 			if (
@@ -105,18 +129,17 @@ export function createCompanion(bridge: CompanionBridge) {
 						format: "markdown",
 					}),
 				);
-				const context = {
+				const attachment = {
 					workspaceId: selected.workspaceId,
 					pageId: current.pageId,
 					title: current.title,
 					revision: current.revision,
 					updatedAt: current.updatedAt,
 				};
-				await bridge.setContext(
+				await context.attach(
 					selectionContextText({ ...selected, title: current.title }, text),
-					context,
+					attachment,
 				);
-				attached = context;
 				message(
 					"page-status",
 					"Selection added. Editing does not change this attachment.",
@@ -125,6 +148,7 @@ export function createCompanion(bridge: CompanionBridge) {
 		},
 	});
 	function updateControls() {
+		const attached = context.attachment;
 		shell?.setAttribute("aria-busy", String(busy));
 		const sidebar = shell?.querySelector<HTMLElement>(".sidebar");
 		if (sidebar) sidebar.inert = busy;
@@ -151,24 +175,28 @@ export function createCompanion(bridge: CompanionBridge) {
 			"context-help",
 			!bridge.canUseContext()
 				? "Context attachments are unavailable in this host."
-				: attached
-					? "Editing and browsing do not change this attachment."
-					: page
-						? "Adds the latest saved page to this conversation."
-						: "Choose a page to add it to this conversation.",
+				: context.error
+					? "Page awareness could not sync. Reopen the panel to reconnect."
+					: attached
+						? "Editing and browsing do not change this attachment."
+						: page
+							? "Page details are shared automatically. Use as context to attach its saved content."
+							: "Choose a page to add it to this conversation.",
 		);
 		message(
 			"context-status",
 			attached
 				? `Using “${attached.title || "Untitled page"}” in this conversation.`
-				: "Your pages stay in Haunter.",
+				: page && bridge.canUseContext() && !context.error
+					? `Current page: “${page.title || "Untitled page"}”.`
+					: "No page content attached.",
 		);
 		get("context-tray").dataset.attached = String(!!attached);
 	}
 	// All actions that can replace a frame or context run one at a time. Search
 	// only changes the sidebar, so it never tears down an editor mid-keystroke.
 	async function action(operation: () => Promise<void>) {
-		if (busy || disposed) return;
+		if (busy || closing || disposed) return;
 		busy = true;
 		clearTimeout(searchTimer);
 		updateControls();
@@ -240,6 +268,7 @@ export function createCompanion(bridge: CompanionBridge) {
 	}
 	function showHome() {
 		page = undefined;
+		updateCurrentView();
 		get("empty-preview").hidden = false;
 		shell?.classList.remove("has-page");
 		message("page-status", "");
@@ -255,6 +284,7 @@ export function createCompanion(bridge: CompanionBridge) {
 			expanded.add(ancestor.pageId);
 		renderNavigation();
 		updateBreadcrumbs();
+		updateCurrentView();
 	}
 	async function openPage(pageId: string) {
 		if (!workspace || page?.pageId === pageId) return;
@@ -493,19 +523,19 @@ export function createCompanion(bridge: CompanionBridge) {
 					format: "markdown",
 				}),
 			);
-			const context = {
+			const attachment = {
 				workspaceId: selected.workspaceId,
 				pageId: current.pageId,
 				title: current.title,
 				revision: current.revision,
 				updatedAt: current.updatedAt,
 			};
-			await bridge.setContext(
-				pageContextText(selectedWorkspace, current),
-				context,
-			);
-			attached = context;
 			page = { ...selected, title: current.title };
+			updateCurrentView();
+			await context.attach(
+				pageContextText(selectedWorkspace, current),
+				attachment,
+			);
 			updateBreadcrumbs();
 			message(
 				"page-status",
@@ -519,8 +549,7 @@ export function createCompanion(bridge: CompanionBridge) {
 		"click",
 		() =>
 			void action(async () => {
-				await bridge.setContext("");
-				attached = undefined;
+				await context.removeAttachment();
 			}),
 	);
 	return {
@@ -532,18 +561,27 @@ export function createCompanion(bridge: CompanionBridge) {
 				throw new Error(
 					"Wait for the current action to finish before closing Haunter.",
 				);
-			return editor.prepareClose();
+			closing = true;
+			try {
+				const result = await editor.prepareClose();
+				// Keep an explicit snapshot but stop reporting this page as open.
+				await context.clearView();
+				return result;
+			} catch (error) {
+				closing = false;
+				editor.resume();
+				updateCurrentView();
+				throw error;
+			}
 		},
 		dispose() {
 			disposed = true;
+			context.dispose();
 			clearTimeout(searchTimer);
 			editor.dispose();
 		},
 		syncContext(current: unknown) {
-			if (current === undefined) return;
-			const parsed = ContextPageSchema.safeParse(current);
-			attached = parsed.success ? parsed.data : undefined;
-			updateControls();
+			context.sync(current);
 		},
 		showConnectionError(text: string) {
 			message("connection-status", text);

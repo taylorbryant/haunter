@@ -27,13 +27,15 @@ afterEach(async () => {
 	await uninstallTestDom();
 });
 
-test("both workspace and page entrypoints open the real editor without sharing context", async () => {
+test("workspace navigation shares current-page metadata without attaching content", async () => {
 	f = fixture();
 	await f.companion.initialize({ workspaces });
 	expect(f.frame.hidden).toBeTrue();
 	f.clickPage(pageId);
 	await waitFor(() => expect(f.frame.src).toContain(destination().editorUrl));
-	expect(f.contexts).toEqual([]);
+	await waitFor(() => expect(f.contexts.at(-1)?.view?.pageId).toBe(pageId));
+	expect(f.contexts.at(-1)?.page).toBeUndefined();
+	expect(f.contexts.at(-1)?.text).not.toContain(savedPage.markdown);
 	expect(element("breadcrumbs").textContent).toBe("ProductLaunch plan");
 });
 
@@ -60,9 +62,9 @@ test("explicit saved-page context flushes first and reads the latest saved revis
 		locallySaved: true,
 		saved: true,
 	});
-	await waitFor(() => expect(f.contexts).toHaveLength(1));
-	expect(f.contexts[0]?.text).toContain("Newest saved content.");
-	expect(f.contexts[0]?.page?.revision).toBe("revision-two");
+	await waitFor(() => expect(f.contexts.at(-1)?.page).toBeDefined());
+	expect(f.contexts.at(-1)?.text).toContain("Newest saved content.");
+	expect(f.contexts.at(-1)?.page?.revision).toBe("revision-two");
 	expect(element("breadcrumbs").textContent).toContain("Updated launch");
 	f.companion.syncContext(null);
 	expect(element("remove-context").hidden).toBeTrue();
@@ -75,7 +77,7 @@ test("search and nested navigation preserve the active editor and explicit conte
 		"ProductLaunch planRelease checklist",
 	);
 	element("use-context").click();
-	await waitFor(() => expect(f.contexts).toHaveLength(1));
+	await waitFor(() => expect(f.contexts.at(-1)?.page).toBeDefined());
 	const source = f.frame.src;
 	element<HTMLInputElement>("query").value = "release";
 	element("search-form").dispatchEvent(new Event("submit"));
@@ -88,7 +90,8 @@ test("search and nested navigation preserve the active editor and explicit conte
 	await waitFor(() =>
 		expect(element<HTMLButtonElement>("home").disabled).toBeFalse(),
 	);
-	expect(f.contexts).toHaveLength(1);
+	expect(f.contexts.at(-1)?.view).toBeUndefined();
+	expect(f.contexts.at(-1)?.page?.pageId).toBe(childId);
 	expect(element("context-status").textContent).toContain(child.title);
 	expect(element<HTMLInputElement>("query").value).toBe("");
 	expect(element(`children-${pageId}`).hidden).toBeFalse();
@@ -161,7 +164,7 @@ test("denied reads cannot share cached content or destroy a draft, and missing c
 	await waitFor(() =>
 		expect(element("page-status").textContent).toContain("not active"),
 	);
-	expect(f.contexts).toEqual([]);
+	expect(f.contexts.every((entry) => !entry.page)).toBeTrue();
 	expect(f.frame.src).toBe(source);
 	f.companion.dispose();
 	// A different host can still browse even if it cannot accept context.

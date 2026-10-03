@@ -18,8 +18,12 @@ export function createEditorFrame(
 		frame: HTMLIFrameElement;
 		status(text: string): void;
 		ready(value: boolean): void;
+		contextChanged(): void;
 		selection(text: string, page: EditorOutput): Promise<void>;
-		metadata(value: { title: string; icon: string | null }): void;
+		metadata(
+			value: { title: string; icon: string | null },
+			page: EditorOutput,
+		): void;
 	},
 ) {
 	const { frame } = options;
@@ -27,6 +31,8 @@ export function createEditorFrame(
 	let nonce = "";
 	let mounted = false;
 	let ready = false;
+	let status: "opening" | "ready" | "unavailable" = "opening";
+	let saveStatus: "unknown" | "saved" | "unsaved" = "unknown";
 	let theme: "light" | "dark" = "light";
 	let loadingTimer: ReturnType<typeof setTimeout> | undefined;
 	let flush:
@@ -91,7 +97,10 @@ export function createEditorFrame(
 		page = undefined;
 		mounted = false;
 		ready = false;
+		status = "opening";
+		saveStatus = "unknown";
 		options.ready(false);
+		options.contextChanged();
 	}
 	async function initialize(input: unknown) {
 		const next = validateEditorOutput(input);
@@ -153,6 +162,8 @@ export function createEditorFrame(
 		} else if (message.type === "haunter/editor/status") {
 			clearTimeout(loadingTimer);
 			ready = message.status === "ready";
+			status = ready ? "ready" : "unavailable";
+			if (!ready) saveStatus = "unknown";
 			mounted ||= ready;
 			options.status(
 				ready
@@ -167,6 +178,7 @@ export function createEditorFrame(
 				available: bridge.canUseContext(),
 			});
 			options.ready(ready);
+			options.contextChanged();
 		} else if (message.type === "haunter/editor/flushed") {
 			if (flush?.id === message.requestId) {
 				clearTimeout(flush.timer);
@@ -174,7 +186,10 @@ export function createEditorFrame(
 				flush = undefined;
 			}
 		} else if (message.type === "haunter/editor/metadata") {
-			options.metadata(message);
+			options.metadata(message, page);
+		} else if (message.type === "haunter/editor/save-status") {
+			saveStatus = status === "unavailable" ? "unknown" : message.status;
+			options.contextChanged();
 		} else if (message.type === "haunter/editor/open-web") {
 			await bridge.openLink(page.webUrl);
 		} else if (message.type === "haunter/editor/selection" && ready && !flush) {
@@ -188,6 +203,9 @@ export function createEditorFrame(
 	};
 	window.addEventListener("message", listener);
 	return {
+		get context() {
+			return { page, status, saveStatus };
+		},
 		initialize,
 		save,
 		prepareClose,

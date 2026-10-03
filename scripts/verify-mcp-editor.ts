@@ -45,6 +45,24 @@ try {
 		secondWorkspaceId: string;
 	};
 	const page = await context.newPage();
+	async function expectCurrentView(expected: Record<string, string> | null) {
+		await page.waitForFunction((expected) => {
+			const text = document.getElementById("context")?.textContent ?? "";
+			if (expected === null)
+				return text.startsWith("No Haunter page is currently open");
+			try {
+				const current = JSON.parse(text.split("\n")[1] ?? "null");
+				return (
+					current &&
+					Object.entries(expected).every(
+						([key, value]) => current[key] === value,
+					)
+				);
+			} catch {
+				return false;
+			}
+		}, expected);
+	}
 	await page.goto("http://localhost:8797/");
 	assert.equal((await context.cookies()).length, 0);
 	const app = page.frameLocator("#app");
@@ -54,9 +72,24 @@ try {
 	console.log(
 		"PASS: the real editor loads under a different top-level site with no browser cookies",
 	);
-	assert.equal(
-		await page.locator("#context").textContent(),
-		"No context attached.",
+	await expectCurrentView({
+		pageId: fixture.pageId,
+		editorStatus: "ready",
+		saveStatus: "saved",
+	});
+	assert.ok(
+		!(await page.locator("#context").textContent())?.includes(
+			"Edit this paragraph",
+		),
+	);
+	const renamedTitle = `Current page proof ${Date.now()}`;
+	await editorFrame
+		.getByRole("textbox", { name: "Page title", exact: true })
+		.fill(renamedTitle);
+	await body.click();
+	await expectCurrentView({ title: renamedTitle, saveStatus: "saved" });
+	console.log(
+		"PASS: opening and renaming share page identity and save status without attaching page content",
 	);
 	// Changing workspaces must authorize the new scope and load its page.
 	await app
@@ -71,6 +104,10 @@ try {
 			exact: true,
 		})
 		.waitFor();
+	await expectCurrentView({
+		workspaceId: fixture.secondWorkspaceId,
+		title: "Team notes",
+	});
 	await app
 		.getByRole("combobox", { name: "Workspace", exact: true })
 		.selectOption("document-workspace");
@@ -87,6 +124,7 @@ try {
 	collaborationOffline = true;
 	await Promise.all([...sockets].map((socket) => socket.close()));
 	await append(body, `Offline draft ${stamp}.`);
+	await expectCurrentView({ pageId: fixture.pageId, saveStatus: "unsaved" });
 	const beforeFailedSwitch = await app
 		.locator("#real-editor")
 		.getAttribute("src");
@@ -112,6 +150,7 @@ try {
 	await editorFrame
 		.getByText("Saved in this browser", { exact: true })
 		.waitFor({ state: "hidden" });
+	await expectCurrentView({ pageId: fixture.pageId, saveStatus: "saved" });
 	console.log(
 		"PASS: an interrupted connection blocks navigation and retains the editable draft",
 	);
@@ -139,6 +178,13 @@ try {
 			exact: true,
 		})
 		.waitFor();
+	await expectCurrentView({
+		pageId: fixture.secondPageId,
+		title: "Release checklist",
+	});
+	assert.ok(
+		(await page.locator("#context").textContent())?.includes(panelText),
+	);
 
 	await editorFrame
 		.getByRole("button", { name: "Canvas · Open in Haunter", exact: true })
@@ -178,6 +224,10 @@ try {
 		"PASS: unsupported integrations use web links and code-dialog edits survive navigation",
 	);
 	await app.getByRole("button", { name: "Home", exact: true }).click();
+	await expectCurrentView(null);
+	assert.ok(
+		(await page.locator("#context").textContent())?.includes(panelText),
+	);
 	await app.locator(`.page-link[data-page-id="${fixture.pageId}"]`).click();
 	await body.getByText(panelText, { exact: true }).waitFor();
 	console.log(

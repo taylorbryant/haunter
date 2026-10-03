@@ -22,15 +22,15 @@ const companion = createCompanion({
 	},
 	canUseContext: () =>
 		app.getHostCapabilities()?.updateModelContext?.text != null,
-	async setContext(text, page) {
+	async setContext(snapshot) {
 		const params = {
-			content: text ? [{ type: "text" as const, text }] : [],
+			content: snapshot.content,
 			...(app.getHostCapabilities()?.updateModelContext?.structuredContent !=
 			null
-				? { structuredContent: page ? { haunterPage: page } : {} }
+				? { structuredContent: snapshot.structuredContent }
 				: {}),
 		};
-		if (extensions.modelContext) await extensions.modelContext.update(params);
+		if (extensions.modelContext) return extensions.modelContext.update(params);
 		else await app.updateModelContext(params);
 	},
 });
@@ -57,8 +57,7 @@ function applyHostContext() {
 		);
 	else document.documentElement.style.removeProperty("--haunter-host-height");
 	const current = extensions.modelContext?.getCurrent();
-	if (current !== undefined)
-		companion.syncContext(current?.structuredContent?.haunterPage ?? null);
+	if (current !== undefined) companion.syncContext(current);
 }
 
 let initialized = false;
