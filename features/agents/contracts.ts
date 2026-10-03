@@ -18,6 +18,10 @@ import {
 	PendingAgentSchema,
 } from "@/features/agents/schemas";
 import { errors } from "@/features/shared/errors";
+import {
+	EmbeddedEditorExchangeSchema,
+	EmbeddedEditorIdentitySchema,
+} from "./embedded-editor-session";
 import { ErrorResponseSchema } from "@/features/shared/schemas";
 
 const agents = defineContractGroup()
@@ -103,3 +107,20 @@ export const getPendingAgent = agents
 	.responses({
 		200: PendingAgentSchema,
 	});
+
+const sessions = defineContractGroup()
+	.namespace("embeddedEditor")
+	.errors({ Unauthorized: errors.Unauthorized, Forbidden: errors.Forbidden });
+export const exchangeEmbeddedEditor = sessions
+	.post("/api/embedded-editor/exchange")
+	.body(EmbeddedEditorExchangeSchema)
+	.meta({ rateLimit: { max: 30, windowSec: 60, scope: "ip" } })
+	.responses({
+		200: z.object({
+			token: z.string(),
+			identity: EmbeddedEditorIdentitySchema,
+		}),
+	});
+export const verifyEmbeddedEditor = sessions
+	.get("/api/embedded-editor/session")
+	.responses({ 200: EmbeddedEditorIdentitySchema });

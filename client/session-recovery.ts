@@ -199,6 +199,15 @@ export function installSessionRecovery(recovery: SessionRecovery) {
 	};
 }
 
+let sessionCredential: (() => Promise<string>) | undefined;
+/** The embedded browser realm uses a credential only for this app's API. */
+export function installSessionCredential(getToken: () => Promise<string>) {
+	sessionCredential = getToken;
+	return () => {
+		if (sessionCredential === getToken) sessionCredential = undefined;
+	};
+}
+
 /** Preserve native responses and never replay a write at the transport layer. */
 export const sessionFetch: typeof fetch = Object.assign(
 	async (
@@ -213,7 +222,26 @@ export const sessionFetch: typeof fetch = Object.assign(
 				{ status: 401 },
 			);
 		}
-		const response = await fetch(input, init);
+		let requestInit = init;
+		if (sessionCredential) {
+			const url = new URL(
+				input instanceof Request ? input.url : String(input),
+				window.location.origin,
+			);
+			if (
+				url.origin !== window.location.origin ||
+				!url.pathname.startsWith("/api/")
+			)
+				throw new Error(
+					"Embedded credentials may only be used with Haunter's API.",
+				);
+			const headers = new Headers(
+				init?.headers ?? (input instanceof Request ? input.headers : undefined),
+			);
+			headers.set("Authorization", `HaunterEmbed ${await sessionCredential()}`);
+			requestInit = { ...init, credentials: "omit", headers };
+		}
+		const response = await fetch(input, requestInit);
 		if (recovery && epoch !== undefined) {
 			if (response.status === 401) recovery.rejectRequest(epoch);
 			// A resource-specific 403 is not an expired session. Verify membership

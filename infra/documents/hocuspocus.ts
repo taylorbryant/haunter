@@ -220,7 +220,10 @@ export function createDocumentServer(
 				throw new Error("Collaboration worker unavailable");
 			if (context.grant.expiresAt <= Date.now())
 				throw new Error("Document session expired");
-			if (Date.now() - context.checkedAt >= 5000) {
+			if (
+				context.grant.embeddedSessionId ||
+				Date.now() - context.checkedAt >= 5000
+			) {
 				const next = await options.authorize(context.grant);
 				Object.assign(context, next, { checkedAt: Date.now() });
 				connection.readOnly = !canEditContent(next.role);
@@ -290,6 +293,12 @@ export function createDocumentServer(
 		},
 		async onStoreDocument({ document, documentName, lastContext }) {
 			try {
+				if (lastContext.grant.embeddedSessionId) {
+					const current = await options.authorize(lastContext.grant);
+					if (!canEditContent(current.role))
+						throw new Error("Embedded editor is read-only");
+					Object.assign(lastContext, current);
+				}
 				const attribution = attributions.get(documentName);
 				const captured = attribution?.capture();
 				const { state, assignmentNotifications, ...result } =

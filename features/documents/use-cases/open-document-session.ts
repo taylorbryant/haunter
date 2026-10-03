@@ -15,7 +15,13 @@ export const openDocumentSessionUseCase = useCase
 		const page = await ctx.ports.pages.findMetaById(scope, input.id);
 		if (!page || page.deletedAt !== null) throw appError("PageNotFound");
 		await ctx.gate.authorize("pages.read", page);
-		const sessionId = ctx.auth?.session?.id;
+		if (
+			ctx.embeddedEditor &&
+			(ctx.embeddedEditor.pageId !== page.id ||
+				ctx.embeddedEditor.workspaceId !== page.workspaceId)
+		)
+			throw appError("Forbidden");
+		const sessionId = ctx.embeddedEditor?.connectionId ?? ctx.auth?.session?.id;
 		if (!sessionId) throw appError("Unauthorized");
 		const generation = await ctx.ports.documents.getGeneration(scope, page.id);
 		if (generation === null)
@@ -27,6 +33,9 @@ export const openDocumentSessionUseCase = useCase
 			...ctx.ports.documentSessions.issue({
 				userId: user.id,
 				sessionId,
+				...(ctx.embeddedEditor
+					? { embeddedSessionId: ctx.embeddedEditor.id }
+					: {}),
 				workspaceId: page.workspaceId,
 				pageId: page.id,
 				generation,

@@ -453,6 +453,11 @@ export const mcpConnection = sqliteTable(
 		permissionProfile: text("permission_profile", {
 			enum: ["view", "edit", "full"],
 		}).notNull(),
+		embeddedEditorAccess: text("embedded_editor_access", {
+			enum: ["view", "edit"],
+		})
+			.notNull()
+			.default("view"),
 		status: text("status", {
 			enum: ["active", "revoked"],
 		})
@@ -471,6 +476,39 @@ export const mcpConnection = sqliteTable(
 			table.userId,
 			table.status,
 		),
+	}),
+);
+
+// A public handoff ID is bound to an iframe-held PKCE verifier. Credentials
+// are random, stored only as hashes, and expire independently of web sessions.
+export const embeddedEditorSession = sqliteTable(
+	"embedded_editor_session",
+	{
+		id: text("id").primaryKey(),
+		connectionId: text("connection_id")
+			.notNull()
+			.references(() => mcpConnection.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		pageId: text("page_id").notNull(),
+		challenge: text("challenge").notNull(),
+		writable: integer("writable", { mode: "boolean" }).notNull(),
+		credentialHash: text("credential_hash"),
+		redeemBy: integer("redeem_by", { mode: "timestamp_ms" }).notNull(),
+		expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+	},
+	(table) => ({
+		credentialIdx: uniqueIndex("embedded_editor_credential_idx").on(
+			table.credentialHash,
+		),
+		connectionIdx: index("embedded_editor_connection_idx").on(
+			table.connectionId,
+		),
+		expiryIdx: index("embedded_editor_expiry_idx").on(table.expiresAt),
 	}),
 );
 

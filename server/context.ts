@@ -6,6 +6,7 @@ import {
 	createUserActor,
 } from "@beignet/core/ports";
 import { defineServerContext } from "@beignet/core/server";
+import { appError } from "@/features/shared/errors";
 import type { TraceContext } from "@beignet/core/tracing";
 import type { AppContext, AppRuntimePorts } from "@/app-context";
 import { resolveRequestTenant, resolveServiceTenant } from "@/lib/tenant";
@@ -30,18 +31,34 @@ export type AppServiceContextInput =
 export const appContext = defineServerContext<AppContext, AppRuntimePorts>()({
 	gate: (ports) => ports.gate,
 	request: async ({ req, ports, requestId, trace }) => {
-		const auth = await ports.auth.getSession(req);
+		const credential = req.headers.get("authorization");
+		const embeddedCredential = credential?.match(
+			/^HaunterEmbed ([A-Za-z0-9_-]{43})$/i,
+		);
+		const embedded = embeddedCredential
+			? await ports.embeddedEditorSessions.authenticate(embeddedCredential[1])
+			: null;
+		if (credential?.toLowerCase().startsWith("haunterembed") && !embedded)
+			throw appError("Unauthorized");
+		const auth = embedded
+			? {
+					user: { ...embedded.user, accessStatus: ACCESS_STATUS_APPROVED },
+					session: { activeOrganizationId: embedded.workspaceId },
+				}
+			: await ports.auth.getSession(req);
 		const requestedTenant = resolveRequestTenant({ auth });
 		// The active organization is only a selector. A current Better Auth member
 		// row is the proof that lets request code receive tenant-scoped ports.
 		const role =
-			auth && requestedTenant
+			embedded?.role ??
+			(auth && requestedTenant
 				? await ports.members.findRole(requestedTenant.id, auth.user.id)
-				: null;
+				: null);
 		const tenant = role ? requestedTenant : undefined;
 
 		return {
 			requestId,
+			...(embedded ? { embeddedEditor: embedded } : {}),
 			actor: auth
 				? createUserActor(auth.user.id, { displayName: auth.user.name })
 				: createAnonymousActor(),

@@ -1,3 +1,8 @@
+import { exchangeEmbeddedEditor, verifyEmbeddedEditor } from "./contracts";
+import {
+	exchangeEmbeddedEditorUseCase,
+	verifyEmbeddedEditorUseCase,
+} from "./use-cases/embedded-editor-session";
 import "@beignet/core/server-only";
 import {
 	authorizeMcpConnection,
@@ -37,5 +42,16 @@ export const agentRoutes = defineRouteGroup({
 			contract: disconnectMcpConnection,
 			useCase: disconnectMcpConnectionUseCase,
 		},
+	],
+});
+
+export const embeddedEditorRoutes = defineRouteGroup({
+	name: "embeddedEditor",
+	routes: [
+		{
+			contract: exchangeEmbeddedEditor,
+			useCase: exchangeEmbeddedEditorUseCase,
+		},
+		{ contract: verifyEmbeddedEditor, useCase: verifyEmbeddedEditorUseCase },
 	],
 });

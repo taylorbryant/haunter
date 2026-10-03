@@ -37,26 +37,26 @@ import {
 	PenToolIcon,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useTheme } from "next-themes";
-import {
-	observeEditorPerformance,
-	type EditorMeasurement,
-} from "@/features/pages/client/editor-performance";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiClient } from "@/client";
 import { downloadRecoveryDrafts } from "@/client/draft-export";
 import { useDurableDraftStorage } from "@/client/durable-draft-storage-provider";
 import { reportUserError } from "@/client/error-feedback";
 import { localDraftKey } from "@/client/local-drafts";
-import { DocumentRecoveryNotice } from "@/features/documents/components/document-recovery-notice";
-import { usePageDocument } from "@/features/documents/client/use-page-document";
-import type { PageDocumentSession } from "@/features/documents/client/session";
-import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
-import { useLiveContext } from "@/features/live-context/client/provider";
-import { observePageContext } from "@/features/pages/client/live-context";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
+import type { PageDocumentSession } from "@/features/documents/client/session";
+import { usePageDocument } from "@/features/documents/client/use-page-document";
+import { DocumentRecoveryNotice } from "@/features/documents/components/document-recovery-notice";
+import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
+import { useLiveContext } from "@/features/live-context/client/provider";
+import {
+	type EditorMeasurement,
+	observeEditorPerformance,
+} from "@/features/pages/client/editor-performance";
+import { observePageContext } from "@/features/pages/client/live-context";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import {
 	getPageQueryOptions,
@@ -81,11 +81,11 @@ import {
 	type OpenCodeBlockDialogDetail,
 } from "./code-block-dialog-event";
 import { CodeEditDialog } from "./code-edit-dialog";
-import { registerTaskCreator } from "./task-block";
 import { useSyncEditorCodeTheme } from "./code-theme";
 import { removeBlockFromSideMenu } from "./remove-block-from-side-menu";
+import { useEmbeddedEditor } from "./embedded-editor-context";
 import { editorSchema, syntaxHighlightingExtension } from "./schema";
-import { TaskBlockCurrentUserContext } from "./task-block";
+import { registerTaskCreator, TaskBlockCurrentUserContext } from "./task-block";
 
 type HaunterBlockNoteEditor = BlockNoteEditor<
 	(typeof editorSchema)["blockSchema"],
@@ -170,10 +170,13 @@ function StableSideMenu() {
 }
 
 function FormattingToolbarWithoutColors() {
+	const embedded = useEmbeddedEditor();
 	return (
 		<FormattingToolbar>
 			{getFormattingToolbarItems().filter(
-				(item) => item.key !== "colorStyleButton",
+				(item) =>
+					item.key !== "colorStyleButton" &&
+					(!embedded || item.key !== "replaceFileButton"),
 			)}
 		</FormattingToolbar>
 	);
@@ -197,6 +200,7 @@ function getSlashMenuItems(
 		pageId: string;
 		workspaceId: string;
 		currentUserId: string | null;
+		embedded: boolean;
 		onSubpageCreated: (created: PageMeta) => void;
 	},
 ) {
@@ -283,17 +287,22 @@ function getSlashMenuItems(
 
 	// Splice the custom items in right after the last "Basic blocks" entry so
 	// the menu keeps one contiguous group (duplicate group headers break keys).
-	const items = [...getDefaultReactSlashMenuItems(editor)];
+	const items = getDefaultReactSlashMenuItems(editor).filter(
+		(item) =>
+			!page.embedded ||
+			!["image", "video", "audio", "file"].includes(
+				"key" in item ? String(item.key) : "",
+			),
+	);
 	const lastBasic = items.findLastIndex(
 		(item) => "group" in item && item.group === "Basic blocks",
 	);
 	items.splice(
 		lastBasic === -1 ? items.length : lastBasic + 1,
 		0,
-		pageItem,
-		taskItem,
-		calloutItem,
-		canvasItem,
+		...(page.embedded
+			? [calloutItem]
+			: [pageItem, taskItem, calloutItem, canvasItem]),
 	);
 
 	return Promise.resolve(filterSuggestionItems(items, query));
@@ -504,7 +513,10 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 	initialContent,
 	collaboration,
 }: MountedHaunterEditorProps) {
-	const { resolvedTheme } = useTheme();
+	const embedded = !!useEmbeddedEditor();
+	const [fileNotice, setFileNotice] = useState("");
+	const { resolvedTheme, forcedTheme } = useTheme();
+	const activeTheme = forcedTheme ?? resolvedTheme;
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const queryClient = useQueryClient();
@@ -525,14 +537,16 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 	const editorOptions = {
 		schema: editorSchema,
 		extensions: [syntaxHighlightingExtension],
-		uploadFile: async (file: File) => {
-			try {
-				return await uploadPageImage(pageId, file);
-			} catch (error) {
-				reportUserError(error, "The image could not be uploaded.");
-				throw error;
-			}
-		},
+		uploadFile: embedded
+			? undefined
+			: async (file: File) => {
+					try {
+						return await uploadPageImage(pageId, file);
+					} catch (error) {
+						reportUserError(error, "The image could not be uploaded.");
+						throw error;
+					}
+				},
 		initialContent:
 			!collaboration && editorInitialContent.length
 				? // The server stores the document verbatim; the editor owns its shape.
@@ -554,7 +568,7 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 				})
 			: editorOptions,
 	);
-	useSyncEditorCodeTheme(editor, resolvedTheme);
+	useSyncEditorCodeTheme(editor, activeTheme);
 	const liveContext = useLiveContext();
 	useEffect(() => {
 		if (!liveContext) return;
@@ -632,16 +646,37 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 		// hidden below. Driven from JS (not CSS) to share one breakpoint.
 		<div
 			ref={editorElement}
+			data-haunter-editor-page={pageId}
+			onPasteCapture={(event) => {
+				if (embedded && event.clipboardData.files.length) {
+					event.preventDefault();
+					event.stopPropagation();
+					setFileNotice("Open this page in Haunter to upload files.");
+				}
+			}}
+			onDropCapture={(event) => {
+				if (embedded && event.dataTransfer.files.length) {
+					event.preventDefault();
+					event.stopPropagation();
+					setFileNotice("Open this page in Haunter to upload files.");
+				}
+			}}
 			className={cn("haunter-editor", isMobile && "editor-flush")}
 		>
+			{fileNotice ? (
+				<p role="status" className="text-sm text-muted-foreground">
+					{fileNotice}
+				</p>
+			) : null}
 			<TaskBlockCurrentUserContext.Provider value={currentUserId}>
 				<BlockNoteView
 					editor={editor}
 					editable={editable}
-					theme={getResolvedThemeColorScheme(resolvedTheme)}
+					theme={getResolvedThemeColorScheme(activeTheme)}
 					formattingToolbar={false}
 					slashMenu={false}
 					sideMenu={false}
+					filePanel={embedded ? false : undefined}
 				>
 					<FormattingToolbarController
 						formattingToolbar={FormattingToolbarWithoutColors}
@@ -653,6 +688,7 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 								pageId,
 								workspaceId,
 								currentUserId,
+								embedded,
 								// Open the new subpage; the unmount flush persists the
 								// parent document (with the link block) on the way out.
 								onSubpageCreated: async (created) => {
@@ -663,35 +699,37 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 							})
 						}
 					/>
-					<SuggestionMenuController
-						triggerCharacter="@"
-						getItems={async (query) => {
-							// Cache-first: the sidebar keeps this list warm.
-							const pages = await queryClient.ensureQueryData(
-								listPagesQueryOptions(workspaceId),
-							);
-							const needle = query.toLowerCase();
-							return pages.items
-								.filter((item) => item.id !== pageId)
-								.filter((item) =>
-									(item.title || "Untitled").toLowerCase().includes(needle),
-								)
-								.slice(0, 10)
-								.map((item) => ({
-									title: item.title || "Untitled",
-									icon: <FileTextIcon className="size-4.5" />,
-									onItemClick: () => {
-										editor.insertInlineContent([
-											{
-												type: "mention",
-												props: { pageId: item.id, workspaceId },
-											},
-											" ",
-										]);
-									},
-								}));
-						}}
-					/>
+					{!embedded ? (
+						<SuggestionMenuController
+							triggerCharacter="@"
+							getItems={async (query) => {
+								// Cache-first: the sidebar keeps this list warm.
+								const pages = await queryClient.ensureQueryData(
+									listPagesQueryOptions(workspaceId),
+								);
+								const needle = query.toLowerCase();
+								return pages.items
+									.filter((item) => item.id !== pageId)
+									.filter((item) =>
+										(item.title || "Untitled").toLowerCase().includes(needle),
+									)
+									.slice(0, 10)
+									.map((item) => ({
+										title: item.title || "Untitled",
+										icon: <FileTextIcon className="size-4.5" />,
+										onItemClick: () => {
+											editor.insertInlineContent([
+												{
+													type: "mention",
+													props: { pageId: item.id, workspaceId },
+												},
+												" ",
+											]);
+										},
+									}));
+							}}
+						/>
+					) : null}
 					{/* The +/drag block controls are hidden on mobile: they're hard
 				    to use on touch and their gutter is reclaimed for content. */}
 					{!isMobile ? <SideMenuController sideMenu={StableSideMenu} /> : null}

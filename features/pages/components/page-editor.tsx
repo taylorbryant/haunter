@@ -31,7 +31,13 @@ const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
 	),
 });
 
-export function PageEditor({ pageId }: { pageId: string }) {
+export function PageEditor({
+	pageId,
+	embedded = false,
+}: {
+	pageId: string;
+	embedded?: boolean;
+}) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: each page navigation starts a new measurement
 	const measurement = useMemo(() => beginEditorMeasurement(), [pageId]);
 	const queryClient = useQueryClient();
@@ -166,7 +172,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 			/>
 			{/* Same 54px inset as the editor content column. */}
 			<div className="px-0 md:px-[54px]">
-				<Backlinks pageId={pageId} />
+				{embedded ? null : <Backlinks pageId={pageId} />}
 			</div>
 		</div>
 	);

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEmbeddedEditor } from "./embedded-editor-context";
 import { createExtension } from "@blocknote/core";
 import {
 	createReactBlockSpec,
@@ -56,6 +57,7 @@ function TaskBlockView({
 }: ReactCustomBlockRenderProps<typeof taskBlockConfig>) {
 	const { checked, due, dueTime, reminder, assignee } = block.props;
 	const currentUserId = useContext(TaskBlockCurrentUserContext);
+	const embedded = useEmbeddedEditor();
 	const deviceTime = useDeviceTimeOrLocalFallback();
 	const shownAssignee =
 		assignee === AUTO_TASK_ASSIGNEE ? (currentUserId ?? "") : assignee;
@@ -162,13 +164,19 @@ function TaskBlockView({
 				// on the right of the title.
 				className="flex w-full shrink-0 items-center gap-1 pl-6 sm:ml-auto sm:w-auto sm:pl-0"
 			>
-				<AssigneePicker
-					value={shownAssignee === "" ? null : shownAssignee}
-					label={shownAssignee === "" ? null : "Assigned"}
-					disabled={readOnly}
-					onChange={(next) => update({ assignee: next ?? "" })}
-				/>
-				{readOnly && due === "" ? null : readOnly ? (
+				{embedded ? (
+					shownAssignee ? (
+						<span className="text-sm text-muted-foreground">Assigned</span>
+					) : null
+				) : (
+					<AssigneePicker
+						value={shownAssignee === "" ? null : shownAssignee}
+						label={shownAssignee === "" ? null : "Assigned"}
+						disabled={readOnly}
+						onChange={(next) => update({ assignee: next ?? "" })}
+					/>
+				)}
+				{(readOnly || embedded) && due === "" ? null : readOnly || embedded ? (
 					<span
 						className={`flex items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs ${
 							overdue

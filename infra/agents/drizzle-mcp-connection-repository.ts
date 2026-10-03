@@ -19,6 +19,7 @@ export function createDrizzleMcpConnectionRepository(
 		clientId: schema.mcpConnection.clientId,
 		clientName: schema.oauthClient.name,
 		permissionProfile: schema.mcpConnection.permissionProfile,
+		embeddedEditorAccess: schema.mcpConnection.embeddedEditorAccess,
 		status: schema.mcpConnection.status,
 		lastUsedAt: schema.mcpConnection.lastUsedAt,
 		createdAt: schema.mcpConnection.createdAt,
@@ -119,6 +120,7 @@ export function createDrizzleMcpConnectionRepository(
 					userId: input.userId,
 					clientId: input.clientId,
 					permissionProfile: input.permissionProfile,
+					embeddedEditorAccess: input.embeddedEditorAccess ?? "view",
 					status: "active",
 					createdAt: input.now,
 					updatedAt: input.now,
@@ -127,6 +129,7 @@ export function createDrizzleMcpConnectionRepository(
 					target: [schema.mcpConnection.userId, schema.mcpConnection.clientId],
 					set: {
 						permissionProfile: input.permissionProfile,
+						embeddedEditorAccess: input.embeddedEditorAccess ?? "view",
 						status: "active",
 						updatedAt: input.now,
 					},
@@ -134,6 +137,10 @@ export function createDrizzleMcpConnectionRepository(
 				.returning({ id: schema.mcpConnection.id });
 
 			if (!connection) return null;
+			// New consent cannot revive a credential issued under older consent.
+			await db
+				.delete(schema.embeddedEditorSession)
+				.where(eq(schema.embeddedEditorSession.connectionId, connection.id));
 			await db
 				.delete(schema.mcpConnectionWorkspace)
 				.where(eq(schema.mcpConnectionWorkspace.connectionId, connection.id));
@@ -206,6 +213,9 @@ export function createDrizzleMcpConnectionRepository(
 				)
 				.limit(1);
 			if (!connection) return false;
+			await db
+				.delete(schema.embeddedEditorSession)
+				.where(eq(schema.embeddedEditorSession.connectionId, connectionId));
 
 			await db
 				.update(schema.mcpConnection)

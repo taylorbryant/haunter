@@ -45,6 +45,6 @@ export const config = {
 		// PWA assets (manifest, service worker, generated icons) must stay
 		// publicly fetchable — the browser requests them without a session, and a
 		// redirect to /sign-in would break installability.
-		"/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons|icon.svg|apple-icon|sign-in|sign-up|accept-invite|share|changelog|mcp|\\.well-known).*)",
+		"/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons|icon.svg|apple-icon|sign-in|sign-up|accept-invite|share|changelog|mcp|embed(?:/|$)|\\.well-known).*)",
 	],
 };

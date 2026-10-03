@@ -1,3 +1,4 @@
+import { createEmbeddedEditorSessionRepository } from "@/infra/agents/embedded-editor-session-repository";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import type { DocumentGrant } from "@/features/documents/ports";
@@ -12,6 +13,23 @@ export async function checkDocumentAccess(
 ): Promise<string> {
 	if (grant.expiresAt <= Date.now())
 		throw new Error("Document session expired");
+	if (grant.embeddedSessionId) {
+		if (grant.kind === "canvas")
+			throw new Error("Invalid embedded document session");
+		const identity = await createEmbeddedEditorSessionRepository(db).findActive(
+			grant.embeddedSessionId,
+		);
+		if (
+			!identity ||
+			identity.connectionId !== grant.sessionId ||
+			identity.user.id !== grant.userId ||
+			identity.workspaceId !== grant.workspaceId ||
+			identity.pageId !== grant.pageId
+		)
+			throw new Error("Embedded document access is no longer available");
+		await checkGeneration(grant, db);
+		return identity.role;
+	}
 	if (grant.kind === "canvas") return checkCanvasAccess(grant, db);
 	const [row] = await db
 		.select({ role: schema.member.role })
@@ -41,18 +59,7 @@ export async function checkDocumentAccess(
 			),
 		);
 	if (!row) throw new Error("Document access is no longer available");
-	const [document] = await db
-		.select({ generation: schema.collaborativeDocuments.generation })
-		.from(schema.collaborativeDocuments)
-		.where(
-			and(
-				eq(schema.collaborativeDocuments.pageId, grant.pageId),
-				eq(schema.collaborativeDocuments.workspaceId, grant.workspaceId),
-			),
-		);
-	if (!document) throw new Error("Page body has not been migrated");
-	if (document.generation !== grant.generation)
-		throw new DocumentRestoredError(document.generation);
+	await checkGeneration(grant, db);
 	return row.role;
 }
 
@@ -109,4 +116,22 @@ async function checkCanvasAccess(
 		if (!page) throw new Error("Canvas page is unavailable");
 	}
 	return row.role;
+}
+
+async function checkGeneration(
+	grant: DocumentGrant,
+	db: LibSQLDatabase<typeof schema>,
+) {
+	const [document] = await db
+		.select({ generation: schema.collaborativeDocuments.generation })
+		.from(schema.collaborativeDocuments)
+		.where(
+			and(
+				eq(schema.collaborativeDocuments.pageId, grant.pageId),
+				eq(schema.collaborativeDocuments.workspaceId, grant.workspaceId),
+			),
+		);
+	if (!document) throw new Error("Page body has not been migrated");
+	if (document.generation !== grant.generation)
+		throw new DocumentRestoredError(document.generation);
 }

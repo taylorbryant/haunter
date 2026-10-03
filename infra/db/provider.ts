@@ -37,6 +37,7 @@ export const appDatabaseProvider = createProvider<{
 			| "idempotency"
 			| "members"
 			| "mcpOAuthClients"
+			| "embeddedEditorSessions"
 			| "notificationInbox"
 			| "pageLinks"
 			| "pages"

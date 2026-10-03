@@ -39,6 +39,39 @@ const editorSingletonPackages = [
 
 /** @type {import("next").NextConfig} */
 const nextConfig = {
+	async headers() {
+		const origins = new Set([
+			new URL(process.env.APP_URL ?? "http://localhost:3000").origin,
+			"https://chatgpt.com",
+			"https://web-sandbox.oaiusercontent.com",
+		]);
+		for (const value of process.env.MCP_EMBED_ALLOWED_ORIGINS?.split(",") ??
+			[]) {
+			const origin = value.trim();
+			if (!origin) continue;
+			const parsed = new URL(origin);
+			if (
+				!["http:", "https:"].includes(parsed.protocol) ||
+				parsed.origin !== origin
+			)
+				throw new Error(
+					"MCP_EMBED_ALLOWED_ORIGINS must contain exact HTTP(S) origins.",
+				);
+			origins.add(origin);
+		}
+		return [
+			{
+				source: "/embed/:path*",
+				headers: [
+					{
+						key: "Content-Security-Policy",
+						value: `frame-ancestors 'self' ${[...origins].join(" ")}`,
+					},
+					{ key: "Referrer-Policy", value: "no-referrer" },
+				],
+			},
+		];
+	},
 	// Route handlers and SSR use separate Turbopack module runtimes. Keep their
 	// editor schemas/state on native modules so constructor checks stay valid.
 	serverExternalPackages: [
@@ -52,6 +85,7 @@ const nextConfig = {
 	outputFileTracingIncludes: {
 		"/*": [`${yjsLib0Directory}/**/*.{js,mjs,cjs,json}`],
 		"/changelog": ["./content/changelog/*.md"],
+		"/mcp": ["./features/agents/mcp-app/dist/companion.html"],
 	},
 	turbopack: {
 		resolveAlias: {
