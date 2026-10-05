@@ -1,6 +1,8 @@
 import { createRequire } from "node:module";
 import { dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isEmbeddedEditorOrigin } from "./features/agents/embedded-editor-origin.js";
+import { parseMcpUiDomain } from "./features/agents/mcp-ui-domain.js";
 
 // Next traces Node's export conditions, but Vercel runs these modules with Bun.
 // lib0 selects additional logging/crypto modules for Bun. Resolve Yjs's own
@@ -45,17 +47,15 @@ const nextConfig = {
 			"https://chatgpt.com",
 			"https://web-sandbox.oaiusercontent.com",
 		]);
+		if (process.env.MCP_UI_DOMAIN !== undefined)
+			origins.add(parseMcpUiDomain(process.env.MCP_UI_DOMAIN).sandboxOrigin);
 		for (const value of process.env.MCP_EMBED_ALLOWED_ORIGINS?.split(",") ??
 			[]) {
 			const origin = value.trim();
 			if (!origin) continue;
-			const parsed = new URL(origin);
-			if (
-				!["http:", "https:"].includes(parsed.protocol) ||
-				parsed.origin !== origin
-			)
+			if (!isEmbeddedEditorOrigin(origin))
 				throw new Error(
-					"MCP_EMBED_ALLOWED_ORIGINS must contain exact HTTP(S) origins.",
+					"MCP_EMBED_ALLOWED_ORIGINS must contain exact HTTP(S) or Codex MCP App origins.",
 				);
 			origins.add(origin);
 		}

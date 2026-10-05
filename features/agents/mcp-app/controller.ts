@@ -1,9 +1,17 @@
+import {
+	EmbeddedWorkspaceSchema,
+	WorkspaceActionResultSchema,
+	type EmbeddedWorkspace,
+	type WorkspaceAction,
+} from "./workspace-schema";
+import { createAppearance } from "./appearance";
+import { createSidebar } from "./sidebar";
+import { workspaceDialog } from "./workspace-dialog";
 import { createEditorFrame } from "./editor-controller";
 import { createCompanionContext, type ContextSnapshot } from "./model-context";
 import {
 	EditorOutputSchema,
 	type EditorOutput,
-	selectionContextText,
 	validateEditorOutput,
 } from "./editor-schema";
 import {
@@ -13,12 +21,9 @@ import {
 	renderRecentPages,
 } from "./navigation";
 import {
-	CompanionPageSchema,
 	type CompanionPageItem,
 	type CompanionWorkspace,
-	MAX_CONTEXT_CHARACTERS,
 	PageListSchema,
-	pageContextText,
 	pageResourceUri,
 	WorkspaceListSchema,
 } from "./schemas";
@@ -38,22 +43,22 @@ export function createCompanion(bridge: CompanionBridge) {
 	};
 	const workspaceSelect = get<HTMLSelectElement>("workspace");
 	const query = get<HTMLInputElement>("query");
-	const useContext = get<HTMLButtonElement>("use-context");
-	const removeContext = get<HTMLButtonElement>("remove-context");
 	const refresh = get<HTMLButtonElement>("refresh");
 	const search = get<HTMLButtonElement>("search");
 	const home = get<HTMLButtonElement>("home");
 	const web = get<HTMLButtonElement>("editor-web");
 	const shell = get("detail").closest<HTMLElement>(".companion");
+	const sidebar = createSidebar();
 	let workspaces: CompanionWorkspace[] = [];
 	let workspacePages: CompanionPageItem[] = [];
 	let visiblePages: CompanionPageItem[] = [];
 	const expanded = new Set<string>();
 	let workspace: CompanionWorkspace | undefined;
+	let workspaceState: EmbeddedWorkspace | undefined;
+	let archived: { workspaceId: string; pageId: string } | undefined;
 	let page: EditorOutput | undefined;
 	let listVersion = 0;
 	let busy = false;
-	let ready = false;
 	let disposed = false;
 	let closing = false;
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -86,6 +91,8 @@ export function createCompanion(bridge: CompanionBridge) {
 						...(page.canvasId
 							? { canvasId: page.canvasId, canvas: state.canvasSelection }
 							: {}),
+						...(state.selection ? { selection: state.selection } : {}),
+						...(state.inlineCanvas ? { inlineCanvas: state.inlineCanvas } : {}),
 						title: page.title,
 						url: page.webUrl,
 						source: page.canvasId
@@ -100,13 +107,41 @@ export function createCompanion(bridge: CompanionBridge) {
 	const editor = createEditorFrame(bridge, {
 		frame: get<HTMLIFrameElement>("real-editor"),
 		status: (text) => message("page-status", text),
-		ready(value) {
-			ready = value;
+		ready() {
 			updateControls();
 		},
-		contextChanged: updateCurrentView,
+		contextChanged() {
+			updateCurrentView();
+			updateControls();
+		},
 		openCanvas,
 		openPage,
+		async workspaceRequest(request) {
+			if (!workspace || closing || disposed)
+				throw new Error("Reopen Haunter to reconnect.");
+			if (request.action === "list-pages") return { pages: workspacePages };
+			if (busy || !page || page.canvasId)
+				throw new Error("Wait for the current action to finish.");
+			busy = true;
+			updateControls();
+			try {
+				const result = await mutate(
+					request.action === "create-page"
+						? {
+								action: "create-page",
+								title: "",
+								parentPageId: page.pageId!,
+								atCursor: true,
+							}
+						: { action: "create-canvas", pageId: page.pageId! },
+				);
+				await loadWorkspace();
+				return result;
+			} finally {
+				busy = false;
+				updateControls();
+			}
+		},
 		metadata(value, selected) {
 			if (!page || page.editorUrl !== selected.editorUrl) return;
 			page = { ...page, title: value.title };
@@ -120,47 +155,24 @@ export function createCompanion(bridge: CompanionBridge) {
 					? { ...item, ...value }
 					: item,
 			);
+			if (!page.canvasId)
+				for (const button of get(
+					"favorites-list",
+				).querySelectorAll<HTMLButtonElement>("button[data-page-id]")) {
+					if (button.dataset.pageId === page.pageId) {
+						const label = button.querySelector(".page-link-title");
+						if (label)
+							label.textContent = `${value.icon ? `${value.icon} ` : ""}${value.title || "Untitled page"}`;
+						button.title = value.title || "Untitled page";
+					}
+				}
 			renderNavigation();
 			updateBreadcrumbs();
 			updateCurrentView();
 		},
-		async selection(text, selected) {
-			if (
-				!page ||
-				selected.canvasId !== undefined ||
-				selected.editorUrl !== page.editorUrl ||
-				!bridge.canUseContext()
-			)
-				return;
-			await action(async () => {
-				// The selected text may be unsaved; current access must still be checked.
-				const current = CompanionPageSchema.parse(
-					await bridge.callTool("read_page", {
-						workspaceId: selected.workspaceId,
-						pageId: selected.pageId,
-						format: "markdown",
-					}),
-				);
-				const attachment = {
-					workspaceId: selected.workspaceId,
-					pageId: current.pageId,
-					title: current.title,
-					revision: current.revision,
-					updatedAt: current.updatedAt,
-				};
-				await context.attach(
-					selectionContextText({ ...selected, title: current.title }, text),
-					attachment,
-				);
-				message(
-					"page-status",
-					"Selection added. Editing does not change this attachment.",
-				);
-			});
-		},
 	});
+	const appearance = createAppearance(editor.applyTheme);
 	function updateControls() {
-		const attached = context.attachment;
 		shell?.setAttribute("aria-busy", String(busy));
 		const sidebar = shell?.querySelector<HTMLElement>(".sidebar");
 		if (sidebar) sidebar.inert = busy;
@@ -174,39 +186,43 @@ export function createCompanion(bridge: CompanionBridge) {
 		get<HTMLButtonElement>("back").disabled = busy;
 		web.hidden = !page;
 		web.disabled = busy;
-		useContext.hidden = !page || !!page.canvasId;
-		useContext.disabled = !page || !ready || busy || !bridge.canUseContext();
-		removeContext.hidden = !attached;
-		removeContext.disabled = busy;
-		const isCurrent =
-			page &&
-			!page.canvasId &&
-			attached?.workspaceId === page.workspaceId &&
-			attached.pageId === page.pageId;
-		useContext.textContent = isCurrent ? "Update context" : "Use as context";
+		get("page-actions").hidden = !page;
+		for (const id of [
+			"new-page",
+			"new-canvas",
+			"new-subpage",
+			"move-page",
+			"archive-page",
+			"favorite-item",
+		]) {
+			get<HTMLButtonElement>(id).disabled = busy || !workspaceState?.canEdit;
+		}
+		for (const id of ["new-subpage", "move-page", "archive-page"])
+			get(id).hidden = !!page?.canvasId;
+		get("favorite-item").hidden = !!page?.canvasId && !!page.pageId;
+		const favorite = page?.canvasId
+			? workspaceState?.canvasFavorites.includes(page.canvasId)
+			: !!page?.pageId && workspaceState?.favorites.includes(page.pageId);
+		get("favorite-item").textContent = favorite
+			? "Remove from favorites"
+			: "Add to favorites";
+		const state = editor.context;
 		message(
-			"context-help",
-			!bridge.canUseContext()
-				? "Context attachments are unavailable in this host."
-				: context.error
-					? "Page awareness could not sync. Reopen the panel to reconnect."
-					: attached
-						? "Editing and browsing do not change this attachment."
-						: page
-							? page.canvasId
-								? "Canvas and selected shapes are shared automatically. Ask about this canvas to work on it."
-								: "Page details are shared automatically. Use as context to attach its saved content."
-							: "Choose a page to add it to this conversation.",
+			"editor-save-status",
+			!page || state.status !== "ready"
+				? ""
+				: state.saveStatus === "unsaved"
+					? "Saving…"
+					: state.saveStatus === "saved"
+						? "Saved"
+						: "",
 		);
 		message(
 			"context-status",
-			attached
-				? `Using “${attached.title || "Untitled page"}” in this conversation.`
-				: page && bridge.canUseContext() && !context.error
-					? `Current ${page.canvasId ? "canvas" : "page"}: “${page.title || "Untitled page"}”.`
-					: "No page content attached.",
+			context.error
+				? "Page context could not sync. Reopen the panel to reconnect."
+				: "",
 		);
-		get("context-tray").dataset.attached = String(!!attached);
 	}
 	// All actions that can replace a frame or context run one at a time. Search
 	// only changes the sidebar, so it never tears down an editor mid-keystroke.
@@ -228,7 +244,7 @@ export function createCompanion(bridge: CompanionBridge) {
 	function updateSelection() {
 		if (page || query.value.trim()) home.removeAttribute("aria-current");
 		else home.setAttribute("aria-current", "page");
-		for (const button of get("page-list").querySelectorAll<HTMLButtonElement>(
+		for (const button of shell!.querySelectorAll<HTMLButtonElement>(
 			"button[data-page-id]",
 		)) {
 			if (!page?.canvasId && button.dataset.pageId === page?.pageId)
@@ -291,6 +307,7 @@ export function createCompanion(bridge: CompanionBridge) {
 		updateCurrentView();
 		get("empty-preview").hidden = false;
 		shell?.classList.remove("has-page");
+		sidebar.showHome();
 		message("page-status", "");
 		updateSelection();
 		updateBreadcrumbs();
@@ -300,22 +317,36 @@ export function createCompanion(bridge: CompanionBridge) {
 		page = next;
 		get("empty-preview").hidden = true;
 		shell?.classList.add("has-page");
+		sidebar.showContent();
 		for (const ancestor of pageAncestors(workspacePages, next.pageId ?? ""))
 			expanded.add(ancestor.pageId);
 		renderNavigation();
 		updateBreadcrumbs();
 		updateCurrentView();
 	}
-	async function openPage(pageId: string) {
-		if (!workspace || (!page?.canvasId && page?.pageId === pageId)) return;
-		const workspaceId = workspace.id;
+	async function openPage(pageId: string, targetWorkspaceId?: string) {
+		if (
+			!workspace ||
+			(!page?.canvasId &&
+				page?.pageId === pageId &&
+				(!targetWorkspaceId || targetWorkspaceId === workspace.id))
+		) {
+			if (page) sidebar.showContent();
+			return;
+		}
+		const workspaceId = targetWorkspaceId ?? workspace.id;
 		await action(async () => {
-			message("page-status", "Opening page…");
+			message("page-status", "");
 			const next = validateEditorOutput(
 				await bridge.callTool("open_haunter_editor", { workspaceId, pageId }),
 			);
 			if (next.workspaceId !== workspaceId || next.pageId !== pageId)
 				throw new Error("Haunter returned a different page. Try again.");
+			if (workspace?.id !== workspaceId)
+				await initializeWorkspaces(
+					await bridge.callTool("list_workspaces", {}),
+					workspaceId,
+				);
 			await showPage(next);
 		});
 	}
@@ -331,7 +362,7 @@ export function createCompanion(bridge: CompanionBridge) {
 			await showPage(next);
 		});
 	}
-	async function loadPages() {
+	async function loadPages(knownPages?: CompanionPageItem[]) {
 		if (!workspace) return;
 		const selectedWorkspace = workspace;
 		const version = ++listVersion;
@@ -345,13 +376,15 @@ export function createCompanion(bridge: CompanionBridge) {
 		updateBreadcrumbs();
 		try {
 			const result = PageListSchema.parse(
-				await bridge.callTool(
-					text.length >= 2 ? "search_pages" : "list_pages",
-					{
-						workspaceId: selectedWorkspace.id,
-						...(text.length >= 2 ? { query: text } : {}),
-					},
-				),
+				knownPages && text.length < 2
+					? { pages: knownPages }
+					: await bridge.callTool(
+							text.length >= 2 ? "search_pages" : "list_pages",
+							{
+								workspaceId: selectedWorkspace.id,
+								...(text.length >= 2 ? { query: text } : {}),
+							},
+						),
 			);
 			if (
 				disposed ||
@@ -359,7 +392,7 @@ export function createCompanion(bridge: CompanionBridge) {
 				workspace !== selectedWorkspace
 			)
 				return;
-			if (!text) workspacePages = result.pages.slice(0, 100);
+			if (!text) workspacePages = result.pages;
 			const pages = result.pages
 				.filter(
 					(item) =>
@@ -413,6 +446,172 @@ export function createCompanion(bridge: CompanionBridge) {
 			}
 		}
 	}
+	async function mutate(operation: WorkspaceAction) {
+		if (!workspace) throw new Error("Choose a workspace first.");
+		return WorkspaceActionResultSchema.parse(
+			await bridge.callTool("act_in_haunter_workspace", {
+				workspaceId: workspace.id,
+				operation,
+			}),
+		);
+	}
+	function itemButton(title: string, open: () => void) {
+		const button = document.createElement("button");
+		button.type = "button";
+		button.className = "page-link";
+		button.title = title;
+		const label = document.createElement("span");
+		label.className = "page-link-title";
+		label.textContent = title;
+		button.append(label);
+		button.addEventListener("click", open);
+		return button;
+	}
+	async function loadWorkspace() {
+		if (!workspace) return;
+		const selected = workspace;
+		const result = EmbeddedWorkspaceSchema.parse(
+			await bridge.callTool("get_haunter_workspace", {
+				workspaceId: selected.id,
+			}),
+		);
+		if (workspace !== selected || disposed) return;
+		workspaceState = result;
+		workspacePages = result.pages;
+		const favorites = get("favorites-list");
+		favorites.replaceChildren();
+		for (const item of result.pages.filter((p) =>
+			result.favorites.includes(p.pageId),
+		)) {
+			const button = itemButton(
+				`${item.icon ? `${item.icon} ` : ""}${item.title || "Untitled page"}`,
+				() => void openPage(item.pageId),
+			);
+			button.dataset.pageId = item.pageId;
+			favorites.append(button);
+		}
+		for (const item of result.canvases.filter((c) =>
+			result.canvasFavorites.includes(c.id),
+		))
+			favorites.append(
+				itemButton(
+					item.title || "Untitled canvas",
+					() => void openCanvas(item.id),
+				),
+			);
+		get("favorites-section").hidden = !favorites.childElementCount;
+		const canvases = get("canvas-list");
+		canvases.replaceChildren();
+		for (const item of result.canvases)
+			canvases.append(
+				itemButton(
+					item.title || "Untitled canvas",
+					() => void openCanvas(item.id),
+				),
+			);
+		get("canvases-section").hidden = !canvases.childElementCount;
+		await loadPages(result.pages);
+		updateControls();
+	}
+	async function createItem(kind: "page" | "subpage" | "canvas") {
+		if (busy || !workspaceState?.canEdit) return;
+		get("page-actions").removeAttribute("open");
+		const selectedWorkspace = workspace?.id;
+		const result = await workspaceDialog({
+			title:
+				kind === "canvas"
+					? "New canvas"
+					: kind === "subpage"
+						? "New subpage"
+						: "New page",
+			submit: "Create",
+			name: "",
+			...(kind !== "canvas"
+				? {
+						parents: workspacePages,
+						parentId: kind === "subpage" ? page?.pageId : null,
+					}
+				: {}),
+		});
+		if (!result || workspace?.id !== selectedWorkspace) return;
+		await action(async () => {
+			await editor.prepareClose();
+			const created = await mutate(
+				kind === "canvas"
+					? { action: "create-canvas", title: result.name || "Untitled canvas" }
+					: {
+							action: "create-page",
+							title: result.name,
+							parentPageId: result.parentId ?? undefined,
+						},
+			);
+			await loadWorkspace();
+			const next = validateEditorOutput(
+				await bridge.callTool(
+					kind === "canvas" ? "open_haunter_canvas" : "open_haunter_editor",
+					{
+						workspaceId: workspace!.id,
+						...(kind === "canvas"
+							? { canvasId: created.id }
+							: { pageId: created.id }),
+					},
+				),
+			);
+			await showPage(next);
+		});
+	}
+	async function movePage() {
+		if (busy || !workspaceState?.canEdit || !page?.pageId || page.canvasId)
+			return;
+		get("page-actions").removeAttribute("open");
+		const selected = page;
+		const result = await workspaceDialog({
+			title: "Move page",
+			submit: "Move",
+			parents: workspacePages,
+			parentId: workspacePages.find((p) => p.pageId === selected.pageId)
+				?.parentPageId,
+			excludeId: selected.pageId!,
+		});
+		if (!result || page !== selected) return;
+		await action(async () => {
+			await editor.prepareClose();
+			await mutate({
+				action: "move-page",
+				pageId: selected.pageId!,
+				parentPageId: result.parentId,
+			});
+			await loadWorkspace();
+			updateBreadcrumbs();
+			editor.resume();
+		});
+	}
+	async function archivePage() {
+		if (busy || !workspaceState?.canEdit || !page?.pageId || page.canvasId)
+			return;
+		get("page-actions").removeAttribute("open");
+		const selected = page;
+		const result = await workspaceDialog({
+			title: "Move page to trash?",
+			submit: "Move to trash",
+			description: `“${page.title || "Untitled page"}” and its subpages will move to trash. You can undo this.`,
+		});
+		if (!result || page !== selected) return;
+		await action(async () => {
+			await editor.prepareClose();
+			await mutate({ action: "archive-page", pageId: selected.pageId! });
+			// Already flushed before mutation. Closing must not try to save an archived resource.
+			editor.discardSaved();
+			showHome();
+			query.value = "";
+			archived = {
+				workspaceId: selected.workspaceId,
+				pageId: selected.pageId!,
+			};
+			get("archive-notice").hidden = false;
+			await loadWorkspace();
+		});
+	}
 	async function initializeWorkspaces(data: unknown, selectedId?: string) {
 		const next = WorkspaceListSchema.parse(data).workspaces;
 		const selected =
@@ -424,6 +623,12 @@ export function createCompanion(bridge: CompanionBridge) {
 		await editor.close();
 		workspaces = next;
 		workspace = selected;
+		workspaceState = undefined;
+		for (const id of ["favorites-list", "canvas-list"])
+			get(id).replaceChildren();
+		for (const id of ["favorites-section", "canvases-section"])
+			get(id).hidden = true;
+		get("archive-notice").hidden = true;
 		workspacePages = [];
 		visiblePages = [];
 		expanded.clear();
@@ -466,7 +671,7 @@ export function createCompanion(bridge: CompanionBridge) {
 			}).format(new Date()),
 		);
 		showHome();
-		if (workspace) await loadPages();
+		if (workspace) await loadWorkspace();
 	}
 	async function initialize(data: unknown) {
 		await action(async () => {
@@ -494,6 +699,12 @@ export function createCompanion(bridge: CompanionBridge) {
 			if (!next || next.id === workspace?.id) return;
 			await editor.close();
 			workspace = next;
+			workspaceState = undefined;
+			for (const id of ["favorites-list", "canvas-list"])
+				get(id).replaceChildren();
+			for (const id of ["favorites-section", "canvases-section"])
+				get(id).hidden = true;
+			get("archive-notice").hidden = true;
 			workspaceSelect.value = next.id;
 			workspacePages = [];
 			visiblePages = [];
@@ -502,7 +713,7 @@ export function createCompanion(bridge: CompanionBridge) {
 			get("page-list").replaceChildren();
 			get("recent-pages").replaceChildren();
 			showHome();
-			await loadPages();
+			await loadWorkspace();
 		});
 	});
 	get("search-form").addEventListener("submit", (event) => {
@@ -521,7 +732,7 @@ export function createCompanion(bridge: CompanionBridge) {
 			await editor.close();
 			query.value = "";
 			showHome();
-			await loadPages();
+			await loadWorkspace();
 			get("home-title").focus({ preventScroll: true });
 		});
 	get("back").addEventListener("click", () => {
@@ -530,6 +741,7 @@ export function createCompanion(bridge: CompanionBridge) {
 	});
 	home.addEventListener("click", () => void goHome());
 	web.addEventListener("click", () => {
+		get("page-actions").removeAttribute("open");
 		if (page)
 			void bridge
 				.openLink(page.webUrl)
@@ -540,64 +752,54 @@ export function createCompanion(bridge: CompanionBridge) {
 					),
 				);
 	});
-	useContext.addEventListener("click", () => {
-		if (
-			!page ||
-			page.canvasId !== undefined ||
-			!workspace ||
-			!ready ||
-			!bridge.canUseContext()
-		)
-			return;
-		const selected = page;
-		const selectedWorkspace = workspace;
-		void action(async () => {
-			message("page-status", "Adding current saved page…");
-			const result = await editor.save();
-			if (!result.saved)
-				throw new Error(
-					"Wait for the editor to finish saving, then try again.",
-				);
-			const current = CompanionPageSchema.parse(
-				await bridge.callTool("read_page", {
-					workspaceId: selected.workspaceId,
-					pageId: selected.pageId,
-					format: "markdown",
-				}),
-			);
-			const attachment = {
-				workspaceId: selected.workspaceId,
-				pageId: current.pageId,
-				title: current.title,
-				revision: current.revision,
-				updatedAt: current.updatedAt,
-			};
-			page = { ...selected, title: current.title };
-			updateCurrentView();
-			await context.attach(
-				pageContextText(selectedWorkspace, current),
-				attachment,
-			);
-			updateBreadcrumbs();
-			message(
-				"page-status",
-				current.markdown.length > MAX_CONTEXT_CHARACTERS
-					? "Added a partial page with a source reference. Ask for the complete source if needed."
-					: "Page added. Ask your next question about it.",
-			);
-		});
-	});
-	removeContext.addEventListener(
+
+	get("new-page").addEventListener("click", () => void createItem("page"));
+	get("new-subpage").addEventListener(
+		"click",
+		() => void createItem("subpage"),
+	);
+	get("new-canvas").addEventListener("click", () => void createItem("canvas"));
+	get("move-page").addEventListener("click", () => void movePage());
+	get("archive-page").addEventListener("click", () => void archivePage());
+	get("favorite-item").addEventListener(
 		"click",
 		() =>
 			void action(async () => {
-				await context.removeAttachment();
+				get("page-actions").removeAttribute("open");
+				if (!page) return;
+				await mutate(
+					page.canvasId
+						? {
+								action: "favorite-canvas",
+								canvasId: page.canvasId,
+								favorite: !workspaceState?.canvasFavorites.includes(
+									page.canvasId,
+								),
+							}
+						: {
+								action: "favorite-page",
+								pageId: page.pageId!,
+								favorite: !workspaceState?.favorites.includes(page.pageId!),
+							},
+				);
+				await loadWorkspace();
+			}),
+	);
+	get("undo-archive").addEventListener(
+		"click",
+		() =>
+			void action(async () => {
+				if (!archived || workspace?.id !== archived.workspaceId) return;
+				await mutate({ action: "restore-page", pageId: archived.pageId });
+				archived = undefined;
+				get("archive-notice").hidden = true;
+				await loadWorkspace();
 			}),
 	);
 	return {
 		initialize,
 		reload,
-		applyTheme: editor.applyTheme,
+		applyTheme: appearance.applyHostTheme,
 		async prepareClose() {
 			if (busy)
 				throw new Error(
@@ -606,7 +808,7 @@ export function createCompanion(bridge: CompanionBridge) {
 			closing = true;
 			try {
 				const result = await editor.prepareClose();
-				// Keep an explicit snapshot but stop reporting this page as open.
+				// Stop reporting the page and its selection when the panel closes.
 				await context.clearView();
 				return result;
 			} catch (error) {
@@ -618,6 +820,8 @@ export function createCompanion(bridge: CompanionBridge) {
 		},
 		dispose() {
 			disposed = true;
+			appearance.dispose();
+			sidebar.dispose();
 			context.dispose();
 			clearTimeout(searchTimer);
 			editor.dispose();

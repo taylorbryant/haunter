@@ -1,0 +1,1 @@
+ALTER TABLE `embedded_editor_session` ADD `scope` text DEFAULT 'document' NOT NULL;

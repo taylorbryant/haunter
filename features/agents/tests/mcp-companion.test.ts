@@ -176,6 +176,7 @@ test("real editor opens an authorized page and only allows Haunter's own iframe 
 		const resource = await f.rpc("resources/read", { uri: EDITOR_URI });
 		expect(resource.result?.contents?.[0]?._meta).toMatchObject({
 			ui: {
+				permissions: { clipboardWrite: {} },
 				csp: {
 					connectDomains: [],
 					resourceDomains: [],
@@ -254,13 +255,30 @@ test("companion entrypoints accept empty input and serve a self-contained MCP Ap
 			"text/html;profile=mcp-app",
 		);
 		const html = resource.result?.contents?.[0]?.text ?? "";
-		expect(html).toContain("Use as context");
+		expect(html).toContain("Haunter workspace");
+		expect(html).toContain("/embed/workspace");
+		expect(html).not.toContain("__HAUNTER_APP_ORIGIN__");
+		expect(html).not.toContain("Use as context");
 		expect(html).toContain("ui/initialize");
 		expect(html).not.toMatch(/<script[^>]+src=/);
 		expect(html).not.toContain("<!-- script -->");
 		expect(resource.result?.contents?.[0]?._meta).toMatchObject({
-			ui: { csp: { connectDomains: [], resourceDomains: [] } },
+			ui: {
+				permissions: { clipboardWrite: {} },
+				csp: {
+					connectDomains: [],
+					resourceDomains: [],
+					frameDomains: [new URL(env.APP_URL).origin],
+				},
+			},
 		});
+		const metadata = resource.result?.contents?.[0]?._meta;
+		expect((metadata?.ui as { domain?: string })?.domain).toBe(
+			env.MCP_UI_DOMAIN,
+		);
+		expect(metadata?.["openai/widgetDomain"]).toBe(env.MCP_UI_DOMAIN);
+		expect(COMPANION_URI).toBe("ui://haunter/workspace/v3");
+		expect(EDITOR_URI).toBe(COMPANION_URI);
 	} finally {
 		await f.database.close();
 	}
@@ -417,6 +435,71 @@ test("the canvas opener returns a scoped destination for view connections and re
 		expect(removed.result?.isError).toBeTrue();
 	} finally {
 		await engine.stop();
+		await f.database.close();
+	}
+});
+
+test("task opener resolves completed tasks beyond list pagination and enforces page, workspace and connection access", async () => {
+	const f = await fixture();
+	try {
+		const input = {
+			userId: f.userId,
+			pageId: null,
+			sourceBlockId: null,
+			title: "Earlier task",
+			completed: false,
+			completedAt: null,
+			dueDate: "2026-01-01",
+			dueTime: null,
+			reminderOffsetMinutes: null,
+			assigneeId: null,
+		};
+		for (let i = 0; i < 51; i++)
+			await f.database.repositories.tasks.create(f.scope, input);
+		const task = await f.database.repositories.tasks.create(f.scope, {
+			...input,
+			title: "Selected completed task",
+			pageId: f.page.id,
+			sourceBlockId: "selected-block",
+			dueDate: null,
+			completed: true,
+			completedAt: new Date().toISOString(),
+		});
+		const args = { workspaceId: f.workspaceId, taskId: task.id };
+		const opened = await f.call("open_haunter", args);
+		expect(opened.result?.isError).not.toBeTrue();
+		expect(opened.result?.structuredContent).toMatchObject({
+			target: { ...args, view: "tasks", filter: "all", scope: "everyone" },
+		});
+		const filtered = await f.call("list_tasks", {
+			...args,
+			filter: "all",
+			scope: "everyone",
+			limit: 1,
+		});
+		expect(filtered.result?.structuredContent).toMatchObject({
+			tasks: [{ taskId: task.id }],
+		});
+		expect(
+			(await f.call("open_haunter", { ...args, workspaceId: "unapproved" }))
+				.result?.isError,
+		).toBeTrue();
+		expect(
+			(await f.call("open_haunter", { ...args, taskId: crypto.randomUUID() }))
+				.result?.isError,
+		).toBeTrue();
+		await f.database.db
+			.update(schema.pages)
+			.set({ deletedAt: new Date().toISOString() })
+			.where(eq(schema.pages.id, f.page.id));
+		expect((await f.call("open_haunter", args)).result?.isError).toBeTrue();
+		await f.database.db
+			.update(schema.pages)
+			.set({ deletedAt: null })
+			.where(eq(schema.pages.id, f.page.id));
+		f.connection.status = "revoked";
+		expect((await f.call("open_haunter", args)).result?.isError).toBeTrue();
+	} finally {
 		await f.database.close();
 	}
 });

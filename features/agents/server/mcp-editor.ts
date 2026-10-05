@@ -1,5 +1,8 @@
 import "@beignet/core/server-only";
-import { EmbeddedEditorAuthorizationSchema } from "@/features/agents/embedded-editor-session";
+import {
+	EmbeddedEditorAuthorizationSchema,
+	EmbeddedWorkspaceAuthorizationSchema,
+} from "@/features/agents/embedded-editor-session";
 import { CanvasReadOutputSchema } from "@/features/canvases/editing";
 import type { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
@@ -26,9 +29,41 @@ export function registerMcpEditor(
 			args: z.infer<typeof EmbeddedEditorAuthorizationSchema>,
 		): Promise<{ id: string }>;
 		errorMessage(error: unknown): string;
+		authorizeWorkspace?(
+			args: z.infer<typeof EmbeddedWorkspaceAuthorizationSchema>,
+		): Promise<{ id: string }>;
 	},
 ) {
 	const origin = new URL(input.appOrigin).origin;
+	if (input.authorizeWorkspace)
+		server.registerTool(
+			"authorize_haunter_workspace",
+			{
+				title: "Authorize the embedded Haunter workspace",
+				description:
+					"Bind an approved workspace session to the embedded app's proof challenge. Ordinary UI actions use Haunter's HTTP APIs.",
+				inputSchema: EmbeddedWorkspaceAuthorizationSchema,
+				annotations: {
+					readOnlyHint: true,
+					destructiveHint: false,
+					openWorldHint: false,
+				},
+				_meta: { ui: { visibility: ["app"] } },
+			},
+			async (args) => {
+				try {
+					return {
+						content: [],
+						structuredContent: await input.authorizeWorkspace!(args),
+					};
+				} catch (error) {
+					return {
+						isError: true,
+						content: [{ type: "text", text: input.errorMessage(error) }],
+					};
+				}
+			},
+		);
 	if (input.authorize)
 		server.registerTool(
 			"authorize_haunter_editor",

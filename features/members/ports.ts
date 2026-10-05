@@ -3,6 +3,7 @@ import type { TenantScope } from "@beignet/core/ports";
 export type WorkspaceMember = {
 	userId: string;
 	name: string;
+	image?: string | null;
 	email: string;
 	role: string;
 };

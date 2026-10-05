@@ -17,7 +17,8 @@ export const openDocumentSessionUseCase = useCase
 		await ctx.gate.authorize("pages.read", page);
 		if (
 			ctx.embeddedEditor &&
-			(ctx.embeddedEditor.pageId !== page.id ||
+			((ctx.embeddedEditor.scope !== "workspace" &&
+				ctx.embeddedEditor.pageId !== page.id) ||
 				ctx.embeddedEditor.workspaceId !== page.workspaceId)
 		)
 			throw appError("Forbidden");

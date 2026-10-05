@@ -1,12 +1,13 @@
 "use client";
 import "tldraw/tldraw.css";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useSync, type UseSyncConnectFn } from "@tldraw/sync";
 import { AuthenticatedCanvasSocket } from "../client/authenticated-socket";
 import {
 	atom,
+	react,
 	createTLCurrentUser,
 	UserRecordType,
 	inlineBase64AssetStore,
@@ -22,7 +23,11 @@ import { Button } from "@/components/ui/button";
 import { useDurableDraftStorage } from "@/client/durable-draft-storage-provider";
 import { listLocalCanvasDrafts, type LocalDraft } from "@/client/local-drafts";
 import { downloadRecoveryDrafts } from "@/client/draft-export";
-import { getCanvasQueryOptions } from "../client/queries";
+import {
+	getCanvasQueryOptions,
+	invalidateCanvases,
+	invalidateCanvasNavigation,
+} from "../client/queries";
 import {
 	registerCanvasSaveFlusher,
 	type CanvasSaveState,
@@ -42,11 +47,13 @@ import {
 	openCanvasSession,
 	importRecovery,
 } from "@/features/documents/contracts";
-import { useRouter } from "next/navigation";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
+import { WorkspaceNavigationContext } from "@/client/workspace-navigation";
 import { useLiveContext } from "@/features/live-context/client/provider";
 import { observeCanvasContext } from "../client/live-context";
 import { AGENT_HIGHLIGHT_OVERLAYS } from "../client/agent-highlights";
 import { CanvasAgentActivity } from "./canvas-agent-activity";
+import type { CanvasSelection } from "@/features/agents/mcp-app/editor-schema";
 export type { CanvasSaveState } from "../client/save-state";
 type Props = {
 	canvasId: string;
@@ -54,6 +61,7 @@ type Props = {
 	layoutKey?: string;
 	embedded?: boolean;
 	onEditorChange?: (editor: Editor | null) => void;
+	onSelectionChange?: (canvasId: string, selection: CanvasSelection) => void;
 };
 export default function CanvasSurface(props: Props) {
 	const shareToken = useSharedPageToken();
@@ -108,6 +116,7 @@ function CollaborativeCanvasSurface({
 	layoutKey,
 	embedded = false,
 	onEditorChange,
+	onSelectionChange,
 	onSaveStateChange,
 	onRestart,
 }: Props & {
@@ -130,6 +139,27 @@ function CollaborativeCanvasSurface({
 	useEffect(() => {
 		onEditorChange?.(contextEditor);
 	}, [contextEditor, onEditorChange]);
+	useEffect(() => {
+		if (!contextEditor || !onSelectionChange) return;
+		let previous = "";
+		return react("Inline canvas selection", () => {
+			if (!contextEditor.getInstanceState().isFocused) {
+				previous = "";
+				return;
+			}
+			const ids = contextEditor.getSelectedShapeIds();
+			const selection = {
+				canvasPageId: contextEditor.getCurrentPageId(),
+				selectedShapeIds: [...ids].slice(0, 100),
+				selectionCount: ids.length,
+				selectionComplete: ids.length <= 100,
+			};
+			const signature = JSON.stringify(selection);
+			if (signature === previous) return;
+			previous = signature;
+			onSelectionChange(canvasId, selection);
+		});
+	}, [canvasId, contextEditor, onSelectionChange]);
 	const { forcedTheme, resolvedTheme } = useTheme();
 	const syncTheme = useCanvasTheme(forcedTheme ?? resolvedTheme);
 	// The host's theme must not overwrite the regular web canvas's preferences.
@@ -420,6 +450,10 @@ function CanvasRecoveryCopies({
 }) {
 	const storage = useDurableDraftStorage<TLStoreSnapshot>();
 	const router = useRouter();
+	const queryClient = useQueryClient();
+	const workspaceNavigation = useContext(WorkspaceNavigationContext);
+	const canEdit = useCanEditWorkspace();
+	const canRecover = canEdit && (!embedded || workspaceNavigation !== null);
 	const [copies, setCopies] = useState<LocalDraft<TLStoreSnapshot>[]>([]);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -477,12 +511,12 @@ function CanvasRecoveryCopies({
 		>
 			<span>
 				{error ??
-					`An unsynced drawing copy from ${new Date(copy.updatedAt).toLocaleString()} is saved in this browser.${copies.length > 1 ? ` ${copies.length} copies are available, newest first.` : ""} ${embedded ? "Download a copy to recover it in Haunter." : "Recover it as a separate canvas to keep both versions."}`}
+					`An unsynced drawing copy from ${new Date(copy.updatedAt).toLocaleString()} is saved in this browser.${copies.length > 1 ? ` ${copies.length} copies are available, newest first.` : ""} ${canRecover ? "Recover it as a separate canvas to keep both versions." : "Download a copy to recover it in Haunter."}`}
 			</span>
 			<Button
 				size="sm"
 				disabled={busy}
-				hidden={embedded}
+				hidden={!canRecover}
 				onClick={async () => {
 					setBusy(true);
 					setError(null);
@@ -495,6 +529,10 @@ function CanvasRecoveryCopies({
 							throw new Error("No recovery canvas returned");
 						await storage.discard(copy.key);
 						setCopies((rows) => rows.filter((row) => row.key !== copy.key));
+						await Promise.all([
+							invalidateCanvases(queryClient),
+							invalidateCanvasNavigation(queryClient, workspaceId),
+						]);
 						router.push(`/w/${workspaceId}/c/${result.canvasIds[0]}`);
 					} catch {
 						setError(

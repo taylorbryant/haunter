@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+export const EmbeddedWorkspaceAuthorizationSchema = z.object({
+	workspaceId: z.string().min(1),
+	challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+});
+
 export const EmbeddedEditorAuthorizationSchema = z
 	.object({
 		workspaceId: z.string().min(1),
@@ -16,6 +21,7 @@ export const EmbeddedEditorExchangeSchema = z.object({
 	proofSecret: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
 });
 export const EmbeddedEditorIdentitySchema = z.object({
+	scope: z.enum(["document", "workspace"]).optional(),
 	id: z.uuid(),
 	connectionId: z.string(),
 	workspaceId: z.string(),
@@ -35,8 +41,26 @@ export type EmbeddedEditorIdentity = z.infer<
 >;
 export const EMBEDDED_EDITOR_AUTH_SCHEME = "HaunterEmbed";
 
+/** Workspace grants include their canvases; document grants retain their original boundary. */
+export function canAccessEmbeddedCanvas(
+	identity: Pick<
+		EmbeddedEditorIdentity,
+		"scope" | "workspaceId" | "pageId" | "canvasId"
+	>,
+	canvas: { id: string; workspaceId: string; pageId: string | null },
+) {
+	return (
+		identity.workspaceId === canvas.workspaceId &&
+		(identity.scope === "workspace" ||
+			(identity.canvasId
+				? identity.canvasId === canvas.id
+				: !!identity.pageId && identity.pageId === canvas.pageId))
+	);
+}
+
 export interface EmbeddedEditorSessionPort {
 	create(input: {
+		scope?: "document" | "workspace";
 		connectionId: string;
 		userId: string;
 		workspaceId: string;

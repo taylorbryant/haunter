@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+
 import { z } from "zod";
 import { AGENT_CAPABILITY_DESCRIPTIONS } from "@/features/agents/capability-catalog";
 import {
@@ -15,6 +16,15 @@ import {
 	PageEditOutputSchema,
 	ReplacePageContentInputSchema,
 } from "./block-editing";
+
+import {
+	PageAttachmentSchema,
+	ReadAttachmentOutputSchema,
+} from "./attachments";
+import {
+	listPageAttachments,
+	readPageAttachment,
+} from "./lib/attachment-content";
 
 const WorkspaceInput = z.object({ workspaceId: z.string().min(1) });
 const PageInput = WorkspaceInput.extend({ pageId: z.string().uuid() });
@@ -348,10 +358,53 @@ export const restorePageCapability = defineAgentCapability("restore_page", {
 	},
 });
 
+export const listPageAttachmentsCapability = defineAgentCapability(
+	"list_page_attachments",
+	{
+		description: AGENT_CAPABILITY_DESCRIPTIONS.list_page_attachments,
+		input: PageInput.extend({ offset: z.number().int().min(0).default(0) }),
+		output: z.object({
+			pageId: z.string().uuid(),
+			attachments: z.array(PageAttachmentSchema),
+			nextOffset: z.number().nullable(),
+		}),
+		async handle({ ctx, input }) {
+			const { readPageDocumentUseCase } = await import(
+				"./use-cases/read-page-document"
+			);
+			const page = await readPageDocumentUseCase.run({
+				ctx,
+				input: { id: input.pageId },
+			});
+			return listPageAttachments(ctx, page, input.offset);
+		},
+	},
+);
+export const readPageAttachmentCapability = defineAgentCapability(
+	"read_page_attachment",
+	{
+		description: AGENT_CAPABILITY_DESCRIPTIONS.read_page_attachment,
+		input: PageInput.extend({ blockId: z.string().min(1).max(200) }),
+		output: ReadAttachmentOutputSchema,
+		async handle({ ctx, input }) {
+			const { readPageDocumentUseCase } = await import(
+				"./use-cases/read-page-document"
+			);
+			const page = await readPageDocumentUseCase.run({
+				ctx,
+				input: { id: input.pageId },
+			});
+			return readPageAttachment(ctx, page, input.blockId);
+		},
+	},
+);
+
 export const pageAgentCapabilities = [
 	listPagesCapability,
 	searchPagesCapability,
 	readPageCapability,
+	listPageAttachmentsCapability,
+	readPageAttachmentCapability,
 	createPageCapability,
 	appendToPageCapability,
 	editPageBlocksCapability,

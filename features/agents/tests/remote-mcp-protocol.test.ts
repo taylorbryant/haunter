@@ -130,6 +130,23 @@ describe("remote MCP protocol", () => {
 		expect(names).not.toContain("delete_task");
 	});
 
+	test("workspace controls are app-only and mutations are not labelled read-only", async () => {
+		const body = await json(await createHandler()(modernRequest("tools/list")));
+		const tools = body.result?.tools as Array<{
+			name: string;
+			_meta: unknown;
+			annotations: unknown;
+		}>;
+		for (const name of ["get_haunter_workspace", "act_in_haunter_workspace"])
+			expect(tools.find((tool) => tool.name === name)?._meta).toMatchObject({
+				ui: { visibility: ["app"] },
+			});
+		expect(
+			tools.find((tool) => tool.name === "act_in_haunter_workspace")
+				?.annotations,
+		).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+	});
+
 	test("validates registered tool input through the native MCP v2 call path", async () => {
 		const response = await createHandler()(
 			modernRequest("tools/call", {

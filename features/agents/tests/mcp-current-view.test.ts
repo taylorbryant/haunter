@@ -22,12 +22,9 @@ afterEach(async () => {
 	await uninstallTestDom();
 });
 const current = () => f.contexts.at(-1);
-async function attached() {
-	element("use-context").click();
-	await waitFor(() => expect(current()?.page?.pageId).toBe(pageId));
-	await waitFor(() =>
-		expect(element<HTMLButtonElement>("home").disabled).toBeFalse(),
-	);
+async function selected(text = "Selected passage") {
+	f.emit("haunter/editor/selection", { text });
+	await waitFor(() => expect(current()?.view?.selection?.text).toBe(text));
 }
 
 test("opening, renaming and save transitions update metadata without a page read or document content", async () => {
@@ -61,27 +58,18 @@ test("opening, renaming and save transitions update metadata without a page read
 	expect(f.contexts).toHaveLength(count);
 });
 
-test("navigation preserves an explicit snapshot while tracking a different current page", async () => {
+test("navigation and Home clear the live selection", async () => {
 	f = fixture();
 	await f.open();
-	await attached();
-	const attachmentText = current()?.content[1]?.text;
+	await selected();
 	f.clickPage(childId);
 	await waitFor(() => expect(current()?.view?.pageId).toBe(childId));
-	expect(current()?.page?.pageId).toBe(pageId);
-	expect(current()?.content[1]?.text).toBe(attachmentText);
-	f.emit("haunter/editor/metadata", {
-		title: "New checklist title",
-		icon: null,
-	});
-	await waitFor(() =>
-		expect(current()?.view?.title).toBe("New checklist title"),
-	);
-	expect(current()?.content[1]?.text).toBe(attachmentText);
+	expect(current()?.view?.selection).toBeUndefined();
+	expect(current()?.text).not.toContain("Selected passage");
+	await selected("Another selection");
 	element("home").click();
 	await waitFor(() => expect(current()?.view).toBeUndefined());
-	expect(current()?.page?.pageId).toBe(pageId);
-	expect(current()?.content[1]?.text).toBe(attachmentText);
+	expect(current()?.text).not.toContain("Another selection");
 });
 
 test("workspace switching and refresh clear current-page identity", async () => {
@@ -139,40 +127,37 @@ test("wrong origins and stale frames cannot rename a page or falsify save status
 	expect(current()?.view?.saveStatus).toBe("unknown");
 });
 
-test("removing an attachment in the host does not restore it on navigation or a stale acknowledgement", async () => {
+test("host removal suppresses a selection until it changes, including stale acknowledgements", async () => {
 	f = fixture();
-	// Hosts may start with a null slot and acknowledge updates without sending
-	// a separate host-context notification before the user removes the slot.
 	f.companion.syncContext(null);
 	await f.open();
-	await attached();
+	await selected();
 	const previous = current();
 	const updateId = `update-${f.contexts.length}`;
 	f.companion.syncContext(null);
-	expect(element("remove-context").hidden).toBeTrue();
 	f.companion.syncContext({ ...previous, updateId });
-	f.clickPage(childId);
-	await waitFor(() => expect(current()?.view?.pageId).toBe(childId));
-	expect(current()?.page).toBeUndefined();
-	expect(current()?.text).not.toContain(savedPage.markdown);
+	f.emit("haunter/editor/save-status", { status: "saved" });
+	await waitFor(() => expect(current()?.view?.selection).toBeUndefined());
+	expect(current()?.view?.pageId).toBe(pageId);
+	await selected("A different selection");
 });
 
-test("a restored host attachment survives initialization and subsequent navigation", async () => {
+test("a previous host selection is never restored into another page", async () => {
 	f = fixture();
 	await f.open();
-	await attached();
+	await selected();
 	const snapshot = current();
 	f.companion.dispose();
 	document.body.innerHTML = template;
 	f = fixture();
-	f.companion.syncContext({ ...snapshot, updateId: "restored-attachment" });
+	f.companion.syncContext({ ...snapshot, updateId: "old-context" });
 	await f.open(childId);
 	await waitFor(() => expect(current()?.view?.pageId).toBe(childId));
-	expect(current()?.page?.pageId).toBe(pageId);
-	expect(current()?.content[1]?.text).toBe(snapshot?.content[1]?.text);
+	expect(current()?.view?.selection).toBeUndefined();
+	expect(current()?.text).not.toContain("Selected passage");
 });
 
-test("removing context while a write is pending cannot resurrect its attached content", async () => {
+test("clearing selection during a pending context write wins over the old selection", async () => {
 	const received: ContextSnapshot[] = [];
 	let release: () => void = () => {};
 	let block = false;
@@ -187,28 +172,27 @@ test("removing context while a write is pending cannot resurrect its attached co
 		},
 	});
 	await f.open();
-	element("use-context").click();
 	await waitFor(() =>
-		expect(received.at(-1)?.structuredContent.haunterPage?.pageId).toBe(pageId),
-	);
-	await waitFor(() =>
-		expect(element<HTMLButtonElement>("home").disabled).toBeFalse(),
-	);
-	block = true;
-	f.emit("haunter/editor/metadata", { title: "Pending metadata", icon: null });
-	await waitFor(() =>
-		expect(received.at(-1)?.structuredContent.haunterView?.title).toBe(
-			"Pending metadata",
+		expect(received.at(-1)?.structuredContent.haunterView?.editorStatus).toBe(
+			"ready",
 		),
 	);
-	f.companion.syncContext(null);
+	block = true;
+	f.emit("haunter/editor/selection", { text: "Stale selection" });
+	await waitFor(() =>
+		expect(
+			received.at(-1)?.structuredContent.haunterView?.selection?.text,
+		).toBe("Stale selection"),
+	);
+	f.emit("haunter/editor/selection", { text: "" });
 	block = false;
 	release();
 	await waitFor(() =>
-		expect(received.at(-1)?.structuredContent.haunterPage).toBeNull(),
+		expect(
+			received.at(-1)?.structuredContent.haunterView?.selection,
+		).toBeUndefined(),
 	);
 	expect(received.at(-1)?.structuredContent.haunterView?.pageId).toBe(pageId);
-	expect(received.at(-1)?.content).toHaveLength(1);
 });
 
 test("context errors do not block editing, and later navigation retries with the latest page", async () => {
@@ -222,7 +206,7 @@ test("context errors do not block editing, and later navigation retries with the
 	});
 	await f.open();
 	await waitFor(() =>
-		expect(element("context-help").textContent).toContain("could not sync"),
+		expect(element("context-status").textContent).toContain("could not sync"),
 	);
 	expect(f.frame.hidden).toBeFalse();
 	fail = false;
@@ -232,7 +216,7 @@ test("context errors do not block editing, and later navigation retries with the
 			childId,
 		),
 	);
-	expect(element("context-help").textContent).not.toContain("could not sync");
+	expect(element("context-status").textContent).not.toContain("could not sync");
 });
 
 test("slow context writes are serialized and finish with the latest page", async () => {
@@ -270,10 +254,10 @@ test("slow context writes are serialized and finish with the latest page", async
 	);
 });
 
-test("teardown clears the live view, preserves attachments and ignores late editor events", async () => {
+test("teardown clears the live view and selection and ignores late editor events", async () => {
 	f = fixture();
 	await f.open();
-	await attached();
+	await selected();
 	f.settings.saved = false;
 	await expect(f.companion.prepareClose()).rejects.toThrow(
 		"Keep this page open",
@@ -282,7 +266,7 @@ test("teardown clears the live view, preserves attachments and ignores late edit
 	f.settings.saved = true;
 	await f.companion.prepareClose();
 	expect(current()?.view).toBeUndefined();
-	expect(current()?.page?.pageId).toBe(pageId);
+	expect(current()?.text).not.toContain("Selected passage");
 	f.emit("haunter/editor/save-status", { status: "saved" });
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(current()?.view).toBeUndefined();

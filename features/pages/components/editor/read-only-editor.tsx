@@ -6,6 +6,9 @@ import "@blocknote/shadcn/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useTheme } from "next-themes";
+import { useEffect, useRef } from "react";
+import { createAttachmentUrlResolver } from "@/features/pages/client/attachment-urls";
+import { HistoryPreviewContext } from "./history-preview-context";
 import { normalizeCodeBlockLanguages } from "@/features/pages/lib/code-block-language";
 import type { BlockJson } from "@/features/pages/schemas";
 import { SharedPageTokenProvider } from "@/features/shares/components/shared-page-context";
@@ -21,16 +24,34 @@ import { editorSchema, syntaxHighlightingExtension } from "./schema";
 export default function ReadOnlyEditor({
 	content,
 	shareToken,
+	historyPreview = false,
 }: {
 	content: BlockJson[];
 	shareToken?: string;
+	historyPreview?: boolean;
 }) {
 	const { resolvedTheme } = useTheme();
 	const normalizedContent = normalizeCodeBlockLanguages(content);
+	const attachments = useRef<ReturnType<
+		typeof createAttachmentUrlResolver
+	> | null>(null);
+	useEffect(
+		() => () => {
+			attachments.current?.dispose();
+			attachments.current = null;
+		},
+		[],
+	);
 
 	const editor = useCreateBlockNote({
 		schema: editorSchema,
 		extensions: [syntaxHighlightingExtension],
+		resolveFileUrl: shareToken
+			? undefined
+			: (url) => {
+					attachments.current ??= createAttachmentUrlResolver();
+					return attachments.current.resolve(url);
+				},
 		// BlockNote rejects an empty initialContent array.
 		initialContent: normalizedContent.length
 			? (normalizedContent as never)
@@ -53,6 +74,8 @@ export default function ReadOnlyEditor({
 	return shareToken ? (
 		<SharedPageTokenProvider token={shareToken}>{view}</SharedPageTokenProvider>
 	) : (
-		view
+		<HistoryPreviewContext.Provider value={historyPreview}>
+			{view}
+		</HistoryPreviewContext.Provider>
 	);
 }

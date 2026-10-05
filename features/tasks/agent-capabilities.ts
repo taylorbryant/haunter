@@ -37,6 +37,12 @@ export function createTaskAgentCapabilities(
 	const listTasksCapability = defineAgentCapability("list_tasks", {
 		description: AGENT_CAPABILITY_DESCRIPTIONS.list_tasks,
 		input: WorkspaceInput.extend({
+			taskId: z
+				.uuid()
+				.optional()
+				.describe(
+					"Read one known task within this workspace, including tasks outside the first page of results. Use filter=all and scope=everyone when reading a selected task.",
+				),
 			filter: z.enum(["open", "completed", "all"]).default("open"),
 			scope: z.enum(["mine", "everyone"]).default("mine"),
 			dueOnOrAfter: DueDate.optional(),
@@ -108,6 +114,7 @@ export function createTaskAgentCapabilities(
 				ctx,
 				input: {
 					workspaceId: input.workspaceId,
+					taskId: input.taskId,
 					filter: input.filter,
 					scope: input.scope,
 					limit: input.limit,

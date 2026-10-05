@@ -1,7 +1,12 @@
-import { exchangeEmbeddedEditor, verifyEmbeddedEditor } from "./contracts";
+import {
+	exchangeEmbeddedEditor,
+	verifyEmbeddedEditor,
+	listEmbeddedWorkspaces,
+} from "./contracts";
 import {
 	exchangeEmbeddedEditorUseCase,
 	verifyEmbeddedEditorUseCase,
+	listEmbeddedWorkspacesUseCase,
 } from "./use-cases/embedded-editor-session";
 import "@beignet/core/server-only";
 import {
@@ -53,5 +58,9 @@ export const embeddedEditorRoutes = defineRouteGroup({
 			useCase: exchangeEmbeddedEditorUseCase,
 		},
 		{ contract: verifyEmbeddedEditor, useCase: verifyEmbeddedEditorUseCase },
+		{
+			contract: listEmbeddedWorkspaces,
+			useCase: listEmbeddedWorkspacesUseCase,
+		},
 	],
 });

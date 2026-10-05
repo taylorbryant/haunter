@@ -312,6 +312,7 @@ svg {
 }
 .breadcrumbs {
 	display: flex;
+	flex: 1;
 	align-items: center;
 	gap: 6px;
 	min-width: 0;
@@ -349,6 +350,43 @@ svg {
 	align-items: center;
 	gap: 8px;
 	flex-shrink: 0;
+}
+.page-actions {
+	position: relative;
+}
+.page-actions summary {
+	list-style: none;
+	cursor: pointer;
+}
+.page-actions summary::-webkit-details-marker {
+	display: none;
+}
+.page-actions-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	z-index: 20;
+	min-width: 170px;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--popover);
+	box-shadow: 0 4px 16px #0002;
+}
+.page-actions-menu .btn {
+	width: 100%;
+	background: transparent;
+	text-align: left;
+}
+.page-actions-menu .btn:hover {
+	background: var(--accent);
+}
+.context-status:empty {
+	display: none;
+}
+.context-status:not(:empty) {
+	padding: 8px 20px;
+	color: var(--muted-foreground);
 }
 .icon-button {
 	display: inline-flex;
@@ -568,34 +606,7 @@ svg {
 	background: var(--muted);
 	border-radius: 6px;
 }
-.context-tray {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	min-height: 64px;
-	padding: 12px 20px;
-	border-top: 1px solid var(--border);
-}
-.context-icon {
-	color: var(--muted-foreground);
-}
-.context-copy {
-	flex: 1;
-	min-width: 0;
-}
-#context-status {
-	font-size: 12px;
-	font-weight: 500;
-	overflow-wrap: anywhere;
-}
-#context-help {
-	font-size: 12px;
-	margin-top: 2px;
-}
-.context-tray[data-attached="true"] {
-	background: var(--muted);
-}
-/* Full plugin screens keep navigation and context in place while the document scrolls. */
+/* Full plugin screens keep navigation in place while the document scrolls. */
 :root[data-display-mode="fullscreen"] .companion {
 	height: var(--haunter-host-height, 100dvh);
 	min-height: 0;
@@ -618,7 +629,6 @@ svg {
 	overscroll-behavior: contain;
 }
 :root[data-display-mode="fullscreen"] .toolbar,
-:root[data-display-mode="fullscreen"] .context-tray,
 :root[data-display-mode="fullscreen"] .connection-status,
 :root[data-display-mode="fullscreen"] .page-status {
 	flex-shrink: 0;
@@ -637,20 +647,19 @@ svg {
 	}
 }
 @media (max-width: 600px) {
-	:root[data-display-mode="fullscreen"]
-		.companion:not(.has-page)
-		.workspace-content {
-		flex: none;
-	}
 	.companion {
-		display: flex;
-		flex-direction: column;
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
 		min-height: 440px;
 	}
+	.workspace-content {
+		display: contents;
+	}
 	.sidebar {
-		flex: 1;
+		grid-row: 2;
 		padding: 12px;
 		border-right: 0;
+		overflow-y: auto;
 	}
 	.sidebar-header {
 		margin-bottom: 8px;
@@ -691,20 +700,23 @@ svg {
 	.page-link-title {
 		font-size: 15px;
 	}
-	.has-page .sidebar {
-		display: none;
-	}
 	.has-page .back {
 		display: inline-flex;
 	}
 	.toolbar {
+		grid-row: 1;
 		padding: 8px 12px;
 		gap: 4px;
 		border-bottom: 1px solid var(--border);
 	}
-	.companion:not(.has-page) .toolbar,
-	.companion:not(.has-page) .detail {
+	.companion.sidebar-open .workspace-content > :not(.toolbar) {
 		display: none;
+	}
+	.detail {
+		grid-row: 2;
+	}
+	.home-view {
+		padding: 28px 24px;
 	}
 	.toolbar .icon-button,
 	.btn {
@@ -732,16 +744,33 @@ svg {
 	.prose {
 		margin-top: 24px;
 	}
-	.context-tray {
-		padding: 12px 16px;
-	}
-	.context-tray .icon-button {
-		min-height: 44px;
-		width: 44px;
-	}
 	.page-status:not(:empty) {
 		margin-inline: 16px;
 	}
+}
+
+.companion:not(.sidebar-open) {
+	grid-template-columns: minmax(0, 1fr);
+}
+.sidebar[hidden] {
+	display: none;
+}
+.appearance-menu {
+	width: min(250px, calc(100vw - 32px));
+	padding: 12px;
+}
+.appearance-menu label {
+	display: block;
+	font-weight: 500;
+	margin-bottom: 8px;
+}
+.appearance-menu select {
+	width: 100%;
+	padding: 8px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--background);
+	color: var(--foreground);
 }
 
 /* The page body is the real Haunter editor, with its own scroll container. */
@@ -762,4 +791,79 @@ svg {
 }
 .companion[aria-busy="true"] {
 	cursor: progress;
+}
+
+.create-actions {
+	display: flex;
+	gap: 6px;
+	margin-top: 16px;
+}
+.create-actions .btn {
+	flex: 1;
+	padding-inline: 8px;
+}
+#favorites-list .page-link,
+#canvas-list .page-link {
+	width: 100%;
+	text-align: left;
+}
+.workspace-dialog {
+	color: var(--foreground);
+	background: var(--background);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	padding: 24px;
+	width: min(440px, calc(100vw - 32px));
+	max-height: calc(100vh - 32px);
+}
+.workspace-dialog::backdrop {
+	background: rgb(0 0 0 / 50%);
+}
+.workspace-dialog form {
+	display: grid;
+	gap: 20px;
+}
+.workspace-dialog h2 {
+	font-size: 20px;
+	margin: 0;
+}
+.workspace-dialog label {
+	display: grid;
+	gap: 8px;
+	font-size: 14px;
+}
+.workspace-dialog input,
+.workspace-dialog select {
+	width: 100%;
+	box-sizing: border-box;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 10px;
+	background: var(--background);
+	color: var(--foreground);
+	font: inherit;
+}
+.dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.dialog-actions .primary {
+	background: var(--foreground);
+	color: var(--background);
+}
+.page-actions-menu .btn {
+	width: 100%;
+	text-align: left;
+	justify-content: flex-start;
+	white-space: nowrap;
+}
+#archive-notice {
+	margin: 12px 24px;
+	display: flex;
+	gap: 16px;
+	align-items: center;
+}
+#archive-notice[hidden] {
+	display: none;
 }

@@ -253,7 +253,18 @@ export function editDocumentBlocks(
 				? { content: operation.content }
 				: {}),
 		};
-		validateEditableBlock(candidate);
+		if (["image", "file", "audio", "video"].includes(block.type)) {
+			if (
+				operation.content !== undefined ||
+				Object.entries(operation.props ?? {}).some(
+					([key, value]) =>
+						!["name", "caption"].includes(key) || typeof value !== "string",
+				)
+			)
+				invalid(
+					"Existing attachments support name and caption updates only. Their file URL and content must be preserved.",
+				);
+		} else validateEditableBlock(candidate);
 		const content = container.get(0);
 		if (!(content instanceof Y.XmlElement)) invalid("Invalid block content.");
 		for (const [key, value] of Object.entries(operation.props ?? {}))

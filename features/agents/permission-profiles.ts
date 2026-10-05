@@ -19,6 +19,8 @@ const VIEW_CAPABILITIES = [
 	"list_pages",
 	"search_pages",
 	"read_page",
+	"list_page_attachments",
+	"read_page_attachment",
 	"list_tasks",
 ] as const;
 
@@ -114,6 +116,8 @@ const CAPABILITY_LABELS = {
 	list_pages: "View page lists",
 	search_pages: "Search pages",
 	read_page: "Read pages",
+	list_page_attachments: "List page attachments",
+	read_page_attachment: "Read page attachments",
 	list_tasks: "View tasks",
 	create_page: "Create pages",
 	append_to_page: "Add to pages",

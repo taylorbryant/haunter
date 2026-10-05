@@ -124,3 +124,11 @@ export const exchangeEmbeddedEditor = sessions
 export const verifyEmbeddedEditor = sessions
 	.get("/api/embedded-editor/session")
 	.responses({ 200: EmbeddedEditorIdentitySchema });
+
+export const listEmbeddedWorkspaces = sessions
+	.get("/api/embedded-editor/workspaces")
+	.responses({
+		200: z.object({
+			workspaces: z.array(z.object({ id: z.string(), name: z.string() })),
+		}),
+	});

@@ -101,6 +101,14 @@ export function fixture(overrides: Partial<CompanionBridge> = {}) {
 		},
 	});
 	const defaultCall: CompanionBridge["callTool"] = async (name, args) => {
+		if (name === "get_haunter_workspace")
+			return {
+				pages: [savedPage, child],
+				canEdit: true,
+				favorites: [],
+				canvasFavorites: [],
+				canvases: [],
+			};
 		if (name === "list_workspaces") return { workspaces };
 		if (name === "open_haunter_editor")
 			return destination(String(args.pageId), String(args.workspaceId));

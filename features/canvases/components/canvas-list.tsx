@@ -3,7 +3,7 @@
 import { contractErrorMessage } from "@beignet/core/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, ShapesIcon, StarIcon, Trash2Icon } from "lucide-react";
-import Link from "next/link";
+import { WorkspaceLink as Link } from "@/client/workspace-navigation";
 import { useState } from "react";
 import { useCreateDialog } from "@/components/create-dialog-provider";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
@@ -92,7 +92,15 @@ function CanvasListRow({
 	);
 }
 
-export function CanvasList({ workspaceId }: { workspaceId: string }) {
+export function CanvasList({
+	workspaceId,
+	allowDelete = true,
+	allowFavorites = true,
+}: {
+	workspaceId: string;
+	allowDelete?: boolean;
+	allowFavorites?: boolean;
+}) {
 	const queryClient = useQueryClient();
 	const canEdit = useCanEditWorkspace();
 	const { openCreateCanvas } = useCreateDialog();
@@ -186,13 +194,13 @@ export function CanvasList({ workspaceId }: { workspaceId: string }) {
 							key={canvas.id}
 							canvas={canvas}
 							workspaceId={workspaceId}
-							canEdit={canEdit}
+							canEdit={canEdit && allowDelete}
 							isFavorite={
 								navigationQuery.data?.favorites.some(
 									(item) => item.id === canvas.id,
 								) ?? false
 							}
-							navigationLoaded={Boolean(navigationQuery.data)}
+							navigationLoaded={allowFavorites && Boolean(navigationQuery.data)}
 							onDelete={() => {
 								setDeleteError(null);
 								setDeleteTarget(canvas);

@@ -24,3 +24,36 @@ export const verifyEmbeddedEditorUseCase = useCase
 		if (!ctx.embeddedEditor) throw appError("Unauthorized");
 		return ctx.embeddedEditor;
 	});
+
+export const listEmbeddedWorkspacesUseCase = useCase
+	.query("agents.listEmbeddedWorkspaces")
+	.input(z.object({}))
+	.output(
+		z.object({
+			workspaces: z.array(z.object({ id: z.string(), name: z.string() })),
+		}),
+	)
+	.run(async ({ ctx }) => {
+		const identity = ctx.embeddedEditor;
+		if (!identity || identity.scope !== "workspace")
+			throw appError("Forbidden");
+		const connections = await ctx.ports.mcpConnections.listByUser(
+			identity.user.id,
+		);
+		const current = connections.find(
+			(connection) => connection.id === identity.connectionId,
+		);
+		const active =
+			current &&
+			(await ctx.ports.mcpConnections.findActive(
+				identity.user.id,
+				current.clientId,
+			));
+		if (!active) throw appError("Forbidden");
+		const memberships = await ctx.ports.members.listForUser(identity.user.id);
+		return {
+			workspaces: memberships
+				.filter((workspace) => active.workspaceIds.includes(workspace.id))
+				.map(({ id, name }) => ({ id, name })),
+		};
+	});

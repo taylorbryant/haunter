@@ -265,8 +265,10 @@ export function McpConsentCard() {
 									Allow editing in the embedded editor
 								</span>
 								<span className="mt-1 block text-xs text-muted-foreground">
-									Edit pages and canvases in this client, including changing
-									page titles and removing content or shapes. View only
+									Create and edit pages, canvases, and tasks in this client,
+									organize pages and favorites, restore history and recovery
+									copies, publish or revoke public page links, and move pages to
+									trash. This includes removing content or shapes. View only
 									connections stay read-only.
 								</span>
 							</label>

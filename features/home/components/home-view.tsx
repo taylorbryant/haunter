@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { FileTextIcon, ShapesIcon } from "lucide-react";
-import Link from "next/link";
+import { WorkspaceLink as Link } from "@/client/workspace-navigation";
 import { useState } from "react";
 import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";

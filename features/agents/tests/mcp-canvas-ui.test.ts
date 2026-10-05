@@ -32,6 +32,42 @@ function setup() {
 			name === "open_haunter_canvas" ? canvas : f.defaultCall(name, args),
 	});
 }
+test("inline canvas selection replaces text selection without navigating away from the page", async () => {
+	setup();
+	await f.open();
+	f.emit("haunter/editor/selection", { text: "Selected page text" });
+	const original = f.frame.src;
+	const selection = {
+		canvasPageId: "page:one",
+		selectedShapeIds: ["shape:box"],
+		selectionCount: 1,
+		selectionComplete: true,
+	};
+	f.emit("haunter/editor/inline-canvas-selection", { canvasId, selection });
+	await waitFor(() =>
+		expect(f.contexts.at(-1)?.view?.inlineCanvas).toEqual({
+			canvasId,
+			selection,
+		}),
+	);
+	expect(f.contexts.at(-1)?.view?.pageId).toBe(pageId);
+	expect(f.contexts.at(-1)?.view?.selection).toBeUndefined();
+	expect(f.frame.src).toBe(original);
+	f.emit("haunter/editor/inline-canvas-selection", {
+		canvasId: null,
+		selection: null,
+	});
+	await waitFor(() =>
+		expect(f.contexts.at(-1)?.view?.inlineCanvas).toBeUndefined(),
+	);
+	f.emit(
+		"haunter/editor/inline-canvas-selection",
+		{ canvasId, selection },
+		{ origin: "https://unrelated.test" },
+	);
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(f.contexts.at(-1)?.view?.inlineCanvas).toBeUndefined();
+});
 test("canvas destinations bind the resource and reject page paths or other origins", () => {
 	expect(validateEditorOutput(canvas)).toEqual(canvas);
 	for (const changed of [
@@ -44,11 +80,9 @@ test("canvas destinations bind the resource and reject page paths or other origi
 test("canvas blocks open the interactive canvas, share bounded selection metadata, and return to the page", async () => {
 	setup();
 	await f.open();
-	element("use-context").click();
-	await waitFor(() => expect(f.contexts.at(-1)?.page?.pageId).toBe(pageId));
+	f.emit("haunter/editor/selection", { text: "Page selection" });
 	f.emit("haunter/editor/open-canvas", { canvasId });
 	await waitFor(() => expect(f.frame.src).toContain(`/c/${canvasId}`));
-	expect(element("use-context").hidden).toBeTrue();
 	await waitFor(() => expect(f.contexts.at(-1)?.view?.canvasId).toBe(canvasId));
 	const selection = {
 		canvasPageId: "page:one",
@@ -61,7 +95,7 @@ test("canvas blocks open the interactive canvas, share bounded selection metadat
 		expect(f.contexts.at(-1)?.view?.canvas).toEqual(selection),
 	);
 	expect(f.contexts.at(-1)?.text).toContain("read_canvas");
-	expect(f.contexts.at(-1)?.page?.pageId).toBe(pageId);
+	expect(f.contexts.at(-1)?.view?.selection).toBeUndefined();
 	const count = f.contexts.length;
 	f.emit("haunter/editor/canvas-selection", { selection });
 	f.emit("haunter/editor/canvas-selection", {

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { useWorkspacePathname as usePathname } from "@/client/workspace-navigation";
 import { useEffect, useState } from "react";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { useDraftRegistry } from "@/client/use-draft-registry";
@@ -38,12 +38,15 @@ export function HeaderSaveIndicator({
 	const registry = useDraftRegistry();
 	const now = useNow(30_000);
 	const canEdit = useCanEditWorkspace();
-	const [historyOpen, setHistoryOpen] = useState(false);
+	const [historyPageId, setHistoryPageId] = useState<string | null>(null);
 
 	const workspaceId = pathname.match(/^(?:\/embed)?\/w\/([^/]+)/)?.[1] ?? null;
 	const pageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 	const { synced } = useWorkspaceRouteSync(workspaceId);
 	const page = useCachedPage(pageId);
+	// A header survives navigation; a history selection belongs to one page.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on route identity changes
+	useEffect(() => setHistoryPageId(null), [pageId, workspaceId]);
 
 	if (pageId === null) return null;
 	const drafts = registry
@@ -104,12 +107,18 @@ export function HeaderSaveIndicator({
 				className={`keyboard-focus-ring ${className} inline-flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-sm bg-transparent p-0 transition-colors hover:text-foreground hover:underline [--keyboard-focus-ring-size:2px]`}
 				aria-label={`Open page history. ${label}`}
 				aria-haspopup="dialog"
-				onClick={() => setHistoryOpen(true)}
+				onClick={() => setHistoryPageId(pageId)}
 			>
 				{label}
 			</button>
-			{historyOpen ? (
-				<PageHistoryDialog pageId={pageId} onOpenChange={setHistoryOpen} />
+			{historyPageId === pageId ? (
+				<PageHistoryDialog
+					key={pageId}
+					pageId={pageId}
+					onOpenChange={(open) => {
+						if (!open) setHistoryPageId(null);
+					}}
+				/>
 			) : null}
 		</>
 	);

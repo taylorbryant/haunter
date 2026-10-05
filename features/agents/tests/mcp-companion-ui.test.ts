@@ -39,45 +39,18 @@ test("workspace navigation shares current-page metadata without attaching conten
 	expect(element("breadcrumbs").textContent).toBe("ProductLaunch plan");
 });
 
-test("explicit saved-page context flushes first and reads the latest saved revision", async () => {
-	f = fixture({
-		async callTool(name, args) {
-			return name === "read_page"
-				? {
-						...savedPage,
-						title: "Updated launch",
-						revision: "revision-two",
-						markdown: "Newest saved content.",
-					}
-				: f.defaultCall(name, args);
-		},
-	});
-	await f.open();
-	f.settings.autoFlush = false;
-	element("use-context").click();
-	expect(f.calls.some((call) => call.name === "read_page")).toBeFalse();
-	const request = f.messages.at(-1);
-	f.emit("haunter/editor/flushed", {
-		requestId: request?.requestId,
-		locallySaved: true,
-		saved: true,
-	});
-	await waitFor(() => expect(f.contexts.at(-1)?.page).toBeDefined());
-	expect(f.contexts.at(-1)?.text).toContain("Newest saved content.");
-	expect(f.contexts.at(-1)?.page?.revision).toBe("revision-two");
-	expect(element("breadcrumbs").textContent).toContain("Updated launch");
-	f.companion.syncContext(null);
-	expect(element("remove-context").hidden).toBeTrue();
-});
-
-test("search and nested navigation preserve the active editor and explicit context", async () => {
+test("search preserves the current selection and Home clears it", async () => {
 	f = fixture();
 	await f.open(childId);
 	expect(element("breadcrumbs").textContent).toBe(
 		"ProductLaunch planRelease checklist",
 	);
-	element("use-context").click();
-	await waitFor(() => expect(f.contexts.at(-1)?.page).toBeDefined());
+	f.emit("haunter/editor/selection", { text: "Selected live passage" });
+	await waitFor(() =>
+		expect(f.contexts.at(-1)?.view?.selection?.text).toBe(
+			"Selected live passage",
+		),
+	);
 	const source = f.frame.src;
 	element<HTMLInputElement>("query").value = "release";
 	element("search-form").dispatchEvent(new Event("submit"));
@@ -85,14 +58,16 @@ test("search and nested navigation preserve the active editor and explicit conte
 		expect(f.calls.some((call) => call.name === "search_pages")).toBeTrue(),
 	);
 	expect(f.frame.src).toBe(source);
+	expect(f.contexts.at(-1)?.view?.selection?.text).toBe(
+		"Selected live passage",
+	);
 	element("home").click();
 	await waitFor(() => expect(f.frame.hidden).toBeTrue());
 	await waitFor(() =>
 		expect(element<HTMLButtonElement>("home").disabled).toBeFalse(),
 	);
 	expect(f.contexts.at(-1)?.view).toBeUndefined();
-	expect(f.contexts.at(-1)?.page?.pageId).toBe(childId);
-	expect(element("context-status").textContent).toContain(child.title);
+	expect(f.contexts.at(-1)?.text).not.toContain("Selected live passage");
 	expect(element<HTMLInputElement>("query").value).toBe("");
 	expect(element(`children-${pageId}`).hidden).toBeFalse();
 });
@@ -150,31 +125,13 @@ test("navigation serializes delayed reads so a second action cannot replace the 
 	expect(select.value).toBe("workspace-one");
 });
 
-test("denied reads cannot share cached content or destroy a draft, and missing context support disables attachment", async () => {
-	f = fixture({
-		async callTool(name, args) {
-			if (name === "read_page")
-				throw new Error("This MCP connection is not active.");
-			return f.defaultCall(name, args);
-		},
-	});
-	await f.open();
-	const source = f.frame.src;
-	element("use-context").click();
-	await waitFor(() =>
-		expect(element("page-status").textContent).toContain("not active"),
-	);
-	expect(f.contexts.every((entry) => !entry.page)).toBeTrue();
-	expect(f.frame.src).toBe(source);
-	f.companion.dispose();
-	// A different host can still browse even if it cannot accept context.
-	document.body.innerHTML = template;
+test("a host without model-context support can still edit without sending selections", async () => {
 	f = fixture({ canUseContext: () => false });
 	await f.open();
-	expect(element<HTMLButtonElement>("use-context").disabled).toBeTrue();
-	expect(element("context-help").textContent).toContain("unavailable");
 	f.emit("haunter/editor/selection", { text: "Private text" });
+	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(f.contexts).toEqual([]);
+	expect(f.frame.hidden).toBeFalse();
 });
 
 test("large page context is bounded and resource identifiers reject noncanonical paths", () => {

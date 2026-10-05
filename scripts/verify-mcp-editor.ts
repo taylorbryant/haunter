@@ -92,11 +92,12 @@ try {
 		"PASS: opening and renaming share page identity and save status without attaching page content",
 	);
 	// Changing workspaces must authorize the new scope and load its page.
-	await app
-		.getByRole("combobox", { name: "Workspace", exact: true })
-		.selectOption(fixture.secondWorkspaceId);
-	await app
-		.getByRole("button", { name: "Team notes", exact: true })
+	await editorFrame.getByRole("button", { name: /^Workspace:/ }).click();
+	await editorFrame
+		.getByRole("menuitem", { name: "Team workspace", exact: true })
+		.click();
+	await editorFrame
+		.getByRole("link", { name: "Team notes", exact: true })
 		.first()
 		.click();
 	await body
@@ -108,10 +109,11 @@ try {
 		workspaceId: fixture.secondWorkspaceId,
 		title: "Team notes",
 	});
-	await app
-		.getByRole("combobox", { name: "Workspace", exact: true })
-		.selectOption("document-workspace");
-	await app.locator(`.page-link[data-page-id="${fixture.pageId}"]`).click();
+	await editorFrame.getByRole("button", { name: /^Workspace:/ }).click();
+	await editorFrame
+		.getByRole("menuitem", { name: "Editor proof", exact: true })
+		.click();
+	await editorFrame.locator(`a[href$="/p/${fixture.pageId}"]`).first().click();
 	await body.waitFor();
 	console.log(
 		"PASS: workspace switching authorizes and opens a different workspace",
@@ -128,8 +130,8 @@ try {
 	const beforeFailedSwitch = await app
 		.locator("#real-editor")
 		.getAttribute("src");
-	await app.getByRole("button", { name: "Home", exact: true }).click();
-	await app
+	await editorFrame.getByRole("link", { name: "Home", exact: true }).click();
+	await editorFrame
 		.getByText("Your changes have not finished saving.", { exact: false })
 		.waitFor();
 	assert.equal(
@@ -149,29 +151,25 @@ try {
 		.evaluate(() => window.dispatchEvent(new Event("online")));
 	await editorFrame
 		.getByText("Saved in this browser", { exact: true })
+		.first()
 		.waitFor({ state: "hidden" });
 	await expectCurrentView({ pageId: fixture.pageId, saveStatus: "saved" });
 	console.log(
 		"PASS: an interrupted connection blocks navigation and retains the editable draft",
 	);
-	await app
-		.getByRole("button", { name: /Use as context|Update context/ })
-		.click();
-	await page.waitForFunction(
-		(text) => document.getElementById("context")?.textContent?.includes(text),
-		panelText,
-	);
 	const saved = await (await fetch(`${origin}/saved`)).json();
 	assert.ok(JSON.stringify(saved).includes(panelText));
-	console.log(
-		"PASS: typed panel text reaches the database and saved-page context",
-	);
+	console.log("PASS: typed panel text reaches the database");
 	// Switch immediately after typing, with no explicit context/save action.
 	const switchedText = `Saved while switching ${stamp}.`;
 	await append(body, switchedText);
-	await app.locator(".tree-toggle").click();
-	await app
-		.locator(`.page-link[data-page-id="${fixture.secondPageId}"]`)
+	const expand = editorFrame
+		.locator(`li:has(> a[href$="/p/${fixture.pageId}"])`)
+		.getByRole("button", { name: "Expand", exact: true });
+	if (await expand.count()) await expand.click();
+	await editorFrame
+		.locator(`a[href$="/p/${fixture.secondPageId}"]`)
+		.first()
 		.click();
 	await body
 		.getByText("A second page for navigation and save verification.", {
@@ -183,21 +181,16 @@ try {
 		title: "Release checklist",
 	});
 	assert.ok(
-		(await page.locator("#context").textContent())?.includes(panelText),
+		!(await page.locator("#context").textContent())?.includes(panelText),
 	);
 
-	await editorFrame
-		.getByRole("button", { name: "Open canvas", exact: true })
-		.waitFor();
-	await editorFrame
-		.getByRole("button", { name: "Linked page · Open in Haunter", exact: true })
-		.waitFor();
-	await editorFrame
-		.getByRole("button", {
-			name: "Page mention · Open in Haunter",
-			exact: true,
-		})
-		.waitFor();
+	await editorFrame.locator(".tl-canvas").waitFor();
+	const linkedPages = body.getByRole("button", {
+		name: new RegExp(renamedTitle),
+	});
+	await linkedPages.first().waitFor();
+	assert.equal(await linkedPages.count(), 2);
+
 	assert.equal(
 		await editorFrame
 			.getByRole("button", { name: /Open page history/ })
@@ -211,27 +204,51 @@ try {
 	await editorFrame
 		.getByRole("textbox", { name: "Code", exact: true })
 		.fill(codeText);
-	// Navigate with the code dialog still open; its draft must be in the document.
-	await app.locator(`.page-link[data-page-id="${fixture.pageId}"]`).click();
+	// Assistant-driven navigation can arrive while the code dialog is open.
+	await page.evaluate(
+		({ webUrl, pageId }) => {
+			const web = new URL(webUrl);
+			document
+				.querySelector<HTMLIFrameElement>("#app")
+				?.contentWindow?.postMessage(
+					{
+						jsonrpc: "2.0",
+						method: "ui/notifications/tool-result",
+						params: {
+							structuredContent: {
+								workspaceId: "document-workspace",
+								pageId,
+								title: "Document",
+								webUrl: web.href,
+								editorUrl: `${web.origin}/embed${web.pathname}`,
+							},
+						},
+					},
+					location.origin,
+				);
+		},
+		{ webUrl: fixture.webUrl, pageId: fixture.pageId },
+	);
 	await body.getByText(switchedText, { exact: true }).waitFor();
-	await app
-		.locator(`.page-link[data-page-id="${fixture.secondPageId}"]`)
+	await editorFrame
+		.locator(`a[href$="/p/${fixture.secondPageId}"]`)
+		.first()
 		.click();
 	await body.getByText(codeText, { exact: true }).waitFor();
-	await app.locator(`.page-link[data-page-id="${fixture.pageId}"]`).click();
+	await editorFrame.locator(`a[href$="/p/${fixture.pageId}"]`).first().click();
 	await body.getByText(switchedText, { exact: true }).waitFor();
 	console.log(
-		"PASS: unsupported integrations use web links and code-dialog edits survive navigation",
+		"PASS: linked pages and mentions display current titles; code-dialog edits survive navigation",
 	);
-	await app.getByRole("button", { name: "Home", exact: true }).click();
+	await editorFrame.getByRole("link", { name: "Home", exact: true }).click();
 	await expectCurrentView(null);
 	assert.ok(
-		(await page.locator("#context").textContent())?.includes(panelText),
+		!(await page.locator("#context").textContent())?.includes(panelText),
 	);
-	await app.locator(`.page-link[data-page-id="${fixture.pageId}"]`).click();
+	await editorFrame.locator(`a[href$="/p/${fixture.pageId}"]`).first().click();
 	await body.getByText(panelText, { exact: true }).waitFor();
 	console.log(
-		"PASS: switching pages and returning Home retain pending edits and attached context",
+		"PASS: switching pages and returning Home save edits and clear the prior page context",
 	);
 	const web = await context.newPage();
 	await web.goto(`${origin}/login`);
@@ -261,18 +278,24 @@ try {
 		selection?.removeAllRanges();
 		selection?.addRange(range);
 	}, webText);
-	await editorFrame
-		.getByRole("button", { name: "Use selection as context", exact: true })
-		.click();
 	await page.waitForFunction(
 		(text) => document.getElementById("context")?.textContent?.includes(text),
 		webText,
 	);
 	assert.match(
 		(await page.locator("#context").textContent()) ?? "",
-		/may include changes that have not been saved/,
+		/may include unsaved changes/,
 	);
-	console.log("PASS: explicitly selected live text reaches host context");
+	await page.getByRole("textbox", { name: "Conversation draft" }).click();
+	assert.ok((await page.locator("#context").textContent())?.includes(webText));
+	await body.evaluate(() => window.getSelection()?.removeAllRanges());
+	await page.waitForFunction(
+		(text) => !document.getElementById("context")?.textContent?.includes(text),
+		webText,
+	);
+	console.log(
+		"PASS: live selection reaches context automatically, survives focusing the composer, and clears when deselected",
+	);
 	await page.screenshot({
 		path: `${artifacts}/editor-light.png`,
 		fullPage: true,
@@ -331,12 +354,13 @@ try {
 		.locator("html")
 		.evaluate(() => window.dispatchEvent(new Event("online")));
 	await freshEditor.getByRole("textbox", { name: "", exact: true }).waitFor();
-	await freshApp
-		.getByRole("button", { name: /Use as context|Update context/ })
-		.click();
+	await fresh.waitForFunction(() => {
+		const value = document.getElementById("context")?.textContent ?? "";
+		return value.includes('"editorStatus":"ready"');
+	});
 	assert.ok(renewals > initialRenewals);
 	console.log(
-		"PASS: embedded session recovery renews access and keeps saved-page context available",
+		"PASS: embedded session recovery renews access and keeps current page context available",
 	);
 	async function access(mode: "view" | "edit" | "revoke") {
 		const response = await fetch(`${origin}/test/access`, {

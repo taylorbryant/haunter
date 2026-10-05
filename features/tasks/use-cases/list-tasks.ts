@@ -12,6 +12,7 @@ export const listTasksUseCase = useCase
 		const scope = requireActiveWorkspaceScope(ctx, input.workspaceId);
 
 		const items = await ctx.ports.tasks.listByWorkspace(scope, input.filter, {
+			taskId: input.taskId,
 			assigneeId: input.scope === "mine" ? user.id : undefined,
 			dueOnOrAfter: input.dueOnOrAfter,
 			dueOnOrBefore: input.dueOnOrBefore,

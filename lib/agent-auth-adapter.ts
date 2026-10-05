@@ -49,6 +49,8 @@ export const agentCapabilityMetadata = {
 	list_pages: workspaceScope,
 	search_pages: workspaceScope,
 	read_page: workspaceScope,
+	list_page_attachments: workspaceScope,
+	read_page_attachment: workspaceScope,
 	create_page: workspaceScope,
 	append_to_page: workspaceScope,
 	edit_page_blocks: workspaceScope,

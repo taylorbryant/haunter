@@ -1,7 +1,9 @@
+import type { AppThemeId } from "@/lib/themes";
 import {
 	EditorMessageSchema,
 	type EditorOutput,
 	type CanvasSelection,
+	type EditorWorkspaceRequest,
 	validateEditorOutput,
 } from "./editor-schema";
 
@@ -20,9 +22,9 @@ export function createEditorFrame(
 		status(text: string): void;
 		ready(value: boolean): void;
 		contextChanged(): void;
-		selection(text: string, page: EditorOutput): Promise<void>;
 		openCanvas(canvasId: string): Promise<void>;
-		openPage(pageId: string): Promise<void>;
+		openPage(pageId: string, workspaceId?: string): Promise<void>;
+		workspaceRequest?(request: EditorWorkspaceRequest): Promise<unknown>;
 		metadata(
 			value: { title: string; icon: string | null },
 			page: EditorOutput,
@@ -33,11 +35,17 @@ export function createEditorFrame(
 	let page: EditorOutput | undefined;
 	let nonce = "";
 	let canvasSelection: CanvasSelection | undefined;
+	let selection: { text: string; complete: boolean } | undefined;
+	let inlineCanvas:
+		| { canvasId: string; selection: CanvasSelection }
+		| undefined;
+	const requests = new Set<string>();
 	let mounted = false;
+	let connected = false;
 	let ready = false;
 	let status: "opening" | "ready" | "unavailable" = "opening";
 	let saveStatus: "unknown" | "saved" | "unsaved" = "unknown";
-	let theme: "light" | "dark" = "light";
+	let theme: AppThemeId = "light";
 	let loadingTimer: ReturnType<typeof setTimeout> | undefined;
 	let flush:
 		| {
@@ -48,7 +56,9 @@ export function createEditorFrame(
 		  }
 		| undefined;
 	const send = (message: Record<string, unknown>) => {
-		if (page)
+		// Before the first verified message, the iframe may still be about:blank
+		// with the host's origin, or its navigation may have been blocked.
+		if (page && connected)
 			frame.contentWindow?.postMessage(
 				{ ...message, nonce },
 				new URL(page.editorUrl).origin,
@@ -100,7 +110,10 @@ export function createEditorFrame(
 		frame.inert = false;
 		page = undefined;
 		canvasSelection = undefined;
+		selection = undefined;
+		inlineCanvas = undefined;
 		mounted = false;
+		connected = false;
 		ready = false;
 		status = "opening";
 		saveStatus = "unknown";
@@ -127,7 +140,8 @@ export function createEditorFrame(
 				),
 			12_000,
 		);
-		options.status(next.canvasId ? "Opening canvas…" : "Opening page…");
+		// The embedded editor owns the loading view; reserve shell notices for errors.
+		options.status("");
 	}
 	async function handleMessage(event: MessageEvent) {
 		if (
@@ -139,6 +153,7 @@ export function createEditorFrame(
 			return;
 		const parsed = EditorMessageSchema.safeParse(event.data);
 		if (!parsed.success || parsed.data.nonce !== nonce) return;
+		connected = true;
 		const message = parsed.data;
 		if (message.type === "haunter/editor/authorize") {
 			const selected = page;
@@ -166,6 +181,37 @@ export function createEditorFrame(
 							"Haunter could not authorize this editor. Reconnect Haunter and try again.",
 					});
 			}
+		} else if (
+			message.type === "haunter/editor/workspace-request" &&
+			ready &&
+			!flush &&
+			!page.canvasId &&
+			options.workspaceRequest
+		) {
+			if (requests.has(message.requestId)) return;
+			requests.add(message.requestId);
+			const selectedNonce = nonce;
+			try {
+				const result = await options.workspaceRequest(message.request);
+				if (nonce === selectedNonce)
+					send({
+						type: "haunter/editor/workspace-result",
+						requestId: message.requestId,
+						result,
+					});
+			} catch (error) {
+				if (nonce === selectedNonce)
+					send({
+						type: "haunter/editor/workspace-result",
+						requestId: message.requestId,
+						error:
+							error instanceof Error
+								? error.message
+								: "Haunter could not complete this action.",
+					});
+			} finally {
+				requests.delete(message.requestId);
+			}
 		} else if (message.type === "haunter/editor/status") {
 			clearTimeout(loadingTimer);
 			ready = message.status === "ready";
@@ -174,13 +220,18 @@ export function createEditorFrame(
 				: message.status === "opening"
 					? "opening"
 					: "unavailable";
-			if (!ready) saveStatus = "unknown";
+			if (!ready) {
+				saveStatus = "unknown";
+				selection = undefined;
+				inlineCanvas = undefined;
+				canvasSelection = undefined;
+			}
 			mounted ||= ready;
 			options.status(
 				ready
 					? ""
 					: message.status === "opening"
-						? "Opening canvas…"
+						? ""
 						: message.status === "sign-in-required"
 							? "Reconnect Haunter to authorize this editor, then retry."
 							: "This Haunter account cannot open the selected page.",
@@ -205,20 +256,26 @@ export function createEditorFrame(
 			!page.canvasId
 		) {
 			await options.openCanvas(message.canvasId);
-		} else if (
-			message.type === "haunter/editor/open-page" &&
-			ready &&
-			!flush &&
-			page.canvasId &&
-			message.pageId === page.pageId
-		) {
-			await options.openPage(message.pageId);
+		} else if (message.type === "haunter/editor/open-page" && ready && !flush) {
+			await options.openPage(message.pageId, message.workspaceId);
 		} else if (
 			message.type === "haunter/editor/canvas-selection" &&
 			ready &&
 			page.canvasId
 		) {
 			canvasSelection = message.selection;
+			options.contextChanged();
+		} else if (
+			message.type === "haunter/editor/inline-canvas-selection" &&
+			ready &&
+			!flush &&
+			!page.canvasId
+		) {
+			inlineCanvas =
+				message.canvasId && message.selection
+					? { canvasId: message.canvasId, selection: message.selection }
+					: undefined;
+			if (inlineCanvas) selection = undefined;
 			options.contextChanged();
 		} else if (message.type === "haunter/editor/metadata") {
 			options.metadata(message, page);
@@ -227,8 +284,17 @@ export function createEditorFrame(
 			options.contextChanged();
 		} else if (message.type === "haunter/editor/open-web") {
 			await bridge.openLink(page.webUrl);
-		} else if (message.type === "haunter/editor/selection" && ready && !flush) {
-			await options.selection(message.text, page);
+		} else if (
+			message.type === "haunter/editor/selection" &&
+			ready &&
+			!flush &&
+			!page.canvasId
+		) {
+			selection = message.text
+				? { text: message.text, complete: message.complete }
+				: undefined;
+			if (selection) inlineCanvas = undefined;
+			options.contextChanged();
 		}
 	}
 	const listener = (event: MessageEvent) => {
@@ -244,9 +310,12 @@ export function createEditorFrame(
 				status,
 				saveStatus,
 				canvasSelection: status === "ready" ? canvasSelection : undefined,
+				selection: status === "ready" ? selection : undefined,
+				inlineCanvas: status === "ready" ? inlineCanvas : undefined,
 			};
 		},
 		initialize,
+		discardSaved: reset,
 		save,
 		prepareClose,
 		resume,
@@ -254,7 +323,7 @@ export function createEditorFrame(
 			await prepareClose();
 			reset();
 		},
-		applyTheme(next: "light" | "dark") {
+		applyTheme(next: AppThemeId) {
 			theme = next;
 			send({ type: "haunter/editor/theme", theme });
 			send({

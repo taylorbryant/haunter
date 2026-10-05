@@ -23,7 +23,8 @@ function MentionChip({
 		enabled: !embedded,
 	});
 	const page = pagesQuery.data?.items.find((item) => item.id === pageId);
-	if (embedded) return <EmbeddedFeatureLink label="Page mention" />;
+	if (embedded)
+		return <EmbeddedFeatureLink pageId={pageId} workspaceId={workspaceId} />;
 
 	if (!page) {
 		return (

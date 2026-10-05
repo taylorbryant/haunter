@@ -78,6 +78,7 @@ export type UpdateTaskData = {
 };
 
 export type ListTasksOptions = {
+	taskId?: string;
 	assigneeId?: string;
 	dueOnOrAfter?: string;
 	dueOnOrBefore?: string;

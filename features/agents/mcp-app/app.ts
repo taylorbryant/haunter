@@ -1,10 +1,10 @@
-import { App, applyDocumentTheme } from "@modelcontextprotocol/ext-apps";
+import { App } from "@modelcontextprotocol/ext-apps";
 import { OpenAIExtensions } from "@openai/mcp-extensions/app";
-import { createCompanion } from "./controller";
+import { createWorkspaceAdapter } from "./workspace-adapter";
 
 const app = new App({ name: "Haunter", version: "1.0.0" }, {});
 const extensions = new OpenAIExtensions(app);
-const companion = createCompanion({
+const companion = createWorkspaceAdapter({
 	async callTool(name, args) {
 		const result = await app.callServerTool({ name, arguments: args });
 		if (result.isError) {
@@ -38,7 +38,6 @@ const companion = createCompanion({
 function applyHostContext() {
 	const context = app.getHostContext();
 	if (context?.theme) {
-		applyDocumentTheme(context.theme);
 		companion.applyTheme(context.theme);
 	}
 	document.documentElement.dataset.displayMode =

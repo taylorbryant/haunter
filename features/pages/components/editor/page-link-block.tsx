@@ -24,7 +24,8 @@ function PageLink({
 		enabled: !embedded,
 	});
 	const page = pagesQuery.data?.items.find((item) => item.id === pageId);
-	if (embedded) return <EmbeddedFeatureLink label="Linked page" />;
+	if (embedded)
+		return <EmbeddedFeatureLink pageId={pageId} workspaceId={workspaceId} />;
 
 	if (pagesQuery.isPending) {
 		return (

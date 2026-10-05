@@ -10,7 +10,7 @@ import {
 	Trash2Icon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { useWorkspacePathname as usePathname } from "@/client/workspace-navigation";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
@@ -65,7 +65,15 @@ const SharePanel = dynamic(
 );
 
 /** Page-scoped actions shared by the desktop menu and mobile drawer. */
-export function HeaderPageActions() {
+export function HeaderPageActions({
+	allowFavorites = true,
+	beforeRemove,
+	onRemoved,
+}: {
+	allowFavorites?: boolean;
+	beforeRemove?: () => Promise<boolean>;
+	onRemoved?: (pageIds: readonly string[]) => boolean;
+}) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const queryClient = useQueryClient();
@@ -209,19 +217,24 @@ export function HeaderPageActions() {
 		setTrashError(null);
 		setPreparingTrash(true);
 		try {
-			if (!(await flushPendingPageSave(target.pageId))) {
+			if (
+				!(await (beforeRemove
+					? beforeRemove()
+					: flushPendingPageSave(target.pageId)))
+			) {
 				setTrashError("Save this page before moving it to trash.");
 				return;
 			}
 			await deleteMutation.mutateAsync({ path: { id: target.pageId } });
 			setTrashTarget(null);
+			const handled = onRemoved?.([target.pageId]) ?? false;
 			await Promise.all([
 				invalidatePages(queryClient),
 				invalidatePageNavigation(queryClient, target.workspaceId),
 				invalidateTrash(queryClient),
 				invalidateTasks(queryClient),
 			]);
-			if (currentPageIdRef.current === target.pageId) {
+			if (!handled && currentPageIdRef.current === target.pageId) {
 				router.push(`/w/${target.workspaceId}/home`);
 			}
 		} catch (error) {
@@ -241,7 +254,12 @@ export function HeaderPageActions() {
 				className="text-muted-foreground"
 				aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
 				title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-				disabled={!page || !navigationQuery.data || favorite.isPending}
+				disabled={
+					!allowFavorites ||
+					!page ||
+					!navigationQuery.data ||
+					favorite.isPending
+				}
 				onClick={() => favorite.toggle(!isFavorite)}
 			>
 				<StarIcon className={isFavorite ? "fill-current" : undefined} />

@@ -406,9 +406,11 @@ function CreateCanvasDialog({
 
 export function CreateDialogProvider({
 	workspaceId,
+	allowTasks = true,
 	children,
 }: {
 	workspaceId: string;
+	allowTasks?: boolean;
 	children: ReactNode;
 }) {
 	const canEdit = useCanEditWorkspace();
@@ -422,10 +424,10 @@ export function CreateDialogProvider({
 		setDialog("page");
 	}, [canEdit, dialog, isMobile, pending, setOpenMobile]);
 	const openCreateTask = useCallback(() => {
-		if (!canEdit || dialog !== null || pending) return;
+		if (!allowTasks || !canEdit || dialog !== null || pending) return;
 		if (isMobile) setOpenMobile(false);
 		setDialog("task");
-	}, [canEdit, dialog, isMobile, pending, setOpenMobile]);
+	}, [allowTasks, canEdit, dialog, isMobile, pending, setOpenMobile]);
 	const openCreateCanvas = useCallback(() => {
 		if (!canEdit || dialog !== null || pending) return;
 		if (isMobile) setOpenMobile(false);
@@ -461,7 +463,7 @@ export function CreateDialogProvider({
 	);
 
 	useCommand(
-		canEdit
+		canEdit && allowTasks
 			? {
 					id: "task.create",
 					title: "Create task",

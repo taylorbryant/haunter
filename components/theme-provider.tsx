@@ -13,6 +13,7 @@ import {
 } from "react";
 import {
 	APP_THEME_IDS,
+	type AppThemeId,
 	DARK_APP_THEMES,
 	type DarkThemeId,
 	DEFAULT_THEME_PREFERENCES,
@@ -35,7 +36,7 @@ type ThemePreferencesContextValue = ThemePreferences & {
 const ThemePreferencesContext =
 	createContext<ThemePreferencesContextValue | null>(null);
 const EmbeddedHostThemeContext = createContext<
-	((mode: "light" | "dark") => void) | null
+	((theme: AppThemeId) => void) | null
 >(null);
 
 /** Host appearance is temporary and never replaces the user's stored preferences. */
@@ -174,8 +175,8 @@ export function ThemeProvider({
 	...props
 }: ComponentProps<typeof NextThemesProvider>) {
 	const [hostTheme, setHostTheme] = useState<string>();
-	const acceptHostTheme = useCallback((mode: "light" | "dark") => {
-		if (window.parent !== window) setHostTheme(mode);
+	const acceptHostTheme = useCallback((theme: AppThemeId) => {
+		if (window.parent !== window) setHostTheme(theme);
 	}, []);
 	return (
 		<>

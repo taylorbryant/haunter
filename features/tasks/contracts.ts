@@ -32,6 +32,7 @@ export const listTasks = tasks
 	.pathParams(z.object({ workspaceId: z.string().min(1) }))
 	.query(
 		z.object({
+			taskId: z.uuid().optional(),
 			filter: TaskFilterSchema.optional(),
 			scope: TaskScopeSchema.optional(),
 			dueOnOrAfter: DueDateSchema.optional(),
@@ -39,6 +40,7 @@ export const listTasks = tasks
 			limit: z.number().int().min(1).max(200).optional(),
 		}),
 		defineQueryTransport({
+			taskId: query.string(),
 			filter: query.string(),
 			scope: query.string(),
 			dueOnOrAfter: query.string(),

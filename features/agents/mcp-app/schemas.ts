@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ListPagesInputSchema } from "@/features/pages/schemas";
 
-export const COMPANION_URI = "ui://haunter/workspace/v2";
+export const COMPANION_URI = "ui://haunter/workspace/v3";
 export const PAGE_RESOURCE_TEMPLATE =
 	"haunter://workspaces/{workspaceId}/pages/{pageId}";
 export const MAX_CONTEXT_CHARACTERS = 60_000;

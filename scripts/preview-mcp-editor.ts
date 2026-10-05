@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
 
 // Every process uses a disposable database and synthetic account. No app env
 // file credentials, production database, or email delivery are used here.
@@ -6,6 +7,7 @@ const appPort = 3097;
 const hostPort = 8797;
 const collaborationPort = 1397;
 const appOrigin = `http://127.0.0.1:${appPort}`;
+const storageRoot = await mkdtemp("/private/tmp/haunter-editor-files-");
 const secret = `editor-proof-${crypto.randomUUID()}-${crypto.randomUUID()}`;
 const previewEnv: Record<string, string> = {
 	PATH: process.env.PATH ?? "",
@@ -14,6 +16,7 @@ const previewEnv: Record<string, string> = {
 	__NEXT_PROCESSED_ENV: "true",
 	NODE_ENV: "development",
 	APP_URL: appOrigin,
+	STORAGE_ROOT: storageRoot,
 	BETTER_AUTH_URL: appOrigin,
 	BETTER_AUTH_SECRET: secret,
 	MCP_RESOURCE_URL: `${appOrigin}/mcp`,
@@ -58,6 +61,10 @@ const { documentFixture, paragraph, seedFixtureBody } = await import(
 const { createRemoteMcpRequestHandler } = await import("@/server/remote-mcp");
 const { buildMcpEditorApp } = await import("./build-mcp-app");
 const f = await documentFixture("owner");
+const { createLocalStorage } = await import("@beignet/provider-storage-local");
+f.ctx.ports.storage = createLocalStorage({ root: storageRoot });
+// This fixture is shared with the Next app and collaboration worker processes.
+await f.database.client.execute("PRAGMA busy_timeout = 5000");
 await f.database.db
 	.update(schema.organization)
 	.set({ name: "Editor proof" })
@@ -78,7 +85,7 @@ await seedFixtureBody(f, [
 		"Edit this paragraph inside the panel. The same document opens in the normal web app.",
 	),
 	paragraph(
-		"Select a passage and use it as context. Close and reopen the editor to verify persistence.",
+		"Select a passage to share it as context automatically. Close and reopen the editor to verify persistence.",
 	),
 ]);
 const secondPage = await f.database.repositories.pages.create(f.scope, {
@@ -92,49 +99,70 @@ const canvas = await f.database.repositories.canvases.create(f.scope, {
 	pageId: secondPage.id,
 	title: null,
 });
-await seedFixtureBody({ ...f, page: secondPage }, [
-	paragraph("A second page for navigation and save verification."),
-	{
-		id: "rich-code",
-		type: "codeBlock",
-		props: { language: "javascript" },
-		content: [{ type: "text", text: "const embedded = true;", styles: {} }],
-		children: [],
-	},
-	{
-		id: "rich-canvas",
-		type: "canvas",
-		props: { canvasId: canvas.id },
-		content: undefined,
-		children: [],
-	},
-	{
-		id: "rich-link",
-		type: "pageLink",
-		props: { workspaceId: f.workspaceId, pageId: f.page.id },
-		children: [],
-	},
-	{
-		id: "rich-mention",
-		type: "paragraph",
-		props: {},
-		content: [
-			{
-				type: "mention",
-				props: { workspaceId: f.workspaceId, pageId: f.page.id },
-			},
-		],
-		children: [],
-	},
-	{
-		id: "rich-task",
-		type: "task",
-		props: { checked: false, assignee: f.userId, due: "2026-10-10" },
-		content: [{ type: "text", text: "Keep the existing task", styles: {} }],
-		children: [],
-	},
-]);
+await seedFixtureBody(
+	{ ...f, page: secondPage },
+	[
+		paragraph("A second page for navigation and save verification."),
+		{
+			id: "rich-code",
+			type: "codeBlock",
+			props: { language: "javascript" },
+			content: [{ type: "text", text: "const embedded = true;", styles: {} }],
+			children: [],
+		},
+		{
+			id: "rich-canvas",
+			type: "canvas",
+			props: { canvasId: canvas.id },
+			content: undefined,
+			children: [],
+		},
+		{
+			id: "rich-link",
+			type: "pageLink",
+			props: { workspaceId: f.workspaceId, pageId: f.page.id },
+			children: [],
+		},
+		{
+			id: "rich-mention",
+			type: "paragraph",
+			props: {},
+			content: [
+				{
+					type: "mention",
+					props: { workspaceId: f.workspaceId, pageId: f.page.id },
+				},
+			],
+			children: [],
+		},
+		{
+			id: "rich-task",
+			type: "task",
+			props: { checked: false, assignee: f.userId, due: "2026-10-10" },
+			content: [{ type: "text", text: "Keep the existing task", styles: {} }],
+			children: [],
+		},
+	],
+	true,
+);
 
+const assigneeId = "editor-teammate";
+await f.database.db.insert(schema.user).values({
+	id: assigneeId,
+	name: "Alex Example",
+	email: "alex@example.test",
+	emailVerified: true,
+	accessStatus: "approved",
+	createdAt: new Date(),
+	updatedAt: new Date(),
+});
+await f.database.db.insert(schema.member).values({
+	id: "editor-teammate-membership",
+	userId: assigneeId,
+	organizationId: f.workspaceId,
+	role: "member",
+	createdAt: new Date(),
+});
 const secondWorkspaceId = "editor-team-workspace";
 await f.database.db.insert(schema.organization).values({
 	id: secondWorkspaceId,
@@ -231,13 +259,16 @@ const server = Bun.serve({
 				headers: { "Content-Type": "text/html", "Cache-Control": "no-store" },
 			});
 		if (url.pathname === "/editor")
-			return new Response(html, {
-				headers: {
-					"Content-Type": "text/html",
-					"Cache-Control": "no-store",
-					"Content-Security-Policy": `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-src ${appOrigin}; connect-src 'none'`,
+			return new Response(
+				html.replaceAll("__HAUNTER_APP_ORIGIN__", appOrigin),
+				{
+					headers: {
+						"Content-Type": "text/html",
+						"Cache-Control": "no-store",
+						"Content-Security-Policy": `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-src ${appOrigin}; connect-src 'none'`,
+					},
 				},
-			});
+			);
 		if (url.pathname === "/login")
 			return new Response(null, {
 				status: 303,
@@ -249,6 +280,8 @@ const server = Bun.serve({
 		if (url.pathname === "/fixture")
 			return Response.json({
 				appOrigin,
+				userId: f.userId,
+				assigneeId,
 				workspaceId: f.workspaceId,
 				pageId: f.page.id,
 				secondPageId: secondPage.id,
@@ -261,6 +294,21 @@ const server = Bun.serve({
 				await f.ctx.ports.pages.findById(f.scope, f.page.id),
 			);
 		// Verification controls exist only in this disposable local host.
+		if (url.pathname === "/test/checkpoint" && request.method === "POST") {
+			const { pageId } = (await request.json()) as { pageId: string };
+			const page = await f.ctx.ports.pages.findById(f.scope, pageId);
+			if (!page) return new Response("Not found", { status: 404 });
+			return Response.json(
+				await f.ctx.ports.pageVersions.create(f.scope, {
+					pageId,
+					title: page.title,
+					icon: page.icon,
+					contentJson: JSON.stringify(page.content),
+					cause: "checkpoint",
+					createdBy: f.userId,
+				}),
+			);
+		}
 		if (url.pathname === "/test/access" && request.method === "POST") {
 			const { mode } = (await request.json()) as { mode?: string };
 			if (mode === "revoke") {
@@ -290,6 +338,7 @@ async function stop() {
 	for (const child of children) child.kill("SIGTERM");
 	await Promise.all(children.map((child) => child.exited));
 	await f.database.close();
+	await rm(storageRoot, { recursive: true, force: true });
 	process.exit(0);
 }
 process.once("SIGINT", () => void stop());

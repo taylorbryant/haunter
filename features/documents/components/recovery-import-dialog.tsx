@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
 	invalidatePages,
+	invalidatePageNavigation,
 	invalidateBacklinks,
 } from "@/features/pages/client/queries";
 import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
@@ -88,6 +89,7 @@ export function RecoveryImportDialog({
 			});
 			await Promise.all([
 				invalidatePages(queryClient),
+				invalidatePageNavigation(queryClient, workspaceId),
 				invalidateTasksWhenIdle(queryClient),
 				invalidateBacklinks(queryClient),
 				invalidateCanvases(queryClient),

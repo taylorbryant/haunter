@@ -3,8 +3,10 @@ import { type ReactNode, useEffect } from "react";
 import { draftRegistry } from "@/client/draft-registry";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { useEmbeddedHostTheme } from "@/components/theme-provider";
+import { getAppTheme } from "@/lib/themes";
 import { flushPendingCanvasSave } from "@/features/canvases/client/save-state";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
+import { isEmbeddedEditorOrigin } from "../embedded-editor-origin.js";
 
 type EmbeddedBridge = { origin: string; nonce: string };
 export function readBridge(): EmbeddedBridge | null {
@@ -12,18 +14,14 @@ export function readBridge(): EmbeddedBridge | null {
 	const query = new URLSearchParams(window.location.search);
 	const origin = query.get("parentOrigin");
 	const nonce = query.get("nonce");
-	if (!origin || !nonce || nonce.length > 100) return null;
-	try {
-		const parsed = new URL(origin);
-		if (
-			!["https:", "http:"].includes(parsed.protocol) ||
-			parsed.origin !== origin
-		)
-			return null;
-		return { origin, nonce };
-	} catch {
+	if (
+		!origin ||
+		!isEmbeddedEditorOrigin(origin) ||
+		!nonce ||
+		nonce.length > 100
+	)
 		return null;
-	}
+	return { origin, nonce };
 }
 export function send(
 	bridge: EmbeddedBridge | null,
@@ -65,11 +63,10 @@ export function EmbeddedEditorFrame({
 				event.data?.nonce !== bridge.nonce
 			)
 				return;
-			if (
-				event.data?.type === "haunter/editor/theme" &&
-				["light", "dark"].includes(event.data.theme)
-			)
-				setHostTheme?.(event.data.theme);
+			if (event.data?.type === "haunter/editor/theme") {
+				const theme = getAppTheme(event.data.theme);
+				if (theme) setHostTheme?.(theme.id);
+			}
 			if (event.data?.type === "haunter/editor/context-support")
 				onContextSupport?.(event.data.available === true);
 			if (event.data?.type === "haunter/editor/resume") {
@@ -100,7 +97,15 @@ export function EmbeddedEditorFrame({
 					(canvasId
 						? flushPendingCanvasSave(canvasId)
 						: pageId
-							? flushPendingPageSave(pageId)
+							? Promise.all([
+									flushPendingPageSave(pageId),
+									...draftRegistry
+										.entries(userId)
+										.filter((entry) => entry.identity.resourceType === "canvas")
+										.map((entry) =>
+											flushPendingCanvasSave(entry.identity.resourceId),
+										),
+								]).then((results) => results.every(Boolean))
 							: Promise.resolve(false)
 					).catch(() => false),
 					new Promise<boolean>((resolve) => {

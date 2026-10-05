@@ -2,13 +2,18 @@
 
 import { createReactBlockSpec } from "@blocknote/react";
 import dynamic from "next/dynamic";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+	memo,
+	useCallback,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+import { HistoryPreviewContext } from "./history-preview-context";
 import type { CanvasSaveState } from "@/features/canvases/components/canvas-surface";
 import { cn } from "@/lib/utils";
-import {
-	useEmbeddedEditor,
-	EmbeddedFeatureLink,
-} from "./embedded-editor-context";
+import { useEmbeddedEditor } from "./embedded-editor-context";
 import { CanvasBlockHeader } from "./canvas-block-header";
 
 // tldraw is a ~MB chunk: load it only when a canvas block actually renders.
@@ -35,11 +40,14 @@ const StableCanvasSurface = memo(function StableCanvasSurface({
 	onSaveStateChange: (state: CanvasSaveState) => void;
 	layoutKey: string;
 }) {
+	const embedded = useEmbeddedEditor();
 	return (
 		<CanvasSurface
 			canvasId={canvasId}
 			onSaveStateChange={onSaveStateChange}
 			layoutKey={layoutKey}
+			embedded={!!embedded}
+			onSelectionChange={embedded?.canvasSelectionChanged}
 		/>
 	);
 });
@@ -198,24 +206,15 @@ export const canvasBlockSpec = createReactBlockSpec(
 		// canvas is tapped — all interaction belongs to tldraw.
 		meta: { selectable: false },
 		render: function CanvasBlock({ block }) {
-			const embedded = useEmbeddedEditor();
-			if (embedded)
+			const canvasId = block.props.canvasId;
+			const historyPreview = useContext(HistoryPreviewContext);
+			if (historyPreview)
 				return (
-					<div contentEditable={false} className="my-2 rounded border p-4">
-						{embedded.openCanvas && block.props.canvasId ? (
-							<button
-								type="button"
-								className="rounded px-1 py-0.5 underline underline-offset-4"
-								onClick={() => embedded.openCanvas?.(block.props.canvasId)}
-							>
-								Open canvas
-							</button>
-						) : (
-							<EmbeddedFeatureLink label="Canvas" />
-						)}
+					<div className="my-2 rounded-lg border p-4 text-sm text-muted-foreground">
+						Canvas — page history restores this canvas’s placement, not its
+						drawing.
 					</div>
 				);
-			const canvasId = block.props.canvasId;
 
 			return (
 				// CanvasBlockView owns the isolation boundary so it can temporarily

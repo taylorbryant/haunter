@@ -13,8 +13,11 @@ import { taskRoutes } from "@/features/tasks/routes";
 import { workspaceRoutes } from "@/features/workspaces/routes";
 import { liveContextRoutes } from "../features/live-context/routes";
 
+import { memberRoutes } from "@/features/members/routes";
+
 export const routes = defineRoutes<AppContext>([
 	adminRoutes,
+	memberRoutes,
 	agentRoutes,
 	embeddedEditorRoutes,
 	workspaceRoutes,

@@ -336,6 +336,8 @@ describe("agents.getPending", () => {
 				"list_pages",
 				"search_pages",
 				"read_page",
+				"list_page_attachments",
+				"read_page_attachment",
 				"list_tasks",
 			],
 			grants: [

@@ -65,7 +65,7 @@ import {
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
 import { registerPageSaveFlusher } from "@/features/pages/client/save-state";
-import { uploadPageImage } from "@/features/pages/client/upload";
+import { uploadPageAttachment } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
 import { normalizeCodeBlockLanguages } from "@/features/pages/lib/code-block-language";
 import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
@@ -84,6 +84,8 @@ import { CodeEditDialog } from "./code-edit-dialog";
 import { useSyncEditorCodeTheme } from "./code-theme";
 import { removeBlockFromSideMenu } from "./remove-block-from-side-menu";
 import { useEmbeddedEditor } from "./embedded-editor-context";
+import { createAttachmentUrlResolver } from "@/features/pages/client/attachment-urls";
+import { AttachmentDownloadButton } from "./attachment-download-button";
 import { editorSchema, syntaxHighlightingExtension } from "./schema";
 import { registerTaskCreator, TaskBlockCurrentUserContext } from "./task-block";
 
@@ -176,8 +178,12 @@ function FormattingToolbarWithoutColors() {
 			{getFormattingToolbarItems().filter(
 				(item) =>
 					item.key !== "colorStyleButton" &&
-					(!embedded || item.key !== "replaceFileButton"),
+					(!embedded || item.key !== "fileDownloadButton") &&
+					(!embedded ||
+						embedded.fileUploads ||
+						item.key !== "replaceFileButton"),
 			)}
+			{embedded ? <AttachmentDownloadButton /> : null}
 		</FormattingToolbar>
 	);
 }
@@ -200,7 +206,7 @@ function getSlashMenuItems(
 		pageId: string;
 		workspaceId: string;
 		currentUserId: string | null;
-		embedded: boolean;
+		embedded: ReturnType<typeof useEmbeddedEditor>;
 		onSubpageCreated: (created: PageMeta) => void;
 	},
 ) {
@@ -233,9 +239,11 @@ function getSlashMenuItems(
 		onItemClick: async () => {
 			try {
 				// Create the row first so the block never points at a missing canvas.
-				const canvas = await apiClient.endpoint(createCanvas).call({
-					body: { workspaceId: page.workspaceId, pageId: page.pageId },
-				});
+				const canvas = page.embedded
+					? await page.embedded.createItem("create-canvas")
+					: await apiClient.endpoint(createCanvas).call({
+							body: { workspaceId: page.workspaceId, pageId: page.pageId },
+						});
 				insertOrUpdateBlockForSlashMenu(editor, {
 					type: "canvas",
 					props: { canvasId: canvas.id },
@@ -266,19 +274,22 @@ function getSlashMenuItems(
 		onItemClick: async () => {
 			try {
 				// Create the row first so the block never points at a missing page.
-				const created = await apiClient.endpoint(createPage).call({
-					body: {
-						workspaceId: page.workspaceId,
-						parentPageId: page.pageId,
-						title: "",
-						appendToParentContent: false,
-					},
-				});
+				const created = page.embedded
+					? await page.embedded.createItem("create-page")
+					: await apiClient.endpoint(createPage).call({
+							body: {
+								workspaceId: page.workspaceId,
+								parentPageId: page.pageId,
+								title: "",
+								appendToParentContent: false,
+							},
+						});
 				insertOrUpdateBlockForSlashMenu(editor, {
 					type: "pageLink",
 					props: { pageId: created.id, workspaceId: page.workspaceId },
 				});
-				page.onSubpageCreated(created);
+				if (page.embedded) page.embedded.openPage(created.id);
+				else page.onSubpageCreated(created as PageMeta);
 			} catch (error) {
 				reportUserError(error, "The subpage could not be created.");
 			}
@@ -290,9 +301,11 @@ function getSlashMenuItems(
 	const items = getDefaultReactSlashMenuItems(editor).filter(
 		(item) =>
 			!page.embedded ||
-			!["image", "video", "audio", "file"].includes(
-				"key" in item ? String(item.key) : "",
-			),
+			!(
+				page.embedded.fileUploads
+					? ["video", "audio"]
+					: ["image", "video", "audio", "file"]
+			).includes("key" in item ? String(item.key) : ""),
 	);
 	const lastBasic = items.findLastIndex(
 		(item) => "group" in item && item.group === "Basic blocks",
@@ -300,9 +313,10 @@ function getSlashMenuItems(
 	items.splice(
 		lastBasic === -1 ? items.length : lastBasic + 1,
 		0,
-		...(page.embedded
-			? [calloutItem]
-			: [pageItem, taskItem, calloutItem, canvasItem]),
+		pageItem,
+		taskItem,
+		calloutItem,
+		canvasItem,
 	);
 
 	return Promise.resolve(filterSuggestionItems(items, query));
@@ -513,8 +527,19 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 	initialContent,
 	collaboration,
 }: MountedHaunterEditorProps) {
-	const embedded = !!useEmbeddedEditor();
+	const embedded = useEmbeddedEditor();
 	const [fileNotice, setFileNotice] = useState("");
+	const uploadsEnabled = !embedded || embedded.fileUploads === true;
+	const attachmentUrls = useRef<ReturnType<
+		typeof createAttachmentUrlResolver
+	> | null>(null);
+	useEffect(
+		() => () => {
+			attachmentUrls.current?.dispose();
+			attachmentUrls.current = null;
+		},
+		[],
+	);
 	const { resolvedTheme, forcedTheme } = useTheme();
 	const activeTheme = forcedTheme ?? resolvedTheme;
 	const router = useRouter();
@@ -537,14 +562,30 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 	const editorOptions = {
 		schema: editorSchema,
 		extensions: [syntaxHighlightingExtension],
-		uploadFile: embedded
+		resolveFileUrl: embedded
+			? (url: string) => {
+					attachmentUrls.current ??= createAttachmentUrlResolver(() =>
+						setFileNotice(
+							"An attachment could not be loaded. Reopen this page to retry.",
+						),
+					);
+					return attachmentUrls.current.resolve(url);
+				}
+			: undefined,
+		uploadFile: !uploadsEnabled
 			? undefined
 			: async (file: File) => {
 					try {
-						return await uploadPageImage(pageId, file);
+						setFileNotice("");
+						return await uploadPageAttachment(pageId, file, !!embedded);
 					} catch (error) {
-						reportUserError(error, "The image could not be uploaded.");
-						throw error;
+						reportUserError(
+							error,
+							"The attachment could not be uploaded. Choose a supported file under 10 MB.",
+						);
+						// BlockNote paste/drop does not catch upload rejections. Keep
+						// an empty file block for retry and surface the failure once.
+						return "";
 					}
 				},
 		initialContent:
@@ -648,14 +689,14 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 			ref={editorElement}
 			data-haunter-editor-page={pageId}
 			onPasteCapture={(event) => {
-				if (embedded && event.clipboardData.files.length) {
+				if (!uploadsEnabled && event.clipboardData.files.length) {
 					event.preventDefault();
 					event.stopPropagation();
 					setFileNotice("Open this page in Haunter to upload files.");
 				}
 			}}
 			onDropCapture={(event) => {
-				if (embedded && event.dataTransfer.files.length) {
+				if (!uploadsEnabled && event.dataTransfer.files.length) {
 					event.preventDefault();
 					event.stopPropagation();
 					setFileNotice("Open this page in Haunter to upload files.");
@@ -676,7 +717,7 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 					formattingToolbar={false}
 					slashMenu={false}
 					sideMenu={false}
-					filePanel={embedded ? false : undefined}
+					filePanel={!uploadsEnabled ? false : undefined}
 				>
 					<FormattingToolbarController
 						formattingToolbar={FormattingToolbarWithoutColors}
@@ -699,14 +740,21 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 							})
 						}
 					/>
-					{!embedded ? (
+					{
 						<SuggestionMenuController
 							triggerCharacter="@"
 							getItems={async (query) => {
 								// Cache-first: the sidebar keeps this list warm.
-								const pages = await queryClient.ensureQueryData(
-									listPagesQueryOptions(workspaceId),
-								);
+								const pages = embedded
+									? {
+											items: embedded.pages.map((page) => ({
+												...page,
+												id: page.pageId,
+											})),
+										}
+									: await queryClient.ensureQueryData(
+											listPagesQueryOptions(workspaceId),
+										);
 								const needle = query.toLowerCase();
 								return pages.items
 									.filter((item) => item.id !== pageId)
@@ -729,7 +777,7 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 									}));
 							}}
 						/>
-					) : null}
+					}
 					{/* The +/drag block controls are hidden on mobile: they're hard
 				    to use on touch and their gutter is reclaimed for content. */}
 					{!isMobile ? <SideMenuController sideMenu={StableSideMenu} /> : null}

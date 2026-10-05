@@ -54,7 +54,12 @@ export function createEmbeddedEditorSessionRepository(
 			.limit(1);
 		if (!row || !row.session.credentialHash) return null;
 		const target = row.session;
-		if (Boolean(target.pageId) === Boolean(target.canvasId)) return null;
+		if (
+			target.scope === "workspace"
+				? !!target.pageId || !!target.canvasId
+				: Boolean(target.pageId) === Boolean(target.canvasId)
+		)
+			return null;
 		let pageId = target.pageId;
 		if (target.canvasId) {
 			const [canvas] = await db
@@ -99,6 +104,7 @@ export function createEmbeddedEditorSessionRepository(
 			connection.permissionProfile !== "view" &&
 			canEditContent(row.role);
 		return {
+			scope: target.scope,
 			id: row.session.id,
 			connectionId: row.session.connectionId,
 			workspaceId: row.session.workspaceId,
@@ -111,6 +117,12 @@ export function createEmbeddedEditorSessionRepository(
 	}
 	return {
 		async create(input) {
+			if (
+				input.scope === "workspace"
+					? !!input.pageId || !!input.canvasId
+					: Boolean(input.pageId) === Boolean(input.canvasId)
+			)
+				throw new Error("Invalid embedded session target");
 			await db.delete(table).where(lt(table.expiresAt, new Date()));
 			const id = crypto.randomUUID();
 			await db.insert(table).values({

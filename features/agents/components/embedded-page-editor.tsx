@@ -1,22 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDraftRegistry } from "@/client/use-draft-registry";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
 import { CreateDialogProvider } from "@/components/create-dialog-provider";
-import { GhostLogo } from "@/components/ghost-logo";
-import { HeaderSaveIndicator } from "@/components/header-save-indicator";
 import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
-import { Button } from "@/components/ui/button";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { WorkspaceEventSubscriber } from "@/features/collab/client/workspace-events";
 import { useCachedPage } from "@/features/pages/client/use-cached-page";
 import { PageEditor } from "@/features/pages/components/page-editor";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { EmbeddedEditorContext } from "@/features/pages/components/editor/embedded-editor-context";
-import { MAX_SELECTION_CHARACTERS } from "../mcp-app/editor-schema";
 
 import { EmbeddedEditorFrame, readBridge, send } from "./embedded-editor-frame";
+import {
+	listEmbeddedPages,
+	createEmbeddedItem,
+} from "../client/embedded-workspace";
+import type { CompanionPageItem } from "../mcp-app/schemas";
+import { observeEmbeddedTextSelection } from "../client/embedded-text-selection";
+import type { CanvasSelection } from "../mcp-app/editor-schema";
 
 export function EmbeddedPageEditor({
 	workspaceId,
@@ -29,17 +32,32 @@ export function EmbeddedPageEditor({
 }) {
 	const { synced } = useWorkspaceRouteSync(workspaceId, { syncActive: true });
 	const requestsEnabled = useProtectedRequestsEnabled();
-	const [selection, setSelection] = useState("");
-	const [contextAvailable, setContextAvailable] = useState(false);
 	const page = useCachedPage(pageId);
+	const [linkedPages, setLinkedPages] = useState<CompanionPageItem[]>([]);
+	useEffect(() => {
+		if (!scoped || !requestsEnabled) return;
+		let active = true;
+		const refresh = () =>
+			void listEmbeddedPages()
+				.then((pages) => {
+					if (active) setLinkedPages(pages);
+				})
+				.catch(() => {});
+		refresh();
+		window.addEventListener("focus", refresh);
+		return () => {
+			active = false;
+			window.removeEventListener("focus", refresh);
+		};
+	}, [scoped, requestsEnabled]);
 	const registry = useDraftRegistry();
 	const drafts = registry
 		.entries()
 		.filter(
 			(entry) =>
 				entry.identity.workspaceId === workspaceId &&
-				entry.identity.resourceId === pageId &&
-				entry.identity.resourceType !== "canvas",
+				(entry.identity.resourceId === pageId ||
+					entry.identity.resourceType === "canvas"),
 		);
 	const snapshots = drafts.map((entry) => entry.getSnapshot());
 	const saveStatus =
@@ -65,26 +83,91 @@ export function EmbeddedPageEditor({
 			});
 	}, [page?.title, page?.icon]);
 	useEffect(() => {
-		const selectedText = () => {
-			const value = window.getSelection();
-			const parent = (node: Node | null) =>
-				node instanceof Element ? node : node?.parentElement;
-			const anchor = parent(value?.anchorNode ?? null)?.closest(
-				"[data-haunter-editor-page]",
+		if (!requestsEnabled) return;
+		return observeEmbeddedTextSelection(pageId, (selection) =>
+			send(readBridge(), { type: "haunter/editor/selection", ...selection }),
+		);
+	}, [pageId, requestsEnabled]);
+	const canvasSelectionChanged = useCallback(
+		(canvasId: string, selection: CanvasSelection) => {
+			if (requestsEnabled)
+				send(readBridge(), {
+					type: "haunter/editor/inline-canvas-selection",
+					canvasId,
+					selection,
+				});
+		},
+		[requestsEnabled],
+	);
+	const embedded = useMemo(
+		() =>
+			scoped
+				? {
+						canvasSelectionChanged,
+						workspaceId,
+						pages: linkedPages,
+						openPage: (id: string, targetWorkspaceId = workspaceId) =>
+							send(readBridge(), {
+								type: "haunter/editor/open-page",
+								pageId: id,
+								workspaceId: targetWorkspaceId,
+							}),
+						createItem: createEmbeddedItem,
+						openInHaunter: () =>
+							send(readBridge(), { type: "haunter/editor/open-web" }),
+					}
+				: null,
+		[scoped, canvasSelectionChanged, workspaceId, linkedPages],
+	);
+	useEffect(() => {
+		const navigateLink = (event: MouseEvent) => {
+			if (
+				!scoped ||
+				event.defaultPrevented ||
+				event.button !== 0 ||
+				event.metaKey ||
+				event.ctrlKey ||
+				event.shiftKey ||
+				event.altKey
+			)
+				return;
+			const anchor =
+				event.target instanceof Element
+					? event.target.closest("a[href]")
+					: null;
+			if (!anchor) return;
+			const url = new URL(
+				anchor.getAttribute("href") ?? "",
+				window.location.href,
 			);
-			const focus = parent(value?.focusNode ?? null)?.closest(
-				"[data-haunter-editor-page]",
-			);
-			setSelection(
-				anchor?.getAttribute("data-haunter-editor-page") === pageId &&
-					anchor === focus
-					? (value?.toString().trim().slice(0, MAX_SELECTION_CHARACTERS) ?? "")
-					: "",
-			);
+			const match = /^\/w\/([^/]+)\/p\/([0-9a-f-]{36})\/?$/i.exec(url.pathname);
+			if (url.origin !== window.location.origin || !match) return;
+			event.preventDefault();
+			event.stopPropagation();
+			send(readBridge(), {
+				type: "haunter/editor/open-page",
+				workspaceId: decodeURIComponent(match[1]),
+				pageId: match[2],
+			});
 		};
-		document.addEventListener("selectionchange", selectedText);
-		return () => document.removeEventListener("selectionchange", selectedText);
-	}, [pageId]);
+		document.addEventListener("click", navigateLink, true);
+		const clearCanvas = (event: PointerEvent) => {
+			if (
+				event.target instanceof Element &&
+				!event.target.closest(".haunter-canvas")
+			)
+				send(readBridge(), {
+					type: "haunter/editor/inline-canvas-selection",
+					canvasId: null,
+					selection: null,
+				});
+		};
+		document.addEventListener("pointerdown", clearCanvas, true);
+		return () => {
+			document.removeEventListener("pointerdown", clearCanvas, true);
+			document.removeEventListener("click", navigateLink, true);
+		};
+	}, [scoped]);
 	if (!synced)
 		return (
 			<p className="p-6 text-sm text-muted-foreground">
@@ -93,9 +176,8 @@ export function EmbeddedPageEditor({
 		);
 	return (
 		<EmbeddedEditorFrame
-			status="ready"
+			status={requestsEnabled ? "ready" : "sign-in-required"}
 			pageId={pageId}
-			onContextSupport={setContextAvailable}
 		>
 			<CommandRegistryProvider>
 				<SidebarProvider defaultOpen={false} className="block min-h-0">
@@ -103,41 +185,7 @@ export function EmbeddedPageEditor({
 						{scoped ? null : (
 							<WorkspaceEventSubscriber workspaceId={workspaceId} />
 						)}
-						<header className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b bg-background/95 px-4 py-2 backdrop-blur-sm">
-							<GhostLogo className="size-5" />
-							<span className="text-sm font-medium">Haunter</span>
-							<HeaderSaveIndicator historyEnabled={!scoped} />
-							<Button
-								size="sm"
-								variant="outline"
-								disabled={!selection || !requestsEnabled}
-								hidden={!contextAvailable}
-								onMouseDown={(event) => event.preventDefault()}
-								onClick={() =>
-									send(readBridge(), {
-										type: "haunter/editor/selection",
-										text: selection,
-									})
-								}
-							>
-								Use selection as context
-							</Button>
-						</header>
-						<EmbeddedEditorContext.Provider
-							value={
-								scoped
-									? {
-											openCanvas: (canvasId) =>
-												send(readBridge(), {
-													type: "haunter/editor/open-canvas",
-													canvasId,
-												}),
-											openInHaunter: () =>
-												send(readBridge(), { type: "haunter/editor/open-web" }),
-										}
-									: null
-							}
-						>
+						<EmbeddedEditorContext.Provider value={embedded}>
 							<PageEditor pageId={pageId} embedded={scoped} />
 						</EmbeddedEditorContext.Provider>
 					</CreateDialogProvider>

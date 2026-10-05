@@ -330,6 +330,13 @@
       "when": 1791065679262,
       "tag": "0046_right_mauler",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1791088684908,
+      "tag": "0047_little_mariko_yashida",
+      "breakpoints": true
     }
   ]
 }

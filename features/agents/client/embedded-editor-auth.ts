@@ -1,3 +1,4 @@
+import { isEmbeddedEditorOrigin } from "../embedded-editor-origin.js";
 import {
 	EmbeddedEditorIdentitySchema,
 	type EmbeddedEditorIdentity,
@@ -11,7 +12,7 @@ function base64url(bytes: Uint8Array) {
 }
 
 /** Lives only in this iframe's memory. Never exposes a verifier to the host. */
-export function createEmbeddedEditorAuth() {
+export function createEmbeddedEditorAuth(workspaceId?: string) {
 	let credential:
 		| { token: string; identity: EmbeddedEditorIdentity }
 		| undefined;
@@ -34,8 +35,9 @@ export function createEmbeddedEditorAuth() {
 			const origin = query.get("parentOrigin");
 			if (
 				!nonce ||
+				nonce.length > 100 ||
 				!origin ||
-				new URL(origin).origin !== origin ||
+				!isEmbeddedEditorOrigin(origin) ||
 				window.parent === window
 			)
 				throw new Error("Open this editor from your Haunter plugin.");
@@ -59,7 +61,12 @@ export function createEmbeddedEditorAuth() {
 						resolve(event.data.handoff.id);
 					else
 						reject(
-							new Error("Reconnect Haunter to open this editor, then retry."),
+							new Error(
+								typeof event.data?.message === "string" &&
+									event.data.message.trim()
+									? `Haunter could not authorize the editor: ${event.data.message.slice(0, 300)}`
+									: "Reconnect Haunter to open this editor, then retry.",
+							),
 						);
 				};
 				const timer = setTimeout(() => {
@@ -70,7 +77,15 @@ export function createEmbeddedEditorAuth() {
 				}, 15_000);
 				window.addEventListener("message", listener);
 				window.parent.postMessage(
-					{ type: "haunter/editor/authorize", requestId, nonce, challenge },
+					{
+						type: workspaceId
+							? "haunter/workspace/authorize"
+							: "haunter/editor/authorize",
+						workspaceId,
+						requestId,
+						nonce,
+						challenge,
+					},
 					origin,
 				);
 			});
@@ -95,6 +110,7 @@ export function createEmbeddedEditorAuth() {
 				(originalIdentity.user.id !== identity.user.id ||
 					originalIdentity.connectionId !== identity.connectionId ||
 					originalIdentity.workspaceId !== identity.workspaceId ||
+					originalIdentity.scope !== identity.scope ||
 					originalIdentity.pageId !== identity.pageId ||
 					originalIdentity.canvasId !== identity.canvasId)
 			)

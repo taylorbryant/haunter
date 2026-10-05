@@ -512,3 +512,35 @@ test("rolling back one creation preserves another optimistic task", async () => 
 		hasMore: true,
 	});
 });
+
+test("focused task caches never pick up unrelated optimistic creations or edits", async () => {
+	const client = new QueryClient();
+	const key = listTasksQueryOptions(task.workspaceId, "all", "everyone", 50, {
+		taskId: task.id,
+	}).queryKey;
+	client.setQueryData<ListTasksOutput>(key, { items: [task], hasMore: false });
+	await optimisticallyAddTask(
+		client,
+		{ ...otherTask, id: createOptimisticTaskId() },
+		task.userId,
+	);
+	await optimisticallyPatchTask(
+		client,
+		otherTask.id,
+		{ title: "Unrelated edit" },
+		task.userId,
+		task.workspaceId,
+	);
+	expect(client.getQueryData<ListTasksOutput>(key)?.items).toEqual([task]);
+	await optimisticallyPatchTask(
+		client,
+		task.id,
+		{ completed: true },
+		task.userId,
+		task.workspaceId,
+	);
+	expect(client.getQueryData<ListTasksOutput>(key)?.items).toEqual([
+		{ ...task, completed: true },
+	]);
+	client.clear();
+});

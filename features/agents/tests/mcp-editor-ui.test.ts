@@ -46,19 +46,67 @@ test("only the active frame, origin, and nonce can enable the editor or share a 
 	);
 	f.emit("haunter/editor/status", { status: "ready", nonce: "stale" });
 	f.emit("haunter/editor/status", { status: "ready" }, { source: window });
-	expect(element<HTMLButtonElement>("use-context").disabled).toBeTrue();
-	f.emit("haunter/editor/status", { status: "ready" });
-	expect(element<HTMLButtonElement>("use-context").disabled).toBeFalse();
-	f.emit("haunter/editor/selection", { text: "Selected live text." });
-	await waitFor(() => expect(f.contexts.at(-1)?.page).toBeDefined());
-	expect(f.calls.filter((call) => call.name === "read_page")).toHaveLength(1);
-	expect(f.contexts.at(-1)?.text).toContain(
-		"may include changes that have not been saved yet",
+	f.companion.applyTheme("dark");
+	expect(f.messages).toHaveLength(0);
+	await waitFor(() =>
+		expect(f.contexts.at(-1)?.view?.editorStatus).not.toBe("ready"),
 	);
-	element("remove-context").click();
-	await waitFor(() => expect(f.contexts.at(-1)?.page).toBeUndefined());
+	f.emit("haunter/editor/status", { status: "ready" });
+	await waitFor(() =>
+		expect(f.contexts.at(-1)?.view?.editorStatus).toBe("ready"),
+	);
+	f.emit("haunter/editor/selection", { text: "Selected live text." });
+	await waitFor(() =>
+		expect(f.contexts.at(-1)?.view?.selection?.text).toBe(
+			"Selected live text.",
+		),
+	);
+	expect(f.calls.filter((call) => call.name === "read_page")).toHaveLength(0);
+	expect(f.contexts.at(-1)?.text).toContain("may include unsaved changes");
+	f.emit("haunter/editor/selection", { text: "" });
+	await waitFor(() =>
+		expect(f.contexts.at(-1)?.view?.selection).toBeUndefined(),
+	);
 	expect(f.contexts.at(-1)?.view?.pageId).toBe(destination().pageId);
 	expect(f.contexts.at(-1)?.text).not.toContain("Selected live text.");
+});
+
+test("waits for the loaded editor before sending theme and resets that wait on navigation", async () => {
+	f = fixture();
+	f.settings.autoReady = false;
+	await f.open();
+	f.companion.applyTheme("dark");
+	expect(f.messages).toHaveLength(0);
+	f.emit("haunter/editor/status", { status: "opening" });
+	expect(f.messages).toContainEqual(
+		expect.objectContaining({ type: "haunter/editor/theme", theme: "dark" }),
+	);
+	f.messages.length = 0;
+	f.clickPage(childId);
+	await waitFor(() => expect(f.frame.src).toContain(childId));
+	f.companion.applyTheme("light");
+	expect(f.messages).toHaveLength(0);
+	f.emit("haunter/editor/status", { status: "opening" });
+	expect(f.messages).toContainEqual(
+		expect.objectContaining({ type: "haunter/editor/theme", theme: "light" }),
+	);
+});
+
+test("the initial authorization request can establish the editor connection", async () => {
+	f = fixture();
+	f.settings.autoReady = false;
+	await f.open();
+	const requestId = crypto.randomUUID();
+	f.emit("haunter/editor/authorize", { requestId, challenge: "a".repeat(43) });
+	await waitFor(() =>
+		expect(f.messages).toContainEqual(
+			expect.objectContaining({
+				type: "haunter/editor/authorized",
+				requestId,
+				handoff: { id: "handoff" },
+			}),
+		),
+	);
 });
 
 test("failed and stale save receipts cannot discard edits; successful switching rotates the nonce", async () => {
@@ -131,7 +179,9 @@ test("missing authorization is visible and Open in Haunter uses the validated de
 	await f.open();
 	f.emit("haunter/editor/status", { status: "sign-in-required" });
 	expect(element("page-status").textContent).toContain("Reconnect Haunter");
-	expect(element<HTMLButtonElement>("use-context").disabled).toBeTrue();
+	await waitFor(() =>
+		expect(f.contexts.at(-1)?.view?.editorStatus).toBe("unavailable"),
+	);
 	f.emit("haunter/editor/open-web");
 	await waitFor(() => expect(f.links).toEqual([destination().webUrl]));
 });

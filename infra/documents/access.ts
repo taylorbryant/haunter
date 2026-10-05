@@ -5,6 +5,7 @@ import type { DocumentGrant } from "@/features/documents/ports";
 import { databaseClient } from "@/infra/db/client";
 import * as schema from "@/infra/db/schema";
 import { DocumentRestoredError } from "@/features/documents/restoration";
+import { canAccessEmbeddedCanvas } from "@/features/agents/embedded-editor-session";
 
 /** Recheck the live session, page and membership; signed claims are selectors. */
 export async function checkDocumentAccess(
@@ -22,15 +23,26 @@ export async function checkDocumentAccess(
 			identity.connectionId !== grant.sessionId ||
 			identity.user.id !== grant.userId ||
 			identity.workspaceId !== grant.workspaceId ||
-			(grant.kind === "canvas"
-				? identity.canvasId !== grant.pageId
-				: identity.pageId !== grant.pageId)
+			(grant.kind !== "canvas" &&
+				identity.scope !== "workspace" &&
+				identity.pageId !== grant.pageId)
 		)
 			throw new Error("Embedded document access is no longer available");
 		if (grant.kind === "canvas") {
 			const [room] = await db
-				.select({ id: schema.canvasSyncRooms.canvasId })
+				.select({
+					id: schema.canvases.id,
+					workspaceId: schema.canvases.workspaceId,
+					pageId: schema.canvases.pageId,
+				})
 				.from(schema.canvasSyncRooms)
+				.innerJoin(
+					schema.canvases,
+					and(
+						eq(schema.canvases.id, schema.canvasSyncRooms.canvasId),
+						eq(schema.canvases.workspaceId, schema.canvasSyncRooms.workspaceId),
+					),
+				)
 				.where(
 					and(
 						eq(schema.canvasSyncRooms.canvasId, grant.pageId),
@@ -38,9 +50,41 @@ export async function checkDocumentAccess(
 					),
 				)
 				.limit(1);
-			if (!room || grant.generation !== 0)
+			if (
+				!room ||
+				!canAccessEmbeddedCanvas(identity, room) ||
+				grant.generation !== 0
+			)
 				throw new Error("Canvas access is no longer available");
-		} else await checkGeneration(grant, db);
+			if (room.pageId) {
+				const [parent] = await db
+					.select({ id: schema.pages.id })
+					.from(schema.pages)
+					.where(
+						and(
+							eq(schema.pages.id, room.pageId),
+							eq(schema.pages.workspaceId, grant.workspaceId),
+							isNull(schema.pages.deletedAt),
+						),
+					)
+					.limit(1);
+				if (!parent) throw new Error("Canvas parent is no longer available");
+			}
+		} else {
+			const [page] = await db
+				.select({ id: schema.pages.id })
+				.from(schema.pages)
+				.where(
+					and(
+						eq(schema.pages.id, grant.pageId),
+						eq(schema.pages.workspaceId, grant.workspaceId),
+						isNull(schema.pages.deletedAt),
+					),
+				)
+				.limit(1);
+			if (!page) throw new Error("Page access is no longer available");
+			await checkGeneration(grant, db);
+		}
 		return identity.role;
 	}
 	if (grant.kind === "canvas") return checkCanvasAccess(grant, db);

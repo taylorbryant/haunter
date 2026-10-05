@@ -2,6 +2,11 @@ import { defineUpload } from "@beignet/core/uploads";
 import { z } from "zod";
 import type { AppContext } from "@/app-context";
 import {
+	ATTACHMENT_CONTENT_TYPES,
+	MAX_ATTACHMENT_BYTES,
+	safeAttachmentName,
+} from "../attachments";
+import {
 	requireActiveWorkspaceId,
 	requireActiveWorkspaceScope,
 	requireUser,
@@ -16,9 +21,7 @@ export type AttachmentUploadMetadata = z.infer<
 >;
 
 /**
- * Images embedded in page documents via the editor's image block. Objects
- * are private; the owner reads them back through /api/files/<key>, which
- * checks the user segment baked into the key.
+ * Private page images and documents. Reads recheck the source page and workspace.
  */
 export const AttachmentUpload = defineUpload<
 	"pages.attachment",
@@ -28,8 +31,8 @@ export const AttachmentUpload = defineUpload<
 >("pages.attachment", {
 	metadata: AttachmentUploadMetadataSchema,
 	file: {
-		contentTypes: ["image/png", "image/jpeg", "image/gif", "image/webp"],
-		maxSizeBytes: 10 * 1024 * 1024,
+		contentTypes: ATTACHMENT_CONTENT_TYPES,
+		maxSizeBytes: MAX_ATTACHMENT_BYTES,
 		maxFiles: 1,
 		visibility: "private",
 		// Keys embed a fresh uploadId, so objects are immutable once written.
@@ -63,8 +66,9 @@ export const AttachmentUpload = defineUpload<
 		const suffix = extension ? `.${extension.slice(0, 8)}` : "";
 		return `pages/${workspaceId}/${metadata.pageId}/${uploadId}${suffix}`;
 	},
-	storageMetadata({ ctx, metadata }) {
+	storageMetadata({ ctx, metadata, file }) {
 		return {
+			filename: safeAttachmentName(file.name),
 			workspaceId: requireActiveWorkspaceId(ctx),
 			userId: requireUser(ctx).id,
 			pageId: metadata.pageId,

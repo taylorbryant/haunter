@@ -7,6 +7,7 @@ export const ListWorkspaceMembersInputSchema = z.object({
 export const WorkspaceMemberSchema = z.object({
 	userId: z.string(),
 	name: z.string(),
+	image: z.string().nullable().optional(),
 	email: z.string().email(),
 	role: z.string(),
 });

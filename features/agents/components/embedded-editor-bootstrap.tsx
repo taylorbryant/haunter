@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { installSessionCredential } from "@/client/session-recovery";
 import { AppSessionProvider } from "@/components/app-session-provider";
 import { ActiveWorkspaceHintProvider } from "@/components/active-workspace-provider";
@@ -24,12 +24,18 @@ export function EmbeddedEditorBootstrap({
 	workspaceId,
 	pageId,
 	canvasId,
+	workspace = false,
+	children,
 }: {
 	workspaceId: string;
 	pageId?: string;
 	canvasId?: string;
+	workspace?: boolean;
+	children?: ReactNode;
 }) {
-	const [auth] = useState(createEmbeddedEditorAuth);
+	const [auth] = useState(() =>
+		createEmbeddedEditorAuth(workspace ? workspaceId : undefined),
+	);
 	const [identity, setIdentity] = useState<EmbeddedEditorIdentity>();
 	const [error, setError] = useState("");
 	const [attempt, setAttempt] = useState(0);
@@ -44,9 +50,13 @@ export function EmbeddedEditorBootstrap({
 				if (!active) return;
 				if (
 					next.workspaceId !== workspaceId ||
-					(canvasId
-						? next.canvasId !== canvasId || next.pageId !== null
-						: next.pageId !== pageId || next.canvasId !== undefined)
+					(workspace
+						? next.scope !== "workspace" ||
+							next.pageId !== null ||
+							next.canvasId !== undefined
+						: canvasId
+							? next.canvasId !== canvasId || next.pageId !== null
+							: next.pageId !== pageId || next.canvasId !== undefined)
 				)
 					throw new Error("Haunter authorized a different document.");
 				uninstall = installSessionCredential(() => auth.token());
@@ -69,12 +79,12 @@ export function EmbeddedEditorBootstrap({
 			active = false;
 			uninstall?.();
 		};
-	}, [auth, workspaceId, pageId, canvasId, attempt]);
+	}, [auth, workspaceId, pageId, canvasId, workspace, attempt]);
 	if (!identity)
 		return (
-			<main className="grid min-h-svh place-content-center gap-4 bg-background p-6 text-foreground">
+			<main className="grid min-h-svh place-content-center place-items-center gap-4 bg-background p-6 text-center text-foreground">
 				<GhostLogo className="size-8" />
-				<p role={error ? "alert" : undefined}>
+				<p className="max-w-md" role={error ? "alert" : "status"}>
 					{error || "Connecting to Haunter…"}
 				</p>
 				{error ? (
@@ -85,7 +95,10 @@ export function EmbeddedEditorBootstrap({
 			</main>
 		);
 	return (
-		<DeviceTimeProvider initialValue={pendingDeviceTime(Date.now())}>
+		<DeviceTimeProvider
+			initialValue={pendingDeviceTime(Date.now())}
+			persistCookie={false}
+		>
 			<AppSessionProvider
 				value={{
 					user: identity.user,
@@ -97,18 +110,19 @@ export function EmbeddedEditorBootstrap({
 				verifySession={(signal, recover) => auth.verify(signal, recover)}
 			>
 				<ActiveWorkspaceHintProvider value={identity.workspaceId}>
-					{canvasId ? (
-						<EmbeddedCanvasEditor
-							workspaceId={workspaceId}
-							canvasId={canvasId}
-						/>
-					) : pageId ? (
-						<EmbeddedPageEditor
-							workspaceId={workspaceId}
-							pageId={pageId}
-							scoped
-						/>
-					) : null}
+					{children ??
+						(canvasId ? (
+							<EmbeddedCanvasEditor
+								workspaceId={workspaceId}
+								canvasId={canvasId}
+							/>
+						) : pageId ? (
+							<EmbeddedPageEditor
+								workspaceId={workspaceId}
+								pageId={pageId}
+								scoped
+							/>
+						) : null)}
 				</ActiveWorkspaceHintProvider>
 			</AppSessionProvider>
 		</DeviceTimeProvider>

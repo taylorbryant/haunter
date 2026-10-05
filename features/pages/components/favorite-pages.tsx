@@ -2,8 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { FileTextIcon, ShapesIcon } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { WorkspaceLink as Link } from "@/client/workspace-navigation";
+import { useWorkspacePathname as usePathname } from "@/client/workspace-navigation";
 import {
 	SidebarGroup,
 	SidebarGroupContent,

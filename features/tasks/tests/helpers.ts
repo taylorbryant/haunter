@@ -45,6 +45,7 @@ export function createTestTaskRepository(options?: {
 					(task) =>
 						task.workspaceId === workspaceId &&
 						matches(task, filter) &&
+						(!listOptions.taskId || task.id === listOptions.taskId) &&
 						(!listOptions.assigneeId ||
 							task.assigneeId === listOptions.assigneeId) &&
 						(!listOptions.dueOnOrAfter ||

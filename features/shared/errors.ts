@@ -1,6 +1,18 @@
 import { createAppError, defineErrors } from "@beignet/core/errors";
 
 export const errors = defineErrors({
+	AttachmentNotFound: {
+		code: "ATTACHMENT_NOT_FOUND",
+		status: 404,
+		message:
+			"This attachment is unavailable or you no longer have access to it.",
+	},
+	UnsupportedAttachment: {
+		code: "UNSUPPORTED_ATTACHMENT",
+		status: 422,
+		message:
+			"This attachment cannot be read through MCP. Images and documents must be 5 MB or smaller; text reads are limited to 64 KB. External links are not fetched.",
+	},
 	LiveContextUnavailable: {
 		code: "LIVE_CONTEXT_UNAVAILABLE",
 		status: 503,

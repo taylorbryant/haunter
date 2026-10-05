@@ -1,6 +1,7 @@
 import { createEnv } from "@beignet/core/config";
 import { z } from "zod";
 import { CollaborationOrigins } from "./collaboration-origins";
+import { parseMcpUiDomain } from "@/features/agents/mcp-ui-domain.js";
 
 const BooleanEnv = z
 	.enum(["true", "false"])
@@ -71,6 +72,21 @@ export const env = createEnv({
 		// Canonical, audience-bound remote MCP endpoint. Keep this stable in
 		// production even when the app also serves preview or alias domains.
 		MCP_RESOURCE_URL: McpResourceUrl.optional(),
+		// Use the same value at build time (iframe CSP) and runtime (MCP metadata).
+		MCP_UI_DOMAIN: z
+			.string()
+			.superRefine((value, ctx) => {
+				try {
+					parseMcpUiDomain(value);
+				} catch (error) {
+					ctx.addIssue({
+						code: "custom",
+						message:
+							error instanceof Error ? error.message : "Invalid MCP UI domain",
+					});
+				}
+			})
+			.optional(),
 		// Optional browser origins allowed to call the MCP transport. Server-side
 		// MCP clients generally omit Origin; present origins fail closed.
 		MCP_ALLOWED_ORIGINS: z.string().optional(),

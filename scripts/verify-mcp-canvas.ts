@@ -85,22 +85,23 @@ try {
 	await embedded
 		.getByRole("textbox", { name: "Page title", exact: true })
 		.waitFor();
-	await app.locator(".tree-toggle").click();
-	await app
-		.locator(`.page-link[data-page-id="${fixture.secondPageId}"]`)
-		.click();
+	const expand = embedded
+		.locator(`li:has(> a[href$="/p/${fixture.pageId}"])`)
+		.getByRole("button", { name: "Expand", exact: true });
+	if (await expand.count()) await expand.click();
 	await embedded
-		.getByRole("button", { name: "Open canvas", exact: true })
+		.locator(`a[href$="/p/${fixture.secondPageId}"]`)
+		.first()
 		.click();
 	await embedded.locator(".tl-canvas").waitFor();
 	await until(
 		async () =>
-			(await currentView())?.canvasId === fixture.canvasId &&
+			(await currentView())?.pageId === fixture.secondPageId &&
 			(await currentView())?.editorStatus === "ready",
 	);
 	assert.equal((await context.cookies()).length, 0);
 	console.log(
-		"PASS: a page canvas opens the real interactive editor without browser cookies",
+		"PASS: a page renders its interactive canvas inline without browser cookies",
 	);
 	const bounds = await embedded.locator(".tl-canvas").boundingBox();
 	assert.ok(bounds);
@@ -112,15 +113,17 @@ try {
 	await page.mouse.up();
 	await until(
 		async () =>
-			(await currentView())?.canvas?.selectionCount === 1 &&
+			(await currentView())?.inlineCanvas?.selection?.selectionCount === 1 &&
 			(await currentView())?.saveStatus === "saved",
 	);
 	const view = await currentView();
-	const shapeId = view.canvas.selectedShapeIds[0];
+	assert.equal(view.inlineCanvas.canvasId, fixture.canvasId);
+	assert.equal(view.pageId, fixture.secondPageId);
+	const shapeId = view.inlineCanvas.selection.selectedShapeIds[0];
 	const read = (await tool("read_canvas", { canvasId: fixture.canvasId }))
 		.structuredContent;
 	assert.ok(read.shapes.some((shape: { id: string }) => shape.id === shapeId));
-	assert.equal(view.canvas.selectionComplete, true);
+	assert.equal(view.inlineCanvas.selection.selectionComplete, true);
 	console.log(
 		"PASS: panel drawing persists and current canvas/selection metadata reaches the host",
 	);
@@ -161,17 +164,15 @@ try {
 	offline = true;
 	assert.ok(sockets.size > 0, "Collaboration sockets were intercepted");
 	await Promise.all([...sockets].map((socket) => socket.close()));
-	await embedded.locator(".tl-canvas").click({ position: { x: 550, y: 370 } });
+	await embedded.locator(".tl-canvas").click({ position: { x: 340, y: 140 } });
 	await page.keyboard.press("t");
-	await embedded.locator(".tl-canvas").click({ position: { x: 550, y: 370 } });
+	await embedded.locator(".tl-canvas").click({ position: { x: 340, y: 140 } });
 	await page.keyboard.type("Offline canvas draft");
 	await page.keyboard.press("Escape");
 	await until(async () => (await currentView())?.saveStatus === "unsaved");
 	const before = await app.locator("#real-editor").getAttribute("src");
+	await embedded.getByRole("link", { name: "Home", exact: true }).click();
 	await embedded
-		.getByRole("button", { name: "Back to page", exact: true })
-		.click();
-	await app
 		.getByText("Your changes have not finished saving.", { exact: false })
 		.waitFor();
 	assert.equal(await app.locator("#real-editor").getAttribute("src"), before);
@@ -192,17 +193,18 @@ try {
 		path: `${artifacts}/canvas-desktop.png`,
 		fullPage: true,
 	});
+	await embedded.getByRole("link", { name: "Home", exact: true }).click();
 	await embedded
-		.getByRole("button", { name: "Back to page", exact: true })
-		.click();
-	await embedded
-		.getByRole("button", { name: "Open canvas", exact: true })
+		.locator(`a[href$="/p/${fixture.secondPageId}"]`)
+		.first()
 		.click();
 	await embedded
 		.getByText("Edited through MCP", { exact: true })
 		.first()
 		.waitFor();
-	console.log("PASS: returning to the page and reopening preserves the canvas");
+	console.log(
+		"PASS: returning Home and reopening the page preserves its inline canvas",
+	);
 	const webTheme = await web.locator(".tl-container").getAttribute("class");
 	const webPreference = await web.evaluate(() =>
 		localStorage.getItem("TLDRAW_USER_DATA_v3"),

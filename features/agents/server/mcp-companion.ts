@@ -3,6 +3,12 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { appError } from "@/features/shared/errors";
+import { parseMcpUiDomain } from "../mcp-ui-domain.js";
+import {
+	OpenHaunterInputSchema,
+	OpenHaunterOutputSchema,
+} from "../mcp-app/workspace-opener";
 import {
 	COMPANION_URI,
 	CompanionPageSchema,
@@ -16,8 +22,14 @@ import {
 
 type CompanionExecution = {
 	appOrigin: string;
+	uiDomain?: string;
 	execute(
-		capability: "list_workspaces" | "list_pages" | "search_pages" | "read_page",
+		capability:
+			| "list_workspaces"
+			| "list_pages"
+			| "search_pages"
+			| "read_page"
+			| "list_tasks",
 		args: Record<string, unknown>,
 	): Promise<unknown>;
 	errorMessage(error: unknown): string;
@@ -34,6 +46,8 @@ export function registerMcpCompanion(
 	server: McpServer,
 	input: CompanionExecution,
 ) {
+	const uiIdentity =
+		input.uiDomain === undefined ? undefined : parseMcpUiDomain(input.uiDomain);
 	server.registerResource(
 		"haunter-page-companion",
 		COMPANION_URI,
@@ -43,12 +57,24 @@ export function registerMcpCompanion(
 				{
 					uri: COMPANION_URI,
 					mimeType: "text/html;profile=mcp-app",
-					text: await readFile(
-						join(process.cwd(), "features/agents/mcp-app/dist/companion.html"),
-						"utf8",
+					text: (
+						await readFile(
+							join(
+								process.cwd(),
+								"features/agents/mcp-app/dist/companion.html",
+							),
+							"utf8",
+						)
+					).replaceAll(
+						"__HAUNTER_APP_ORIGIN__",
+						new URL(input.appOrigin).origin
+							.replaceAll("&", "&amp;")
+							.replaceAll('"', "&quot;"),
 					),
 					_meta: {
 						ui: {
+							...(uiIdentity ? { domain: uiIdentity.domain } : {}),
+							permissions: { clipboardWrite: {} },
 							csp: {
 								connectDomains: [],
 								resourceDomains: [],
@@ -56,6 +82,7 @@ export function registerMcpCompanion(
 							},
 							prefersBorder: true,
 						},
+						...(uiIdentity ? { "openai/widgetDomain": uiIdentity.domain } : {}),
 						"openai/widgetCSP": {
 							redirect_domains: [new URL(input.appOrigin).origin],
 						},
@@ -74,9 +101,9 @@ export function registerMcpCompanion(
 		{
 			title: "Haunter",
 			description:
-				"Open Haunter to browse, search, and use its page editor. Editing follows the connection's explicit consent and current workspace permissions. Pages and selections can be added to this conversation.",
-			inputSchema: z.object({}),
-			outputSchema: WorkspaceListSchema,
+				"Open Haunter's Home or Tasks screen. Pass view=tasks with optional filter/scope, or workspaceId and taskId to focus a known task (including completed tasks). Find task IDs with list_tasks. This only navigates; editing follows the connection's explicit consent and workspace permissions. Current tasks and selections become conversation context automatically.",
+			inputSchema: OpenHaunterInputSchema,
+			outputSchema: OpenHaunterOutputSchema,
 			annotations: readOnlyAnnotations,
 			_meta: {
 				ui: { resourceUri: COMPANION_URI, visibility: ["app", "model"] },
@@ -84,13 +111,56 @@ export function registerMcpCompanion(
 				"openai/ui": { entrypoints: [{ type: "global" }, { type: "thread" }] },
 			},
 		},
-		async () => {
+		async (args) => {
 			try {
+				const list = WorkspaceListSchema.parse(
+					await input.execute("list_workspaces", {}),
+				);
+				const workspaceId = args.workspaceId ?? list.workspaces[0]?.id;
+				if (
+					args.workspaceId &&
+					!list.workspaces.some((item) => item.id === args.workspaceId)
+				)
+					throw appError("Forbidden");
+				if (args.taskId) {
+					const result = z
+						.object({ tasks: z.array(z.object({ taskId: z.uuid() })) })
+						.parse(
+							await input.execute("list_tasks", {
+								workspaceId,
+								taskId: args.taskId,
+								filter: "all",
+								scope: "everyone",
+								limit: 1,
+							}),
+						);
+					if (!result.tasks.some((task) => task.taskId === args.taskId))
+						throw appError("TaskNotFound");
+				}
+				const tasks =
+					args.view === "tasks" || !!(args.taskId || args.filter || args.scope);
 				return {
 					content: [],
-					structuredContent: WorkspaceListSchema.parse(
-						await input.execute("list_workspaces", {}),
-					),
+					structuredContent: {
+						...list,
+						...(workspaceId
+							? {
+									target: {
+										workspaceId,
+										view: tasks ? ("tasks" as const) : ("home" as const),
+										...(tasks
+											? {
+													filter: args.taskId ? ("all" as const) : args.filter,
+													scope: args.taskId
+														? ("everyone" as const)
+														: args.scope,
+													taskId: args.taskId,
+												}
+											: {}),
+									},
+								}
+							: {}),
+					},
 				};
 			} catch (error) {
 				return {

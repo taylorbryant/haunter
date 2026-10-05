@@ -13,8 +13,8 @@ import {
 	Trash2Icon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { WorkspaceLink as Link } from "@/client/workspace-navigation";
+import { useWorkspacePathname as usePathname } from "@/client/workspace-navigation";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import {
 	Fragment,
@@ -176,7 +176,21 @@ function useExpandedState(workspaceId: string) {
 	return { expanded, toggle };
 }
 
-export function PageTree({ workspaceId }: { workspaceId: string }) {
+export function PageTree({
+	workspaceId,
+	allowImports = true,
+	allowRecovery = allowImports,
+	allowFavorites = true,
+	beforeRemove,
+	onRemoved,
+}: {
+	workspaceId: string;
+	allowImports?: boolean;
+	allowRecovery?: boolean;
+	allowFavorites?: boolean;
+	beforeRemove?: () => Promise<boolean>;
+	onRemoved?: (pageIds: readonly string[]) => boolean;
+}) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const currentPathnameRef = useRef(pathname);
@@ -257,6 +271,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 		message: string;
 	} | null>(null);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
+	const [preparingRemoval, setPreparingRemoval] = useState(false);
 	const [iconPageId, setIconPageId] = useState<string | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [recoveryOpen, setRecoveryOpen] = useState(false);
@@ -271,7 +286,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	const pendingRenamePageIds = useRef(new Set<string>());
 
 	useCommand(
-		canEdit && synced
+		canEdit && synced && allowImports
 			? {
 					id: "page.import-markdown",
 					title: "Import Markdown",
@@ -284,7 +299,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	);
 
 	useCommand(
-		canEdit && synced
+		canEdit && synced && allowRecovery
 			? {
 					id: "page.recover-drafts",
 					title: "Recover drafts",
@@ -460,8 +475,18 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 	}
 
 	// Soft delete: the subtree moves to the workspace trash (restorable).
-	function deletePage(node: PageTreeNode) {
+	async function deletePage(node: PageTreeNode) {
+		if (preparingRemoval || deleteMutation.isPending) return;
 		setDeleteError(null);
+		if (beforeRemove) {
+			setPreparingRemoval(true);
+			const saved = await beforeRemove().catch(() => false);
+			setPreparingRemoval(false);
+			if (!saved) {
+				setDeleteError("Save your changes before moving this page to trash.");
+				return;
+			}
+		}
 		const subtree = subtreeIdsById.get(node.id) ?? new Set([node.id]);
 		deleteMutation.mutate(
 			{ path: { id: node.id } },
@@ -469,6 +494,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 				onSuccess: async () => {
 					setPageToTrash(null);
 					setDeleteError(null);
+					const handled = onRemoved?.([...subtree]) ?? false;
 					await Promise.all([
 						invalidatePages(queryClient),
 						invalidatePageNavigation(queryClient, workspaceId),
@@ -482,6 +508,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 						/^\/w\/([^/]+)\/p\/([^/]+)/,
 					);
 					if (
+						!handled &&
 						currentRoute?.[1] === workspaceId &&
 						currentRoute[2] &&
 						subtree.has(currentRoute[2])
@@ -742,7 +769,9 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 												variant="ghost"
 												className="h-11 justify-start"
 												disabled={
-													!navigationQuery.data || favoriteMutation.isPending
+													!allowFavorites ||
+													!navigationQuery.data ||
+													favoriteMutation.isPending
 												}
 												onClick={() => toggleFavorite(node)}
 											/>
@@ -839,7 +868,9 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 								>
 									<DropdownMenuItem
 										disabled={
-											!navigationQuery.data || favoriteMutation.isPending
+											!allowFavorites ||
+											!navigationQuery.data ||
+											favoriteMutation.isPending
 										}
 										onClick={() => toggleFavorite(node)}
 									>
@@ -909,11 +940,17 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 							<MoreHorizontalIcon />
 						</DropdownMenuTrigger>
 						<DropdownMenuContent className="w-44" side="bottom" align="end">
-							<DropdownMenuItem onClick={() => setRecoveryOpen(true)}>
+							<DropdownMenuItem
+								disabled={!allowRecovery}
+								onClick={() => setRecoveryOpen(true)}
+							>
 								<FileUpIcon />
 								Recover drafts
 							</DropdownMenuItem>
-							<DropdownMenuItem onClick={() => setImportOpen(true)}>
+							<DropdownMenuItem
+								disabled={!allowImports}
+								onClick={() => setImportOpen(true)}
+							>
 								<FileUpIcon />
 								Import Markdown
 							</DropdownMenuItem>
@@ -1038,6 +1075,7 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 			<DestructiveConfirmationDialog
 				open={pageToTrash !== null}
 				onOpenChange={(open) => {
+					if (preparingRemoval || deleteMutation.isPending) return;
 					if (!open) {
 						setPageToTrash(null);
 						setDeleteError(null);
@@ -1055,10 +1093,10 @@ export function PageTree({ workspaceId }: { workspaceId: string }) {
 				}
 				actionLabel="Move to trash"
 				pendingLabel="Moving…"
-				pending={deleteMutation.isPending}
+				pending={preparingRemoval || deleteMutation.isPending}
 				error={deleteError}
 				onConfirm={() => {
-					if (pageToTrash) deletePage(pageToTrash);
+					if (pageToTrash) void deletePage(pageToTrash);
 				}}
 			/>
 			<Dialog

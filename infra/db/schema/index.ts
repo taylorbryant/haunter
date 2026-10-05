@@ -485,6 +485,9 @@ export const embeddedEditorSession = sqliteTable(
 	"embedded_editor_session",
 	{
 		id: text("id").primaryKey(),
+		scope: text("scope", { enum: ["document", "workspace"] })
+			.notNull()
+			.default("document"),
 		connectionId: text("connection_id")
 			.notNull()
 			.references(() => mcpConnection.id, { onDelete: "cascade" }),

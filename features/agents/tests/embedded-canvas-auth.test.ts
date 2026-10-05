@@ -31,6 +31,104 @@ async function fixture(access: "view" | "edit" = "edit") {
 	return { ...f, canvas, standalone };
 }
 
+test.each(["view", "edit"] as const)(
+	"%s page credentials allow only their own inline canvases and recheck the relationship",
+	async (access) => {
+		const f = await fixture(access);
+		const app = await createTestApp<
+			AppContext,
+			AppContext["ports"],
+			AppServiceContextInput
+		>({
+			ports: f.ctx.ports,
+			context: appContext,
+			hooks: [embeddedEditorAuthHooks],
+			routes: defineRoutes<AppContext>([
+				canvasRoutes,
+				pageRoutes,
+				documentRoutes,
+			]),
+		});
+		try {
+			const other = await f.ctx.ports.pages.create(f.scope, {
+				userId: f.userId,
+				title: "Other",
+				parentPageId: null,
+				position: 1,
+			});
+			const otherCanvas = await f.ctx.ports.canvases.create(f.scope, {
+				userId: f.userId,
+				pageId: other.id,
+				title: null,
+			});
+			const session = await f.login();
+			const request = (id: string, suffix = "", method = "GET") =>
+				app.fetch(`http://beignet.test/api/canvases/${id}${suffix}`, {
+					method,
+					headers: {
+						authorization: `HaunterEmbed ${session.token}`,
+						"content-type": "application/json",
+					},
+					...(method === "POST" ? { body: "{}" } : {}),
+				});
+			expect((await request(f.canvas.id)).status).toBe(200);
+			expect((await request(f.canvas.id, "/sync-session", "POST")).status).toBe(
+				200,
+			);
+			for (const id of [f.standalone.id, otherCanvas.id, crypto.randomUUID()]) {
+				expect((await request(id)).status).toBe(403);
+				expect((await request(id, "/sync-session", "POST")).status).toBe(403);
+			}
+			f.ctx.embeddedEditor = session.identity;
+			const issued = await openCanvasSessionUseCase.run({
+				ctx: f.ctx,
+				input: { id: f.canvas.id },
+			});
+			const grant = createDocumentSessionTokens("embedded-test-secret").verify(
+				issued.token,
+			);
+			expect(await checkDocumentAccess(grant, f.database.db)).toBe(
+				access === "edit" ? "owner" : "viewer",
+			);
+			await expect(
+				checkDocumentAccess(
+					{ ...grant, workspaceId: "other-workspace" },
+					f.database.db,
+				),
+			).rejects.toThrow();
+			await expect(
+				openCanvasSessionUseCase.run({
+					ctx: f.ctx,
+					input: { id: otherCanvas.id },
+				}),
+			).rejects.toMatchObject({ code: "FORBIDDEN" });
+			// Even an already-issued collaboration token loses access when the canvas moves.
+			await f.database.db
+				.update(schema.canvases)
+				.set({ pageId: other.id })
+				.where(eq(schema.canvases.id, f.canvas.id));
+			expect((await request(f.canvas.id)).status).toBe(403);
+			await expect(checkDocumentAccess(grant, f.database.db)).rejects.toThrow();
+			await f.database.db
+				.update(schema.canvases)
+				.set({ pageId: f.page.id })
+				.where(eq(schema.canvases.id, f.canvas.id));
+			expect(await checkDocumentAccess(grant, f.database.db)).toBe(
+				access === "edit" ? "owner" : "viewer",
+			);
+			await f.ctx.ports.mcpConnections.disconnectOwned(
+				f.userId,
+				f.connection.id,
+				new Date(),
+			);
+			await expect(checkDocumentAccess(grant, f.database.db)).rejects.toThrow();
+		} finally {
+			await app.stop();
+			await f.database.close();
+		}
+	},
+);
+
 test("canvas credentials authorize exactly one resource, including standalone canvases, without web cookies", async () => {
 	const f = await fixture();
 	const app = await createTestApp<
@@ -110,13 +208,6 @@ test("canvas credentials authorize exactly one resource, including standalone ca
 				}),
 			).rejects.toMatchObject({ code: "FORBIDDEN" });
 		}
-		const pageSession = await f.login();
-		await expect(
-			openCanvasSessionUseCase.run({
-				ctx: Object.assign(f.ctx, { embeddedEditor: pageSession.identity }),
-				input: { id: f.canvas.id },
-			}),
-		).rejects.toMatchObject({ code: "FORBIDDEN" });
 	} finally {
 		await app.stop();
 		await f.database.close();

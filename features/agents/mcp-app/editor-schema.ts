@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-	ContextPageSchema,
-	pageResourceUri,
-	workspacePathSegment,
-} from "./schemas";
+import { ContextPageSchema, workspacePathSegment } from "./schemas";
 
 export { COMPANION_URI as EDITOR_URI } from "./schemas";
 export const MAX_SELECTION_CHARACTERS = 12_000;
@@ -58,12 +54,36 @@ export const CanvasSelectionSchema = z
 				(value.selectionCount === value.selectedShapeIds.length),
 	);
 export type CanvasSelection = z.infer<typeof CanvasSelectionSchema>;
+export const EditorWorkspaceRequestSchema = z.discriminatedUnion("action", [
+	z.object({ action: z.literal("list-pages") }),
+	z.object({ action: z.literal("create-page") }),
+	z.object({ action: z.literal("create-canvas") }),
+]);
+export type EditorWorkspaceRequest = z.infer<
+	typeof EditorWorkspaceRequestSchema
+>;
 export const EditorMessageSchema = z.discriminatedUnion("type", [
+	z.object({
+		type: z.literal("haunter/editor/workspace-request"),
+		nonce: z.string(),
+		requestId: z.uuid(),
+		request: EditorWorkspaceRequestSchema,
+	}),
 	z.object({
 		type: z.literal("haunter/editor/canvas-selection"),
 		nonce: z.string(),
 		selection: CanvasSelectionSchema,
 	}),
+	z
+		.object({
+			type: z.literal("haunter/editor/inline-canvas-selection"),
+			nonce: z.string(),
+			canvasId: z.uuid().nullable(),
+			selection: CanvasSelectionSchema.nullable(),
+		})
+		.refine(
+			(value) => (value.canvasId === null) === (value.selection === null),
+		),
 	z.object({
 		type: z.literal("haunter/editor/open-canvas"),
 		nonce: z.string(),
@@ -72,6 +92,7 @@ export const EditorMessageSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("haunter/editor/open-page"),
 		nonce: z.string(),
+		workspaceId: z.string().min(1).optional(),
 		pageId: z.uuid(),
 	}),
 	z.object({
@@ -107,7 +128,8 @@ export const EditorMessageSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("haunter/editor/selection"),
 		nonce: z.string(),
-		text: z.string().trim().min(1).max(MAX_SELECTION_CHARACTERS),
+		text: z.string().trim().max(MAX_SELECTION_CHARACTERS),
+		complete: z.boolean().default(true),
 	}),
 ]);
 
@@ -148,14 +170,4 @@ export function validateEditorOutput(input: unknown) {
 	)
 		throw new Error("Haunter returned an invalid editor destination.");
 	return output;
-}
-
-export function selectionContextText(page: PageEditorOutput, text: string) {
-	return [
-		`Selected text from Haunter: ${page.title}`,
-		`Source: ${pageResourceUri(page.workspaceId, page.pageId)}`,
-		"Live editor selection; may include changes that have not been saved yet.",
-		"",
-		text.slice(0, MAX_SELECTION_CHARACTERS),
-	].join("\n");
 }

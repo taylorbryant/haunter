@@ -2,6 +2,7 @@ import { z } from "zod";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
+import { canAccessEmbeddedCanvas } from "@/features/agents/embedded-editor-session";
 
 export const openCanvasSessionUseCase = useCase
 	.command("documents.openCanvasSession")
@@ -19,8 +20,7 @@ export const openCanvasSessionUseCase = useCase
 		}
 		if (
 			ctx.embeddedEditor &&
-			(ctx.embeddedEditor.canvasId !== canvas.id ||
-				ctx.embeddedEditor.workspaceId !== canvas.workspaceId)
+			!canAccessEmbeddedCanvas(ctx.embeddedEditor, canvas)
 		)
 			throw appError("Forbidden");
 		const sessionId = ctx.embeddedEditor?.connectionId ?? ctx.auth?.session?.id;
