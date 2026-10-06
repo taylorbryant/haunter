@@ -1,5 +1,6 @@
 import { visitBlocks } from "./block-tree";
 import type { BlockJson } from "./schemas";
+import { tableCellRows } from "./table-content";
 
 type InlineNode = {
 	type?: string;
@@ -12,7 +13,11 @@ export function extractPageLinks(blocks: BlockJson[]): string[] {
 	const found = new Set<string>();
 
 	const visitInline = (content: unknown): void => {
-		if (!Array.isArray(content)) return;
+		if (!Array.isArray(content)) {
+			for (const row of tableCellRows(content))
+				for (const cell of row) visitInline(cell);
+			return;
+		}
 		for (const node of content as InlineNode[]) {
 			if (node?.type === "mention") {
 				const pageId = node.props?.pageId;

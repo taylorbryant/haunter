@@ -58,15 +58,158 @@ const PropsSchema = z.record(
 	z.string(),
 	z.union([z.string().max(4_000), z.boolean(), z.number().finite()]),
 );
-export const NewPageBlockSchema = z
+export const MAX_TABLE_ROWS = 200;
+export const MAX_TABLE_COLUMNS = 50;
+const TableWidthSchema = z.number().int().positive().max(10_000).nullable();
+export const EditableTableCellSchema = z.union([
+	EditableInlineSchema,
+	z
+		.object({
+			type: z.literal("tableCell"),
+			content: EditableInlineSchema,
+			props: z
+				.object({
+					backgroundColor: z.string().max(100).optional(),
+					textColor: z.string().max(100).optional(),
+					textAlignment: z
+						.enum(["left", "center", "right", "justify"])
+						.optional(),
+					colspan: z.literal(1).optional(),
+					rowspan: z.literal(1).optional(),
+				})
+				.strict()
+				.optional(),
+		})
+		.strict(),
+]);
+export const EditableTableContentSchema = z
+	.object({
+		type: z.literal("tableContent"),
+		columnWidths: z
+			.array(TableWidthSchema.optional())
+			.max(MAX_TABLE_COLUMNS)
+			.optional(),
+		headerRows: z.number().int().min(0).max(MAX_TABLE_ROWS).optional(),
+		headerCols: z.number().int().min(0).max(MAX_TABLE_COLUMNS).optional(),
+		rows: z
+			.array(
+				z
+					.object({
+						cells: z
+							.array(EditableTableCellSchema)
+							.min(1)
+							.max(MAX_TABLE_COLUMNS),
+					})
+					.strict(),
+			)
+			.min(1)
+			.max(MAX_TABLE_ROWS),
+	})
+	.strict()
+	.superRefine((table, ctx) => {
+		const columns = table.rows[0]?.cells.length ?? 0;
+		if (table.rows.some((row) => row.cells.length !== columns))
+			ctx.addIssue({
+				code: "custom",
+				message: "Every table row must have the same number of cells.",
+			});
+		if (table.columnWidths && table.columnWidths.length !== columns)
+			ctx.addIssue({
+				code: "custom",
+				message: "Provide one width per table column, or omit columnWidths.",
+			});
+		if (
+			(table.headerRows ?? 0) > table.rows.length ||
+			(table.headerCols ?? 0) > columns
+		)
+			ctx.addIssue({
+				code: "custom",
+				message: "Table headers must fit inside the table.",
+			});
+	});
+export type EditableTableContent = z.infer<typeof EditableTableContentSchema>;
+
+const NewInlineBlockSchema = z
 	.object({
 		type: EditableBlockTypeSchema,
 		props: PropsSchema.optional(),
 		content: EditableInlineSchema.optional(),
 	})
 	.strict();
+export const NewPageBlockSchema = z.union([
+	NewInlineBlockSchema,
+	z
+		.object({
+			type: z.literal("table"),
+			props: PropsSchema.optional(),
+			content: EditableTableContentSchema,
+		})
+		.strict(),
+]);
+
+const TableTarget = { blockId: BlockIdSchema };
+export const TableOperationSchema = z.discriminatedUnion("op", [
+	z
+		.object({
+			...TableTarget,
+			op: z.literal("update_table_cell"),
+			row: z
+				.number()
+				.int()
+				.min(0)
+				.max(MAX_TABLE_ROWS - 1),
+			column: z
+				.number()
+				.int()
+				.min(0)
+				.max(MAX_TABLE_COLUMNS - 1),
+			content: EditableInlineSchema,
+		})
+		.strict(),
+	z
+		.object({
+			...TableTarget,
+			op: z.literal("insert_table_row"),
+			index: z.number().int().min(0).max(MAX_TABLE_ROWS),
+			cells: z.array(EditableTableCellSchema).min(1).max(MAX_TABLE_COLUMNS),
+		})
+		.strict(),
+	z
+		.object({
+			...TableTarget,
+			op: z.literal("insert_table_column"),
+			index: z.number().int().min(0).max(MAX_TABLE_COLUMNS),
+			cells: z.array(EditableTableCellSchema).min(1).max(MAX_TABLE_ROWS),
+			width: TableWidthSchema.optional(),
+		})
+		.strict(),
+	z
+		.object({
+			...TableTarget,
+			op: z.literal("delete_table_row"),
+			index: z
+				.number()
+				.int()
+				.min(0)
+				.max(MAX_TABLE_ROWS - 1),
+		})
+		.strict(),
+	z
+		.object({
+			...TableTarget,
+			op: z.literal("delete_table_column"),
+			index: z
+				.number()
+				.int()
+				.min(0)
+				.max(MAX_TABLE_COLUMNS - 1),
+		})
+		.strict(),
+]);
+export type TableOperation = z.infer<typeof TableOperationSchema>;
 
 export const PageBlockOperationSchema = z.discriminatedUnion("op", [
+	...TableOperationSchema.options,
 	z
 		.object({
 			op: z.literal("move"),

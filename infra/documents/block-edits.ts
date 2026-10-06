@@ -6,6 +6,7 @@ import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
 import {
 	EditableBlockTypeSchema,
 	EditableInlineSchema,
+	TableOperationSchema,
 	type PageBlockOperation,
 } from "@/features/pages/block-editing";
 import { CreatePageInputSchema } from "@/features/pages/schemas";
@@ -14,13 +15,17 @@ import { seedPageBody, projectPageBody } from "./codec";
 import { updateInlineContent } from "./inline-edits";
 import { serverPageSchema } from "./page-schema";
 import { recordBlockMove } from "./move-conflicts";
+import { editableTableContent, editTable } from "./table-edits";
 
 function invalid(message: string): never {
 	throw appError("InvalidPageContent", { message });
 }
 
 function validateEditableBlock(block: BlockJson) {
-	if (!EditableBlockTypeSchema.safeParse(block.type).success)
+	if (
+		block.type !== "table" &&
+		!EditableBlockTypeSchema.safeParse(block.type).success
+	)
 		invalid(
 			`Editing ${block.type} blocks is not supported. Leave that block unchanged.`,
 		);
@@ -40,7 +45,9 @@ function validateEditableBlock(block: BlockJson) {
 		)
 			invalid(`Invalid ${block.type} property: ${key}.`);
 	}
-	if (spec.content === "inline" || spec.content === "plain") {
+	if (block.type === "table") {
+		editableTableContent(block.content);
+	} else if (spec.content === "inline" || spec.content === "plain") {
 		const content = EditableInlineSchema.safeParse(block.content ?? []);
 		if (!content.success) invalid(`Invalid inline content for ${block.type}.`);
 		if (
@@ -79,7 +86,22 @@ export function validateReplacementBlocks(
 			if (!block.id || ids.has(block.id))
 				invalid("Block IDs must be nonempty and unique within a page.");
 			ids.add(block.id);
-			if (EditableBlockTypeSchema.safeParse(block.type).success)
+			// Existing rich/merged tables may be preserved verbatim, even when
+			// their structure is outside the targeted table-editing subset.
+			if (
+				block.type === "table" &&
+				isDeepStrictEqual(
+					JSON.parse(JSON.stringify(block)),
+					JSON.parse(JSON.stringify(previous.get(block.id) ?? null)),
+				)
+			) {
+				visit(block.children);
+				continue;
+			}
+			if (
+				block.type === "table" ||
+				EditableBlockTypeSchema.safeParse(block.type).success
+			)
 				validateEditableBlock(block);
 			else if (
 				!isDeepStrictEqual(
@@ -186,6 +208,23 @@ export function editDocumentBlocks(
 			continue;
 		}
 		const container = containerOf(doc, operation.blockId);
+		if (
+			operation.op !== "move" &&
+			operation.op !== "delete" &&
+			operation.op !== "update"
+		) {
+			const block = blockOf(doc, operation.blockId);
+			if (block.type !== "table")
+				invalid("This operation requires a table block.");
+			const table = container.get(0);
+			if (!(table instanceof Y.XmlElement)) invalid("Invalid table structure.");
+			editTable(
+				table,
+				editableTableContent(block.content),
+				TableOperationSchema.parse(operation),
+			);
+			continue;
+		}
 		if (operation.op === "move") {
 			const destinationParent = operation.parentBlockId
 				? containerOf(doc, operation.parentBlockId)
@@ -246,6 +285,10 @@ export function editDocumentBlocks(
 			continue;
 		}
 		const block = blockOf(doc, operation.blockId);
+		if (block.type === "table" && operation.content !== undefined)
+			invalid(
+				"Use update_table_cell or the table row/column operations to edit table content.",
+			);
 		const candidate = {
 			...block,
 			props: { ...block.props, ...operation.props },
