@@ -238,7 +238,7 @@ the embedded surface provides a React navigation adapter with no web-route prefe
 Both entrypoints compose `WorkspaceSidebar`, `WorkspaceHeader`, and the same
 responsive `WorkspacePicker`. The web wrapper supplies notifications, account and
 workspace management actions. The embedded wrapper supplies its scoped workspace
-list, local appearance preferences, existing creation actions, and save guards.
+list, account-backed embedded appearance preferences, existing creation actions, and save guards.
 The shared header reads the active route through the navigation adapter so its save
 indicator also follows embedded page changes and opens the shared page history dialog.
 The page action menu provides favorites, sharing, Markdown/HTML export and trash.
@@ -275,8 +275,15 @@ Screenshots are saved under `/private/tmp/haunter-appearance-proof`.
 
 The React shell uses `app/globals.css` and `lib/themes.ts` directly. Host light/dark
 updates cross the exact-origin, source and nonce-checked bridge. Named themes are
-selected locally in React and applied as a temporary `forcedTheme`. Embedded theme
-and sidebar preferences use their own storage keys; the shared SidebarProvider does
+selected in React and applied as a temporary `forcedTheme`. The embedded theme is
+saved per user through `/api/embedded-editor/appearance`, so new panels and host
+storage partitions restore the same choice. It defaults to Follow host until the
+user saves a theme; choose the theme once after upgrading from browser-only storage.
+Both view-only and editable workspace sessions can save their own theme. Document
+sessions and unauthenticated requests cannot access this setting. A failed load or
+save is shown beside the picker with Retry. Apply migration `0048` before deploying
+the web app; no collaboration worker update is required for this setting.
+The sidebar still uses its own local storage key; the shared SidebarProvider does
 not write the normal web sidebar cookie when embedded.
 
 

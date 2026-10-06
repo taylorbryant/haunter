@@ -2,7 +2,13 @@ import {
 	exchangeEmbeddedEditor,
 	verifyEmbeddedEditor,
 	listEmbeddedWorkspaces,
+	getEmbeddedAppearance,
+	updateEmbeddedAppearance,
 } from "./contracts";
+import {
+	getEmbeddedAppearanceUseCase,
+	updateEmbeddedAppearanceUseCase,
+} from "./use-cases/embedded-appearance";
 import {
 	exchangeEmbeddedEditorUseCase,
 	verifyEmbeddedEditorUseCase,
@@ -53,6 +59,11 @@ export const agentRoutes = defineRouteGroup({
 export const embeddedEditorRoutes = defineRouteGroup({
 	name: "embeddedEditor",
 	routes: [
+		{ contract: getEmbeddedAppearance, useCase: getEmbeddedAppearanceUseCase },
+		{
+			contract: updateEmbeddedAppearance,
+			useCase: updateEmbeddedAppearanceUseCase,
+		},
 		{
 			contract: exchangeEmbeddedEditor,
 			useCase: exchangeEmbeddedEditorUseCase,

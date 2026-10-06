@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { APP_THEME_IDS } from "@/lib/themes";
+
+export const EmbeddedAppearanceSchema = z
+	.object({ theme: z.enum(["host", ...APP_THEME_IDS]) })
+	.strict();
+export type EmbeddedAppearance = z.infer<typeof EmbeddedAppearanceSchema>;
 
 export const AgentPermissionProfileSchema = z.enum(["view", "edit", "full"]);
 

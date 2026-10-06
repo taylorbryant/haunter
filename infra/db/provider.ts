@@ -38,6 +38,7 @@ export const appDatabaseProvider = createProvider<{
 			| "members"
 			| "mcpOAuthClients"
 			| "embeddedEditorSessions"
+			| "embeddedAppearance"
 			| "notificationInbox"
 			| "pageLinks"
 			| "pages"

@@ -93,6 +93,13 @@ export const user = sqliteTable("user", {
 	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+export const embeddedAppearance = sqliteTable("embedded_appearance", {
+	userId: text("user_id")
+		.primaryKey()
+		.references(() => user.id, { onDelete: "cascade" }),
+	theme: text("theme").notNull(),
+});
+
 export const session = sqliteTable(
 	"session",
 	{

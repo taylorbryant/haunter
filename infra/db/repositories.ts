@@ -1,4 +1,5 @@
 import { createEmbeddedEditorSessionRepository } from "@/infra/agents/embedded-editor-session-repository";
+import { createDrizzleEmbeddedAppearanceRepository } from "@/infra/agents/drizzle-embedded-appearance-repository";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
 import { createEmbeddedTaskProjectionPort } from "@/features/tasks/lib/task-integration-ports";
 import { createDrizzleAdminUserRepository } from "@/infra/admin/drizzle-admin-user-repository";
@@ -39,6 +40,7 @@ export function createRepositories(
 		adminUsers: createDrizzleAdminUserRepository(db),
 		agents: createDrizzleAgentAdminRepository(db),
 		mcpConnections: createDrizzleMcpConnectionRepository(db),
+		embeddedAppearance: createDrizzleEmbeddedAppearanceRepository(db),
 		embeddedEditorSessions: createEmbeddedEditorSessionRepository(db),
 		mcpOAuthClients: createDrizzleMcpOAuthClientRepository(db),
 		canvasNavigation: createDrizzleCanvasNavigationRepository(db),

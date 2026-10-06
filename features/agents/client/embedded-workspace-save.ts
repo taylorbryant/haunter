@@ -3,6 +3,7 @@ import { waitForTaskWrites } from "@/features/tasks/client/wait-for-task-writes"
 import { draftRegistry } from "@/client/draft-registry";
 import { flushPendingCanvasSave } from "@/features/canvases/client/save-state";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
+import { waitForEmbeddedAppearanceWrites } from "./embedded-appearance";
 
 /** A workspace switch may release the credential, so wait for acknowledged saves. */
 export async function flushEmbeddedWorkspace(
@@ -27,6 +28,7 @@ export async function flushEmbeddedWorkspace(
 	try {
 		const saved = await Promise.race([
 			Promise.all([
+				waitForEmbeddedAppearanceWrites(queryClient),
 				waitForTaskWrites(queryClient, workspaceId),
 				...[...pages].map(flushPendingPageSave),
 				...[...canvases].map(flushPendingCanvasSave),

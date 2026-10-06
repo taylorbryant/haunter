@@ -9,6 +9,7 @@ import {
 	DisconnectMcpConnectionInputSchema,
 	DisconnectMcpConnectionOutputSchema,
 	EmbeddedWorkspaceListSchema,
+	EmbeddedAppearanceSchema,
 	GetMcpConsentContextInputSchema,
 	ListAgentActivityInputSchema,
 	ListAgentActivityOutputSchema,
@@ -129,3 +130,12 @@ export const verifyEmbeddedEditor = sessions
 export const listEmbeddedWorkspaces = sessions
 	.get("/api/embedded-editor/workspaces")
 	.responses({ 200: EmbeddedWorkspaceListSchema });
+
+export const getEmbeddedAppearance = sessions
+	.get("/api/embedded-editor/appearance")
+	.responses({ 200: EmbeddedAppearanceSchema });
+
+export const updateEmbeddedAppearance = sessions
+	.put("/api/embedded-editor/appearance")
+	.body(EmbeddedAppearanceSchema)
+	.responses({ 200: EmbeddedAppearanceSchema });

@@ -1,3 +1,11 @@
+import type { EmbeddedAppearance } from "./schemas";
+
+/** Personal embedded-app preferences, independent of OAuth clients and workspaces. */
+export interface EmbeddedAppearanceRepository {
+	get(userId: string): Promise<EmbeddedAppearance>;
+	set(userId: string, appearance: EmbeddedAppearance): Promise<void>;
+}
+
 export type AgentCapabilityGrant = {
 	capability: string;
 	status: string;

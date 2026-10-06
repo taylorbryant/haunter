@@ -41,6 +41,8 @@ import {
 	exchangeEmbeddedEditor,
 	verifyEmbeddedEditor,
 	listEmbeddedWorkspaces,
+	getEmbeddedAppearance,
+	updateEmbeddedAppearance,
 } from "@/features/agents/contracts";
 import { appError } from "@/features/shared/errors";
 import { canAccessEmbeddedCanvas } from "@/features/agents/embedded-editor-session";
@@ -71,6 +73,13 @@ export const embeddedEditorAuthHooks: ServerHook<AppContext> = {
 		)
 			return;
 		if (grant.scope === "workspace") {
+			// A viewer can save their own appearance; this grants no content writes.
+			if (
+				[getEmbeddedAppearance.name, updateEmbeddedAppearance.name].includes(
+					contract.name,
+				)
+			)
+				return;
 			const reads = [
 				listEmbeddedWorkspaces,
 				listTasks,

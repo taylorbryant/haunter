@@ -17,7 +17,6 @@ import {
 	useCreateDialog,
 } from "@/components/create-dialog-provider";
 import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
-import { useEmbeddedHostTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { WorkspaceHeader } from "@/components/workspace-header";
@@ -45,7 +44,7 @@ import { TaskViewProvider } from "@/features/tasks/client/task-view-context";
 import type { TaskView, SelectedTask } from "@/features/tasks/current-view";
 import { TrashList } from "@/features/pages/components/trash-list";
 import { EmbeddedEditorContext } from "@/features/pages/components/editor/embedded-editor-context";
-import { APP_THEMES, getAppTheme, type AppThemeId } from "@/lib/themes";
+import { EmbeddedAppearancePicker } from "./embedded-appearance-picker";
 import { listEmbeddedWorkspaces } from "../contracts";
 import { pageResourceUri } from "../mcp-app/schemas";
 import { observeEmbeddedTextSelection } from "../client/embedded-text-selection";
@@ -197,23 +196,15 @@ function WorkspaceShell({
 	const target = parseWorkspacePath(path);
 	const canEdit = useCanEditWorkspace();
 	const [open, setOpen] = useState(true);
-	const [appearance, setAppearance] = useState<AppThemeId | "host">("host");
 	const [hostTheme, setHostTheme] = useState<"light" | "dark">("light");
-	const setTheme = useEmbeddedHostTheme();
 	const workspaces = useQuery(rq(listEmbeddedWorkspaces).queryOptions({}));
 	useEffect(() => {
 		try {
 			setOpen(localStorage.getItem("haunter-mcp-sidebar-expanded") !== "false");
-			const stored = localStorage.getItem("haunter-mcp-theme");
-			if (getAppTheme(stored ?? undefined)?.id)
-				setAppearance(getAppTheme(stored ?? undefined)!.id);
 		} catch {
 			/* Storage is optional in embedded hosts. */
 		}
 	}, []);
-	useEffect(() => {
-		setTheme?.(appearance === "host" ? hostTheme : appearance);
-	}, [appearance, hostTheme, setTheme]);
 	useEffect(() => {
 		const bridge = readBridge();
 		const listener = (event: MessageEvent) => {
@@ -231,16 +222,6 @@ function WorkspaceShell({
 		send(bridge, { type: "haunter/workspace/ready" });
 		return () => window.removeEventListener("message", listener);
 	}, []);
-	function changeAppearance(next: string) {
-		const value = next === "host" ? "host" : getAppTheme(next)?.id;
-		if (!value) return;
-		setAppearance(value);
-		try {
-			localStorage.setItem("haunter-mcp-theme", value);
-		} catch {
-			/* optional */
-		}
-	}
 	const name =
 		workspaces.data?.workspaces.find(
 			(workspace) => workspace.id === target.workspaceId,
@@ -293,24 +274,7 @@ function WorkspaceShell({
 							onRemoved,
 							beforeRemove,
 						}}
-						footer={
-							<label className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
-								Appearance
-								<select
-									aria-label="Haunter theme"
-									value={appearance}
-									onChange={(event) => changeAppearance(event.target.value)}
-									className="min-w-0 flex-1 rounded bg-sidebar py-2 text-foreground"
-								>
-									<option value="host">Follow host</option>
-									{APP_THEMES.map((theme) => (
-										<option key={theme.id} value={theme.id}>
-											{theme.label}
-										</option>
-									))}
-								</select>
-							</label>
-						}
+						footer={<EmbeddedAppearancePicker hostTheme={hostTheme} />}
 					/>
 					<SidebarInset className="min-h-0" data-haunter-embedded-workspace>
 						<WorkspaceHeader>
