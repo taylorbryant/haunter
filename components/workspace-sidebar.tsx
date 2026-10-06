@@ -38,6 +38,7 @@ export function WorkspaceSidebar({
 	utilityActions,
 	footer,
 	showTasks = true,
+	preferShiftShortcut = false,
 	pageTreeProps,
 	className,
 }: {
@@ -47,6 +48,7 @@ export function WorkspaceSidebar({
 	utilityActions?: ReactNode;
 	footer: ReactNode;
 	showTasks?: boolean;
+	preferShiftShortcut?: boolean;
 	pageTreeProps?: Omit<ComponentProps<typeof PageTree>, "workspaceId">;
 	className?: string;
 }) {
@@ -64,7 +66,7 @@ export function WorkspaceSidebar({
 					) : null}
 				</div>
 				<SidebarMenu className="gap-0.5">
-					<SearchCommand />
+					<SearchCommand preferShiftShortcut={preferShiftShortcut} />
 					<WorkspaceNavItem workspaceId={workspaceId} section="home" />
 					{showTasks ? (
 						<WorkspaceNavItem workspaceId={workspaceId} section="tasks" />

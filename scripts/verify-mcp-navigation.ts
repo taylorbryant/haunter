@@ -88,10 +88,11 @@ try {
 	await saved();
 	const frameUrl = await app.locator("#real-editor").getAttribute("src");
 	const bootCalls = calls.length;
+	await body.press("ControlOrMeta+Shift+K");
 	await workspace
-		.locator("header")
-		.getByRole("button", { name: "Create page", exact: true })
-		.click();
+		.getByPlaceholder("Search pages, or > for commands...")
+		.fill(">");
+	await workspace.getByRole("option", { name: /^Create page/ }).click();
 	await workspace
 		.getByRole("textbox", { name: "Title", exact: true })
 		.fill(parentName);
@@ -203,10 +204,11 @@ try {
 	console.log(
 		"PASS: the shared trash flow archives and restores a page with its canvas",
 	);
+	await workspace.getByRole("button", { name: /^Search/ }).click();
 	await workspace
-		.locator("header")
-		.getByRole("button", { name: "Create canvas", exact: true })
-		.click();
+		.getByPlaceholder("Search pages, or > for commands...")
+		.fill(">");
+	await workspace.getByRole("option", { name: /^Create canvas/ }).click();
 	await workspace
 		.getByRole("textbox", { name: "Title", exact: true })
 		.fill(canvasName);

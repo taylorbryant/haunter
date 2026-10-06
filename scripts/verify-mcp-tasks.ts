@@ -95,9 +95,11 @@ try {
 		.getByRole("textbox", { name: "Add a task", exact: true })
 		.press("Enter");
 	await row(todayTitle).waitFor();
+	await workspace.getByRole("button", { name: /^Search/ }).click();
 	await workspace
-		.getByRole("button", { name: "Create task", exact: true })
-		.click();
+		.getByPlaceholder("Search pages, or > for commands...")
+		.fill(">");
+	await workspace.getByRole("option", { name: /^Create task/ }).click();
 	const dialog = workspace.getByRole("dialog");
 	await dialog
 		.getByRole("textbox", { name: "Task name" })

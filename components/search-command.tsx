@@ -13,13 +13,24 @@ const SearchCommandDialog = dynamic(
 	{ ssr: false },
 );
 
-/** Sidebar "Search" row plus the ⌘K palette it opens (pages + commands). */
-export function SearchCommand() {
+/** Sidebar Search and its palette. Shift provides an alternative to host shortcuts. */
+export function SearchCommand({
+	preferShiftShortcut = false,
+}: {
+	preferShiftShortcut?: boolean;
+}) {
 	const [open, setOpen] = useState(false);
 
 	useEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
-			if (event.key === "k" && (event.metaKey || event.ctrlKey)) {
+			if (
+				!event.defaultPrevented &&
+				!event.repeat &&
+				!event.isComposing &&
+				!event.altKey &&
+				event.key.toLowerCase() === "k" &&
+				(event.metaKey || event.ctrlKey)
+			) {
 				event.preventDefault();
 				setOpen((current) => !current);
 			}
@@ -31,10 +42,16 @@ export function SearchCommand() {
 	return (
 		<>
 			<SidebarMenuItem>
-				<SidebarMenuButton tooltip="Search" onClick={() => setOpen(true)}>
+				<SidebarMenuButton
+					tooltip={preferShiftShortcut ? "Search (⇧⌘K)" : "Search (⌘K)"}
+					aria-keyshortcuts="Meta+K Control+K Meta+Shift+K Control+Shift+K"
+					onClick={() => setOpen(true)}
+				>
 					<SearchIcon />
 					<span>Search</span>
-					<span className="ml-auto text-muted-foreground text-xs">⌘K</span>
+					<span className="ml-auto text-muted-foreground text-xs">
+						{preferShiftShortcut ? "⇧⌘K" : "⌘K"}
+					</span>
 				</SidebarMenuButton>
 			</SidebarMenuItem>
 			{open ? <SearchCommandDialog open={open} onOpenChange={setOpen} /> : null}

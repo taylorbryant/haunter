@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
-import { FilePlus2Icon, ShapesIcon, ListTodoIcon } from "lucide-react";
 import { rq } from "@/client";
 import { useDraftRegistry } from "@/client/use-draft-registry";
 import {
@@ -12,10 +11,7 @@ import {
 } from "@/client/workspace-navigation";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
-import {
-	CreateDialogProvider,
-	useCreateDialog,
-} from "@/components/create-dialog-provider";
+import { CreateDialogProvider } from "@/components/create-dialog-provider";
 import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
 import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -253,6 +249,7 @@ function WorkspaceShell({
 				<CreateDialogProvider workspaceId={target.workspaceId}>
 					<WorkspaceSidebar
 						workspaceId={target.workspaceId}
+						preferShiftShortcut
 						workspaceSwitcher={
 							<WorkspacePicker
 								workspaces={
@@ -284,7 +281,6 @@ function WorkspaceShell({
 									workspaceId={target.workspaceId}
 								/>
 							) : null}
-							<WorkspaceCreateButtons />
 							<HeaderPageActions
 								allowFavorites={canEdit}
 								beforeRemove={beforeRemove}
@@ -306,41 +302,6 @@ function WorkspaceShell({
 				</CreateDialogProvider>
 			</SidebarProvider>
 		</CommandRegistryProvider>
-	);
-}
-
-function WorkspaceCreateButtons() {
-	const canEdit = useCanEditWorkspace();
-	const { openCreatePage, openCreateCanvas, openCreateTask } =
-		useCreateDialog();
-	if (!canEdit) return null;
-	return (
-		<div className="ml-auto flex gap-1">
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Create task"
-				onClick={openCreateTask}
-			>
-				<ListTodoIcon />
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Create page"
-				onClick={openCreatePage}
-			>
-				<FilePlus2Icon />
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Create canvas"
-				onClick={openCreateCanvas}
-			>
-				<ShapesIcon />
-			</Button>
-		</div>
 	);
 }
 

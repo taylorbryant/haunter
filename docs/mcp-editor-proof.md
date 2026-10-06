@@ -286,6 +286,11 @@ the web app; no collaboration worker update is required for this setting.
 The sidebar still uses its own local storage key; the shared SidebarProvider does
 not write the normal web sidebar cookie when embedded.
 
+The embedded header omits duplicate task/page/canvas creation buttons. Creation
+remains available from Search (type `>` for commands) and the corresponding workspace screens. With focus
+inside Haunter, Search accepts Cmd+K or Cmd+Shift+K (Ctrl on Windows/Linux); the
+embedded sidebar advertises the shifted shortcut to avoid the host's Cmd+K binding.
+
 
 ## Task selection and assistant navigation
 
