@@ -11,16 +11,19 @@ import {
 import { activity } from "@/features/agents/tests/page-activity-fixture";
 import { canvasActivity } from "@/features/agents/tests/canvas-activity-fixture";
 import { canvasAgentActivityKey } from "@/features/agents/client/canvas-activity-cache";
-import { workspaceCanvasActivity } from "../channels";
+import { workspaceCanvasActivity, workspaceFavorites } from "../channels";
 import type { WorkspaceEventClock } from "../client/event-clock";
 import {
 	getCanvasQueryOptions,
+	getCanvasNavigationQueryOptions,
 	listCanvasesQueryOptions,
 } from "@/features/canvases/client/queries";
 import { listNotificationsQueryOptions } from "@/features/notifications/client/queries";
 import {
 	getPageQueryOptions,
+	getPageNavigationQueryOptions,
 	listPagesQueryOptions,
+	listPageVersionsQueryOptions,
 } from "@/features/pages/client/queries";
 import { listTasksQueryOptions } from "@/features/tasks/client/queries";
 import { TASK_WRITE_KEY } from "@/features/tasks/client/write-state";
@@ -28,6 +31,7 @@ import { subscribeToWorkspaceChanges } from "../client/broadcasts";
 import { createWorkspaceRefreshGate } from "../client/refresh-gate";
 import {
 	createWorkspaceCanvasEvent,
+	createWorkspaceFavoritesEvent,
 	createWorkspacePageEvent,
 	createWorkspaceTaskEvent,
 } from "../workspace-events";
@@ -98,6 +102,137 @@ function fixture() {
 }
 
 describe("workspace broadcast cache", () => {
+	it.each(["page", "canvas"] as const)(
+		"refreshes %s favorites immediately only for the acting user and workspace",
+		async (resourceType) => {
+			const f = fixture();
+			const navigation =
+				resourceType === "page"
+					? getPageNavigationQueryOptions
+					: getCanvasNavigationQueryOptions;
+			const otherNavigation =
+				resourceType === "page"
+					? getCanvasNavigationQueryOptions
+					: getPageNavigationQueryOptions;
+			const key = navigation("workspace_1").queryKey;
+			const untouched = [
+				navigation("workspace_2").queryKey,
+				otherNavigation("workspace_1").queryKey,
+				getPageQueryOptions("open_page").queryKey,
+			];
+			for (const other of untouched) f.queryClient.setQueryData(other, {});
+			let fetches = 0;
+			const observer = new QueryObserver(f.queryClient, {
+				queryKey: key,
+				initialData: { favorites: [] as string[] },
+				queryFn: async () => {
+					fetches++;
+					return { favorites: ["new_favorite"] };
+				},
+			});
+			cleanups.push(observer.subscribe(() => {}));
+			const event = createWorkspaceFavoritesEvent({
+				workspaceId: "workspace_1",
+				userId: "user_1",
+				resourceType,
+			});
+			await f.favoritesEvent({ ...event, userId: "user_2" });
+			await f.favoritesEvent({ ...event, workspaceId: "workspace_2" });
+			expect(fetches).toBe(0);
+			await f.favoritesEvent(event);
+			await until(
+				() => observer.getCurrentResult().data?.favorites.length === 1,
+			);
+			expect(fetches).toBe(1);
+			for (const other of untouched)
+				expect(f.queryClient.getQueryState(other)?.isInvalidated).toBe(false);
+		},
+	);
+
+	it("coalesces favorite hints and reconnects behind optimistic writes and drops queued hints on teardown", async () => {
+		const f = fixture();
+		const key = getPageNavigationQueryOptions("workspace_1").queryKey;
+		const canvasKey = getCanvasNavigationQueryOptions("workspace_1").queryKey;
+		f.queryClient.setQueryData(canvasKey, {});
+		let fetches = 0;
+		const observer = new QueryObserver(f.queryClient, {
+			queryKey: key,
+			initialData: { favorites: [] },
+			queryFn: async () => {
+				fetches++;
+				return { favorites: [] };
+			},
+		});
+		cleanups.push(observer.subscribe(() => {}));
+		const event = createWorkspaceFavoritesEvent({
+			workspaceId: "workspace_1",
+			userId: "user_1",
+			resourceType: "page",
+		});
+		for (const close of [false, true]) {
+			const pending = deferred();
+			const mutation = f.queryClient
+				.getMutationCache()
+				.build(f.queryClient, { mutationFn: () => pending.promise });
+			const write = mutation.execute(undefined);
+			await f.favoritesEvent(event);
+			await f.favoritesEvent(event);
+			await f.sync(workspaceFavorites.name);
+			expect(fetches).toBe(close ? 1 : 0);
+			if (close) f.unsubscribe();
+			pending.resolve();
+			await write;
+			if (!close) await until(() => fetches === 1);
+			expect(fetches).toBe(1);
+		}
+		expect(f.queryClient.getQueryState(canvasKey)?.isInvalidated).toBe(true);
+	});
+
+	it("refreshes open page history after content changes and reconciles missed changes on reconnect", async () => {
+		const f = fixture();
+		const key = listPageVersionsQueryOptions("open_page").queryKey;
+		const otherKey = listPageVersionsQueryOptions("other_page").queryKey;
+		f.queryClient.setQueryData(otherKey, {});
+		let fetches = 0;
+		const observer = new QueryObserver(f.queryClient, {
+			queryKey: key,
+			initialData: { items: ["original"] },
+			queryFn: async () => {
+				fetches++;
+				return { items: ["original", "recovery"] };
+			},
+		});
+		cleanups.push(observer.subscribe(() => {}));
+		await f.event(
+			createWorkspacePageEvent({
+				workspaceId: "workspace_1",
+				pageId: "open_page",
+				type: "page.renamed",
+			}),
+		);
+		await f.event(
+			createWorkspacePageEvent({
+				workspaceId: "workspace_2",
+				pageId: "open_page",
+				type: "page.contentChanged",
+			}),
+		);
+		expect(fetches).toBe(0);
+		await f.event(
+			createWorkspacePageEvent({
+				workspaceId: "workspace_1",
+				pageId: "open_page",
+				type: "page.contentChanged",
+			}),
+		);
+		await until(() => observer.getCurrentResult().data?.items.length === 2);
+		expect(fetches).toBe(1);
+		expect(f.queryClient.getQueryState(otherKey)?.isInvalidated).toBe(false);
+		await f.sync();
+		await until(() => fetches === 2);
+		expect(f.queryClient.getQueryState(otherKey)?.isInvalidated).toBe(true);
+	});
+
 	it("routes canvas activity without content invalidation and clears it on disconnect, renewal, and teardown", async () => {
 		const f = fixture();
 		const event = canvasActivity({ workspaceId: "workspace_1" });

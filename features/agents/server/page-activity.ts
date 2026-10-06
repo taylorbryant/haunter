@@ -7,6 +7,10 @@ import { requireActiveWorkspaceScope } from "@/lib/auth";
 
 const actions: Record<string, PageAgentActivity["action"]> = {
 	read_page: "read",
+	list_backlinks: "read",
+	list_page_versions: "read",
+	read_page_version: "read",
+	restore_page_version: "restore",
 	list_page_attachments: "read",
 	read_page_attachment: "read",
 	append_to_page: "append",

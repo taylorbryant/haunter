@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { WorkspaceFavoritesEventSchema } from "../schemas";
 import {
 	createWorkspaceCanvasEvent,
+	createWorkspaceFavoritesEvent,
 	createWorkspacePageEvent,
 	createWorkspaceTaskEvent,
 	isWorkspaceCanvasEvent,
@@ -12,6 +14,16 @@ import {
 } from "../workspace-events";
 
 describe("workspace events", () => {
+	it("keeps personal favorite hints separate from the legacy workspace schema", () => {
+		const event = createWorkspaceFavoritesEvent({
+			workspaceId: "workspace_1",
+			userId: "user_1",
+			resourceType: "page",
+		});
+		expect(WorkspaceFavoritesEventSchema.safeParse(event).success).toBe(true);
+		expect(isWorkspaceEvent(event)).toBe(false);
+	});
+
 	it("creates versioned, workspace-scoped page invalidation hints", () => {
 		const event = createWorkspacePageEvent({
 			type: "page.moved",

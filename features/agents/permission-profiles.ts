@@ -9,6 +9,13 @@ export type AgentHostPermissionState =
 	| "custom";
 
 const VIEW_CAPABILITIES = [
+	"list_canvases",
+	"list_canvas_favorites",
+	"list_page_favorites",
+	"list_backlinks",
+	"list_trash",
+	"list_page_versions",
+	"read_page_version",
 	"list_active_sessions",
 	"get_active_context",
 	"search_canvas_library",
@@ -26,6 +33,10 @@ const VIEW_CAPABILITIES = [
 
 const EDIT_CAPABILITIES = [
 	...VIEW_CAPABILITIES,
+	"create_canvas",
+	"update_canvas",
+	"set_canvas_favorite",
+	"set_page_favorite",
 	"create_canvas_block",
 	"insert_canvas_library_item",
 	"edit_canvas",
@@ -41,6 +52,8 @@ const EDIT_CAPABILITIES = [
 
 export const ALL_HAUNTER_AGENT_CAPABILITIES = [
 	...EDIT_CAPABILITIES,
+	"delete_canvas",
+	"restore_page_version",
 	"delete_canvas_shapes",
 	"archive_page",
 	"restore_page",
@@ -65,6 +78,8 @@ export const AGENT_PERMISSION_PROFILES = {
 		details: [
 			"Read your open pages and canvas selections",
 			"View and search pages",
+			"Browse favorites, backlinks, trash, and page history",
+			"List standalone canvases",
 			"Read canvas shapes and history",
 			"Preview canvas drawings and browse the library",
 			"View tasks",
@@ -78,6 +93,7 @@ export const AGENT_PERMISSION_PROFILES = {
 		details: [
 			"Everything in View only",
 			"Create and edit pages",
+			"Create and rename standalone canvases; manage your favorites",
 			"Add canvas blocks, insert library items, and edit shapes",
 			"Create, update, complete, and reopen tasks",
 		],
@@ -90,6 +106,8 @@ export const AGENT_PERMISSION_PROFILES = {
 		details: [
 			"Everything in View and edit",
 			"Archive and restore pages",
+			"Restore saved page versions",
+			"Permanently delete standalone canvases",
 			"Delete page blocks and replace page bodies",
 			"Delete canvas shapes",
 			"Delete tasks",
@@ -102,6 +120,19 @@ export const AGENT_PERMISSION_PROFILES = {
 >;
 
 const CAPABILITY_LABELS = {
+	list_canvases: "List standalone canvases",
+	create_canvas: "Create standalone canvases",
+	update_canvas: "Rename standalone canvases",
+	delete_canvas: "Delete standalone canvases",
+	list_canvas_favorites: "View your favorite canvases",
+	set_canvas_favorite: "Manage your favorite canvases",
+	list_page_favorites: "View your favorite pages",
+	set_page_favorite: "Manage your favorite pages",
+	list_backlinks: "View page backlinks",
+	list_trash: "Browse archived pages",
+	list_page_versions: "List page history",
+	read_page_version: "Read saved page versions",
+	restore_page_version: "Restore saved page versions",
 	list_active_sessions: "View your active Haunter sessions",
 	get_active_context: "Read your current page and canvas selection",
 	create_canvas_block: "Add canvas blocks",

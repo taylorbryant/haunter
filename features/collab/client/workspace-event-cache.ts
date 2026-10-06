@@ -13,6 +13,7 @@ import {
 	getPageNavigation,
 	listBacklinks,
 	listPages,
+	listPageVersions,
 	listTrash,
 	searchPages,
 } from "@/features/pages/contracts";
@@ -21,6 +22,7 @@ import {
 	isWorkspaceCanvasEvent,
 	isWorkspaceTaskEvent,
 	type WorkspaceEvent,
+	type WorkspaceFavoritesEvent,
 	workspaceEventAffectedPageIds,
 } from "../workspace-events";
 
@@ -47,6 +49,24 @@ function canvasQueries(workspaceId: string): QueryFilters[] {
 		rq(getCanvasNavigation).filter({ path: { workspaceId } }),
 	];
 }
+
+export function workspaceFavoritesQueries(workspaceId: string): QueryFilters[] {
+	return [
+		rq(getPageNavigation).filter({ path: { workspaceId } }),
+		rq(getCanvasNavigation).filter({ path: { workspaceId } }),
+	];
+}
+
+export function workspaceFavoritesEventQueries(
+	workspaceId: string,
+	userId: string,
+	event: WorkspaceFavoritesEvent,
+): QueryFilters[] {
+	if (event.workspaceId !== workspaceId || event.userId !== userId) return [];
+	return event.resourceType === "page"
+		? [rq(getPageNavigation).filter({ path: { workspaceId } })]
+		: [rq(getCanvasNavigation).filter({ path: { workspaceId } })];
+}
 export function workspaceReconciliationQueries(
 	workspaceId: string,
 ): QueryFilters[] {
@@ -56,6 +76,7 @@ export function workspaceReconciliationQueries(
 		rq(getPage).filter(),
 		rq(getPageMetadata).filter(),
 		rq(getCanvas).filter(),
+		rq(listPageVersions).filter(),
 	];
 }
 export function workspaceEventQueries(
@@ -75,6 +96,9 @@ export function workspaceEventQueries(
 		...workspaceEventAffectedPageIds(event).flatMap((id) => [
 			rq(getPage).filter({ path: { id } }),
 			rq(getPageMetadata).filter({ path: { id } }),
+			...(event.type === "page.contentChanged"
+				? [rq(listPageVersions).filter({ path: { id } })]
+				: []),
 		]),
 	];
 }

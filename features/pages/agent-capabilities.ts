@@ -7,6 +7,11 @@ import {
 	MAX_INITIAL_PAGE_CONTENT_BLOCKS,
 	PAGE_TITLE_MAX_LENGTH,
 	PAGE_TITLE_TOO_LONG_MESSAGE,
+	PageVersionMetaSchema,
+	PageContentSchema,
+	SavePageContentOutputSchema,
+	SetPageFavoriteOutputSchema,
+	type PageMeta,
 } from "@/features/pages/schemas";
 import { appError } from "@/features/shared/errors";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
@@ -15,6 +20,7 @@ import {
 	PageDocumentOutputSchema,
 	PageEditOutputSchema,
 	ReplacePageContentInputSchema,
+	PageRevisionSchema,
 } from "./block-editing";
 
 import {
@@ -399,7 +405,173 @@ export const readPageAttachmentCapability = defineAgentCapability(
 	},
 );
 
+function pageMetadata(page: PageMeta) {
+	return {
+		pageId: page.id,
+		title: page.title,
+		icon: page.icon,
+		parentPageId: page.parentPageId,
+		updatedAt: page.updatedAt,
+	};
+}
+
+const VersionMetadata = PageVersionMetaSchema.omit({ id: true }).extend({
+	versionId: z.uuid(),
+});
+const PageVersionInput = PageInput.extend({ versionId: z.uuid() });
+
+const pageManagementCapabilities = [
+	defineAgentCapability("list_page_favorites", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.list_page_favorites,
+		input: WorkspaceInput,
+		output: z.object({
+			pages: z.array(
+				PageMetadataOutput.extend({ favoritedAt: z.string().nullable() }),
+			),
+		}),
+		async handle({ ctx, input }) {
+			const { getPageNavigationUseCase } = await import(
+				"./use-cases/get-page-navigation"
+			);
+			const { favorites } = await getPageNavigationUseCase.run({ ctx, input });
+			return {
+				pages: favorites.map((page) => ({
+					...pageMetadata(page),
+					favoritedAt: page.favoritedAt,
+				})),
+			};
+		},
+	}),
+	defineAgentCapability("set_page_favorite", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.set_page_favorite,
+		input: PageInput.extend({ favorite: z.boolean() }),
+		output: SetPageFavoriteOutputSchema,
+		async handle({ ctx, input }) {
+			const { setPageFavoriteUseCase } = await import(
+				"./use-cases/set-page-favorite"
+			);
+			return setPageFavoriteUseCase.run({
+				ctx,
+				input: { id: input.pageId, favorite: input.favorite },
+			});
+		},
+	}),
+	defineAgentCapability("list_backlinks", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.list_backlinks,
+		input: PageInput,
+		output: z.object({ pages: z.array(PageMetadataOutput) }),
+		async handle({ ctx, input }) {
+			const { listBacklinksUseCase } = await import(
+				"./use-cases/list-backlinks"
+			);
+			const { items } = await listBacklinksUseCase.run({
+				ctx,
+				input: { id: input.pageId },
+			});
+			return { pages: items.map(pageMetadata) };
+		},
+	}),
+	defineAgentCapability("list_trash", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.list_trash,
+		input: WorkspaceInput,
+		output: z.object({
+			pages: z.array(
+				PageMetadataOutput.extend({ deletedAt: z.string().nullable() }),
+			),
+		}),
+		async handle({ ctx, input }) {
+			const { listTrashUseCase } = await import("./use-cases/list-trash");
+			const { items } = await listTrashUseCase.run({ ctx, input });
+			return {
+				pages: items.map((page) => ({
+					...pageMetadata(page),
+					deletedAt: page.deletedAt,
+				})),
+			};
+		},
+	}),
+	defineAgentCapability("list_page_versions", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.list_page_versions,
+		input: PageInput,
+		output: z.object({ versions: z.array(VersionMetadata) }),
+		async handle({ ctx, input }) {
+			const { listPageVersionsUseCase } = await import(
+				"./use-cases/list-page-versions"
+			);
+			const { items } = await listPageVersionsUseCase.run({
+				ctx,
+				input: { id: input.pageId },
+			});
+			return {
+				versions: items.map(({ id, ...version }) => ({
+					...version,
+					versionId: id,
+				})),
+			};
+		},
+	}),
+	defineAgentCapability("read_page_version", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.read_page_version,
+		input: PageVersionInput.extend({
+			format: z.enum(["markdown", "blocks", "both"]).optional(),
+		}),
+		output: VersionMetadata.extend({
+			markdown: z.string().optional(),
+			blocks: PageContentSchema.optional(),
+		}),
+		async handle({ ctx, input }) {
+			const { getPageVersionUseCase } = await import(
+				"./use-cases/get-page-version"
+			);
+			const { blocksToMarkdown } = await import("./lib/markdown");
+			const { id, content, ...version } = await getPageVersionUseCase.run({
+				ctx,
+				input: { id: input.pageId, versionId: input.versionId },
+			});
+			return {
+				...version,
+				versionId: id,
+				...(input.format !== "blocks"
+					? { markdown: blocksToMarkdown(content) }
+					: {}),
+				...(input.format === "blocks" || input.format === "both"
+					? { blocks: content }
+					: {}),
+			};
+		},
+	}),
+	defineAgentCapability("restore_page_version", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.restore_page_version,
+		input: PageVersionInput.extend({ expectedRevision: PageRevisionSchema }),
+		output: SavePageContentOutputSchema.extend({
+			pageId: z.uuid(),
+			versionId: z.uuid(),
+			restored: z.literal(true),
+		}),
+		async handle({ ctx, input }) {
+			const { restorePageVersionUseCase } = await import(
+				"./use-cases/restore-page-version"
+			);
+			const result = await restorePageVersionUseCase.run({
+				ctx,
+				input: {
+					id: input.pageId,
+					versionId: input.versionId,
+					expectedRevision: input.expectedRevision,
+				},
+			});
+			return {
+				...result,
+				pageId: input.pageId,
+				versionId: input.versionId,
+				restored: true as const,
+			};
+		},
+	}),
+] as const;
+
 export const pageAgentCapabilities = [
+	...pageManagementCapabilities,
 	listPagesCapability,
 	searchPagesCapability,
 	readPageCapability,

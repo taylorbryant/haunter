@@ -32,6 +32,11 @@ function activityResource(
 	const output = objectValue(result);
 	const pageCapability = [
 		"read_page",
+		"set_page_favorite",
+		"list_backlinks",
+		"list_page_versions",
+		"read_page_version",
+		"restore_page_version",
 		"list_page_attachments",
 		"read_page_attachment",
 		"create_page",

@@ -1,5 +1,6 @@
 import type { BroadcastPort } from "@beignet/core/broadcasting/server";
 import { tenantScopeId } from "@beignet/core/ports";
+import { workspaceChanges } from "@/features/collab/channels";
 import { WorkspaceEventSchema } from "@/features/collab/schemas";
 import type { WorkspaceEvent } from "@/features/collab/workspace-events";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
@@ -18,7 +19,8 @@ export function createTestWorkspaceEventPublisher(
 	published: WorkspaceEvent[] = [],
 ): BroadcastPort {
 	return {
-		async publish(_channel, event) {
+		async publish(channel, event) {
+			if (channel.name !== workspaceChanges.name) return;
 			published.push(WorkspaceEventSchema.parse(event.data));
 		},
 		subscribe() {

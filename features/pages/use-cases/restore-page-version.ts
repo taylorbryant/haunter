@@ -9,17 +9,23 @@ import {
 	SavePageContentOutputSchema,
 } from "../schemas";
 import { VERSION_RETENTION } from "./save-page-content";
+import { PageRevisionSchema } from "../block-editing";
+import { assertDocumentRevision } from "@/features/documents/revision";
 
 /**
  * Overwrite the page document with a stored version. The current state is
  * always snapshotted first (cause "restore"), so a restore can itself be
- * undone from history. An explicit user action, so it intentionally
- * last-write-wins over concurrent autosaves. Collaborative restores start a
+ * undone from history. UI restores intentionally use last-write-wins;
+ * delegated restores supply a revision checked in this transaction. Restores start a
  * new generation; old clients retain recovery copies instead of merging back.
  */
 export const restorePageVersionUseCase = useCase
 	.command("pages.restoreVersion")
-	.input(PageVersionIdInputSchema)
+	.input(
+		PageVersionIdInputSchema.extend({
+			expectedRevision: PageRevisionSchema.optional(),
+		}),
+	)
 	.output(SavePageContentOutputSchema)
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
@@ -36,6 +42,11 @@ export const restorePageVersionUseCase = useCase
 			}
 
 			await ctx.gate.authorize("pages.update", page);
+			if (input.expectedRevision !== undefined) {
+				const document = await tx.documents.find(scope, page.id);
+				if (!document) throw appError("InvalidPageContent");
+				assertDocumentRevision(document, input.expectedRevision);
+			}
 
 			const version = await tx.pageVersions.findById(scope, input.versionId);
 			if (!version || version.pageId !== page.id) {

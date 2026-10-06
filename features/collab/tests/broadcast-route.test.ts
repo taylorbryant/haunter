@@ -23,6 +23,7 @@ import {
 	type CachedCanvasAgentActivity,
 } from "@/features/agents/client/canvas-activity-cache";
 import { listTasksQueryOptions } from "@/features/tasks/client/queries";
+import { getPageNavigationQueryOptions } from "@/features/pages/client/queries";
 import { appPorts } from "@/infra/port-wiring";
 import { routeAuth } from "@/lib/route-auth";
 import type { AppTransactionPorts } from "@/ports";
@@ -39,7 +40,11 @@ import {
 } from "@/server/broadcast-admission";
 import { channels } from "@/server/broadcasts";
 import { type AppServiceContextInput, appContext } from "@/server/context";
-import { workspaceChanges, workspaceCanvasActivity } from "../channels";
+import {
+	workspaceChanges,
+	workspaceCanvasActivity,
+	workspaceFavorites,
+} from "../channels";
 import {
 	WorkspacePageEventSchema,
 	WorkspaceTaskEventSchema,
@@ -48,7 +53,10 @@ import {
 import { subscribeToWorkspaceChanges } from "../client/broadcasts";
 import { WORKSPACE_EVENT_TIME_HEADER } from "../headers";
 import { withWorkspaceEventClock } from "../server/event-clock";
-import { createWorkspaceTaskEvent } from "../workspace-events";
+import {
+	createWorkspaceTaskEvent,
+	createWorkspaceFavoritesEvent,
+} from "../workspace-events";
 import { deferred, memoryBroadcast, until } from "./helpers";
 
 // Preserve the pre-canvas-activity client's union instead of importing the
@@ -190,7 +198,7 @@ async function fixture(
 }
 
 describe("workspace broadcast route", () => {
-	it("keeps legacy tabs connected while new tabs receive MCP canvas activity on the same stream", async () => {
+	it("keeps legacy tabs connected while new tabs receive canvas activity and personal favorites on the same stream", async () => {
 		const commands = await canvasActivityFixture();
 		const workspaceId = commands.workspaceId;
 		const f = await fixture({ workspaceId });
@@ -206,6 +214,7 @@ describe("workspace broadcast route", () => {
 		const errors: unknown[] = [];
 		const legacyEvents: unknown[] = [];
 		const taskKey = listTasksQueryOptions(workspaceId, "open").queryKey;
+		const navigationKey = getPageNavigationQueryOptions(workspaceId).queryKey;
 		const activityKey = canvasAgentActivityKey("user_1", workspaceId);
 		let legacyReady = 0;
 		const legacySubscription = f.client.subscribe(legacyWorkspaceChanges, {
@@ -234,11 +243,24 @@ describe("workspace broadcast route", () => {
 		});
 		let running: Promise<unknown> | undefined;
 		try {
-			await until(() => legacyReady === 1 && f.bus.subscriberCount() === 3);
-			// Two browser connections, despite the new client subscribing to two
-			// channels. Activity must not consume an additional connection lease.
+			await until(() => legacyReady === 1 && f.bus.subscriberCount() === 4);
+			// Two browser connections, despite the new client subscribing to three
+			// channels. These hints must not consume an additional connection lease.
 			expect(f.acquired()).toBe(2);
 			queryClient.setQueryData(taskKey, { items: [] });
+			queryClient.setQueryData(navigationKey, { favorites: [] });
+			for (const params of [
+				{ workspaceId, userId: "user_2" },
+				{ workspaceId: "other_workspace", userId: "user_1" },
+			])
+				await f.bus.port.publish(workspaceFavorites, {
+					params,
+					event: "changed",
+					data: createWorkspaceFavoritesEvent({
+						...params,
+						resourceType: "page",
+					}),
+				});
 			const before = createWorkspaceTaskEvent({
 				workspaceId,
 				taskId: "before",
@@ -253,6 +275,22 @@ describe("workspace broadcast route", () => {
 					legacyEvents.length === 1 &&
 					queryClient.getQueryState(taskKey)?.isInvalidated === true,
 			);
+			expect(queryClient.getQueryState(navigationKey)?.isInvalidated).toBe(
+				false,
+			);
+			await f.bus.port.publish(workspaceFavorites, {
+				params: { workspaceId, userId: "user_1" },
+				event: "changed",
+				data: createWorkspaceFavoritesEvent({
+					workspaceId,
+					userId: "user_1",
+					resourceType: "page",
+				}),
+			});
+			await until(
+				() => queryClient.getQueryState(navigationKey)?.isInvalidated === true,
+			);
+			expect(legacyEvents).toEqual([before]);
 			queryClient.setQueryData(taskKey, { items: [] });
 			running = commands.execute();
 			await until(
@@ -450,14 +488,36 @@ describe("workspace broadcast route", () => {
 		}
 	});
 
-	it.each([workspaceChanges, workspaceCanvasActivity])(
+	it("rejects subscriptions to another user's favorites before opening the stream", async () => {
+		const f = await fixture();
+		try {
+			const denied = deferred<unknown>();
+			f.client.subscribe(workspaceFavorites, {
+				params: { workspaceId: "workspace_1", userId: "user_2" },
+				onSync() {
+					throw new Error("Unauthorized readiness");
+				},
+				onEvent() {
+					throw new Error("Personal event leaked");
+				},
+				onError: denied.resolve,
+			});
+			expect(await denied.promise).toMatchObject({ status: 403 });
+			await until(() => f.released() === 1);
+			expect(f.bus.subscriberCount()).toBe(0);
+		} finally {
+			await f.close();
+		}
+	});
+
+	it.each([workspaceChanges, workspaceCanvasActivity, workspaceFavorites])(
 		"blocks cross-workspace access to $name without subscribing",
 		async (channel) => {
 			const f = await fixture();
 			try {
 				const denied = deferred<unknown>();
 				f.client.subscribe(channel, {
-					params: { workspaceId: "workspace_2" },
+					params: { workspaceId: "workspace_2", userId: "user_1" },
 					onSync() {
 						throw new Error("Unauthorized readiness");
 					},
@@ -475,7 +535,7 @@ describe("workspace broadcast route", () => {
 		},
 	);
 
-	it.each([workspaceChanges, workspaceCanvasActivity])(
+	it.each([workspaceChanges, workspaceCanvasActivity, workspaceFavorites])(
 		"renews $name automatically and rechecks revoked membership",
 		async (channel) => {
 			const f = await fixture({ lifetime: 120 });
@@ -483,7 +543,7 @@ describe("workspace broadcast route", () => {
 				const reasons: string[] = [];
 				const denied = deferred<unknown>();
 				f.client.subscribe(channel, {
-					params: { workspaceId: "workspace_1" },
+					params: { workspaceId: "workspace_1", userId: "user_1" },
 					onEvent() {},
 					onError: denied.resolve,
 					onSync(info) {

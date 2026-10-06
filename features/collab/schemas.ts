@@ -30,6 +30,13 @@ export const WorkspaceCanvasEventSchema = WorkspaceEventBase.extend({
 	canvasId: z.string().min(1),
 	pageId: z.string().min(1).nullable(),
 });
+// Personal invalidation hints travel on their own opt-in channel, not the
+// workspace-wide union consumed by already-open older clients.
+export const WorkspaceFavoritesEventSchema = WorkspaceEventBase.extend({
+	type: z.literal("favorites.changed"),
+	userId: z.string().min(1),
+	resourceType: z.enum(["page", "canvas"]),
+});
 export const WorkspaceEventSchema = z.discriminatedUnion("type", [
 	WorkspacePageEventSchema,
 	WorkspaceTaskEventSchema,
