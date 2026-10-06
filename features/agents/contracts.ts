@@ -8,6 +8,7 @@ import {
 	AuthorizeMcpConnectionInputSchema,
 	DisconnectMcpConnectionInputSchema,
 	DisconnectMcpConnectionOutputSchema,
+	EmbeddedWorkspaceListSchema,
 	GetMcpConsentContextInputSchema,
 	ListAgentActivityInputSchema,
 	ListAgentActivityOutputSchema,
@@ -127,8 +128,4 @@ export const verifyEmbeddedEditor = sessions
 
 export const listEmbeddedWorkspaces = sessions
 	.get("/api/embedded-editor/workspaces")
-	.responses({
-		200: z.object({
-			workspaces: z.array(z.object({ id: z.string(), name: z.string() })),
-		}),
-	});
+	.responses({ 200: EmbeddedWorkspaceListSchema });

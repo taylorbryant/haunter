@@ -1,5 +1,6 @@
 import { useCase } from "@/lib/use-case";
 import { appError } from "@/features/shared/errors";
+import { EmbeddedWorkspaceListSchema } from "../schemas";
 import {
 	EmbeddedEditorExchangeSchema,
 	EmbeddedEditorIdentitySchema,
@@ -28,11 +29,7 @@ export const verifyEmbeddedEditorUseCase = useCase
 export const listEmbeddedWorkspacesUseCase = useCase
 	.query("agents.listEmbeddedWorkspaces")
 	.input(z.object({}))
-	.output(
-		z.object({
-			workspaces: z.array(z.object({ id: z.string(), name: z.string() })),
-		}),
-	)
+	.output(EmbeddedWorkspaceListSchema)
 	.run(async ({ ctx }) => {
 		const identity = ctx.embeddedEditor;
 		if (!identity || identity.scope !== "workspace")
@@ -54,6 +51,6 @@ export const listEmbeddedWorkspacesUseCase = useCase
 		return {
 			workspaces: memberships
 				.filter((workspace) => active.workspaceIds.includes(workspace.id))
-				.map(({ id, name }) => ({ id, name })),
+				.map(({ id, name, logo }) => ({ id, name, logo: logo ?? null })),
 		};
 	});

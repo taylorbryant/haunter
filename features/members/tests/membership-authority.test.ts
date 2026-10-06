@@ -89,6 +89,7 @@ describe("workspace membership authority", () => {
 				{
 					id: "workspace_membership",
 					name: "Membership Test",
+					logo: null,
 					role: "viewer",
 				},
 			]);

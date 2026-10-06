@@ -11,6 +11,7 @@ export type WorkspaceMember = {
 export type UserWorkspace = {
 	id: string;
 	name: string;
+	logo?: string | null;
 	role: string;
 };
 

@@ -39,6 +39,12 @@ export const McpConnectionWorkspaceSchema = z.object({
 	name: z.string(),
 });
 
+export const EmbeddedWorkspaceListSchema = z.object({
+	workspaces: z.array(
+		McpConnectionWorkspaceSchema.extend({ logo: z.string().nullable() }),
+	),
+});
+
 export const McpConnectionSummarySchema = z.object({
 	id: z.string().uuid(),
 	clientId: z.string(),
