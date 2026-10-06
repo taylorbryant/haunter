@@ -326,10 +326,22 @@ const BULLET_LINE = /^[-*] (.*)$/;
 const NUMBERED_LINE = /^\d+[.)] (.*)$/;
 const HEADING_LINE = /^(#{1,6}) (.*)$/;
 const FENCE_LINE = /^```(\S*)\s*$/;
+const IMAGE_LINE = /^!\[([^\]]*)\]\(([^)\s]*)\)$/;
 
 function pipeCells(line: string): string[] | null {
 	const source = line.trim();
 	if (!source.includes("|")) return null;
+	// Existing block syntax takes precedence over both table headers and rows.
+	// An explicit leading pipe still allows this syntax as literal cell content.
+	if (
+		HEADING_LINE.test(source) ||
+		FENCE_LINE.test(source) ||
+		BULLET_LINE.test(source) || // Includes tasks.
+		NUMBERED_LINE.test(source) ||
+		source.startsWith("> ") ||
+		IMAGE_LINE.test(source)
+	)
+		return null;
 	const cells: string[] = [];
 	let cell = "";
 	let separators = 0;
@@ -559,7 +571,7 @@ export function markdownToBlocks(
 			continue;
 		}
 
-		const image = /^!\[([^\]]*)\]\(([^)\s]*)\)$/.exec(trimmed);
+		const image = IMAGE_LINE.exec(trimmed);
 		if (image) {
 			listStack = [];
 			listIndents = [];

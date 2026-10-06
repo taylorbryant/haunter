@@ -3,6 +3,95 @@ import { extractInlineText } from "@/features/content/inline-content";
 import { tableCellRows } from "@/features/content/table-content";
 import { blocksToMarkdown, markdownToBlocks } from "../lib/markdown";
 
+const nonTableBlocks = [
+	{
+		line: "# Status | Owner",
+		type: "heading",
+		text: "Status | Owner",
+		props: { level: 1 },
+	},
+	{ line: "> Status | Owner", type: "callout", text: "Status | Owner" },
+	{ line: "- Status | Owner", type: "bulletListItem", text: "Status | Owner" },
+	{ line: "* Status | Owner", type: "bulletListItem", text: "Status | Owner" },
+	{
+		line: "1. Status | Owner",
+		type: "numberedListItem",
+		text: "Status | Owner",
+	},
+	{
+		line: "2) Status | Owner",
+		type: "numberedListItem",
+		text: "Status | Owner",
+	},
+	{
+		line: "- [x] Status | Owner (due: 2026-10-10)",
+		type: "task",
+		text: "Status | Owner",
+		props: { checked: true, due: "2026-10-10" },
+	},
+	{
+		line: "![Status | Owner](https://example.com/image.png)",
+		type: "image",
+		props: { caption: "Status | Owner", url: "https://example.com/image.png" },
+	},
+];
+
+test.each(nonTableBlocks)(
+	"preserves $type syntax before a table-like separator: $line",
+	({ line, type, text, props }) => {
+		const blocks = markdownToBlocks(`${line}\n--- | ---`);
+		expect(blocks).toHaveLength(2);
+		expect(blocks[0]).toMatchObject({ type, ...(props ? { props } : {}) });
+		if (text) expect(extractInlineText(blocks[0]!.content)).toBe(text);
+		expect(blocks[1]!.type).toBe("paragraph");
+		expect(extractInlineText(blocks[1]!.content)).toBe("--- | ---");
+	},
+);
+
+test.each(nonTableBlocks)(
+	"ends a table before a following $type block: $line",
+	({ line, type, text, props }) => {
+		const blocks = markdownToBlocks(
+			`Status | Owner\n--- | ---\nReady | Taylor\n${line}`,
+		);
+		expect(blocks).toHaveLength(2);
+		expect(blocks[0]!.type).toBe("table");
+		expect(
+			tableCellRows(blocks[0]!.content).map((row) =>
+				row.map(extractInlineText),
+			),
+		).toEqual([
+			["Status", "Owner"],
+			["Ready", "Taylor"],
+		]);
+		expect(blocks[1]).toMatchObject({ type, ...(props ? { props } : {}) });
+		if (text) expect(extractInlineText(blocks[1]!.content)).toBe(text);
+	},
+);
+
+test("explicit outer pipes allow block-like text inside table cells", () => {
+	const blocks = markdownToBlocks(
+		"| # Status | > Owner |\n| --- | --- |\n| - [ ] Ready | 1. Taylor |",
+	);
+	expect(blocks).toHaveLength(1);
+	expect(blocks[0]!.type).toBe("table");
+	expect(
+		tableCellRows(blocks[0]!.content).map((row) => row.map(extractInlineText)),
+	).toEqual([
+		["# Status", "> Owner"],
+		["- [ ] Ready", "1. Taylor"],
+	]);
+});
+
+test("a code fence containing a pipe ends the preceding table", () => {
+	const blocks = markdownToBlocks(
+		"Status | Owner\n--- | ---\n```js|example\nconst owner = 'Taylor';\n```",
+	);
+	expect(blocks.map((block) => block.type)).toEqual(["table", "codeBlock"]);
+	expect(tableCellRows(blocks[0]!.content)).toHaveLength(1);
+	expect(extractInlineText(blocks[1]!.content)).toBe("const owner = 'Taylor';");
+});
+
 test("pipe tables parse styled cells, alignments, escaped pipes, and line breaks", () => {
 	const blocks = markdownToBlocks(
 		"Before\n\n| Name | Details |\n| :--- | ---: |\n| **Alpha** | `a\\|b`<br>[More](https://example.com) |\n\nAfter",
