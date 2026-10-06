@@ -1,5 +1,31 @@
 /** Browser-safe capability copy shared by approval UI use cases and adapters. */
 export const AGENT_CAPABILITY_DESCRIPTIONS = {
+	list_canvases:
+		"List standalone canvases in one workspace as metadata, including canvasId and title. For canvases embedded in pages, read_page with format=blocks instead. Use read_canvas for shapes and open_haunter_canvas to open a drawing.",
+	create_canvas:
+		"Create an empty standalone canvas with a title in one workspace. Returns canvasId; use open_haunter_canvas to open it, and read_canvas then edit_canvas to draw. For an inline canvas inside a page use create_canvas_block instead.",
+	update_canvas:
+		"Rename a standalone canvas. Does not change its drawing. Inline canvases must be managed through their parent page.",
+	delete_canvas:
+		"Permanently delete an entire standalone canvas, including its drawing and history. This cannot be undone through trash. Requires Full access. Inline canvases cannot be deleted with this tool; manage their blocks in the parent page.",
+	list_canvas_favorites:
+		"List the acting user's favorite standalone canvases in one workspace. Does not return another user's favorites or drawing bodies.",
+	set_canvas_favorite:
+		"Set a standalone canvas as a favorite for the acting user, or remove it with favorite=false. Repeating the same choice is safe. Does not change anyone else's favorites.",
+	list_page_favorites:
+		"List the acting user's favorite active pages in one workspace. Does not return another user's favorites or page bodies.",
+	set_page_favorite:
+		"Set an active page as a favorite for the acting user, or remove it with favorite=false. Repeating the same choice is safe. Does not change anyone else's favorites.",
+	list_backlinks:
+		"List active pages in this workspace that link to the specified page, including page links and mentions. Read a returned page with read_page to inspect the reference.",
+	list_trash:
+		"List archived page subtree roots in one workspace, with their pageId and deletion time. Children restore together with their root and are not listed separately. Use restore_page to recover a subtree. Permanent purging is only available in the human-controlled UI.",
+	list_page_versions:
+		"List retained saved history snapshots of an active page, including versionId, creation time, author and cause. Use read_page_version to inspect a snapshot. Restore an archived page with restore_page before reading its history.",
+	read_page_version:
+		"Read a retained page history snapshot from list_page_versions. format defaults to markdown; blocks or both preserves rich block structure. This is historical content, not a current revision token. Canvas blocks refer to canvases; this does not read or restore historical drawings.",
+	restore_page_version:
+		"Restore an active page's body from a retained versionId. Requires Full access and expectedRevision from a fresh read_page. The revision is checked atomically; on REVISION_CONFLICT reread before retrying. Preserves the current body in history, reconciles tasks and links, and starts a new collaborative generation. Title, icon and hierarchy stay unchanged; referenced canvas drawings are not rolled back. Read the page again for its new revision after restoration.",
 	search_canvas_library:
 		"Discover the built-in canvas templates and components available in Haunter's library. Requires workspaceId. Optional query matches item IDs, names, descriptions, categories and keywords, case-insensitively. Filter kind (component/template) and category (architecture/wireframes). Returns total matches and up to limit items (default/max 50), starting at offset (default 0). Items include id, version, description, nominal width/height at scale 1 and shapeCount excluding the group. Pass id and version to insert_canvas_library_item. Empty query lists items; no collaboration worker required.",
 	insert_canvas_library_item:

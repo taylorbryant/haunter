@@ -8,9 +8,16 @@ import {
 	type BroadcastTransport,
 	createBroadcastPort,
 } from "@beignet/core/broadcasting/server";
-import { workspaceChanges, workspaceCanvasActivity } from "../channels";
+import {
+	workspaceChanges,
+	workspaceCanvasActivity,
+	workspaceFavorites,
+} from "../channels";
 import type { CanvasAgentActivity } from "@/features/agents/canvas-activity";
-import type { WorkspaceEvent } from "../workspace-events";
+import type {
+	WorkspaceEvent,
+	WorkspaceFavoritesEvent,
+} from "../workspace-events";
 
 export function deferred<T = void>() {
 	let resolve!: (value: T | PromiseLike<T>) => void;
@@ -68,14 +75,16 @@ export function controlledBroadcastClient() {
 		onEvent(
 			event:
 				| InferChannelEvent<typeof workspaceChanges>
-				| InferChannelEvent<typeof workspaceCanvasActivity>,
+				| InferChannelEvent<typeof workspaceCanvasActivity>
+				| InferChannelEvent<typeof workspaceFavorites>,
 		): void | Promise<void>;
 		onSync(info: BroadcastConnectionInfo): void | Promise<void>;
 		onStatusChange?(status: BroadcastClientStatus): void;
 	};
 	type ChannelName =
 		| typeof workspaceChanges.name
-		| typeof workspaceCanvasActivity.name;
+		| typeof workspaceCanvasActivity.name
+		| typeof workspaceFavorites.name;
 	const observers = new Map<ChannelName, Observer>();
 	const client: BroadcastClient = {
 		subscribe(channel, options) {
@@ -99,6 +108,10 @@ export function controlledBroadcastClient() {
 		client,
 		event: (data: WorkspaceEvent) =>
 			observers.get(workspaceChanges.name)?.onEvent({ event: "changed", data }),
+		favoritesEvent: (data: WorkspaceFavoritesEvent) =>
+			observers
+				.get(workspaceFavorites.name)
+				?.onEvent({ event: "changed", data }),
 		canvasEvent: (data: CanvasAgentActivity) =>
 			observers
 				.get(workspaceCanvasActivity.name)

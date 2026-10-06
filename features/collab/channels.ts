@@ -1,7 +1,7 @@
 import { defineChannel } from "@beignet/core/broadcasting";
 import { z } from "zod";
 import { CanvasAgentActivitySchema } from "@/features/agents/canvas-activity";
-import { WorkspaceEventSchema } from "./schemas";
+import { WorkspaceEventSchema, WorkspaceFavoritesEventSchema } from "./schemas";
 
 /** Projection and presence hints; document content uses Yjs and tldraw sync. */
 export const workspaceChanges = defineChannel("workspace.changes", {
@@ -18,3 +18,12 @@ export const workspaceCanvasActivity = defineChannel(
 		events: { activity: CanvasAgentActivitySchema },
 	},
 );
+
+/** Only the acting user's sessions receive changes to their personal favorites. */
+export const workspaceFavorites = defineChannel("workspace.favorites.v1", {
+	params: z.object({
+		workspaceId: z.string().min(1),
+		userId: z.string().min(1),
+	}),
+	events: { changed: WorkspaceFavoritesEventSchema },
+});

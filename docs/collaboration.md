@@ -31,6 +31,14 @@ not by itself prove that it has been saved to the database.
 Optional workspace live updates use a separate event stream to refresh lists
 and metadata. They do not carry page bodies or canvas edits.
 
+Personal favorite changes use `workspace.favorites.v1` on the same SSE
+connection and admission lease. Subscriptions require the authenticated user's
+ID, the active workspace, and current membership; authorization is rechecked on
+renewal. Hints refresh that user's page or canvas navigation without including
+item IDs or content. Older tabs keep their existing event schemas and polling
+fallback; reopen them to enable favorite hints. Page-content hints also refresh
+open page history, and reconnecting reconciles any missed updates.
+
 [Canvas MCP tools](mcp-canvas-editing.md) send authenticated commands to the same
 worker. Each batch saves a canvas history snapshot and commits before being
 sent to editors. Deploy migration `0044_thin_iceman.sql` and the updated worker

@@ -20,7 +20,11 @@ import {
 } from "@/features/agents/client/canvas-activity-cache";
 import { listPages } from "@/features/pages/contracts";
 import type { PageMeta } from "@/features/pages/schemas";
-import { workspaceChanges, workspaceCanvasActivity } from "../channels";
+import {
+	workspaceChanges,
+	workspaceCanvasActivity,
+	workspaceFavorites,
+} from "../channels";
 import {
 	isWorkspacePageEvent,
 	workspaceEventRemovesPage,
@@ -30,6 +34,8 @@ import type { WorkspaceEventClock } from "./event-clock";
 import {
 	workspaceEventQueries,
 	workspaceReconciliationQueries,
+	workspaceFavoritesEventQueries,
+	workspaceFavoritesQueries,
 } from "./workspace-event-cache";
 
 export function subscribeToWorkspaceChanges(options: {
@@ -87,6 +93,7 @@ export function subscribeToWorkspaceChanges(options: {
 	});
 	let subscription: BroadcastClientSubscription | undefined;
 	let canvasSubscription: BroadcastClientSubscription | undefined;
+	let favoritesSubscription: BroadcastClientSubscription | undefined;
 	try {
 		subscription = createBroadcastQuerySubscription({
 			client: options.client,
@@ -130,7 +137,18 @@ export function subscribeToWorkspaceChanges(options: {
 			},
 			onError: options.onError,
 		});
-		// Both channels share one SSE connection and admission lease. Activity is
+		favoritesSubscription = createBroadcastQuerySubscription({
+			client: options.client,
+			channel: workspaceFavorites,
+			params: { workspaceId, userId },
+			queryClient,
+			refreshGate: gate,
+			invalidates: ({ data }) =>
+				closed ? [] : workspaceFavoritesEventQueries(workspaceId, userId, data),
+			reconciles: workspaceFavoritesQueries(workspaceId),
+			onError: options.onError,
+		});
+		// All channels share one SSE connection and admission lease. Activity is
 		// transient and must never invalidate document queries or reconcile pages.
 		canvasSubscription = options.client.subscribe(workspaceCanvasActivity, {
 			params: { workspaceId },
@@ -161,6 +179,7 @@ export function subscribeToWorkspaceChanges(options: {
 		clearCanvasPresence();
 		subscription?.unsubscribe();
 		canvasSubscription?.unsubscribe();
+		favoritesSubscription?.unsubscribe();
 		throw error;
 	}
 	return () => {
@@ -171,5 +190,6 @@ export function subscribeToWorkspaceChanges(options: {
 		clearCanvasPresence();
 		subscription?.unsubscribe();
 		canvasSubscription?.unsubscribe();
+		favoritesSubscription?.unsubscribe();
 	};
 }

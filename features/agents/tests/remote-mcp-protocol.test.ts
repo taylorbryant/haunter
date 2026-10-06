@@ -78,6 +78,82 @@ function legacyRequest(
 	});
 }
 
+test("content management discovery respects profiles and declares write semantics", async () => {
+	const readers = [
+		"list_canvases",
+		"list_canvas_favorites",
+		"list_page_favorites",
+		"list_backlinks",
+		"list_trash",
+		"list_page_versions",
+		"read_page_version",
+	];
+	const editors = [
+		"create_canvas",
+		"update_canvas",
+		"set_canvas_favorite",
+		"set_page_favorite",
+	];
+	const destructive = ["delete_canvas", "restore_page_version"];
+	for (const profile of ["view", "edit", "full"] as const) {
+		const body = await json(
+			await createHandler(profile)(modernRequest("tools/list")),
+		);
+		const tools = body.result?.tools as Array<{
+			name: string;
+			annotations: Record<string, boolean>;
+			inputSchema: { required: string[] };
+			_meta?: { ui?: { visibility?: string[] } };
+		}>;
+		for (const name of readers) {
+			const tool = tools.find((t) => t.name === name);
+			expect(tool?.annotations).toMatchObject({
+				readOnlyHint: true,
+				destructiveHint: false,
+				idempotentHint: true,
+			});
+			expect(tool?._meta?.ui?.visibility).not.toEqual(["app"]);
+			expect(tool?.inputSchema.required).toContain("workspaceId");
+		}
+		for (const name of editors) {
+			const tool = tools.find((t) => t.name === name);
+			if (profile === "view") expect(tool).toBeUndefined();
+			else
+				expect(tool?.annotations).toMatchObject({
+					readOnlyHint: false,
+					destructiveHint: false,
+					idempotentHint: name !== "create_canvas",
+				});
+		}
+		for (const name of destructive) {
+			const tool = tools.find((t) => t.name === name);
+			if (profile !== "full") expect(tool).toBeUndefined();
+			else {
+				expect(tool?.annotations).toMatchObject({
+					readOnlyHint: false,
+					destructiveHint: true,
+				});
+				if (name === "restore_page_version")
+					expect(tool?.inputSchema.required).toEqual(
+						expect.arrayContaining([
+							"workspaceId",
+							"pageId",
+							"versionId",
+							"expectedRevision",
+						]),
+					);
+			}
+		}
+		for (const name of [
+			"purge_page",
+			"purge_trash",
+			"delete_workspace",
+			"delete_account",
+		])
+			expect(tools.some((t) => t.name === name)).toBe(false);
+	}
+});
+
 async function json(response: Response) {
 	return (await response.json()) as {
 		result?: Record<string, unknown>;

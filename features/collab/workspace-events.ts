@@ -2,6 +2,7 @@ import type { z } from "zod";
 import {
 	WorkspaceCanvasEventSchema,
 	WorkspaceEventSchema,
+	WorkspaceFavoritesEventSchema,
 	WorkspacePageEventSchema,
 	WorkspaceTaskEventSchema,
 } from "./schemas";
@@ -10,6 +11,9 @@ export const WORKSPACE_EVENT_SCHEMA_VERSION = 1 as const;
 export type WorkspacePageEvent = z.infer<typeof WorkspacePageEventSchema>;
 export type WorkspaceTaskEvent = z.infer<typeof WorkspaceTaskEventSchema>;
 export type WorkspaceCanvasEvent = z.infer<typeof WorkspaceCanvasEventSchema>;
+export type WorkspaceFavoritesEvent = z.infer<
+	typeof WorkspaceFavoritesEventSchema
+>;
 export type WorkspaceEvent = z.infer<typeof WorkspaceEventSchema>;
 
 export function createWorkspacePageEvent(input: {
@@ -66,6 +70,22 @@ export function workspaceEventAffectedPageIds(
 	event: WorkspacePageEvent,
 ): string[] {
 	return [...new Set([event.pageId, ...(event.affectedPageIds ?? [])])];
+}
+
+export function createWorkspaceFavoritesEvent(input: {
+	workspaceId: string;
+	userId: string;
+	resourceType: WorkspaceFavoritesEvent["resourceType"];
+	occurredAt?: string;
+}): WorkspaceFavoritesEvent {
+	return {
+		schemaVersion: WORKSPACE_EVENT_SCHEMA_VERSION,
+		type: "favorites.changed",
+		workspaceId: input.workspaceId,
+		userId: input.userId,
+		resourceType: input.resourceType,
+		occurredAt: input.occurredAt ?? new Date().toISOString(),
+	};
 }
 
 export function workspaceEventRemovesPage(

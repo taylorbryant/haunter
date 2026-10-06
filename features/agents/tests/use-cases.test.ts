@@ -326,6 +326,13 @@ describe("agents.getPending", () => {
 	it("proposes an upgrade without forgetting the host's current profile", async () => {
 		const active = agentRow({
 			hostDefaultCapabilities: [
+				"list_canvases",
+				"list_canvas_favorites",
+				"list_page_favorites",
+				"list_backlinks",
+				"list_trash",
+				"list_page_versions",
+				"read_page_version",
 				"list_active_sessions",
 				"get_active_context",
 				"search_canvas_library",

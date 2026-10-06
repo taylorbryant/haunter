@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { scheduleWorkspaceFavoritesEvent } from "@/features/collab/server/workspace-events";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -33,5 +34,10 @@ export const setCanvasFavoriteUseCase = useCase
 			canvas.id,
 			input.favorite,
 		);
+		scheduleWorkspaceFavoritesEvent(ctx, {
+			workspaceId: canvas.workspaceId,
+			userId: user.id,
+			resourceType: "canvas",
+		});
 		return { canvasId: canvas.id, favoritedAt };
 	});

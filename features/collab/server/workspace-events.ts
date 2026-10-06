@@ -1,13 +1,18 @@
 import "@beignet/core/server-only";
 import type { AppContext } from "@/app-context";
-import { workspaceChanges } from "@/features/collab/channels";
+import {
+	workspaceChanges,
+	workspaceFavorites,
+} from "@/features/collab/channels";
 import {
 	createWorkspaceCanvasEvent,
 	createWorkspacePageEvent,
 	createWorkspaceTaskEvent,
+	createWorkspaceFavoritesEvent,
 	type WorkspaceCanvasEvent,
 	type WorkspacePageEvent,
 	type WorkspaceTaskEvent,
+	type WorkspaceFavoritesEvent,
 } from "@/features/collab/workspace-events";
 
 async function publishSafely(
@@ -55,4 +60,28 @@ export function scheduleWorkspaceCanvasEvent(
 	input: Pick<WorkspaceCanvasEvent, "workspaceId" | "canvasId" | "pageId">,
 ) {
 	schedule(ctx, createWorkspaceCanvasEvent(input));
+}
+
+export function scheduleWorkspaceFavoritesEvent(
+	ctx: AppContext,
+	input: Pick<
+		WorkspaceFavoritesEvent,
+		"workspaceId" | "userId" | "resourceType"
+	>,
+) {
+	const event = createWorkspaceFavoritesEvent(input);
+	ctx.ports.bestEffortWork.defer(async () => {
+		try {
+			await ctx.ports.broadcast.publish(workspaceFavorites, {
+				params: { workspaceId: event.workspaceId, userId: event.userId },
+				event: "changed",
+				data: event,
+			});
+		} catch (error) {
+			ctx.ports.logger.warn("Failed to broadcast a favorites event", {
+				error,
+				workspaceId: event.workspaceId,
+			});
+		}
+	});
 }
