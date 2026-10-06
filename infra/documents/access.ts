@@ -1,9 +1,11 @@
+import { createEmbeddedEditorSessionRepository } from "@/infra/agents/embedded-editor-session-repository";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import type { DocumentGrant } from "@/features/documents/ports";
 import { databaseClient } from "@/infra/db/client";
 import * as schema from "@/infra/db/schema";
 import { DocumentRestoredError } from "@/features/documents/restoration";
+import { canAccessEmbeddedCanvas } from "@/features/agents/embedded-editor-session";
 
 /** Recheck the live session, page and membership; signed claims are selectors. */
 export async function checkDocumentAccess(
@@ -12,6 +14,79 @@ export async function checkDocumentAccess(
 ): Promise<string> {
 	if (grant.expiresAt <= Date.now())
 		throw new Error("Document session expired");
+	if (grant.embeddedSessionId) {
+		const identity = await createEmbeddedEditorSessionRepository(db).findActive(
+			grant.embeddedSessionId,
+		);
+		if (
+			!identity ||
+			identity.connectionId !== grant.sessionId ||
+			identity.user.id !== grant.userId ||
+			identity.workspaceId !== grant.workspaceId ||
+			(grant.kind !== "canvas" &&
+				identity.scope !== "workspace" &&
+				identity.pageId !== grant.pageId)
+		)
+			throw new Error("Embedded document access is no longer available");
+		if (grant.kind === "canvas") {
+			const [room] = await db
+				.select({
+					id: schema.canvases.id,
+					workspaceId: schema.canvases.workspaceId,
+					pageId: schema.canvases.pageId,
+				})
+				.from(schema.canvasSyncRooms)
+				.innerJoin(
+					schema.canvases,
+					and(
+						eq(schema.canvases.id, schema.canvasSyncRooms.canvasId),
+						eq(schema.canvases.workspaceId, schema.canvasSyncRooms.workspaceId),
+					),
+				)
+				.where(
+					and(
+						eq(schema.canvasSyncRooms.canvasId, grant.pageId),
+						eq(schema.canvasSyncRooms.workspaceId, grant.workspaceId),
+					),
+				)
+				.limit(1);
+			if (
+				!room ||
+				!canAccessEmbeddedCanvas(identity, room) ||
+				grant.generation !== 0
+			)
+				throw new Error("Canvas access is no longer available");
+			if (room.pageId) {
+				const [parent] = await db
+					.select({ id: schema.pages.id })
+					.from(schema.pages)
+					.where(
+						and(
+							eq(schema.pages.id, room.pageId),
+							eq(schema.pages.workspaceId, grant.workspaceId),
+							isNull(schema.pages.deletedAt),
+						),
+					)
+					.limit(1);
+				if (!parent) throw new Error("Canvas parent is no longer available");
+			}
+		} else {
+			const [page] = await db
+				.select({ id: schema.pages.id })
+				.from(schema.pages)
+				.where(
+					and(
+						eq(schema.pages.id, grant.pageId),
+						eq(schema.pages.workspaceId, grant.workspaceId),
+						isNull(schema.pages.deletedAt),
+					),
+				)
+				.limit(1);
+			if (!page) throw new Error("Page access is no longer available");
+			await checkGeneration(grant, db);
+		}
+		return identity.role;
+	}
 	if (grant.kind === "canvas") return checkCanvasAccess(grant, db);
 	const [row] = await db
 		.select({ role: schema.member.role })
@@ -41,18 +116,7 @@ export async function checkDocumentAccess(
 			),
 		);
 	if (!row) throw new Error("Document access is no longer available");
-	const [document] = await db
-		.select({ generation: schema.collaborativeDocuments.generation })
-		.from(schema.collaborativeDocuments)
-		.where(
-			and(
-				eq(schema.collaborativeDocuments.pageId, grant.pageId),
-				eq(schema.collaborativeDocuments.workspaceId, grant.workspaceId),
-			),
-		);
-	if (!document) throw new Error("Page body has not been migrated");
-	if (document.generation !== grant.generation)
-		throw new DocumentRestoredError(document.generation);
+	await checkGeneration(grant, db);
 	return row.role;
 }
 
@@ -109,4 +173,22 @@ async function checkCanvasAccess(
 		if (!page) throw new Error("Canvas page is unavailable");
 	}
 	return row.role;
+}
+
+async function checkGeneration(
+	grant: DocumentGrant,
+	db: LibSQLDatabase<typeof schema>,
+) {
+	const [document] = await db
+		.select({ generation: schema.collaborativeDocuments.generation })
+		.from(schema.collaborativeDocuments)
+		.where(
+			and(
+				eq(schema.collaborativeDocuments.pageId, grant.pageId),
+				eq(schema.collaborativeDocuments.workspaceId, grant.workspaceId),
+			),
+		);
+	if (!document) throw new Error("Page body has not been migrated");
+	if (document.generation !== grant.generation)
+		throw new DocumentRestoredError(document.generation);
 }

@@ -59,6 +59,7 @@ export const TaskScopeSchema = z.enum(["everyone", "mine"]).default("everyone");
 export const ListTasksInputSchema = z
 	.object({
 		workspaceId: z.string().min(1),
+		taskId: z.uuid().optional(),
 		filter: TaskFilterSchema,
 		scope: TaskScopeSchema,
 		dueOnOrAfter: DueDateSchema.optional(),

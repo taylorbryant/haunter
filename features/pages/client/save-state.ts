@@ -7,6 +7,22 @@ export type PageSaveState = "saved" | "pending" | "saving" | "error" | "paused";
 let state: PageSaveState = "saved";
 const listeners = new Set<() => void>();
 const flushers = new Map<string, Map<symbol, () => Promise<boolean>>>();
+const uploads = new Map<string, Set<Promise<void>>>();
+
+export function beginPageUpload(pageId: string) {
+	let finish!: () => void;
+	const pending = new Promise<void>((resolve) => {
+		finish = resolve;
+	});
+	const page = uploads.get(pageId) ?? new Set<Promise<void>>();
+	uploads.set(pageId, page);
+	page.add(pending);
+	return () => {
+		page.delete(pending);
+		if (!page.size) uploads.delete(pageId);
+		finish();
+	};
+}
 
 export function setPageSaveState(next: PageSaveState) {
 	if (state === next) return;
@@ -45,6 +61,8 @@ export function registerPageSaveFlusher(
 }
 
 export async function flushPendingPageSave(pageId: string): Promise<boolean> {
+	while (uploads.get(pageId)?.size)
+		await Promise.all(uploads.get(pageId) ?? []);
 	const registered = flushers.get(pageId);
 	if (!registered || registered.size === 0) return true;
 	const results = await Promise.all(

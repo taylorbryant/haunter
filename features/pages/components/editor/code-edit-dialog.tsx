@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
 import { editCodeBlockIndentation } from "./code-block-indent";
+import { useEmbeddedEditor } from "./embedded-editor-context";
 import { CodeEditDialogHeader } from "./code-edit-dialog-header";
 import { getCodeTheme, getHaunterHighlighter } from "./code-theme";
 import type { editorSchema } from "./schema";
@@ -33,7 +34,9 @@ export function CodeEditDialog({
 	editable?: boolean;
 	onClose: () => void;
 }) {
-	const { resolvedTheme } = useTheme();
+	const embedded = useEmbeddedEditor();
+	const { resolvedTheme, forcedTheme } = useTheme();
+	const activeTheme = forcedTheme ?? resolvedTheme;
 	const block = editor.getBlock(blockId);
 	const [text, setText] = useState(() => (block ? blockInlineText(block) : ""));
 	const [language, setLanguage] = useState(() => {
@@ -43,7 +46,7 @@ export function CodeEditDialog({
 	});
 	const [highlightedHtml, setHighlightedHtml] = useState("");
 	const overlayRef = useRef<HTMLDivElement>(null);
-	const theme = getCodeTheme(resolvedTheme);
+	const theme = getCodeTheme(activeTheme);
 
 	// Re-highlight through the same shiki instance the editor uses. The
 	// trailing newline keeps the overlay's last line aligned with the textarea.
@@ -51,7 +54,7 @@ export function CodeEditDialog({
 		let live = true;
 		(async () => {
 			try {
-				const highlighter = await getHaunterHighlighter(resolvedTheme);
+				const highlighter = await getHaunterHighlighter(activeTheme);
 				let lang = language;
 				if (
 					lang !== "text" &&
@@ -73,7 +76,20 @@ export function CodeEditDialog({
 		return () => {
 			live = false;
 		};
-	}, [text, language, theme.id, resolvedTheme]);
+	}, [text, language, theme.id, activeTheme]);
+
+	function updateText(next: string) {
+		setText(next);
+		// Embedded navigation flushes the shared document. Keep dialog edits in that
+		// document too, so leaving the page cannot drop an open code draft.
+		if (embedded && editable && editor.getBlock(blockId))
+			editor.updateBlock(blockId, { content: next });
+	}
+	function updateLanguage(next: string) {
+		setLanguage(next);
+		if (embedded && editable && editor.getBlock(blockId))
+			editor.updateBlock(blockId, { props: { language: next } });
+	}
 
 	function commitAndClose() {
 		if (!editable) {
@@ -104,7 +120,7 @@ export function CodeEditDialog({
 						<CodeEditDialogHeader
 							language={language}
 							editable={editable}
-							onLanguageChange={setLanguage}
+							onLanguageChange={updateLanguage}
 						/>
 						<div className="relative order-2 min-h-0 flex-1">
 							<div
@@ -124,7 +140,7 @@ export function CodeEditDialog({
 								readOnly={!editable}
 								className="code-edit-textarea relative size-full resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-sm text-transparent leading-relaxed outline-none"
 								style={{ caretColor: theme.foreground }}
-								onChange={(event) => setText(event.target.value)}
+								onChange={(event) => updateText(event.target.value)}
 								onScroll={(event) => {
 									const overlay = overlayRef.current;
 									if (overlay) {
@@ -142,7 +158,7 @@ export function CodeEditDialog({
 											textarea.selectionEnd,
 											event.shiftKey,
 										);
-										setText(edit.text);
+										updateText(edit.text);
 										requestAnimationFrame(() => {
 											textarea.setSelectionRange(
 												edit.selectionFrom,

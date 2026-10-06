@@ -41,8 +41,10 @@ function sameDeviceTime(
 export function DeviceTimeProvider({
 	initialValue,
 	children,
+	persistCookie = true,
 }: {
 	initialValue: DeviceTimeState;
+	persistCookie?: boolean;
 	children: ReactNode;
 }) {
 	const router = useRouter();
@@ -55,6 +57,8 @@ export function DeviceTimeProvider({
 
 			const next = deviceTimeAt(new Date(), timezone);
 			setValue((current) => (sameDeviceTime(current, next) ? current : next));
+
+			if (!persistCookie) return;
 
 			const encodedTimezone = encodeURIComponent(timezone);
 			if (readCookie(DEVICE_TIMEZONE_COOKIE_NAME) === encodedTimezone) return;
@@ -77,7 +81,7 @@ export function DeviceTimeProvider({
 			window.removeEventListener("focus", synchronizeDeviceTime);
 			document.removeEventListener("visibilitychange", synchronizeWhenVisible);
 		};
-	}, [router]);
+	}, [router, persistCookie]);
 
 	return (
 		<DeviceTimeContext.Provider value={value}>

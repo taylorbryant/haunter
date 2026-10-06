@@ -2,7 +2,7 @@
 
 import { CircleUserRoundIcon } from "lucide-react";
 import { useState } from "react";
-import { authClient } from "@/client/auth-client";
+import { useWorkspaceMembers } from "../client/use-workspace-members";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -51,11 +51,11 @@ function AssigneeChip({
 
 function ResolvedAssigneeChip({ value }: { value: string | null }) {
 	const currentUser = useCurrentUser();
-	const orgQuery = authClient.useActiveOrganization();
-	const members = orgQuery.data?.members ?? [];
+	const orgQuery = useWorkspaceMembers();
+	const members = orgQuery.data?.items ?? [];
 	const current = members.find((member) => member.userId === value) ?? null;
 	const label = current
-		? current.user?.name || current.user?.email || "Member"
+		? current.name || current.email || "Member"
 		: value
 			? "Assigned"
 			: null;
@@ -66,7 +66,7 @@ function ResolvedAssigneeChip({ value }: { value: string | null }) {
 		<AssigneeChip
 			label={label}
 			avatarLabel={currentUserLabel}
-			image={current?.user?.image ?? null}
+			image={current?.image ?? null}
 		/>
 	);
 }
@@ -80,8 +80,8 @@ function AssigneePickerContent({
 	onChange: (next: string | null, label: string | null) => void;
 	onClose: () => void;
 }) {
-	const orgQuery = authClient.useActiveOrganization();
-	const members = orgQuery.data?.members ?? [];
+	const orgQuery = useWorkspaceMembers();
+	const members = orgQuery.data?.items ?? [];
 
 	return (
 		<DropdownMenuContent align="end" className="w-48">
@@ -91,17 +91,17 @@ function AssigneePickerContent({
 				</DropdownMenuItem>
 			) : null}
 			{members.map((member) => {
-				const name = member.user?.name || member.user?.email || "Member";
+				const name = member.name || member.email || "Member";
 				return (
 					<DropdownMenuItem
-						key={member.id}
+						key={member.userId}
 						onClick={() => {
 							onChange(member.userId, name);
 							onClose();
 						}}
 					>
 						<Avatar className="size-5 rounded-full bg-primary/15 text-[10px] text-primary">
-							<AvatarImage src={member.user?.image ?? undefined} alt="" />
+							<AvatarImage src={member.image ?? undefined} alt="" />
 							<AvatarFallback className="bg-transparent font-medium text-[9px] text-inherit leading-none">
 								{initials(name)}
 							</AvatarFallback>

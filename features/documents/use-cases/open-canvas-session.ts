@@ -2,6 +2,7 @@ import { z } from "zod";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
+import { canAccessEmbeddedCanvas } from "@/features/agents/embedded-editor-session";
 
 export const openCanvasSessionUseCase = useCase
 	.command("documents.openCanvasSession")
@@ -17,7 +18,12 @@ export const openCanvasSessionUseCase = useCase
 			const page = await ctx.ports.pages.findMetaById(scope, canvas.pageId);
 			if (!page || page.deletedAt !== null) throw appError("CanvasNotFound");
 		}
-		const sessionId = ctx.auth?.session?.id;
+		if (
+			ctx.embeddedEditor &&
+			!canAccessEmbeddedCanvas(ctx.embeddedEditor, canvas)
+		)
+			throw appError("Forbidden");
+		const sessionId = ctx.embeddedEditor?.connectionId ?? ctx.auth?.session?.id;
 		if (!sessionId) throw appError("Unauthorized");
 		if (!(await ctx.ports.canvases.findSyncRoom(scope, canvas.id)))
 			throw appError("InvalidPageContent", {
@@ -28,6 +34,9 @@ export const openCanvasSessionUseCase = useCase
 				kind: "canvas",
 				userId: user.id,
 				sessionId,
+				...(ctx.embeddedEditor
+					? { embeddedSessionId: ctx.embeddedEditor.id }
+					: {}),
 				workspaceId: canvas.workspaceId,
 				pageId: canvas.id,
 				generation: 0,

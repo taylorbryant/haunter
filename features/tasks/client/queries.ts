@@ -40,7 +40,7 @@ function listTasksCacheParams(
 	params: ContractCacheParams<typeof listTasks.config>,
 ) {
 	const workspaceId = params.path?.workspaceId;
-	const { filter, scope, limit, dueOnOrAfter, dueOnOrBefore } =
+	const { filter, scope, limit, dueOnOrAfter, dueOnOrBefore, taskId } =
 		params.query ?? {};
 	// Cache identities can be partial. Only infer list membership when the
 	// caller explicitly keyed the filters and limit, as our query options do.
@@ -54,6 +54,7 @@ function listTasksCacheParams(
 	}
 	return {
 		workspaceId,
+		taskId,
 		filter,
 		scope,
 		limit,
@@ -81,6 +82,7 @@ function taskMatchesListQuery(
 	params: NonNullable<ReturnType<typeof listTasksCacheParams>>,
 ) {
 	if (task.workspaceId !== params.workspaceId) return false;
+	if (params.taskId && task.id !== params.taskId) return false;
 	if (params.filter === "open" && task.completed) return false;
 	if (params.filter === "completed" && !task.completed) return false;
 	if (params.scope === "mine" && task.assigneeId !== currentUserId)
@@ -105,7 +107,11 @@ export function listTasksQueryOptions(
 	filter: TaskFilter,
 	scope: TaskScope = "everyone",
 	limit = 50,
-	options: { dueOnOrAfter?: string; dueOnOrBefore?: string } = {},
+	options: {
+		dueOnOrAfter?: string;
+		dueOnOrBefore?: string;
+		taskId?: string;
+	} = {},
 ) {
 	return {
 		...rq(listTasks).queryOptions({

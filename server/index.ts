@@ -12,6 +12,7 @@ import { closeDatabaseClient } from "@/infra/db/client";
 import { appPorts } from "@/infra/port-wiring";
 import { env } from "@/lib/env";
 import { appContext } from "./context";
+import { embeddedEditorAuthHooks } from "./embedded-editor-auth";
 import { routes } from "./routes";
 
 /**
@@ -27,7 +28,12 @@ export const getServer = createNextServerLoader(async () => {
 		providers,
 		hooks: [
 			createSecurityHeadersHooks<AppContext>(),
-			createCsrfHooks<AppContext>(),
+			embeddedEditorAuthHooks,
+			createCsrfHooks<AppContext>({
+				// The public app origin can differ from Next's internal request URL.
+				// Nested editors still make same-origin requests to this app.
+				trustedOrigins: [new URL(env.APP_URL).origin],
+			}),
 			createErrorReportingHooks<AppContext>(),
 			createIdempotencyHooks<AppContext>(),
 			// Enforces contract.meta.rateLimit. The Vercel edge normalizes

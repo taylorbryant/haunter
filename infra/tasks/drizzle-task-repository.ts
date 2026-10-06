@@ -61,6 +61,7 @@ export function createDrizzleTaskRepository(
 			if (options.assigneeId) {
 				conditions.push(eq(schema.tasks.assigneeId, options.assigneeId));
 			}
+			if (options.taskId) conditions.push(eq(schema.tasks.id, options.taskId));
 			if (options.dueOnOrAfter) {
 				conditions.push(gte(schema.tasks.dueDate, options.dueOnOrAfter));
 			}

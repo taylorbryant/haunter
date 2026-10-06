@@ -9,6 +9,7 @@ import {
 	useCallback,
 } from "react";
 
+import type { VerifiedSession } from "@/client/session-recovery";
 import { SessionRecoveryProvider } from "./session-recovery-provider";
 import { LiveContextProvider } from "@/features/live-context/client/provider";
 
@@ -30,9 +31,16 @@ const AppSessionContext = createContext<AppSessionValue | null>(null);
 
 export function AppSessionProvider({
 	value,
+	embedded = false,
+	verifySession,
 	children,
 }: {
 	value: AppSessionValue;
+	embedded?: boolean;
+	verifySession?: (
+		signal: AbortSignal,
+		recover: boolean,
+	) => Promise<VerifiedSession | null>;
 	children: ReactNode;
 }) {
 	const [session, setSession] = useState(value);
@@ -56,15 +64,21 @@ export function AppSessionProvider({
 			<SessionRecoveryProvider
 				key={value.user.id}
 				initial={value}
+				embedded={embedded}
 				onVerified={onVerified}
+				verifySession={verifySession}
 			>
-				<LiveContextProvider
-					key={value.user.id}
-					userId={value.user.id}
-					activeWorkspaceId={session.activeWorkspaceId}
-				>
-					{children}
-				</LiveContextProvider>
+				{embedded ? (
+					children
+				) : (
+					<LiveContextProvider
+						key={value.user.id}
+						userId={value.user.id}
+						activeWorkspaceId={session.activeWorkspaceId}
+					>
+						{children}
+					</LiveContextProvider>
+				)}
 			</SessionRecoveryProvider>
 		</AppSessionContext.Provider>
 	);

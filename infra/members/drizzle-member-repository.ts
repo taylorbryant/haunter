@@ -52,6 +52,7 @@ export function createDrizzleMemberRepository(
 				.select({
 					userId: schema.member.userId,
 					name: schema.user.name,
+					image: schema.user.image,
 					email: schema.user.email,
 					role: schema.member.role,
 				})

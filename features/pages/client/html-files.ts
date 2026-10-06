@@ -1,6 +1,7 @@
 "use client";
 
 import { HtmlExportError } from "@/features/pages/client/html-export-error";
+import { sessionFetch } from "@/client/session-recovery";
 import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
 import { pageExportFilename } from "@/features/pages/lib/export-filename";
 import {
@@ -228,7 +229,7 @@ async function resolveImageUrls(content: BlockJson[], sourceUrl: string) {
 		baseUrl: source.href,
 		origin: source.origin,
 		async fetchImage(url) {
-			const response = await fetch(url, { credentials: "same-origin" });
+			const response = await sessionFetch(url, { credentials: "same-origin" });
 			if (!response.ok) throw new Error(`Image returned ${response.status}`);
 			return response.blob();
 		},

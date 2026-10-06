@@ -82,6 +82,7 @@ export type DocumentGrant = {
 	kind?: "page" | "canvas";
 	userId: string;
 	sessionId: string;
+	embeddedSessionId?: string;
 	workspaceId: string;
 	pageId: string;
 	generation: number;

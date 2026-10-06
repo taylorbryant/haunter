@@ -155,7 +155,11 @@ export function PageHistoryDialog({
 			</Button>
 		</div>
 	) : previewQuery.data ? (
-		<ReadOnlyEditor key={selected} content={previewQuery.data.content} />
+		<ReadOnlyEditor
+			key={selected}
+			content={previewQuery.data.content}
+			historyPreview
+		/>
 	) : (
 		<p className="text-muted-foreground text-sm">
 			This version could not be loaded.

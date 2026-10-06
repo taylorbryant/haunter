@@ -2,7 +2,6 @@
 
 import {
 	CheckIcon,
-	ChevronDownIcon,
 	PencilIcon,
 	PlusIcon,
 	Trash2Icon,
@@ -19,41 +18,19 @@ import {
 	useCommand,
 } from "@/components/command-palette/registry";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
-import { GhostLogo } from "@/components/ghost-logo";
 import {
 	ResponsiveDialog,
 	ResponsiveDialogFooter,
 } from "@/components/responsive-dialog";
 import { Button } from "@/components/ui/button";
-import {
-	Drawer,
-	DrawerClose,
-	DrawerContent,
-	DrawerDescription,
-	DrawerHeader,
-	DrawerTitle,
-	DrawerTrigger,
-} from "@/components/ui/drawer";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	SidebarMenu,
-	SidebarMenuButton,
-	SidebarMenuItem,
-	SidebarMenuSkeleton,
-	useSidebar,
-} from "@/components/ui/sidebar";
 import { useWorkspaces } from "@/features/workspaces/client/use-workspaces";
 import { canManageMembers } from "@/lib/org-roles";
+import {
+	WorkspacePicker,
+	type WorkspacePickerAction,
+} from "./workspace-picker";
 
 const MembersDialog = dynamic(
 	() =>
@@ -98,7 +75,6 @@ export function WorkspaceSwitcher({
 }: {
 	activeWorkspaceId: string | null;
 }) {
-	const { isMobile } = useSidebar();
 	const router = useRouter();
 	const appSession = useAppSession();
 	const workspacesQuery = useWorkspaces();
@@ -336,320 +312,160 @@ export function WorkspaceSwitcher({
 		router.refresh();
 	}
 
-	const trigger = (
-		<SidebarMenuButton className="w-fit px-1.5 font-medium">
-			<GhostLogo className="size-4 shrink-0" />
-			<span className="truncate">
-				{active
-					? `${active.logo ? `${active.logo} ` : ""}${active.name}`
-					: "Haunter"}
-			</span>
-			<ChevronDownIcon className="opacity-50" />
-		</SidebarMenuButton>
-	);
-
-	const workspaceItems = workspaces.map((workspace) => ({
-		id: workspace.id,
-		label: `${workspace.logo ? `${workspace.logo} ` : ""}${workspace.name}`,
-		active: workspace.id === activeWorkspaceId,
-	}));
-
-	if (workspacesQuery.isPending && workspaces.length === 0) {
-		return (
-			<SidebarMenu>
-				<SidebarMenuItem>
-					<SidebarMenuSkeleton showIcon className="opacity-70" />
-				</SidebarMenuItem>
-			</SidebarMenu>
-		);
-	}
-
-	if (workspacesQuery.error && workspaces.length === 0) {
-		return (
-			<SidebarMenu>
-				<SidebarMenuItem>
-					<SidebarMenuButton onClick={() => void workspacesQuery.refetch?.()}>
-						<span className="text-destructive">Workspaces unavailable</span>
-					</SidebarMenuButton>
-				</SidebarMenuItem>
-			</SidebarMenu>
-		);
+	const actions: WorkspacePickerAction[] = [
+		{
+			label: "New workspace",
+			icon: PlusIcon,
+			onSelect: openCreate,
+			muted: true,
+		},
+	];
+	if (active) {
+		actions.push({
+			label: "Members",
+			icon: UsersIcon,
+			onSelect: () => setMembersOpen(true),
+			separatorBefore: true,
+		});
+		if (canEditWorkspace)
+			actions.push({
+				label: "Edit workspace",
+				icon: PencilIcon,
+				onSelect: openEdit,
+			});
+		if (canDeleteWorkspace)
+			actions.push({
+				label: "Delete workspace",
+				icon: Trash2Icon,
+				onSelect: openDelete,
+				destructive: true,
+			});
 	}
 
 	return (
 		<>
-			<SidebarMenu>
-				<SidebarMenuItem>
-					{isMobile ? (
-						<Drawer showSwipeHandle>
-							<DrawerTrigger render={trigger} />
-							<DrawerContent>
-								<DrawerHeader>
-									<DrawerTitle>Workspaces</DrawerTitle>
-									<DrawerDescription className="sr-only">
-										Switch or manage workspaces
-									</DrawerDescription>
-								</DrawerHeader>
-								<div className="flex flex-col gap-1 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-									{workspaceItems.map((workspace) => (
-										<DrawerClose
-											key={workspace.id}
-											render={
-												<Button
-													variant="ghost"
-													className="h-11 justify-start"
-													onClick={() => switchTo(workspace.id)}
-												/>
-											}
-										>
-											<span className="flex-1 truncate text-left">
-												{workspace.label}
-											</span>
-											{workspace.active ? <CheckIcon /> : null}
-										</DrawerClose>
-									))}
-									<div className="my-1 h-px bg-border" />
-									<DrawerClose
-										render={
-											<Button
-												variant="ghost"
-												className="h-11 justify-start text-muted-foreground"
-												onClick={openCreate}
-											/>
-										}
-									>
-										<PlusIcon />
-										New workspace
-									</DrawerClose>
-									{active ? (
-										<>
-											<DrawerClose
-												render={
-													<Button
-														variant="ghost"
-														className="h-11 justify-start"
-														onClick={() => setMembersOpen(true)}
-													/>
-												}
-											>
-												<UsersIcon />
-												Members
-											</DrawerClose>
-											{canEditWorkspace ? (
-												<DrawerClose
-													render={
-														<Button
-															variant="ghost"
-															className="h-11 justify-start"
-															onClick={openEdit}
-														/>
-													}
-												>
-													<PencilIcon />
-													Edit workspace
-												</DrawerClose>
-											) : null}
-											{canDeleteWorkspace ? (
-												<DrawerClose
-													render={
-														<Button
-															variant="ghost"
-															className="h-11 justify-start text-destructive hover:text-destructive"
-															onClick={openDelete}
-														/>
-													}
-												>
-													<Trash2Icon />
-													Delete workspace
-												</DrawerClose>
-											) : null}
-										</>
-									) : null}
-								</div>
-							</DrawerContent>
-						</Drawer>
-					) : (
-						<DropdownMenu>
-							<DropdownMenuTrigger render={trigger} />
-							<DropdownMenuContent
-								className="w-56 rounded-lg"
-								align="start"
-								side="bottom"
-								sideOffset={4}
-								// Don't return focus to the trigger on close: it would steal
-								// focus from the dialogs opened by the items below.
-								finalFocus={() => false}
-							>
-								{/* Base UI requires GroupLabel to live inside a Group. */}
-								<DropdownMenuGroup>
-									<DropdownMenuLabel className="text-muted-foreground text-xs">
-										Workspaces
-									</DropdownMenuLabel>
-									{workspaces.map((workspace) => (
-										<DropdownMenuItem
-											key={workspace.id}
-											onClick={() => switchTo(workspace.id)}
-										>
-											<span className="truncate">
-												{workspace.logo ? `${workspace.logo} ` : ""}
-												{workspace.name}
-											</span>
-											{workspace.id === activeWorkspaceId ? (
-												<CheckIcon className="ml-auto" />
-											) : null}
-										</DropdownMenuItem>
-									))}
-								</DropdownMenuGroup>
-								<DropdownMenuSeparator />
-								<DropdownMenuItem onClick={openCreate}>
-									<PlusIcon />
-									<span className="font-medium text-muted-foreground">
-										New workspace
-									</span>
-								</DropdownMenuItem>
-								{active ? (
-									<>
-										<DropdownMenuSeparator />
-										<DropdownMenuItem onClick={() => setMembersOpen(true)}>
-											<UsersIcon />
-											Members
-										</DropdownMenuItem>
-										{canEditWorkspace ? (
-											<DropdownMenuItem onClick={openEdit}>
-												<PencilIcon />
-												Edit workspace
-											</DropdownMenuItem>
-										) : null}
-										{canDeleteWorkspace ? (
-											<DropdownMenuItem
-												className="text-destructive focus:text-destructive"
-												onClick={openDelete}
-											>
-												<Trash2Icon className="text-destructive" />
-												Delete workspace
-											</DropdownMenuItem>
-										) : null}
-									</>
-								) : null}
-							</DropdownMenuContent>
-						</DropdownMenu>
-					)}
+			<WorkspacePicker
+				workspaces={workspaces}
+				activeWorkspaceId={activeWorkspaceId}
+				onSelect={switchTo}
+				initialLoading={workspacesQuery.isPending && workspaces.length === 0}
+				unavailable={!!workspacesQuery.error && workspaces.length === 0}
+				onRetry={() => void workspacesQuery.refetch?.()}
+				actions={actions}
+			/>
+			<ResponsiveDialog
+				open={dialogOpen}
+				onOpenChange={(nextOpen) => {
+					setDialogOpen(nextOpen);
+					if (nextOpen) setError(null);
+				}}
+				title="New workspace"
+				description="Workspaces keep separate areas of your life apart, like work and personal."
+				className="sm:max-w-sm"
+			>
+				<form
+					className="flex flex-col gap-4"
+					onSubmit={(event) => {
+						event.preventDefault();
+						create();
+					}}
+				>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="workspace-name">Name</Label>
+						<Input
+							id="workspace-name"
+							autoFocus
+							value={name}
+							placeholder="e.g. Work"
+							onChange={(event) => setName(event.target.value)}
+						/>
+					</div>
+					{error ? (
+						<p role="alert" className="text-destructive text-sm">
+							{error}
+						</p>
+					) : null}
+					<ResponsiveDialogFooter>
+						<Button type="submit" disabled={!name.trim() || busy}>
+							{busy ? "Creating…" : "Create workspace"}
+						</Button>
+					</ResponsiveDialogFooter>
+				</form>
+			</ResponsiveDialog>
 
-					<ResponsiveDialog
-						open={dialogOpen}
-						onOpenChange={(nextOpen) => {
-							setDialogOpen(nextOpen);
-							if (nextOpen) setError(null);
+			<ResponsiveDialog
+				open={editOpen}
+				onOpenChange={(nextOpen) => {
+					setEditOpen(nextOpen);
+					if (nextOpen) setError(null);
+				}}
+				title="Edit workspace"
+				description="Update this workspace's emoji and name."
+				className="sm:max-w-sm"
+			>
+				{editOpen ? (
+					<form
+						className="flex flex-col gap-4"
+						onSubmit={(event) => {
+							event.preventDefault();
+							saveEdit();
 						}}
-						title="New workspace"
-						description="Workspaces keep separate areas of your life apart, like work and personal."
-						className="sm:max-w-sm"
 					>
-						<form
-							className="flex flex-col gap-4"
-							onSubmit={(event) => {
-								event.preventDefault();
-								create();
-							}}
-						>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="workspace-name">Name</Label>
-								<Input
-									id="workspace-name"
-									autoFocus
-									value={name}
-									placeholder="e.g. Work"
-									onChange={(event) => setName(event.target.value)}
+						<div className="flex items-end gap-3">
+							<div className="flex shrink-0 flex-col gap-2">
+								<Label htmlFor="edit-workspace-emoji">Emoji</Label>
+								<WorkspaceIconPicker
+									id="edit-workspace-emoji"
+									icon={editIcon}
+									onIconChange={setEditIcon}
 								/>
 							</div>
-							{error ? (
-								<p role="alert" className="text-destructive text-sm">
-									{error}
-								</p>
-							) : null}
-							<ResponsiveDialogFooter>
-								<Button type="submit" disabled={!name.trim() || busy}>
-									{busy ? "Creating…" : "Create workspace"}
-								</Button>
-							</ResponsiveDialogFooter>
-						</form>
-					</ResponsiveDialog>
-
-					<ResponsiveDialog
-						open={editOpen}
-						onOpenChange={(nextOpen) => {
-							setEditOpen(nextOpen);
-							if (nextOpen) setError(null);
-						}}
-						title="Edit workspace"
-						description="Update this workspace's emoji and name."
-						className="sm:max-w-sm"
-					>
-						{editOpen ? (
-							<form
-								className="flex flex-col gap-4"
-								onSubmit={(event) => {
-									event.preventDefault();
-									saveEdit();
-								}}
-							>
-								<div className="flex items-end gap-3">
-									<div className="flex shrink-0 flex-col gap-2">
-										<Label htmlFor="edit-workspace-emoji">Emoji</Label>
-										<WorkspaceIconPicker
-											id="edit-workspace-emoji"
-											icon={editIcon}
-											onIconChange={setEditIcon}
-										/>
-									</div>
-									<div className="flex flex-1 flex-col gap-2">
-										<Label htmlFor="edit-workspace-name">Name</Label>
-										<Input
-											id="edit-workspace-name"
-											value={editName}
-											onChange={(event) => setEditName(event.target.value)}
-										/>
-									</div>
-								</div>
-								{error ? (
-									<p role="alert" className="text-destructive text-sm">
-										{error}
-									</p>
-								) : null}
-								<ResponsiveDialogFooter>
-									<Button type="submit" disabled={!editName.trim() || busy}>
-										{busy ? "Saving..." : "Save"}
-									</Button>
-								</ResponsiveDialogFooter>
-							</form>
+							<div className="flex flex-1 flex-col gap-2">
+								<Label htmlFor="edit-workspace-name">Name</Label>
+								<Input
+									id="edit-workspace-name"
+									value={editName}
+									onChange={(event) => setEditName(event.target.value)}
+								/>
+							</div>
+						</div>
+						{error ? (
+							<p role="alert" className="text-destructive text-sm">
+								{error}
+							</p>
 						) : null}
-					</ResponsiveDialog>
+						<ResponsiveDialogFooter>
+							<Button type="submit" disabled={!editName.trim() || busy}>
+								{busy ? "Saving..." : "Save"}
+							</Button>
+						</ResponsiveDialogFooter>
+					</form>
+				) : null}
+			</ResponsiveDialog>
 
-					{membersOpen ? (
-						<MembersDialog open={membersOpen} onOpenChange={setMembersOpen} />
-					) : null}
+			{membersOpen ? (
+				<MembersDialog open={membersOpen} onOpenChange={setMembersOpen} />
+			) : null}
 
-					<DestructiveConfirmationDialog
-						open={deleteOpen}
-						onOpenChange={(nextOpen) => {
-							setDeleteOpen(nextOpen);
-							if (!nextOpen) setError(null);
-						}}
-						title={`Delete ${active ? `“${active.name}”` : "workspace"}?`}
-						description={
-							<span className="break-words">
-								This permanently deletes the workspace and all of its pages,
-								tasks, and canvases. This cannot be undone.
-							</span>
-						}
-						actionLabel="Delete workspace"
-						pendingLabel="Deleting…"
-						pending={busy}
-						error={error}
-						onConfirm={confirmDelete}
-					/>
-				</SidebarMenuItem>
-			</SidebarMenu>
+			<DestructiveConfirmationDialog
+				open={deleteOpen}
+				onOpenChange={(nextOpen) => {
+					setDeleteOpen(nextOpen);
+					if (!nextOpen) setError(null);
+				}}
+				title={`Delete ${active ? `“${active.name}”` : "workspace"}?`}
+				description={
+					<span className="break-words">
+						This permanently deletes the workspace and all of its pages, tasks,
+						and canvases. This cannot be undone.
+					</span>
+				}
+				actionLabel="Delete workspace"
+				pendingLabel="Deleting…"
+				pending={busy}
+				error={error}
+				onConfirm={confirmDelete}
+			/>
 			{workspaces.map((workspace) => (
 				<CommandRegistration
 					key={workspace.id}

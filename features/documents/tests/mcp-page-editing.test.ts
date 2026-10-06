@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createMemoryStorage } from "@beignet/core/ports";
 import { createBetterAuthAgentCapabilityTestContext } from "@beignet/agent-auth-better-auth/testing";
 import * as Y from "yjs";
 import { createTestMcpConnectionRepository } from "@/features/agents/tests/helpers";
@@ -1243,6 +1244,101 @@ test("tables and attachments survive targeted edits and structured replacement w
 		expect(edited.blocks.slice(1)).toEqual(before.blocks.slice(1));
 		await f.replace({ format: "blocks", blocks: edited.blocks });
 		expect((await f.read()).blocks).toEqual(edited.blocks);
+	} finally {
+		await f.database.close();
+	}
+});
+
+test("MCP reads private attachments and edits captions without replacing their bytes", async () => {
+	const f = await fixture("edit");
+	try {
+		f.ctx.ports.storage = createMemoryStorage();
+		const key = `pages/${f.workspaceId}/${f.page.id}/test.txt`;
+		await f.ctx.ports.storage.put(key, "Private attachment text", {
+			contentType: "text/plain",
+			visibility: "private",
+			metadata: { filename: "notes.txt" },
+		});
+		await seedFixtureBody(
+			f,
+			[
+				paragraph("Intro", "intro"),
+				{
+					id: "attachment",
+					type: "file",
+					props: {
+						name: "notes.txt",
+						caption: "Original caption",
+						url: `/api/files/${key}`,
+					},
+					children: [],
+				},
+				{
+					id: "external",
+					type: "file",
+					props: { name: "Remote", url: "http://169.254.169.254/private" },
+					children: [],
+				},
+			],
+			true,
+		);
+		const listed = await f.execute("list_page_attachments");
+		expect(listed).toMatchObject({
+			attachments: [
+				{ blockId: "attachment", available: true, size: 23 },
+				{ blockId: "external", available: false },
+			],
+			nextOffset: null,
+		});
+		expect(
+			await f.execute("read_page_attachment", { blockId: "attachment" }),
+		).toMatchObject({ text: "Private attachment text", truncated: false });
+		await expect(
+			f.execute("read_page_attachment", { blockId: "external" }),
+		).rejects.toMatchObject({ code: "UNSUPPORTED_ATTACHMENT" });
+		await f.edit([
+			{
+				op: "update",
+				blockId: "attachment",
+				props: { caption: "Updated caption", name: "Renamed.txt" },
+			},
+			{ op: "move", blockId: "attachment", afterBlockId: null },
+		]);
+		expect((await f.read()).blocks[0]).toMatchObject({
+			id: "attachment",
+			props: {
+				caption: "Updated caption",
+				name: "Renamed.txt",
+				url: `/api/files/${key}`,
+			},
+		});
+		for (const update of [
+			{ props: { url: "https://example.com/replacement" } },
+			{ content: text("No") },
+			{ props: { caption: true } },
+		])
+			await expect(
+				f.edit([{ op: "update", blockId: "attachment", ...update }]),
+			).rejects.toMatchObject({ code: "INVALID_PAGE_CONTENT" });
+		await f.ctx.ports.storage.put(key, "x".repeat(70000), {
+			contentType: "text/plain",
+		});
+		const large = (await f.execute("read_page_attachment", {
+			blockId: "attachment",
+		})) as { text: string; truncated: boolean };
+		expect(large.text.length).toBe(65536);
+		expect(large.truncated).toBe(true);
+		await f.ctx.ports.pages.setDeletedByIds(
+			f.scope,
+			[f.page.id],
+			new Date().toISOString(),
+		);
+		await expect(
+			f.execute("read_page_attachment", { blockId: "attachment" }),
+		).rejects.toMatchObject({ code: "PAGE_NOT_FOUND" });
+		expect(JSON.stringify(f.activities)).not.toContain(
+			"Private attachment text",
+		);
 	} finally {
 		await f.database.close();
 	}

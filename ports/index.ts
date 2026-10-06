@@ -1,3 +1,4 @@
+import type { EmbeddedEditorSessionPort } from "@/features/agents/embedded-editor-session";
 import type { BroadcastPort } from "@beignet/core/broadcasting/server";
 import type { ErrorReporterPort } from "@beignet/core/error-reporting";
 import type { IdempotencyPort } from "@beignet/core/idempotency";
@@ -69,6 +70,7 @@ export type AppTransactionPorts = {
 	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
 	mcpConnections: McpConnectionRepository;
+	embeddedEditorSessions: EmbeddedEditorSessionPort;
 	mcpOAuthClients: McpOAuthClientRepository;
 	canvasNavigation: CanvasNavigationRepository;
 	canvases: CanvasRepository;
@@ -97,6 +99,7 @@ export type AppPorts = {
 	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
 	mcpConnections: McpConnectionRepository;
+	embeddedEditorSessions: EmbeddedEditorSessionPort;
 	mcpOAuthClients: McpOAuthClientRepository;
 	mcpOAuthRequests: McpOAuthRequestVerifier;
 	mcpServerConfiguration: McpServerConfigurationPort;

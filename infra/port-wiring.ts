@@ -59,6 +59,7 @@ export const appPorts = definePorts<AppPorts>()({
 		"mailer",
 		"members",
 		"mcpConnections",
+		"embeddedEditorSessions",
 		"mcpOAuthClients",
 		"notificationInbox",
 		"notifications",

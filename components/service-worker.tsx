@@ -9,6 +9,7 @@ import { useEffect } from "react";
  */
 export function ServiceWorkerRegistrar() {
 	useEffect(() => {
+		if (window.parent !== window) return;
 		if (!("serviceWorker" in navigator)) return;
 		const register = () => {
 			navigator.serviceWorker.register("/sw.js").catch(() => {

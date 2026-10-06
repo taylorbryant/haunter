@@ -154,7 +154,7 @@ export function SharePanel({
 			setActionError(
 				userErrorMessage(
 					error,
-					"The link could not be copied to the clipboard.",
+					"Clipboard access is unavailable. Select the link and copy it manually.",
 				),
 			);
 		}
@@ -195,7 +195,13 @@ export function SharePanel({
 					</div>
 				</div>
 				<div className="flex gap-2">
-					<Input readOnly value={shareUrl ?? ""} className="h-8 text-xs" />
+					<Input
+						readOnly
+						aria-label="Public page link"
+						value={shareUrl ?? ""}
+						onFocus={(event) => event.currentTarget.select()}
+						className="h-8 text-xs"
+					/>
 					<Button
 						type="button"
 						variant="outline"

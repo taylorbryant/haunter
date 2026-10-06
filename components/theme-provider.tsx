@@ -13,6 +13,7 @@ import {
 } from "react";
 import {
 	APP_THEME_IDS,
+	type AppThemeId,
 	DARK_APP_THEMES,
 	type DarkThemeId,
 	DEFAULT_THEME_PREFERENCES,
@@ -34,6 +35,14 @@ type ThemePreferencesContextValue = ThemePreferences & {
 
 const ThemePreferencesContext =
 	createContext<ThemePreferencesContextValue | null>(null);
+const EmbeddedHostThemeContext = createContext<
+	((theme: AppThemeId) => void) | null
+>(null);
+
+/** Host appearance is temporary and never replaces the user's stored preferences. */
+export function useEmbeddedHostTheme() {
+	return useContext(EmbeddedHostThemeContext);
+}
 
 function getThemeBootstrapScript(storageKey: string) {
 	const config = JSON.stringify({
@@ -142,10 +151,11 @@ export function useThemePreferences() {
 }
 
 function ThemeColorSync() {
-	const { resolvedTheme } = useTheme();
+	const { resolvedTheme, forcedTheme } = useTheme();
+	const activeTheme = forcedTheme ?? resolvedTheme;
 
 	useEffect(() => {
-		const themeColor = getResolvedThemeColor(resolvedTheme);
+		const themeColor = getResolvedThemeColor(activeTheme);
 		if (!themeColor) return;
 
 		for (const meta of document.querySelectorAll<HTMLMetaElement>(
@@ -153,7 +163,7 @@ function ThemeColorSync() {
 		)) {
 			meta.content = themeColor;
 		}
-	}, [resolvedTheme]);
+	}, [activeTheme]);
 
 	return null;
 }
@@ -164,6 +174,10 @@ export function ThemeProvider({
 	storageKey = "theme",
 	...props
 }: ComponentProps<typeof NextThemesProvider>) {
+	const [hostTheme, setHostTheme] = useState<string>();
+	const acceptHostTheme = useCallback((theme: AppThemeId) => {
+		if (window.parent !== window) setHostTheme(theme);
+	}, []);
 	return (
 		<>
 			<script
@@ -176,14 +190,17 @@ export function ThemeProvider({
 			/>
 			<NextThemesProvider
 				{...props}
+				forcedTheme={hostTheme ?? props.forcedTheme}
 				nonce={nonce}
 				storageKey={storageKey}
 				themes={APP_THEME_IDS}
 			>
-				<ThemePreferencesSync storageKey={storageKey}>
-					<ThemeColorSync />
-					{children}
-				</ThemePreferencesSync>
+				<EmbeddedHostThemeContext.Provider value={acceptHostTheme}>
+					<ThemePreferencesSync storageKey={storageKey}>
+						<ThemeColorSync />
+						{children}
+					</ThemePreferencesSync>
+				</EmbeddedHostThemeContext.Provider>
 			</NextThemesProvider>
 		</>
 	);

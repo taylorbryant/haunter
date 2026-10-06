@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { WorkspaceLink as Link } from "@/client/workspace-navigation";
+import { useWorkspacePathname as usePathname } from "@/client/workspace-navigation";
 import { Fragment, type ReactElement } from "react";
 import {
 	Breadcrumb,

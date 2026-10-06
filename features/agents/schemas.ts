@@ -59,6 +59,7 @@ export const ListAgentsOutputSchema = z.object({
 export const AuthorizeMcpConnectionInputSchema = z.object({
 	oauthQuery: z.string().trim().min(1).max(16_384),
 	permissionProfile: AgentPermissionProfileSchema,
+	embeddedEditorAccess: z.enum(["view", "edit"]).default("view"),
 	workspaceIds: z
 		.array(z.string().min(1))
 		.min(1)

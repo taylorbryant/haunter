@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Haunter</title>
+		<!-- styles -->
+	</head>
+	<body>
+		<main class="companion" aria-label="Haunter workspace">
+			<aside class="sidebar" id="workspace-sidebar" aria-label="Workspace navigation">
+				<div class="sidebar-header"><div class="workspace-switcher">
+					<span class="workspace-mark" aria-hidden="true"><!-- icon:ghost --></span>
+					<label class="sr-only" for="workspace">Workspace</label>
+					<select id="workspace" name="workspace" disabled><option value="">Loading workspaces…</option></select>
+					<span class="workspace-chevron" aria-hidden="true"><!-- icon:chevron-down --></span>
+				</div><button class="icon-button" id="refresh" type="button" aria-label="Refresh" title="Refresh workspace and access" disabled><!-- icon:refresh --></button></div>
+				<search><form id="search-form" class="search-row">
+					<span aria-hidden="true"><!-- icon:search --></span>
+					<label class="sr-only" for="query">Search pages</label>
+					<input id="query" name="query" type="search" maxlength="200" autocomplete="off" placeholder="Search pages…" disabled />
+					<button class="icon-button" id="search" type="submit" aria-label="Search" title="Search" disabled><!-- icon:arrow-right --></button>
+				</form></search>
+				<button class="nav-link" id="home" type="button" aria-current="page"><!-- icon:home --><span>Home</span></button>
+				<div class="create-actions"><button class="btn" id="new-page" type="button" disabled>New page</button><button class="btn" id="new-canvas" type="button" disabled>New canvas</button></div>
+                <section id="favorites-section" hidden><div class="pages-heading"><h2>Favorites</h2></div><nav id="favorites-list" aria-label="Favorites"></nav></section>
+                <div class="pages-heading"><h2 id="list-heading">Pages</h2><span id="page-count"></span></div>
+				<p class="list-status" id="list-status" role="status"></p>
+				<nav id="page-list" aria-label="Pages"></nav>
+				<section id="canvases-section" hidden><div class="pages-heading"><h2>Canvases</h2></div><nav id="canvas-list" aria-label="Canvases"></nav></section>
+                <div class="sidebar-footer"><span class="haunter-brand"><!-- icon:ghost -->Haunter</span></div>
+			</aside>
+			<section class="workspace-content">
+				<header class="toolbar">
+					<button class="icon-button" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar" aria-expanded="true" aria-controls="workspace-sidebar"><!-- icon:panel-left --></button>
+					<button class="icon-button back" id="back" type="button" aria-label="Back to pages" title="Back to pages"><!-- icon:arrow-left --></button>
+					<nav id="breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"><span>Home</span></nav>
+					<div class="toolbar-actions">
+						<details id="appearance" class="page-actions">
+							<summary class="icon-button" aria-label="Appearance" title="Appearance"><!-- icon:palette --></summary>
+							<div class="page-actions-menu appearance-menu"><label for="appearance-theme">Theme</label><select id="appearance-theme"><option value="host">Follow host (light/dark)</option></select></div>
+						</details>
+						<span id="editor-save-status" class="muted" role="status"></span>
+						<details id="page-actions" class="page-actions" hidden>
+							<summary class="icon-button" aria-label="Page actions" title="Page actions"><!-- icon:more --></summary>
+							<div class="page-actions-menu">
+                            <button class="btn" id="favorite-item" type="button">Add to favorites</button>
+                            <button class="btn" id="new-subpage" type="button">New subpage</button>
+                            <button class="btn" id="move-page" type="button">Move page…</button>
+                            <button class="btn" id="archive-page" type="button">Move to trash…</button>
+                            <button class="btn" id="editor-web" type="button" hidden>Open in browser</button></div>
+						</details>
+					</div>
+				</header>
+				<div class="notice connection-status" id="connection-status" role="status">Connecting to Haunter…</div>
+				<section class="detail" aria-label="Haunter page" id="detail">
+					<div class="home-view" id="empty-preview">
+						<header><h1 id="home-title" tabindex="-1">Home</h1><p class="muted" id="home-date"></p></header>
+						<section class="recent-section" aria-labelledby="recent-heading"><h2 id="recent-heading">Recently updated</h2><div id="recent-pages" class="recent-pages"></div><p id="home-status" class="muted">Your workspace pages will appear here.</p></section>
+						<div class="home-hint"><span aria-hidden="true"><!-- icon:message --></span><p>Open a page to start working. Your conversation follows the page and your selection.</p></div>
+					</div>
+<iframe id="real-editor" title="Haunter page editor" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" hidden></iframe>
+				</section>
+				<p class="notice page-status" id="page-status" role="status"></p>
+				<div id="archive-notice" class="notice" hidden><span>Page moved to trash.</span> <button class="btn" id="undo-archive" type="button">Undo</button></div>
+                <p class="notice context-status" id="context-status" role="status"></p>
+			</section>
+		</main>
+		<template id="icon-page"><!-- icon:page --></template>
+		<template id="icon-chevron"><!-- icon:chevron-right --></template>
+		<!-- script -->
+	</body>
+</html>

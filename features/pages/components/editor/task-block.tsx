@@ -1,5 +1,6 @@
 "use client";
 
+import { useEmbeddedEditor } from "./embedded-editor-context";
 import { createExtension } from "@blocknote/core";
 import {
 	createReactBlockSpec,
@@ -10,11 +11,17 @@ import {
 	type FocusEvent,
 	type KeyboardEvent,
 	useContext,
+	useEffect,
 } from "react";
 import { useDeviceTimeOrLocalFallback } from "@/components/device-time-provider";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
-import { parseTaskDateShortcut } from "@/features/tasks/lib/parse-task-input";
+import {
+	parseTaskDateShortcut,
+	taskInlineText,
+} from "@/features/tasks/lib/parse-task-input";
+import { TASK_TITLE_MAX_LENGTH } from "@/features/tasks/schemas";
+import type { SelectedTask } from "@/features/tasks/current-view";
 import { parseTaskReminderOffset } from "@/features/tasks/lib/reminder-options";
 import { AUTO_TASK_ASSIGNEE } from "@/features/tasks/lib/task-block-props";
 import {
@@ -56,6 +63,7 @@ function TaskBlockView({
 }: ReactCustomBlockRenderProps<typeof taskBlockConfig>) {
 	const { checked, due, dueTime, reminder, assignee } = block.props;
 	const currentUserId = useContext(TaskBlockCurrentUserContext);
+	const embedded = useEmbeddedEditor();
 	const deviceTime = useDeviceTimeOrLocalFallback();
 	const shownAssignee =
 		assignee === AUTO_TASK_ASSIGNEE ? (currentUserId ?? "") : assignee;
@@ -63,6 +71,29 @@ function TaskBlockView({
 	// checkbox/date UI fires its own handlers — gate them too so a
 	// read-only viewer can't toggle props.
 	const readOnly = !editor.isEditable;
+	const limitedEmbed = !!embedded && !embedded.taskControls;
+	const reportSelection = embedded?.taskSelectionChanged;
+	const taskSnapshot = JSON.stringify({
+		taskId: null,
+		pageId: embedded?.pageId ?? null,
+		sourceBlockId: block.id,
+		title: taskInlineText(block.content).slice(0, TASK_TITLE_MAX_LENGTH),
+		completed: checked,
+		assigneeId: shownAssignee || null,
+		dueDate: due || null,
+		dueTime: dueTime || null,
+		reminderOffsetMinutes: parseTaskReminderOffset(reminder),
+	});
+	useEffect(() => {
+		reportSelection?.(block.id, JSON.parse(taskSnapshot) as SelectedTask);
+	}, [reportSelection, block.id, taskSnapshot]);
+	useEffect(
+		() => () => reportSelection?.(block.id, undefined),
+		[reportSelection, block.id],
+	);
+	function selectTask() {
+		reportSelection?.(block.id, JSON.parse(taskSnapshot) as SelectedTask, true);
+	}
 
 	function update(props: {
 		checked?: boolean;
@@ -134,6 +165,8 @@ function TaskBlockView({
 		// biome-ignore lint/a11y/noStaticElementInteractions: observes child editor blur/Enter events, not direct static-element interaction
 		<div
 			className="haunter-task flex w-full flex-wrap items-start gap-2"
+			onFocusCapture={selectTask}
+			onPointerDown={selectTask}
 			onBlur={handleBlur}
 			onKeyDownCapture={handleKeyDown}
 		>
@@ -162,13 +195,20 @@ function TaskBlockView({
 				// on the right of the title.
 				className="flex w-full shrink-0 items-center gap-1 pl-6 sm:ml-auto sm:w-auto sm:pl-0"
 			>
-				<AssigneePicker
-					value={shownAssignee === "" ? null : shownAssignee}
-					label={shownAssignee === "" ? null : "Assigned"}
-					disabled={readOnly}
-					onChange={(next) => update({ assignee: next ?? "" })}
-				/>
-				{readOnly && due === "" ? null : readOnly ? (
+				{limitedEmbed ? (
+					shownAssignee ? (
+						<span className="text-sm text-muted-foreground">Assigned</span>
+					) : null
+				) : (
+					<AssigneePicker
+						value={shownAssignee === "" ? null : shownAssignee}
+						label={shownAssignee === "" ? null : "Assigned"}
+						disabled={readOnly}
+						onChange={(next) => update({ assignee: next ?? "" })}
+					/>
+				)}
+				{(readOnly || limitedEmbed) && due === "" ? null : readOnly ||
+					limitedEmbed ? (
 					<span
 						className={`flex items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs ${
 							overdue

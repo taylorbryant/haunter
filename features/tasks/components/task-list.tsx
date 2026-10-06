@@ -9,8 +9,11 @@ import {
 	PlusIcon,
 	Trash2Icon,
 } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import {
+	WorkspaceLink as Link,
+	useWorkspacePathname as usePathname,
+	useWorkspaceSearchParams as useSearchParams,
+} from "@/client/workspace-navigation";
 import { useEffect, useRef, useState } from "react";
 import { reportUserError } from "@/client/error-feedback";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
@@ -30,6 +33,9 @@ import {
 } from "@/features/tasks/client/queries";
 import { useTaskMutations } from "@/features/tasks/client/use-task-mutations";
 import { useTaskRefetchOptions } from "@/features/tasks/client/use-task-refetch-options";
+import { useObservedTaskList } from "@/features/tasks/client/task-view-context";
+import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
+import { TaskIdInputSchema } from "@/features/tasks/schemas";
 import {
 	TaskComposer,
 	type TaskSubmissionResult,
@@ -101,6 +107,7 @@ export function TaskList({
 	const pathname = usePathname();
 	const router = useRouter();
 	const searchParams = useSearchParams();
+	const requestsEnabled = useProtectedRequestsEnabled();
 	// Viewers see the list but get no add/toggle/edit/delete controls.
 	const canEdit = useCanEditWorkspace();
 	const currentUser = useCurrentUser();
@@ -108,6 +115,11 @@ export function TaskList({
 	const isTodayView = variant === "today";
 	const isUpcomingView = variant === "upcoming";
 	const isHomeView = isTodayView || isUpcomingView;
+	const requestedTask = TaskIdInputSchema.safeParse({
+		id: searchParams.get("taskId"),
+	});
+	const focusedTaskId =
+		!isHomeView && requestedTask.success ? requestedTask.data.id : undefined;
 	const resolvedTodayDate = deviceTime.ready ? deviceTime.today : "1970-01-01";
 	const resolvedCurrentTime = deviceTime.ready
 		? deviceTime.currentTime
@@ -147,14 +159,45 @@ export function TaskList({
 							dueOnOrAfter: upcomingStartDate,
 							dueOnOrBefore: upcomingEndDate,
 						}
-					: {},
+					: { taskId: focusedTaskId },
 		),
 		...refetchOptions,
 		refetchOnMount: false,
-		enabled: deviceTime.ready,
+		enabled: deviceTime.ready && requestsEnabled,
 	});
 
 	const tasks = tasksQuery.data?.items ?? [];
+	const observer = useObservedTaskList(
+		{
+			view: isTodayView ? "today" : isUpcomingView ? "upcoming" : "tasks",
+			filter,
+			scope,
+			taskId: focusedTaskId,
+			...(isTodayView
+				? { dueOnOrBefore: resolvedTodayDate }
+				: isUpcomingView
+					? { dueOnOrAfter: upcomingStartDate, dueOnOrBefore: upcomingEndDate }
+					: {}),
+			hasMore: tasksQuery.data?.hasMore ?? false,
+			status:
+				!requestsEnabled || tasksQuery.isError
+					? "unavailable"
+					: tasksQuery.isPending
+						? "loading"
+						: "ready",
+		},
+		tasks,
+		pendingTaskIds.size > 0,
+		titleDrafts,
+	);
+	const focusedRow = useRef<HTMLLIElement>(null);
+	const focusReady =
+		!!focusedTaskId && tasks.some((task) => task.id === focusedTaskId);
+	useEffect(() => {
+		if (!focusedTaskId || !focusReady) return;
+		focusedRow.current?.scrollIntoView({ block: "nearest" });
+		focusedRow.current?.focus({ preventScroll: true });
+	}, [focusedTaskId, focusReady]);
 	const hasMore = tasksQuery.data?.hasMore ?? false;
 	const overdueTasks = isTodayView
 		? tasks.filter((task) =>
@@ -317,6 +360,7 @@ export function TaskList({
 	function setTaskListParams(next: { filter?: TaskFilter; scope?: TaskScope }) {
 		setLimit(TASK_PAGE_SIZE);
 		const params = new URLSearchParams(searchParams.toString());
+		params.delete("taskId");
 		const nextFilter = next.filter ?? filter;
 		const nextScope = next.scope ?? scope;
 
@@ -344,7 +388,18 @@ export function TaskList({
 				{visibleTasks.map((task) => (
 					<li
 						key={task.id}
-						className="group flex items-start gap-3 py-2 [contain-intrinsic-size:0_52px] [content-visibility:auto]"
+						ref={task.id === focusedTaskId ? focusedRow : undefined}
+						data-task-id={task.id}
+						aria-current={
+							observer?.selectedTaskId === task.id ? true : undefined
+						}
+						tabIndex={observer || task.id === focusedTaskId ? 0 : undefined}
+						onFocusCapture={() => observer?.select(task.id)}
+						onPointerDown={() => observer?.select(task.id)}
+						className={cn(
+							"group flex items-start gap-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring [contain-intrinsic-size:0_52px] [content-visibility:auto]",
+							observer?.selectedTaskId === task.id && "rounded-md bg-accent/40",
+						)}
 					>
 						<input
 							type="checkbox"
@@ -540,6 +595,18 @@ export function TaskList({
 
 	return (
 		<div className="flex flex-col gap-4">
+			{focusedTaskId ? (
+				<div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+					<span>Focused task</span>
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={() => setTaskListParams({})}
+					>
+						Show all tasks
+					</Button>
+				</div>
+			) : null}
 			{!canEdit ? null : isTodayView ? (
 				<TaskComposer
 					currentUserId={currentUser?.id ?? null}

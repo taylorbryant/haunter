@@ -38,6 +38,7 @@ export function McpConsentCard() {
 	const workspacesQuery = useWorkspaces();
 	const [client, setClient] = useState<McpConsentContext | null>(null);
 	const [clientError, setClientError] = useState("");
+	const [allowEditor, setAllowEditor] = useState(false);
 	const [profile, setProfile] = useState<AgentPermissionProfile>("view");
 	const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>(
 		[],
@@ -55,6 +56,7 @@ export function McpConsentCard() {
 		setClient(null);
 		setClientError("");
 		setProfile("view");
+		setAllowEditor(false);
 		setSelectedWorkspaceIds([]);
 		let cancelled = false;
 		void apiClient
@@ -109,6 +111,8 @@ export function McpConsentCard() {
 				body: {
 					oauthQuery: searchParams.toString(),
 					permissionProfile: profile,
+					embeddedEditorAccess:
+						allowEditor && profile !== "view" ? "edit" : "view",
 					workspaceIds: selectedWorkspaceIds,
 				},
 			});
@@ -249,6 +253,26 @@ export function McpConsentCard() {
 							})}
 						</fieldset>
 
+						<div className="flex items-start gap-3 rounded-lg border p-3">
+							<Checkbox
+								id="mcp-editor-access"
+								checked={allowEditor && profile !== "view"}
+								disabled={profile === "view"}
+								onCheckedChange={(checked) => setAllowEditor(checked === true)}
+							/>
+							<label htmlFor="mcp-editor-access" className="text-sm">
+								<span className="font-medium">
+									Allow editing in the embedded editor
+								</span>
+								<span className="mt-1 block text-xs text-muted-foreground">
+									Create and edit pages, canvases, and tasks in this client,
+									organize pages and favorites, restore history and recovery
+									copies, publish or revoke public page links, and move pages to
+									trash. This includes removing content or shapes. View only
+									connections stay read-only.
+								</span>
+							</label>
+						</div>
 						<fieldset className="flex flex-col gap-2">
 							<legend className="mb-1 font-medium text-sm">Workspaces</legend>
 							<p className="mb-1 text-muted-foreground text-xs">

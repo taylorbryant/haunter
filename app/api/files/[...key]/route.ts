@@ -1,53 +1,60 @@
+import {
+	ATTACHMENT_CONTENT_TYPES,
+	safeAttachmentName,
+} from "@/features/pages/attachments";
+import { canReadAttachment } from "@/features/pages/lib/attachment-access";
 import { getServer } from "@/server";
 
-/**
- * Serve private storage objects back to workspace members. Upload keys are
- * namespaced pages/<workspaceId>/..., so access is checked by matching the
- * caller's active workspace against the key; everything else (missing,
- * foreign, invalid) is a uniform 404.
- */
+/** Cookie and embedded sessions both pass through request context and auth hooks. */
 export async function GET(
-	_req: Request,
+	req: Request,
 	{ params }: { params: Promise<{ key: string[] }> },
 ) {
 	const { key: segments } = await params;
-	const server = await getServer();
-	const ctx = await server.createContextFromNext();
-	const workspaceId = ctx.tenant?.id;
-	if (!ctx.auth?.user.id || !workspaceId) {
-		return new Response(null, { status: 404 });
-	}
-
-	// This route bypasses the contract hooks, so enforce the limit manually.
-	const limit = await server.ports.rateLimit.hit({
-		key: `files:${ctx.auth.user.id}`,
-		limit: 600,
-		windowSec: 60,
-	});
-	if (!limit.allowed) {
-		return new Response(null, {
-			status: 429,
-			headers: limit.retryAfterSeconds
-				? { "retry-after": String(limit.retryAfterSeconds) }
-				: {},
-		});
-	}
-
 	const key = segments.join("/");
-	if (!key.startsWith(`pages/${workspaceId}/`)) {
-		return new Response(null, { status: 404 });
-	}
-
-	const object = await server.ports.storage.get(key);
-	if (!object) {
-		return new Response(null, { status: 404 });
-	}
-
-	return new Response(object.stream(), {
-		headers: {
-			"content-type": object.contentType ?? "application/octet-stream",
-			"content-length": String(object.size),
-			"cache-control": object.cacheControl ?? "private, max-age=0",
-		},
-	});
+	const server = await getServer();
+	return server
+		.rawRoute({
+			name: "pageAttachment.read",
+			method: "GET",
+			path: "/api/files/*key",
+		})
+		.handle(async ({ ctx }) => {
+			if (!ctx.auth?.user.id || !ctx.tenant?.id)
+				return new Response(null, { status: 404 });
+			const limit = await ctx.ports.rateLimit.hit({
+				key: `files:${ctx.auth.user.id}`,
+				limit: 600,
+				windowSec: 60,
+			});
+			if (!limit.allowed)
+				return new Response(null, {
+					status: 429,
+					headers: limit.retryAfterSeconds
+						? { "retry-after": String(limit.retryAfterSeconds) }
+						: {},
+				});
+			if (!(await canReadAttachment(ctx, key)))
+				return new Response(null, { status: 404 });
+			const object = await ctx.ports.storage.get(key);
+			if (!object) return new Response(null, { status: 404 });
+			const mimeType =
+				object.contentType &&
+				ATTACHMENT_CONTENT_TYPES.includes(object.contentType)
+					? object.contentType
+					: "application/octet-stream";
+			const name = safeAttachmentName(
+				object.metadata?.filename ?? segments.at(-1) ?? "attachment",
+			);
+			return new Response(object.stream(), {
+				headers: {
+					"content-type": mimeType,
+					"content-length": String(object.size),
+					"content-disposition": `${mimeType.startsWith("image/") ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(name).replace(/'/g, "%27")}`,
+					"cache-control": "private, no-store",
+					"x-content-type-options": "nosniff",
+					"content-security-policy": "sandbox; default-src 'none'",
+				},
+			});
+		})(req);
 }

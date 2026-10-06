@@ -18,7 +18,13 @@ import {
 } from "@/features/pages/client/queries";
 import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 
-export function TrashList({ workspaceId }: { workspaceId: string }) {
+export function TrashList({
+	workspaceId,
+	allowPurge = true,
+}: {
+	workspaceId: string;
+	allowPurge?: boolean;
+}) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	// Viewers can see what's in the trash but not restore or purge.
@@ -135,19 +141,21 @@ export function TrashList({ workspaceId }: { workspaceId: string }) {
 									<Undo2Icon className="size-3.5" />
 									Restore
 								</Button>
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									className="text-destructive hover:text-destructive"
-									disabled={purgeMutation.isPending}
-									onClick={() =>
-										setPageToPurge({ id: page.id, title: page.title })
-									}
-								>
-									<Trash2Icon className="size-3.5" />
-									Delete forever
-								</Button>
+								{allowPurge ? (
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										className="text-destructive hover:text-destructive"
+										disabled={purgeMutation.isPending}
+										onClick={() =>
+											setPageToPurge({ id: page.id, title: page.title })
+										}
+									>
+										<Trash2Icon className="size-3.5" />
+										Delete forever
+									</Button>
+								) : null}
 							</>
 						) : null}
 					</li>

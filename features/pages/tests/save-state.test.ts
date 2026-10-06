@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
 	flushPendingPageSave,
+	beginPageUpload,
 	registerPageSaveFlusher,
 } from "@/features/pages/client/save-state";
 
@@ -38,4 +39,20 @@ describe("page save flush registry", () => {
 		await expect(flushPendingPageSave("page_2")).resolves.toBe(true);
 		unregisterTitle();
 	});
+});
+
+it("navigation waits for uploaded URLs to enter the document before flushing", async () => {
+	const finish = beginPageUpload("upload-page");
+	let saved = false;
+	const unregister = registerPageSaveFlusher("upload-page", async () => {
+		saved = true;
+		return true;
+	});
+	const pending = flushPendingPageSave("upload-page");
+	await Promise.resolve();
+	expect(saved).toBe(false);
+	finish();
+	await expect(pending).resolves.toBe(true);
+	expect(saved).toBe(true);
+	unregister();
 });

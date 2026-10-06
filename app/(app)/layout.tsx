@@ -7,17 +7,11 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppCommands } from "@/components/command-palette/app-commands";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
 import { DeviceTimeProvider } from "@/components/device-time-provider";
-import { HeaderBreadcrumbs } from "@/components/header-breadcrumbs";
+import { WorkspaceHeader } from "@/components/workspace-header";
 import { HeaderCanvasActions } from "@/components/header-canvas-actions";
 import { HeaderPageActions } from "@/components/header-page-actions";
 import { HeaderPageAgents } from "@/components/header-page-agents";
-import { HeaderSaveIndicator } from "@/components/header-save-indicator";
-import { Separator } from "@/components/ui/separator";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { WaitlistDialogProvider } from "@/features/admin/components/waitlist-dialog";
 import { loadChangelogReleases } from "@/features/changelog/content";
 import { NotificationTimezoneInitializer } from "@/features/notifications/components/notification-timezone-initializer";
@@ -98,18 +92,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 									isAdmin={isAdmin}
 								/>
 								<SidebarInset>
-									<header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-3 backdrop-blur-sm">
-										<SidebarTrigger />
-										<Separator
-											orientation="vertical"
-											className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-										/>
-										<HeaderBreadcrumbs />
-										<HeaderSaveIndicator />
+									<WorkspaceHeader>
 										<HeaderPageAgents />
 										<HeaderPageActions />
 										<HeaderCanvasActions />
-									</header>
+									</WorkspaceHeader>
 									<div className="min-w-0 flex-1">{children}</div>
 								</SidebarInset>
 							</WaitlistDialogProvider>

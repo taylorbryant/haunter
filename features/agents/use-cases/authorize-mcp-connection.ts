@@ -32,6 +32,11 @@ export const authorizeMcpConnectionUseCase = useCase
 			});
 		}
 
+		if (
+			input.permissionProfile === "view" &&
+			input.embeddedEditorAccess === "edit"
+		)
+			throw appError("Forbidden");
 		const now = new Date();
 		const connection = await ctx.ports.uow.transaction(async (ports) => {
 			return ports.mcpConnections.authorize({
@@ -39,6 +44,7 @@ export const authorizeMcpConnectionUseCase = useCase
 				userId: user.id,
 				clientId: oauthRequest.clientId,
 				permissionProfile: input.permissionProfile,
+				embeddedEditorAccess: input.embeddedEditorAccess,
 				workspaceIds: input.workspaceIds,
 				now,
 			});

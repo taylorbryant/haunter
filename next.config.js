@@ -1,6 +1,8 @@
 import { createRequire } from "node:module";
 import { dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isEmbeddedEditorOrigin } from "./features/agents/embedded-editor-origin.js";
+import { parseMcpUiDomain } from "./features/agents/mcp-ui-domain.js";
 
 // Next traces Node's export conditions, but Vercel runs these modules with Bun.
 // lib0 selects additional logging/crypto modules for Bun. Resolve Yjs's own
@@ -39,6 +41,37 @@ const editorSingletonPackages = [
 
 /** @type {import("next").NextConfig} */
 const nextConfig = {
+	async headers() {
+		const origins = new Set([
+			new URL(process.env.APP_URL ?? "http://localhost:3000").origin,
+			"https://chatgpt.com",
+			"https://web-sandbox.oaiusercontent.com",
+		]);
+		if (process.env.MCP_UI_DOMAIN !== undefined)
+			origins.add(parseMcpUiDomain(process.env.MCP_UI_DOMAIN).sandboxOrigin);
+		for (const value of process.env.MCP_EMBED_ALLOWED_ORIGINS?.split(",") ??
+			[]) {
+			const origin = value.trim();
+			if (!origin) continue;
+			if (!isEmbeddedEditorOrigin(origin))
+				throw new Error(
+					"MCP_EMBED_ALLOWED_ORIGINS must contain exact HTTP(S) or Codex MCP App origins.",
+				);
+			origins.add(origin);
+		}
+		return [
+			{
+				source: "/embed/:path*",
+				headers: [
+					{
+						key: "Content-Security-Policy",
+						value: `frame-ancestors 'self' ${[...origins].join(" ")}`,
+					},
+					{ key: "Referrer-Policy", value: "no-referrer" },
+				],
+			},
+		];
+	},
 	// Route handlers and SSR use separate Turbopack module runtimes. Keep their
 	// editor schemas/state on native modules so constructor checks stay valid.
 	serverExternalPackages: [
@@ -52,6 +85,7 @@ const nextConfig = {
 	outputFileTracingIncludes: {
 		"/*": [`${yjsLib0Directory}/**/*.{js,mjs,cjs,json}`],
 		"/changelog": ["./content/changelog/*.md"],
+		"/mcp": ["./features/agents/mcp-app/dist/companion.html"],
 	},
 	turbopack: {
 		resolveAlias: {
