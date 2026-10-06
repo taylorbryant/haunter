@@ -1,3 +1,5 @@
+import { tableCellRows } from "./table-content";
+
 type InlineNode = {
 	text?: string;
 	content?: unknown;
@@ -5,7 +7,10 @@ type InlineNode = {
 
 /** Concatenate plain text from nested BlockNote inline content. */
 export function extractInlineText(content: unknown): string {
-	if (!Array.isArray(content)) return "";
+	if (!Array.isArray(content))
+		return tableCellRows(content)
+			.map((row) => row.map(extractInlineText).join("\t"))
+			.join("\n");
 
 	let text = "";
 	for (const node of content as InlineNode[]) {

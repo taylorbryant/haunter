@@ -1,5 +1,6 @@
 import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
 import type { BlockJson } from "@/features/content/schemas";
+import { tableCellRows } from "@/features/content/table-content";
 
 /**
  * Lossy blocks ⇄ markdown conversion for agent access. Hand-rolled rather
@@ -9,8 +10,9 @@ import type { BlockJson } from "@/features/content/schemas";
  * module graph.
  *
  * Coverage: paragraph, heading, bulletListItem, numberedListItem, task,
- * codeBlock, callout, divider, pageLink, image, quote. Canvases and tables
- * export as placeholders and cannot be authored from markdown.
+ * codeBlock, callout, divider, pageLink, image, quote, and pipe tables.
+ * Table formatting and merged cells require structured blocks for fidelity.
+ * Canvases export as placeholders and cannot be authored from markdown.
  */
 
 type InlineNode = {
@@ -146,8 +148,27 @@ function blockToMarkdown(
 		}
 		case "canvas":
 			return `${indent}*(canvas)*`;
-		case "table":
-			return `${indent}*(table omitted)*`;
+		case "table": {
+			const rows = tableCellRows(block.content);
+			const columns = Math.max(0, ...rows.map((row) => row.length));
+			if (!columns) return `${indent}*(empty table)*`;
+			const line = (cells: unknown[]) =>
+				`${indent}| ${Array.from({ length: columns }, (_, index) => inlineToMarkdown(cells[index]).replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>")).join(" | ")} |`;
+			const headerRows =
+				block.content &&
+				typeof block.content === "object" &&
+				"headerRows" in block.content
+					? block.content.headerRows
+					: 0;
+			// A blank Markdown header avoids relabeling the first data row.
+			const header =
+				typeof headerRows === "number" && headerRows > 0 ? rows[0]! : [];
+			return [
+				line(header),
+				`${indent}| ${Array(columns).fill("---").join(" | ")} |`,
+				...(header === rows[0] ? rows.slice(1) : rows).map(line),
+			].join("\n");
+		}
 		default:
 			return `${indent}${inline}`;
 	}
@@ -216,7 +237,7 @@ function parseInline(
 
 	const flush = () => {
 		if (plain.length > 0) {
-			nodes.push(textNode(plain.replace(/\\([\\`*_[\]])/g, "$1"), styles));
+			nodes.push(textNode(plain.replace(/\\([\\`*_[\]|])/g, "$1"), styles));
 			plain = "";
 		}
 	};
@@ -305,6 +326,41 @@ const BULLET_LINE = /^[-*] (.*)$/;
 const NUMBERED_LINE = /^\d+[.)] (.*)$/;
 const HEADING_LINE = /^(#{1,6}) (.*)$/;
 const FENCE_LINE = /^```(\S*)\s*$/;
+const IMAGE_LINE = /^!\[([^\]]*)\]\(([^)\s]*)\)$/;
+
+function pipeCells(line: string): string[] | null {
+	const source = line.trim();
+	if (!source.includes("|")) return null;
+	// Existing block syntax takes precedence over both table headers and rows.
+	// An explicit leading pipe still allows this syntax as literal cell content.
+	if (
+		HEADING_LINE.test(source) ||
+		FENCE_LINE.test(source) ||
+		BULLET_LINE.test(source) || // Includes tasks.
+		NUMBERED_LINE.test(source) ||
+		source.startsWith("> ") ||
+		IMAGE_LINE.test(source)
+	)
+		return null;
+	const cells: string[] = [];
+	let cell = "";
+	let separators = 0;
+	for (let index = 0; index < source.length; index++) {
+		if (source[index] === "\\" && index + 1 < source.length) {
+			cell += source.slice(index, index + 2);
+			index++;
+		} else if (source[index] === "|") {
+			cells.push(cell.trim());
+			cell = "";
+			separators++;
+		} else cell += source[index];
+	}
+	if (!separators) return null;
+	cells.push(cell.trim());
+	if (source.startsWith("|")) cells.shift();
+	if (source.endsWith("|") && cells.at(-1) === "") cells.pop();
+	return cells.length ? cells : null;
+}
 
 export class MarkdownBlockLimitError extends Error {
 	constructor(readonly maxBlocks: number) {
@@ -389,6 +445,53 @@ export function markdownToBlocks(
 			continue;
 		}
 
+		const header = pipeCells(trimmed);
+		const delimiter = pipeCells(lines[i + 1] ?? "");
+		if (
+			header &&
+			delimiter &&
+			header.length === delimiter.length &&
+			delimiter.every((cell) => /^:?-{3,}:?$/.test(cell))
+		) {
+			const rows = [header];
+			i += 2;
+			while (i < lines.length) {
+				const cells = pipeCells(lines[i]);
+				// Leave mismatched rows as ordinary content rather than discarding cells.
+				if (!cells || cells.length !== header.length) break;
+				rows.push(cells);
+				i++;
+			}
+			listStack = [];
+			listIndents = [];
+			roots.push(
+				parsedBlock(
+					"table",
+					{},
+					{
+						type: "tableContent",
+						headerRows: 1,
+						rows: rows.map((cells) => ({
+							cells: cells.map((cell, column) => ({
+								type: "tableCell",
+								props: {
+									textAlignment: delimiter[column]!.endsWith(":")
+										? delimiter[column]!.startsWith(":")
+											? "center"
+											: "right"
+										: "left",
+								},
+								content: parseInline(
+									cell.replace(/\\\|/g, "|").replace(/<br\s*\/?\s*>/gi, "\n"),
+								),
+							})),
+						})),
+					},
+				),
+			);
+			continue;
+		}
+
 		if (/^(-{3,}|\*{3,})$/.test(trimmed)) {
 			listStack = [];
 			listIndents = [];
@@ -468,7 +571,7 @@ export function markdownToBlocks(
 			continue;
 		}
 
-		const image = /^!\[([^\]]*)\]\(([^)\s]*)\)$/.exec(trimmed);
+		const image = IMAGE_LINE.exec(trimmed);
 		if (image) {
 			listStack = [];
 			listIndents = [];

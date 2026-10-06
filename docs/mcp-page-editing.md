@@ -25,7 +25,8 @@ Blocks have stable `id` values, a `type`, `props`, optional `content`, and neste
 `children`. Keep IDs when editing existing blocks. Treat `revision` as an opaque
 token. Renaming or moving the page does not change its body revision.
 
-Markdown omits tables and canvases and cannot preserve all task properties.
+Markdown includes tables as pipe tables and canvases as placeholders. It cannot
+preserve cell formatting, column widths, merged cells, or all task properties.
 Use structured blocks to inspect existing content before editing it.
 
 ## Edit selected blocks
@@ -67,7 +68,7 @@ one paragraph and inserts another immediately after it:
 
 Editable and insertable types are `paragraph`, `heading`, `bulletListItem`,
 `numberedListItem`, `task`, `codeBlock`, `callout`, `quote`, `divider`, and
-`pageLink`. Inline content supports text with styles, links containing text, and
+`pageLink`, plus `table` through the operations below. Inline content supports text with styles, links containing text, and
 page mentions. `divider` and `pageLink` accept no inline content. Unsupported
 types, invalid properties, and missing IDs fail the entire batch.
 Moves also support existing rich blocks such as canvases and tables, without
@@ -104,7 +105,99 @@ without a page-replacement recovery notice. It returns no new block IDs.
 Moving the last child out of a nested parent is rejected: removing its child
 container could discard a concurrent sibling insertion. Leave another child in
 that parent before moving the block. Root-level reorders have no such restriction.
-Rich blocks can be moved, but their content cannot be edited with this tool.
+Other unsupported rich blocks can be moved without changing their content.
+
+## Create and edit tables
+
+Tables use Haunter's native editor format. `create_page`, `append_to_page`, and
+Markdown body replacement accept pipe tables with a header and separator row:
+
+```markdown
+| Project | Status |
+| --- | --- |
+| Haunter | In progress |
+```
+
+For explicit headers, widths, and cell styles, insert a structured table with
+`edit_page_blocks`. This is an `operations` entry; supply `workspaceId`, `pageId`,
+and `expectedRevision` in the surrounding request as above:
+
+```json
+{
+  "op": "insert",
+  "afterBlockId": null,
+  "blocks": [{
+    "type": "table",
+    "content": {
+      "type": "tableContent",
+      "headerRows": 1,
+      "columnWidths": [240, 180],
+      "rows": [
+        { "cells": [
+          [{ "type": "text", "text": "Project", "styles": {} }],
+          [{ "type": "text", "text": "Status", "styles": {} }]
+        ] },
+        { "cells": [
+          [{ "type": "text", "text": "Haunter", "styles": {} }],
+          [{ "type": "text", "text": "In progress", "styles": {} }]
+        ] }
+      ]
+    }
+  }]
+}
+```
+
+Use the returned block ID and revision for further edits. All row, column, and
+insertion indices are **zero-based** and refer to the table after preceding
+operations in the same batch. Tables must be rectangular, with 1–200 rows and
+1–50 columns; headers count toward these limits.
+
+| Operation | Fields and behavior |
+| --- | --- |
+| `update_table_cell` | `blockId`, `row`, `column`, `content` (an inline array; `[]` clears it). Changes that cell's text, links, mentions, and inline styles. Preserves cell properties, headers, widths, and other cells. |
+| `insert_table_row` | `blockId`, `index`, `cells`. Inserts before `index`; use the current row count to append. Provide one cell per existing column. |
+| `insert_table_column` | `blockId`, `index`, `cells`, optional `width`. Inserts before `index`; use the current column count to append. Provide one cell per existing row. |
+| `delete_table_row` | `blockId`, `index`. Removes one row. Requires Full access. |
+| `delete_table_column` | `blockId`, `index`. Removes one column. Requires Full access. |
+
+For example, update the first data row's status:
+
+```json
+{
+  "op": "update_table_cell",
+  "blockId": "TABLE_BLOCK_ID",
+  "row": 1,
+  "column": 1,
+  "content": [{ "type": "text", "text": "Shipped", "styles": { "bold": true } }]
+}
+```
+
+New cells accept an inline array or
+`{ "type": "tableCell", "content": [...], "props": { ... } }`.
+Supported cell properties are `backgroundColor`, `textColor`, `textAlignment`
+(`left`, `center`, `right`, or `justify`), and `colspan`/`rowspan` set to `1`.
+Omit `columnWidths` for automatic sizing, or supply one positive integer pixel
+width (up to 10,000) or `null` per column. `headerRows` and `headerCols` count
+leading headers. An insertion inside a header region inherits its header type;
+one after the region creates data cells, retaining the other axis's headers.
+
+Targeted edits require unmerged cells. Editing a cell containing multiple native
+paragraphs is also unsupported; normalize it in the editor first. Existing merged
+tables can still be read, moved, deleted, or preserved unchanged in a structured
+body replacement. Deleting the last row or column is rejected; delete the whole
+table block instead. Generic `update.content` does not replace table contents.
+
+Cell edits preserve existing collaborative text nodes. Row/column insertions and
+deletions retain the other cells. Pending typing inside a deleted row or column
+is removed with it; sync any wanted edits before deletion. Tables participate in
+the same atomic revision checks, history snapshots, search, backlinks, and live
+editor updates as other page blocks. Search and backlinks for older tables are
+refreshed when their page is next saved; deployment does not backfill old pages.
+
+Markdown supports inline styles, links, escaped pipes (`\|`), and `<br>` within
+cells. A native table without headers exports an empty Markdown header so every
+data row remains visible. Markdown round trips are lossy: use structured blocks
+for exact table editing.
 
 ## Replace the entire body
 
@@ -146,8 +239,8 @@ history. History retains the latest 50 snapshots, including ordinary checkpoints
 | Permission | Allowed operations |
 | --- | --- |
 | View only | Read any supported format. |
-| View and edit | Update and insert blocks. |
-| Full access | Also delete blocks and replace bodies. |
+| View and edit | Update, insert, and move blocks; edit table cells and insert rows/columns. |
+| Full access | Also delete blocks, table rows/columns, and replace bodies. |
 
 Workspace membership and page permissions are checked on every call. For local
 Agent Auth, each tool requires its own workspace-scoped grant. Delete operations

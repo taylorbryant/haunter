@@ -17,6 +17,7 @@ import { appError } from "@/features/shared/errors";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
 import {
 	EditPageBlocksInputSchema,
+	EditableTableContentSchema,
 	PageDocumentOutputSchema,
 	PageEditOutputSchema,
 	ReplacePageContentInputSchema,
@@ -47,9 +48,20 @@ async function parseAgentMarkdown(markdown: string): Promise<BlockJson[]> {
 		"@/features/pages/lib/markdown"
 	);
 	try {
-		return markdownToBlocks(markdown, {
+		const blocks = markdownToBlocks(markdown, {
 			maxBlocks: MAX_INITIAL_PAGE_CONTENT_BLOCKS,
 		});
+		for (const block of blocks) {
+			if (
+				block.type === "table" &&
+				!EditableTableContentSchema.safeParse(block.content).success
+			)
+				throw appError("InvalidPageContent", {
+					message:
+						"Tables must be rectangular with at most 200 rows and 50 columns.",
+				});
+		}
+		return blocks;
 	} catch (error) {
 		if (error instanceof MarkdownBlockLimitError) {
 			throw appError("InvalidPageContent", { message: error.message });
@@ -144,12 +156,16 @@ export const editPageBlocksCapability = defineAgentCapability(
 		output: PageEditOutputSchema,
 		async handle({ ctx, input, principal }) {
 			if (
-				input.operations.some((operation) => operation.op === "delete") &&
+				input.operations.some((operation) =>
+					["delete", "delete_table_row", "delete_table_column"].includes(
+						operation.op,
+					),
+				) &&
 				!principal.pageBlockDeletionAllowed
 			)
 				throw appError("Forbidden", {
 					message:
-						"Deleting blocks requires Full access (or a scoped replace_page_content grant for Agent Auth).",
+						"Deleting blocks, table rows, or table columns requires Full access (or a scoped replace_page_content grant for Agent Auth).",
 				});
 			const { editPageBlocksUseCase } = await import(
 				"@/features/pages/use-cases"

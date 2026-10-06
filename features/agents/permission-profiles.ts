@@ -93,6 +93,7 @@ export const AGENT_PERMISSION_PROFILES = {
 		details: [
 			"Everything in View only",
 			"Create and edit pages",
+			"Create tables, edit cells, and add rows and columns",
 			"Create and rename standalone canvases; manage your favorites",
 			"Add canvas blocks, insert library items, and edit shapes",
 			"Create, update, complete, and reopen tasks",
@@ -109,6 +110,7 @@ export const AGENT_PERMISSION_PROFILES = {
 			"Restore saved page versions",
 			"Permanently delete standalone canvases",
 			"Delete page blocks and replace page bodies",
+			"Delete table rows and columns",
 			"Delete canvas shapes",
 			"Delete tasks",
 		],
