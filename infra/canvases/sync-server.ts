@@ -7,7 +7,10 @@ import {
 import type { TLRecord, TLStoreSnapshot } from "@tldraw/tlschema";
 import { createTenantScope } from "@beignet/core/ports";
 import type { AppContext } from "@/app-context";
-import type { CanvasPreviewRenderer } from "@/features/canvases/ports";
+import type {
+	CanvasPreviewRenderer,
+	CanvasStructureEditor,
+} from "@/features/canvases/ports";
 import type { DocumentGrant } from "@/features/documents/ports";
 import {
 	canvasSchema,
@@ -27,6 +30,7 @@ import { authorizeCanvas } from "@/features/canvases/lib/authorize-canvas";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { appError } from "@/features/shared/errors";
 import { prepareCanvasEdit, describeCanvas } from "./shape-edits";
+import { needsCanvasStructureEditor } from "./structure-selection";
 import { prepareCanvasLibraryInsertion } from "./library-insertion";
 
 type Socket = Pick<WebSocketMinimal, "send" | "close" | "readyState">;
@@ -68,6 +72,7 @@ export function createCanvasSyncServer(options: {
 	workerOwnerId?: string;
 	canWrite?: () => boolean;
 	previewRenderer?: CanvasPreviewRenderer;
+	structureEditor?: CanvasStructureEditor;
 	onStorageHealth?: (name: string, healthy: boolean) => void;
 }) {
 	const rooms = new Map<string, Promise<Entry>>();
@@ -333,10 +338,32 @@ export function createCanvasSyncServer(options: {
 						revision: currentRevision,
 					};
 				}
+				const nativeEdit =
+					command.action === "edit" &&
+					needsCanvasStructureEditor(before, command);
+				if (nativeEdit && !options.structureEditor)
+					throw appError("CanvasWorkerUnavailable");
 				const edit =
 					command.action === "insert-library"
 						? prepareCanvasLibraryInsertion(before, command)
-						: prepareCanvasEdit(before, command);
+						: nativeEdit && command.action === "edit"
+							? await options.structureEditor!.prepare({
+									snapshot: structuredClone(before),
+									command,
+								})
+							: prepareCanvasEdit(before, command);
+				if (nativeEdit) {
+					if (stopping || options.canWrite?.() === false)
+						throw appError("CanvasWorkerUnavailable");
+					if (refreshContext) ctx = await refreshContext();
+					const currentRole = await ctx.ports.members.findRole(
+						canvas.workspaceId,
+						user.id,
+					);
+					if (!currentRole || !canEditContent(currentRole))
+						throw appError("Forbidden");
+					await authorizeCanvas(ctx, canvas.id, true);
+				}
 				const staged = new InMemorySyncStorage<TLRecord>({
 					snapshot: entry.storage.getSnapshot(),
 				});

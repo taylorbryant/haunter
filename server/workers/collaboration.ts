@@ -1,3 +1,4 @@
+import { createCanvasStructureEditor } from "@/infra/canvases/structure-editor";
 import { createCanvasSyncServer } from "@/infra/canvases/sync-server";
 import { createCanvasPreviewRenderer } from "@/infra/canvases/preview-renderer";
 import { checkDocumentAccess } from "@/infra/documents/access";
@@ -85,9 +86,13 @@ const server = createDocumentServer({
 const canvasPreviewRenderer = createCanvasPreviewRenderer({
 	licenseKey: process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY,
 });
+const canvasStructureEditor = createCanvasStructureEditor({
+	licenseKey: process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY,
+});
 const canvasServer = createCanvasSyncServer({
 	...sharedOptions,
 	previewRenderer: canvasPreviewRenderer,
+	structureEditor: canvasStructureEditor,
 });
 let stopping = false;
 const transport = listenDocumentServer(server, {
@@ -133,6 +138,7 @@ async function stop() {
 		await stopDocumentServer(server);
 		await canvasServer.stop();
 		await canvasPreviewRenderer.stop();
+		await canvasStructureEditor.stop();
 		await transport.stop(true);
 		clearInterval(heartbeat);
 		await lease.release();

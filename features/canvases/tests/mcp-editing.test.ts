@@ -1,3 +1,4 @@
+import { createCanvasStructureEditor } from "@/infra/canvases/structure-editor";
 import { createHaunterAgentAuthAdapter } from "@/lib/agent-auth-adapter";
 import { createBetterAuthAgentCapabilityTestContext } from "@beignet/agent-auth-better-auth/testing";
 import { expect, test } from "bun:test";
@@ -25,7 +26,7 @@ import { SearchCanvasLibraryOutputSchema } from "../library-schemas";
 import { CANVAS_LIBRARY_ITEMS } from "../lib/library";
 import { createCanvasBlockUseCase } from "../use-cases/create-canvas-block";
 import { CanvasPreviewOutputSchema } from "../editing";
-import type { CanvasPreviewRenderer } from "../ports";
+import type { CanvasPreviewRenderer, CanvasStructureEditor } from "../ports";
 import { createCanvasPreviewRenderer } from "@/infra/canvases/preview-renderer";
 import { createRemoteMcpRequestHandler } from "@/server/remote-mcp";
 import type { TLRecord, TLShape } from "@tldraw/tlschema";
@@ -41,6 +42,7 @@ async function fixture(
 	profile: McpConnectionRow["permissionProfile"] = "full",
 	role = "owner",
 	previewRenderer?: CanvasPreviewRenderer,
+	structureEditor?: CanvasStructureEditor,
 ) {
 	const f = await documentFixture(role);
 	const connection: McpConnectionRow = {
@@ -65,6 +67,7 @@ async function fixture(
 	};
 	const engine = createCanvasSyncServer({
 		previewRenderer,
+		structureEditor,
 		verify() {
 			throw new Error("Not a browser session");
 		},
@@ -1099,6 +1102,184 @@ test("Agent Auth library tools require explicit workspace constraints and execut
 		expect((await f.read(canvasId)).shapes).toHaveLength(
 			libraryItem.elements.length + 1,
 		);
+	} finally {
+		await f.stop();
+	}
+});
+
+test("MCP structure edits commit one history entry, preserve bindings, and reject stale or partial writes", async () => {
+	const native = createCanvasStructureEditor();
+	const f = await fixture("edit", "owner", undefined, native);
+	try {
+		const { canvasId } = await f.create();
+		const made = await f.edit(canvasId, diagram);
+		const before = await f.read(canvasId);
+		const result = await f.edit(
+			canvasId,
+			[
+				{
+					op: "group",
+					ref: "component",
+					shapeIds: [made.createdShapes.api, made.createdShapes.database],
+				},
+				{
+					op: "create",
+					ref: "frame",
+					type: "frame",
+					x: -100,
+					y: -100,
+					width: 1000,
+					height: 500,
+					text: "Architecture",
+				},
+				{ op: "reparent", shapeIds: ["component"], parentId: "frame" },
+				{ op: "update", shapeId: "frame", x: 100 },
+			],
+			made.revision,
+		);
+		const after = await f.read(canvasId);
+		expect(after.history).toHaveLength(before.history.length + 1);
+		expect(after.bindings.map((b) => b.id).sort()).toEqual(
+			before.bindings.map((b) => b.id).sort(),
+		);
+		expect(
+			after.shapes.find((s) => s.id === made.createdShapes.request)?.parentId,
+		).toBe(result.createdShapes.component);
+		expect((await f.read(canvasId, result.historyVersionId)).shapes).toEqual(
+			before.shapes,
+		);
+		await expect(
+			f.edit(
+				canvasId,
+				[{ op: "ungroup", shapeId: result.createdShapes.component }],
+				made.revision,
+			),
+		).rejects.toMatchObject({ code: "CANVAS_REVISION_CONFLICT" });
+		await expect(
+			f.edit(canvasId, [
+				{
+					op: "update",
+					shapeId: result.createdShapes.frame,
+					text: "Must roll back",
+				},
+				{
+					op: "reparent",
+					shapeIds: [result.createdShapes.frame],
+					parentId: result.createdShapes.component,
+				},
+			]),
+		).rejects.toMatchObject({ code: "INVALID_CANVAS_EDIT" });
+		expect(await f.read(canvasId)).toEqual(after);
+		const transaction = f.ctx.ports.uow.transaction;
+		f.ctx.ports.uow.transaction = (work) =>
+			transaction((tx) =>
+				work({
+					...tx,
+					canvases: {
+						...tx.canvases,
+						commitSyncRoom: async () => {
+							throw new Error("storage unavailable");
+						},
+					},
+				}),
+			);
+		try {
+			await expect(
+				f.edit(canvasId, [
+					{ op: "ungroup", shapeId: result.createdShapes.component },
+				]),
+			).rejects.toMatchObject({ code: "CANVAS_WORKER_UNAVAILABLE" });
+		} finally {
+			f.ctx.ports.uow.transaction = transaction;
+		}
+		expect(await f.read(canvasId)).toEqual(after);
+		await f.edit(canvasId, [
+			{ op: "ungroup", shapeId: result.createdShapes.component },
+		]);
+		expect(
+			(await f.read(canvasId)).shapes.some(
+				(s) => s.id === result.createdShapes.component,
+			),
+		).toBe(false);
+		f.connection.permissionProfile = "view";
+		await expect(
+			f.edit(canvasId, [
+				{ op: "update", shapeId: result.createdShapes.frame, x: 300 },
+			]),
+		).rejects.toThrow("does not allow");
+	} finally {
+		await f.stop();
+		await native.stop();
+	}
+}, 30_000);
+
+test("membership revoked during native preparation prevents history and document writes", async () => {
+	const started = Promise.withResolvers<void>();
+	const finish = Promise.withResolvers<void>();
+	const f = await fixture("edit", "owner", undefined, {
+		prepare: async ({ snapshot }) => {
+			started.resolve();
+			await finish.promise;
+			return { next: snapshot, changed: [], deleted: [], createdShapes: {} };
+		},
+	});
+	try {
+		const { canvasId } = await f.create();
+		const made = await f.edit(canvasId, diagram);
+		const before = await f.database.db.select().from(schema.canvases);
+		const history = await f.database.db.select().from(schema.canvasHistory);
+		const pending = f
+			.edit(canvasId, [
+				{
+					op: "group",
+					ref: "g",
+					shapeIds: [made.createdShapes.api, made.createdShapes.database],
+				},
+			])
+			.then(
+				() => null,
+				(error: unknown) => error,
+			);
+		await started.promise;
+		await f.database.db
+			.delete(schema.member)
+			.where(eq(schema.member.userId, f.userId));
+		finish.resolve();
+		expect(await pending).toMatchObject({ code: "FORBIDDEN" });
+		expect(await f.database.db.select().from(schema.canvases)).toEqual(before);
+		expect(await f.database.db.select().from(schema.canvasHistory)).toEqual(
+			history,
+		);
+	} finally {
+		finish.resolve();
+		await f.stop();
+	}
+});
+
+test("workers without native canvas organization reject it without affecting legacy edits", async () => {
+	const f = await fixture("edit");
+	try {
+		const { canvasId } = await f.create();
+		const made = await f.edit(canvasId, diagram);
+		const before = await f.read(canvasId);
+		await expect(
+			f.edit(canvasId, [
+				{
+					op: "group",
+					ref: "g",
+					shapeIds: [made.createdShapes.api, made.createdShapes.database],
+				},
+			]),
+		).rejects.toMatchObject({ code: "CANVAS_WORKER_UNAVAILABLE" });
+		expect(await f.read(canvasId)).toEqual(before);
+		await expect(
+			f.edit(canvasId, [
+				{ op: "group", ref: "g", shapeIds: [made.createdShapes.api] },
+			]),
+		).rejects.toThrow();
+		await f.edit(canvasId, [
+			{ op: "update", shapeId: made.createdShapes.api, text: "Still editable" },
+		]);
 	} finally {
 		await f.stop();
 	}

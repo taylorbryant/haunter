@@ -1,5 +1,5 @@
 import type { TenantScope } from "@beignet/core/ports";
-import type { TLStoreSnapshot } from "@tldraw/tlschema";
+import type { TLRecord, TLStoreSnapshot } from "@tldraw/tlschema";
 import type {
 	CanvasCommand,
 	CanvasCommandOutput,
@@ -106,4 +106,18 @@ export interface CanvasNavigationRepository {
 		userId: string,
 		canvasId: string,
 	): Promise<string>;
+}
+
+export type PreparedCanvasEdit = {
+	next: TLStoreSnapshot;
+	changed: TLRecord[];
+	deleted: TLRecord["id"][];
+	createdShapes: Record<string, string>;
+};
+
+export interface CanvasStructureEditor {
+	prepare(input: {
+		snapshot: TLStoreSnapshot;
+		command: Extract<CanvasCommand, { action: "edit" }>;
+	}): Promise<PreparedCanvasEdit>;
 }

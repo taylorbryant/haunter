@@ -8,6 +8,11 @@ const ShapeId = z
 	.max(200);
 const Ref = z.string().regex(/^[a-zA-Z][\w-]{0,63}$/);
 const Target = z.union([ShapeId, Ref]);
+const PageId = z
+	.string()
+	.regex(/^page:.+/)
+	.max(200);
+const Targets = z.array(Target).min(2).max(100);
 const Color = z.enum([
 	"black",
 	"grey",
@@ -27,11 +32,50 @@ const Text = z.string().max(5_000);
 export const CanvasRevisionSchema = z.string().min(1).max(200);
 export const CanvasTargetSchema = z.object({ canvasId: z.uuid() }).strict();
 export const CanvasOperationSchema = z.discriminatedUnion("op", [
+	z.object({ op: z.literal("group"), ref: Ref, shapeIds: Targets }).strict(),
+	z.object({ op: z.literal("ungroup"), shapeId: Target }).strict(),
+	z
+		.object({
+			op: z.literal("reparent"),
+			shapeIds: z.array(Target).min(1).max(100),
+			parentId: z.union([Target, PageId]),
+		})
+		.strict(),
+	z
+		.object({
+			op: z.literal("align"),
+			shapeIds: Targets,
+			alignment: z.enum([
+				"left",
+				"center-horizontal",
+				"right",
+				"top",
+				"center-vertical",
+				"bottom",
+				"center",
+			]),
+		})
+		.strict(),
+	z
+		.object({
+			op: z.literal("distribute"),
+			shapeIds: z.array(Target).min(3).max(100),
+			direction: z.enum(["horizontal", "vertical"]),
+		})
+		.strict(),
+
 	z
 		.object({
 			op: z.literal("create"),
 			ref: Ref,
-			type: z.enum(["rectangle", "ellipse", "diamond", "text", "note"]),
+			type: z.enum([
+				"rectangle",
+				"ellipse",
+				"diamond",
+				"text",
+				"note",
+				"frame",
+			]),
 			x: Coordinate,
 			y: Coordinate,
 			width: Dimension.optional(),
@@ -40,7 +84,7 @@ export const CanvasOperationSchema = z.discriminatedUnion("op", [
 			color: Color.optional(),
 			// New shapes may join an existing group/frame. Coordinates are local
 			// to that parent; pageId, when supplied, must match its ancestor page.
-			parentId: ShapeId.optional(),
+			parentId: Target.optional(),
 			pageId: z
 				.string()
 				.regex(/^page:.+/)

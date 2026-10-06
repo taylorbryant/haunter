@@ -354,3 +354,113 @@ test("the navigation guard sees an editor operation before the next animation fr
 		await uninstallTestDom();
 	}
 });
+
+test("native structure edits publish stable bindings without changing the open editor's selection or redo", async () => {
+	const { createCanvasStructureEditor } = await import(
+		"@/infra/canvases/structure-editor"
+	);
+	const native = createCanvasStructureEditor();
+	installTestDom();
+	const {
+		Editor,
+		createTLStore,
+		defaultShapeUtils,
+		defaultBindingUtils,
+		tipTapDefaultExtensions,
+		defaultAddFontsFromNode,
+		SelectTool,
+		getArrowInfo,
+	} = await import("tldraw");
+	const container = document.createElement("div");
+	document.body.append(container);
+	const store = createTLStore({
+		shapeUtils: defaultShapeUtils,
+		bindingUtils: defaultBindingUtils,
+		snapshot: normalizeCanvasSnapshot({}),
+	});
+	const editor = new Editor({
+		store,
+		shapeUtils: defaultShapeUtils,
+		bindingUtils: defaultBindingUtils,
+		tools: [SelectTool],
+		initialState: "select",
+		getContainer: () => container,
+		options: {
+			text: {
+				tipTapConfig: { extensions: tipTapDefaultExtensions },
+				addFontsFromNode: defaultAddFontsFromNode,
+			},
+		},
+	});
+	try {
+		const { CANVAS_LIBRARY_ITEMS, materializeCanvasLibraryItem } = await import(
+			"../lib/library"
+		);
+		const item = CANVAS_LIBRARY_ITEMS.find(
+			(item) => item.id === "request-flow",
+		)!;
+		const template = materializeCanvasLibraryItem(item, { x: 200, y: 300 });
+		editor.createShapes(template.shapes);
+		editor.createBindings(template.bindings);
+		editor.groupShapes(template.shapeIds, { groupId: template.groupId });
+		const outside = "shape:outside" as TLShape["id"];
+		editor.createShape({ id: outside, type: "geo", x: 1000, y: 1000 });
+		editor.select(outside);
+		editor.markHistoryStoppingPoint("local move");
+		editor.updateShape({ id: outside, type: "geo", x: 1050 });
+		editor.undo();
+		expect(editor.getCanRedo()).toBe(true);
+		const before = normalizeCanvasSnapshot({ ...store.getStoreSnapshot() });
+		const selectedBefore = editor.getSelectedShapeIds();
+		const viewport = editor.getCamera();
+		const result = await native.prepare({
+			snapshot: before,
+			command: {
+				action: "edit",
+				canvasId: crypto.randomUUID(),
+				expectedRevision: "test",
+				operations: [
+					{
+						op: "create",
+						ref: "frame",
+						type: "frame",
+						x: 0,
+						y: 0,
+						width: 2000,
+						height: 1600,
+					},
+					{ op: "reparent", shapeIds: [template.groupId], parentId: "frame" },
+					{ op: "update", shapeId: "frame", x: 80, y: 90 },
+					{ op: "update", shapeId: template.groupId, x: 300 },
+				],
+			},
+		});
+		store.mergeRemoteChanges(() => {
+			store.remove(result.deleted);
+			store.put(result.changed);
+		});
+		expect(normalizeCanvasSnapshot({ ...store.getStoreSnapshot() })).toEqual(
+			result.next,
+		);
+		expect(editor.getSelectedShapeIds()).toEqual(selectedBefore);
+		expect(editor.getCamera()).toEqual(viewport);
+		expect(editor.getCanRedo()).toBe(true);
+		const arrows = editor
+			.getCurrentPageShapes()
+			.filter((s) => s.type === "arrow");
+		expect(arrows.length).toBeGreaterThan(0);
+		for (const arrow of arrows)
+			expect(getArrowInfo(editor, arrow.id)?.isValid).toBe(true);
+		const firstArrow = arrows[0];
+		const target = editor.getBindingsFromShape(firstArrow, "arrow")[0].toId;
+		const arrowBefore = getArrowInfo(editor, firstArrow.id);
+		const node = editor.getShape(target)!;
+		editor.updateShape({ id: node.id, type: node.type, x: node.x + 50 });
+		expect(getArrowInfo(editor, firstArrow.id)).not.toEqual(arrowBefore);
+	} finally {
+		editor.dispose();
+		container.remove();
+		await uninstallTestDom();
+		await native.stop();
+	}
+}, 30_000);

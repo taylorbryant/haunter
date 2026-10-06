@@ -33,7 +33,7 @@ export function prepareCanvasEdit(
 	command: Extract<CanvasCommand, { action: "edit" | "delete" }>,
 ) {
 	const records: Record<string, TLRecord> = { ...snapshot.store };
-	const createdShapes: Record<string, string> = {};
+	const createdShapes: Record<string, string> = Object.create(null);
 	const changed = new Map<string, TLRecord>();
 	const deleted = new Set<string>();
 	const touchedGroups = new Set<string>();
@@ -150,7 +150,9 @@ export function prepareCanvasEdit(
 					(r) => r.typeName === "page",
 				);
 				const parentId =
-					op.parentId ??
+					(op.parentId
+						? (createdShapes[op.parentId] ?? op.parentId)
+						: undefined) ??
 					op.pageId ??
 					(pages.length === 1
 						? pages[0]!.id
@@ -167,7 +169,9 @@ export function prepareCanvasEdit(
 					scale: 1,
 					richText: richText(op.text ?? ""),
 				};
-				if (op.type === "text") {
+				if (op.type === "frame") {
+					invalid("Frame creation requires the native canvas editor.");
+				} else if (op.type === "text") {
 					if (op.height !== undefined)
 						invalid(
 							"Text height is determined by its content; set width instead.",
@@ -251,7 +255,7 @@ export function prepareCanvasEdit(
 						...(op.text !== undefined ? { richText: richText(op.text) } : {}),
 					},
 				});
-			} else {
+			} else if (op.op === "connect") {
 				const from = shape(op.fromId),
 					to = shape(op.toId);
 				if (from.id === to.id || from.parentId !== to.parentId)
@@ -301,7 +305,7 @@ export function prepareCanvasEdit(
 						},
 						meta: {},
 					});
-			}
+			} else invalid("This operation requires the native canvas editor.");
 		}
 	// Native tldraw dissolves groups with fewer than two children. Avoid
 	// implicitly deleting a group or reparenting an unaddressed sibling (and

@@ -204,3 +204,29 @@ test("library insertion publishes edit activity and highlights the group and nam
 		"shape:surface",
 	]);
 });
+
+test("canvas structure activity resolves refs and highlights layout targets without removed groups", async () => {
+	const f = await canvasActivityFixture();
+	await f.execute("edit_canvas", {
+		operations: [
+			{ op: "group", ref: "box", shapeIds: ["shape:old", "shape:other"] },
+			{ op: "align", shapeIds: ["box", "shape:third"], alignment: "top" },
+			{
+				op: "distribute",
+				shapeIds: ["box", "shape:third", "shape:fourth"],
+				direction: "horizontal",
+			},
+			{ op: "reparent", shapeIds: ["box"], parentId: "shape:frame" },
+			{ op: "ungroup", shapeId: "shape:removed" },
+		],
+	});
+	expect(f.events[1]).toMatchObject({
+		changedShapeIds: [
+			"shape:old",
+			"shape:other",
+			"shape:new",
+			"shape:third",
+			"shape:fourth",
+		],
+	});
+});
