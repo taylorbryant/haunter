@@ -17,6 +17,7 @@ export function listenDocumentServer(
 		hostname: string;
 		canAcceptConnections?: () => boolean;
 		isReady?: () => boolean;
+		rendererHealth?: () => { ready: boolean };
 		canvases?: CanvasSyncServer;
 		canvasCommands?: (request: Request) => Promise<Response>;
 	},
@@ -31,6 +32,16 @@ export function listenDocumentServer(
 		hostname: options.hostname,
 		async fetch(request, server) {
 			if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+				if (
+					new URL(request.url).pathname === "/health/renderer" &&
+					options.rendererHealth
+				) {
+					const health = options.rendererHealth();
+					return Response.json(health, {
+						status: health.ready ? 200 : 503,
+						headers: { "Cache-Control": "no-store" },
+					});
+				}
 				if (
 					new URL(request.url).pathname === "/internal/canvas-command" &&
 					options.canvasCommands

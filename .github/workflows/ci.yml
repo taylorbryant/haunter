@@ -40,6 +40,11 @@ jobs:
       - name: Install canvas preview browser
         run: bunx --bun playwright install --with-deps chromium --only-shell
 
+      - name: Build and verify the production canvas runtime
+        run: |
+          bun --no-env-file scripts/build-canvas-browser.ts
+          NODE_ENV=production bun --no-env-file scripts/verify-canvas-renderer.ts
+
       - name: Install Redis for isolated Lua regression tests
         run: |
           sudo apt-get update

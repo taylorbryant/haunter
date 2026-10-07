@@ -1,6 +1,5 @@
-import { createCanvasStructureEditor } from "@/infra/canvases/structure-editor";
 import { createCanvasSyncServer } from "@/infra/canvases/sync-server";
-import { createCanvasPreviewRenderer } from "@/infra/canvases/preview-renderer";
+import { createCanvasRenderingService } from "@/infra/canvases/rendering-service";
 import { checkDocumentAccess } from "@/infra/documents/access";
 import { createDocumentServer } from "@/infra/documents/hocuspocus";
 import {
@@ -83,16 +82,15 @@ const server = createDocumentServer({
 	...sharedOptions,
 	...origins,
 });
-const canvasPreviewRenderer = createCanvasPreviewRenderer({
+const rendering = createCanvasRenderingService({
 	licenseKey: process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY,
-});
-const canvasStructureEditor = createCanvasStructureEditor({
-	licenseKey: process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY,
+	onMetric: (metric) =>
+		console.info(JSON.stringify({ event: "canvas.browser.job", ...metric })),
 });
 const canvasServer = createCanvasSyncServer({
 	...sharedOptions,
-	previewRenderer: canvasPreviewRenderer,
-	structureEditor: canvasStructureEditor,
+	previewRenderer: rendering.preview,
+	structureEditor: rendering.structure,
 });
 let stopping = false;
 const transport = listenDocumentServer(server, {
@@ -126,10 +124,25 @@ const transport = listenDocumentServer(server, {
 	...origins,
 	canAcceptConnections: () => !stopping && lease.valid(),
 	isReady: () => heartbeatHealthy && failedDocuments.size === 0,
+	rendererHealth: rendering.health,
 });
 console.info(
 	`Haunter collaboration listening on ${transport.hostname}:${transport.port}`,
 );
+// Rendering has independent readiness. A browser failure never stops normal
+// collaboration; retry the synthetic probe while idle after a transient failure.
+const warmRenderer = () =>
+	rendering.warmup().catch(() => {
+		console.warn(
+			JSON.stringify({ event: "canvas.browser.warmup", outcome: "error" }),
+		);
+	});
+void warmRenderer();
+const rendererRecovery = setInterval(() => {
+	const health = rendering.health();
+	if (!stopping && !health.ready && !health.active && !health.warming)
+		void warmRenderer();
+}, 60_000);
 async function stop() {
 	if (stopping) return;
 	stopping = true;
@@ -137,8 +150,8 @@ async function stop() {
 		await canvasServer.flush();
 		await stopDocumentServer(server);
 		await canvasServer.stop();
-		await canvasPreviewRenderer.stop();
-		await canvasStructureEditor.stop();
+		clearInterval(rendererRecovery);
+		await rendering.stop();
 		await transport.stop(true);
 		clearInterval(heartbeat);
 		await lease.release();
