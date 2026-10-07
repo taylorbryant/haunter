@@ -80,17 +80,76 @@ same batch can use. The response maps these names to native IDs in `createdShape
 
 | Operation | Fields and behavior |
 | --- | --- |
-| `create` | Requires `ref`, `type`, `x`, and `y`. Types: `rectangle`, `ellipse`, `diamond`, `text`, `note`. Optional `text`, `color`, and tldraw `pageId`. Set `parentId` to an existing group or frame to add a child; otherwise specify `pageId` when the canvas has multiple pages. If both are supplied, the parent must belong to that page. Geometry accepts `width` and `height`, defaulting to 240 × 120. Text accepts `width`, defaulting to 240. Notes use their native fixed size and reject dimensions. |
-| `update` | Requires `shapeId` and at least one of `x`, `y`, `text`, `color`, `width`, or `height`. Positions are relative to the shape's immediate parent, as returned by `read_canvas`. Omitted fields, parent IDs and rotations stay unchanged. Only geometry and text accept width; only geometry accepts height. Text replaces the label's rich text with plain text. |
+| `create` | Requires `ref`, `type`, `x`, and `y`. Types: `rectangle`, `ellipse`, `diamond`, `text`, `note`, `frame`. Optional `text`, `color`, and tldraw `pageId`. Set `parentId` to a group/frame ID or earlier reference to add a child; otherwise specify `pageId` when the canvas has multiple pages. If both are supplied, the parent must belong to that page. Geometry accepts `width` and `height`, defaulting to 240 × 120. Text accepts `width`, defaulting to 240. Notes use their native fixed size and reject dimensions. |
+| `update` | Requires `shapeId` and at least one of `x`, `y`, `text`, `color`, `width`, or `height`. Positions are relative to the shape's immediate parent, as returned by `read_canvas`. Omitted fields, parent IDs and rotations stay unchanged. Geometry, text and frames accept width; geometry and frames accept height. Groups accept movement only. For frames, `text` changes the frame name; for leaves it replaces the label's rich text with plain text. |
 | `connect` | Requires `ref`, `fromId`, and `toId`; optional `text` and `color`. Creates a bound arrow between distinct nodes sharing the same immediate parent: a page, group, or frame. The arrow is created under that parent and follows the nodes when they move. Arrows cannot connect to other arrows. |
 
 Updates and connections support unlocked `geo`, `text`, `note`, and `arrow`
 leaf shapes on a tldraw page or inside groups and frames, including nested groups.
 A lock on any ancestor blocks edits, creation, connections and deletion inside it.
 Move a connected node to change an arrow's path; the API does not translate arrows.
-Use the canvas editor to create or transform group/frame containers, reparent
-shapes, or edit images, freehand drawings, rich text formatting, rotation and
-other unsupported shape types.
+Groups and frames can also be organized through the operations below. Use the
+canvas editor to edit images, freehand points, rich text formatting, rotation,
+and other unsupported properties.
+
+## Organize groups and frames
+
+`edit_canvas` also accepts these operations. IDs can be native IDs from
+`read_canvas` or references created earlier in the same batch.
+
+| Operation | Behavior |
+| --- | --- |
+| `create` with `type: "frame"` | Create a frame; `text` names it, `width`/`height` default to 800×600. Optional `parentId` accepts a group/frame ID or earlier reference. Creating a frame does not automatically capture shapes beneath it. |
+| `group` | Supply a new `ref` and 2–100 distinct sibling `shapeIds`. Creates one group while preserving the drawing's placement and bindings. |
+| `ungroup` | Supply a group `shapeId`. Removes the group and reparents its children to its parent, preserving their page positions and rotations. |
+| `update` on a container | Groups accept `x`/`y` movement. Frames also accept `width`, `height`, `text` (name), and `color`. Moving a container moves its contents; resizing a frame changes its boundary without scaling children. |
+| `reparent` | Supply 1–100 `shapeIds` and a `parentId` identifying a canvas page, group or frame. Moves shapes into that container while preserving their page positions and rotations. |
+| `align` | Supply 2–100 `shapeIds` and `alignment`: `left`, `center-horizontal`, `right`, `top`, `center-vertical`, `bottom`, or `center`. Aligns native page bounds, including measured text. |
+| `distribute` | Supply 3–100 `shapeIds` and `direction`: `horizontal` or `vertical`. Keeps the outer shapes in place and equalizes gaps between their bounds. Gaps may overlap if space is insufficient. |
+
+For example, organize an existing component inside a named frame:
+
+```json
+{
+  "workspaceId": "YOUR_WORKSPACE_ID",
+  "canvasId": "YOUR_CANVAS_ID",
+  "expectedRevision": "REVISION_FROM_READ_CANVAS",
+  "operations": [
+    { "op": "group", "ref": "component", "shapeIds": ["shape:box", "shape:label"] },
+    { "op": "create", "ref": "section", "type": "frame", "x": 0, "y": 0,
+      "width": 1200, "height": 800, "text": "Sign in" },
+    { "op": "reparent", "shapeIds": ["component"], "parentId": "section" },
+    { "op": "update", "shapeId": "section", "x": 200 }
+  ]
+}
+```
+
+Use actual shape IDs from `read_canvas`. Grouping, ungrouping, reparenting and
+layout preserve rotations. Create/update positions remain relative to the
+immediate parent; reparenting instead preserves page placement. Alignment and
+distribution work in page coordinates even under rotated parents.
+
+Select shapes on the same canvas page, and select a container or its children,
+never both. Grouping requires the same immediate parent. Reparenting cannot
+create cycles or cross canvas pages. A source group must retain at least two
+children; explicitly ungroup it first otherwise. Native arrows follow their
+connected nodes and tldraw manages their parent and stacking order. For layout,
+select nodes or whole components instead of individual arrows.
+
+Organization supports geometry, text, notes, arrows, lines, freehand drawings,
+highlights, groups and frames. Selected containers must contain only supported,
+unlocked shapes. Locked targets, ancestors, descendants, or indirectly changed
+arrows reject the entire batch. Unrelated unsupported shapes remain untouched.
+
+These operations use a detached native tldraw editor with bundled fonts and no
+external network access. The canvas must contain at most 1,000 shapes, and the
+worker prepares one organization batch at a time. Preparation has a 20-second
+deadline including browser startup. A missing/busy browser or timeout returns
+`CANVAS_WORKER_UNAVAILABLE`; reread before retrying. The canvas's mutation queue
+is held during preparation so concurrent writes cannot invalidate its revision.
+Access is checked again before saving. No partial changes or temporary editor
+user records are published. Ordinary leaf-only batches keep their browser-free
+path. There is no automatic diagram routing, container scaling or Mermaid import.
 
 ## Find and insert library items
 
@@ -191,9 +250,9 @@ Read the ancestor records when planning a layout; screen or whole-page positions
 must not be passed as child-local positions.
 
 Edits preserve group membership, ancestor transforms, metadata and omitted
-properties. Connections across different parents are rejected. The API does not
-change grouping automatically, so an agent can customize the content while you
-continue moving and selecting the template as a group.
+properties. Connections across different parents are rejected. Use `update` with the returned `rootShapeId` to move the whole component,
+`reparent` to place it inside a frame, or `align`/`distribute` to arrange several
+components. Membership changes only when explicitly requested.
 
 Colors are `black`, `grey`, `light-violet`, `violet`, `blue`, `light-blue`,
 `yellow`, `orange`, `green`, `light-green`, `light-red`, `red`, and `white`.
@@ -204,7 +263,8 @@ An edit accepts up to 100 operations. Text is limited to 5,000 characters per
 operation; dimensions to 1–10,000 canvas units; coordinates to ±1,000,000.
 The command must fit within 1 MB. Saved drawings retain the existing canvas
 limits of 30,000 records and 5 MB of record JSON, with an 8 MiB room limit.
-There is no automatic layout, text sizing during edits, or Mermaid import.
+Use explicit `align`/`distribute` operations for layout; ordinary leaf edits do
+not measure text or automatically fit containers.
 
 ## Preview a drawing
 
@@ -253,7 +313,7 @@ retry after a short delay. Access is checked again before returning the image.
 in the same deletion batch when deleting their target nodes. Deleting an arrow
 also removes its bindings. Nested leaf shapes can be deleted, but every affected
 group must retain at least two direct children. A batch that would dissolve a
-group is rejected in full; ungroup or remove that group in the canvas editor.
+group is rejected in full; use `ungroup` in `edit_canvas` first when appropriate.
 Frames may be left empty. Group/frame containers, unsupported shapes, and shapes
 with a lock on themselves or any ancestor cannot be deleted through this tool.
 The operation deletes drawings, not the page's canvas block.
@@ -263,7 +323,7 @@ The operation deletes drawings, not the page's canvas block.
 | Permission | Allowed canvas operations |
 | --- | --- |
 | View only | Search library items, read current drawings and retained history, and preview current drawings. |
-| View and edit | Also add canvas blocks, insert library items, create shapes, update shapes, and connect nodes. |
+| View and edit | Also add canvas blocks, insert library items, create/update shapes and frames, connect nodes, group/ungroup, reparent, align and distribute. |
 | Full access | Also delete shapes. |
 
 Local Agent Auth requires an explicit workspace-scoped grant for each tool.
@@ -293,9 +353,9 @@ conflict behavior and should be reviewed after reconnection.
 
 ## Deployment
 
-For library search and insertion, deploy the collaboration worker first, then
+For library insertion and canvas organization, deploy the collaboration worker first, then
 the web app/MCP. No database migration is required for this extension. Older
-workers do not accept library insertion commands. Item versions prevent a worker
+workers do not accept the new organization operations. Item versions prevent a worker
 from silently inserting a different template than the one returned by search.
 Existing drawings keep their stored records when the catalog changes.
 
@@ -326,9 +386,11 @@ On Linux, add `--with-deps` to install system dependencies. Supply
 `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` to the worker as well as the web app when using
 a tldraw license. The browser and tldraw bundle run only in the collaboration
 worker; the web app forwards authenticated requests. Browser startup has an
-8-second timeout and rendering a 15-second timeout within the command bridge's
-30-second request deadline. Monitor worker memory under preview load; each
-request starts a separate Chromium process with one render allowed at a time.
+8-second timeout within a 20-second overall deadline for bundling, startup and
+rendering/preparation, below the command bridge's 30-second request deadline.
+Monitor worker memory under preview and organization load: each request starts
+a separate Chromium process, with one preview and one organization batch
+allowed at a time. The existing browser installation also powers organization.
 
 Follow the [collaboration deployment guide](collaboration.md#worker-deployment)
 for worker configuration and the single-worker requirement.

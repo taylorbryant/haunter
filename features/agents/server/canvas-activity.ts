@@ -73,13 +73,24 @@ function changedShapes(
 		return [];
 	const created = result.data.createdShapes;
 	const ids = input.data.operations.flatMap((operation) => {
-		const target =
-			operation.op === "update" ? operation.shapeId : operation.ref;
-		return target.startsWith("shape:")
-			? [target]
-			: created[target]
-				? [created[target]]
-				: [];
+		const targets =
+			"shapeIds" in operation
+				? [
+						...operation.shapeIds,
+						...("ref" in operation ? [operation.ref] : []),
+					]
+				: "shapeId" in operation
+					? operation.op === "ungroup"
+						? []
+						: [operation.shapeId]
+					: [operation.ref];
+		return targets.flatMap((target) =>
+			target.startsWith("shape:")
+				? [target]
+				: Object.hasOwn(created, target)
+					? [created[target]]
+					: [],
+		);
 	});
 	return [...new Set(ids)]
 		.filter((id) => /^shape:.+/.test(id) && id.length <= 200)
