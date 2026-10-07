@@ -33,6 +33,12 @@ import {
 	readPageAttachment,
 } from "./lib/attachment-content";
 
+import {
+	AttachFileInputSchema,
+	AttachFileOutputSchema,
+	attachFileUseCase,
+} from "./use-cases/attach-file";
+
 const WorkspaceInput = z.object({ workspaceId: z.string().min(1) });
 const PageInput = WorkspaceInput.extend({ pageId: z.string().uuid() });
 const PageMetadataOutput = z.object({
@@ -587,6 +593,13 @@ const pageManagementCapabilities = [
 ] as const;
 
 export const pageAgentCapabilities = [
+	defineAgentCapability("attach_file_to_page", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.attach_file_to_page,
+		input: AttachFileInputSchema.safeExtend({ workspaceId: z.string().min(1) }),
+		output: AttachFileOutputSchema,
+		handle: ({ ctx, input: { workspaceId: _, ...input } }) =>
+			attachFileUseCase.run({ ctx, input }),
+	}),
 	...pageManagementCapabilities,
 	listPagesCapability,
 	searchPagesCapability,

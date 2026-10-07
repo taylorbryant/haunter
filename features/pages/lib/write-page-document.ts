@@ -22,6 +22,7 @@ export async function writePageDocument(
 	) => Promise<
 		DocumentWriteResult & { generation: number; insertedBlockIds: string[] }
 	>,
+	onCommitted?: () => void,
 ) {
 	const user = requireUser(ctx);
 	const scope = requireActiveWorkspaceScope(ctx);
@@ -69,6 +70,7 @@ export async function writePageDocument(
 				workspaceId: page.workspaceId,
 			};
 		});
+	onCommitted?.();
 	ctx.ports.taskAssignmentDelivery.schedule(assignmentNotifications);
 	scheduleWorkspacePageEvent(ctx, {
 		type: "page.contentChanged",

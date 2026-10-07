@@ -39,6 +39,7 @@ function activityResource(
 		"restore_page_version",
 		"list_page_attachments",
 		"read_page_attachment",
+		"attach_file_to_page",
 		"create_page",
 		"append_to_page",
 		"edit_page_blocks",

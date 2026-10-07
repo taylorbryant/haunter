@@ -15,7 +15,8 @@ import {
 
 export const maxDuration = 60;
 
-const MAX_MCP_REQUEST_BYTES = 1_000_000;
+// A 2 MiB inline file expands to ~2.8 MB of base64; leave room for MCP JSON.
+const MAX_MCP_REQUEST_BYTES = 3_000_000;
 
 async function readBoundedMcpRequest(
 	request: Request,

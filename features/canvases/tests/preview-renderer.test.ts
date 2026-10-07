@@ -353,14 +353,14 @@ test("page and shape selection is explicit, bounded and rejects unsupported desc
 			shapeIds: ["shape:group"],
 		}).shapeIds,
 	).toContain(shape.id);
-	Object.assign(shape, { type: "image" });
+	Object.assign(shape, { type: "video" });
 	expect(() =>
 		prepareCanvasPreview(snapshot, {
 			...command,
 			pageId: "page:page",
 			shapeIds: ["shape:group"],
 		}),
-	).toThrow("do not support image");
+	).toThrow("do not support video");
 	// An unrelated media shape does not prevent a focused native-shape preview.
 	expect(
 		prepareCanvasPreview(snapshot, {

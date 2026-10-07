@@ -1284,3 +1284,231 @@ test("workers without native canvas organization reject it without affecting leg
 		await f.stop();
 	}
 });
+
+test("MCP inserts and reads native image assets through the signed worker bridge, preserving revisions and recovery", async () => {
+	const f = await fixture("edit");
+	try {
+		const sharp = (await import("sharp")).default;
+		const bytes = await sharp({
+			create: { width: 60, height: 40, channels: 3, background: "#ff0055" },
+		})
+			.png()
+			.toBuffer();
+		const canvas = await f.create();
+		const before = await f.read(canvas.canvasId);
+		const inserted = CanvasEditOutputSchema.parse(
+			await f.execute("insert_canvas_image", {
+				canvasId: canvas.canvasId,
+				expectedRevision: before.revision,
+				x: 120,
+				y: 200,
+				width: 300,
+				inlineFile: {
+					name: "chart.png",
+					mimeType: "image/png",
+					data: bytes.toString("base64"),
+				},
+			}),
+		);
+		const id = inserted.createdShapes.image!;
+		const after = await f.read(canvas.canvasId);
+		expect(after.shapes).toHaveLength(1);
+		expect(after.shapes[0]).toMatchObject({
+			id,
+			type: "image",
+			x: 120,
+			y: 200,
+			props: { w: 300, h: 200 },
+		});
+		expect(
+			(await f.read(canvas.canvasId, inserted.historyVersionId)).shapes,
+		).toHaveLength(0);
+		const { CanvasImageOutputSchema } = await import("../editing");
+		const read = CanvasImageOutputSchema.parse(
+			await f.execute("read_canvas_image", {
+				canvasId: canvas.canvasId,
+				shapeId: id,
+				expectedRevision: inserted.revision,
+			}),
+		);
+		expect(read).toMatchObject({
+			name: "chart.png",
+			width: 60,
+			height: 40,
+			mimeType: "image/png",
+			revision: inserted.revision,
+		});
+		expect(
+			(await sharp(Buffer.from(read.data, "base64")).raw().toBuffer()).subarray(
+				0,
+				3,
+			),
+		).toEqual(Buffer.from([255, 0, 85]));
+		await expect(
+			f.execute("read_canvas_image", {
+				canvasId: canvas.canvasId,
+				shapeId: id,
+				expectedRevision: before.revision,
+			}),
+		).rejects.toMatchObject({ code: "CANVAS_REVISION_CONFLICT" });
+		await f.edit(canvas.canvasId, [
+			{ op: "update", shapeId: id, x: 250, width: 600, height: 400 },
+		]);
+		expect((await f.read(canvas.canvasId)).shapes[0]).toMatchObject({
+			x: 250,
+			props: { w: 600, h: 400, assetId: after.shapes[0]!.props.assetId },
+		});
+		await expect(
+			f.edit(canvas.canvasId, [
+				{ op: "update", shapeId: id, text: "Unsupported" },
+			]),
+		).rejects.toMatchObject({ code: "INVALID_CANVAS_EDIT" });
+		f.connection.permissionProfile = "view";
+		await expect(
+			f.execute("insert_canvas_image", {
+				canvasId: canvas.canvasId,
+				expectedRevision: (await f.read(canvas.canvasId)).revision,
+				x: 0,
+				y: 0,
+				inlineFile: {
+					name: "chart.png",
+					mimeType: "image/png",
+					data: bytes.toString("base64"),
+				},
+			}),
+		).rejects.toThrow();
+		expect(
+			CanvasImageOutputSchema.parse(
+				await f.execute("read_canvas_image", {
+					canvasId: canvas.canvasId,
+					shapeId: id,
+				}),
+			).data,
+		).toBe(read.data);
+		f.connection.permissionProfile = "full";
+		await f.execute("delete_canvas_shapes", {
+			canvasId: canvas.canvasId,
+			expectedRevision: (await f.read(canvas.canvasId)).revision,
+			shapeIds: [id],
+		});
+		expect((await f.read(canvas.canvasId)).shapes).toHaveLength(0);
+	} finally {
+		await f.stop();
+	}
+}, 30_000);
+
+test("native previews render image pixels and native organization handles image groups", async () => {
+	const renderer = createCanvasPreviewRenderer();
+	const structure = createCanvasStructureEditor();
+	const f = await fixture("edit", "owner", renderer, structure);
+	try {
+		const sharp = (await import("sharp")).default;
+		const bytes = await sharp({
+			create: { width: 80, height: 60, channels: 3, background: "#ff0055" },
+		})
+			.png()
+			.toBuffer();
+		const canvas = await f.create();
+		const inserted = CanvasEditOutputSchema.parse(
+			await f.execute("insert_canvas_image", {
+				canvasId: canvas.canvasId,
+				expectedRevision: canvas.canvasRevision,
+				x: 0,
+				y: 0,
+				inlineFile: {
+					name: "chart.png",
+					mimeType: "image/png",
+					data: bytes.toString("base64"),
+				},
+			}),
+		);
+		const id = inserted.createdShapes.image!;
+		const preview = CanvasPreviewOutputSchema.parse(
+			await f.execute("preview_canvas", {
+				canvasId: canvas.canvasId,
+				shapeIds: [id],
+			}),
+		);
+		const { data, info } = await sharp(
+			Buffer.from(preview.image.data, "base64"),
+		)
+			.removeAlpha()
+			.raw()
+			.toBuffer({ resolveWithObject: true });
+		const center =
+			(Math.floor(info.height / 2) * info.width + Math.floor(info.width / 2)) *
+			info.channels;
+		expect([...data.subarray(center, center + 3)]).toEqual([255, 0, 85]);
+		const grouped = await f.edit(canvas.canvasId, [
+			{ op: "create", ref: "label", type: "text", text: "Chart", x: 0, y: 100 },
+			{ op: "group", ref: "chart", shapeIds: [id, "label"] },
+			{ op: "update", shapeId: "chart", x: 400, y: 300 },
+		]);
+		expect(
+			(await f.read(canvas.canvasId)).shapes.find((s) => s.id === id)?.parentId,
+		).toBe(grouped.createdShapes.chart);
+	} finally {
+		await f.stop();
+		await renderer.stop();
+		await structure.stop();
+	}
+}, 60_000);
+
+test("image insertion rejects stale revisions, invalid parents and revoked access without orphan assets", async () => {
+	const f = await fixture("edit");
+	try {
+		const sharp = (await import("sharp")).default;
+		const data = (
+			await sharp({
+				create: { width: 40, height: 30, channels: 3, background: "red" },
+			})
+				.png()
+				.toBuffer()
+		).toString("base64");
+		const canvas = await f.create();
+		const before = await f.read(canvas.canvasId);
+		await f.edit(canvas.canvasId, [
+			{ op: "create", ref: "box", type: "rectangle", x: 0, y: 0 },
+		]);
+		const args = {
+			canvasId: canvas.canvasId,
+			expectedRevision: before.revision,
+			x: 10,
+			y: 10,
+			inlineFile: { name: "x.png", mimeType: "image/png", data },
+		};
+		await expect(f.execute("insert_canvas_image", args)).rejects.toMatchObject({
+			code: "CANVAS_REVISION_CONFLICT",
+		});
+		const current = await f.read(canvas.canvasId);
+		await expect(
+			f.execute("insert_canvas_image", {
+				...args,
+				expectedRevision: current.revision,
+				parentId: current.shapes[0]!.id,
+			}),
+		).rejects.toMatchObject({ code: "INVALID_CANVAS_EDIT" });
+		const fileReader = f.ctx.ports.agentFiles.read.bind(f.ctx.ports.agentFiles);
+		f.ctx.ports.agentFiles = {
+			read: async (...input) => {
+				const image = await fileReader(...input);
+				await f.database.db.update(schema.member).set({ role: "viewer" });
+				return image;
+			},
+		};
+		await expect(
+			f.execute("insert_canvas_image", {
+				...args,
+				expectedRevision: current.revision,
+			}),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		expect(await f.read(canvas.canvasId)).toEqual(current);
+		const saved = await f.database.repositories.canvases.findById(
+			f.scope,
+			canvas.canvasId,
+		);
+		expect(JSON.stringify(saved?.snapshot)).not.toContain('"typeName":"asset"');
+	} finally {
+		await f.stop();
+	}
+});

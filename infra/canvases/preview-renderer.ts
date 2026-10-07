@@ -1,3 +1,4 @@
+import { readCanvasImage } from "./image-edits";
 import { isAppError } from "@beignet/core/errors";
 import { getAssetUrls } from "@tldraw/assets/selfHosted";
 import type { CanvasPreviewRenderer } from "@/features/canvases/ports";
@@ -22,6 +23,41 @@ export function createCanvasPreviewRenderer(
 			if (!runner.available) throw appError("CanvasPreviewUnavailable");
 			const selected = prepareCanvasPreview(input.snapshot, input.command);
 			try {
+				const processed = new Set<string>();
+				const started = performance.now();
+				let pixels = 0,
+					bytes = 0;
+				for (const id of selected.shapeIds) {
+					const shape = selected.snapshot.store[id];
+					if (shape?.typeName !== "shape" || shape.type !== "image") continue;
+					if (shape.props.assetId && processed.has(shape.props.assetId))
+						continue;
+					if (processed.size >= 20 || performance.now() - started > 5_000)
+						throw appError("InvalidCanvasPreview", {
+							message: "Select fewer images for this preview (at most 20).",
+						});
+					const image = await readCanvasImage(selected.snapshot, id);
+					pixels += image.width * image.height;
+					bytes += image.data.length;
+					if (pixels > 16_000_000 || bytes > 4_000_000)
+						throw appError("InvalidCanvasPreview", {
+							message:
+								"Select fewer images: previews support 16 megapixels and 4 MB of encoded image data in total.",
+						});
+					const asset =
+						shape.props.assetId && selected.snapshot.store[shape.props.assetId];
+					if (asset && asset.typeName === "asset" && asset.type === "image") {
+						processed.add(asset.id);
+						asset.props = {
+							...asset.props,
+							src: `data:image/png;base64,${image.data}`,
+							mimeType: "image/png",
+							w: image.width,
+							h: image.height,
+							isAnimated: false,
+						};
+					}
+				}
 				return await runner.run(async (page) => {
 					const result = await page.evaluate(
 						(serialized: string) =>
@@ -72,7 +108,11 @@ export function createCanvasPreviewRenderer(
 					});
 				});
 			} catch (error) {
-				if (isAppError(error)) throw error;
+				if (isAppError(error)) {
+					if (error.code === "INVALID_CANVAS_EDIT")
+						throw appError("InvalidCanvasPreview", { message: error.message });
+					throw error;
+				}
 				console.error("Canvas preview renderer failed", error);
 				throw appError("CanvasPreviewUnavailable");
 			}

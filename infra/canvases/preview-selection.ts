@@ -17,6 +17,7 @@ const supported = new Set([
 	"highlight",
 	"group",
 	"frame",
+	"image",
 ]);
 const invalid = (message: string): never => {
 	throw appError("InvalidCanvasPreview", { message });
@@ -84,6 +85,13 @@ export function prepareCanvasPreview(
 				pageShapeIds.has(r.toId))
 		)
 			store[r.id] = r;
+	}
+	for (const { shape } of selected) {
+		if (shape.type === "image" && shape.props.assetId) {
+			const asset = snapshot.store[shape.props.assetId];
+			if (asset?.typeName === "asset" && asset.type === "image")
+				store[asset.id] = structuredClone(asset);
+		}
 	}
 	return {
 		snapshot: { schema: snapshot.schema, store },
