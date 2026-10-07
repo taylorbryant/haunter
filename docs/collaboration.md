@@ -182,6 +182,10 @@ are not inherited. Browser requests remain restricted to exact in-memory
 renderer assets; service workers, WebSockets and downloads are blocked. Run the
 container as the provided non-root `bun` user and retain sandbox support when
 changing hosts. Sandbox startup was verified on the current Fly Machine.
+Ubuntu 24.04 CI additionally installs an executable-specific AppArmor profile
+for the downloaded headless shell, following
+[Chromium's user-namespace guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
+This runner configuration is separate from the Fly container.
 
 Structured `canvas.browser.job` logs contain operation kind, outcome, queue,
 preparation, launch, render, cleanup and total milliseconds, plus force-kill and
