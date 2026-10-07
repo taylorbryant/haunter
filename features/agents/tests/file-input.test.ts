@@ -5,12 +5,46 @@ import { Readable } from "node:stream";
 import type { IncomingMessage } from "node:http";
 import type { request } from "node:https";
 import type { lookup } from "node:dns/promises";
+import { CanvasImageDataSchema } from "@/features/canvases/editing";
 import { createAgentFiles, decodeFileBase64 } from "@/infra/agents/file-input";
 import {
 	downloadAgentFile,
 	isPublicFileAddress,
 } from "@/infra/agents/file-download";
 import { MAX_AGENT_FILE_BYTES } from "../file-input";
+
+test.each([
+	"a".repeat(196),
+	"a".repeat(200),
+	`${"a".repeat(198)}.a`,
+	`${"a".repeat(496)}.jpg`,
+])("normalized image names fit the canvas schema: %s", async (name) => {
+	const bytes = await sharp({
+		create: { width: 1, height: 1, channels: 3, background: "#ff0055" },
+	})
+		.jpeg()
+		.toBuffer();
+	const file = await createAgentFiles().read(
+		{
+			inlineFile: {
+				name,
+				mimeType: "image/jpeg",
+				data: bytes.toString("base64"),
+			},
+		},
+		{ imageOnly: true },
+	);
+	expect(file.name).toBe(`${"a".repeat(196)}.png`);
+	expect(() =>
+		CanvasImageDataSchema.parse({
+			name: file.name,
+			mimeType: file.mimeType,
+			data: Buffer.from(file.bytes).toString("base64"),
+			width: file.width,
+			height: file.height,
+		}),
+	).not.toThrow();
+});
 
 test("file inputs validate actual bytes, bound size and normalize raster images", async () => {
 	const bytes = await sharp({

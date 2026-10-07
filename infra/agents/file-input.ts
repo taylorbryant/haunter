@@ -114,7 +114,10 @@ export function createAgentFiles(download = downloadAgentFile): AgentFilesPort {
 				);
 			if (options?.imageOnly || mimeType.startsWith("image/")) {
 				const image = await normalizeAgentImage(bytes);
-				return { ...image, name: name.replace(/\.[^.]+$/, "") + ".png" };
+				return {
+					...image,
+					name: name.replace(/\.[^.]+$/, "").slice(0, 196) + ".png",
+				};
 			}
 			if (
 				mimeType === "application/pdf" &&
