@@ -1158,6 +1158,19 @@ test("MCP protocol advertises the tools and returns structured reads and actiona
 				expect.objectContaining({ name: "replace_page_content" }),
 			]),
 		);
+		for (const name of ["attach_file_to_page", "insert_canvas_image"]) {
+			const tool = tools.result.tools.find(
+				(t: { name: string }) => t.name === name,
+			);
+			expect(tool._meta["openai/fileParams"]).toEqual(["file"]);
+			expect(tool.inputSchema.properties.file.required.sort()).toEqual([
+				"download_url",
+				"file_id",
+			]);
+			expect(
+				Object.keys(tool.inputSchema.properties.file.properties).sort(),
+			).toEqual(["download_url", "file_id", "file_name", "mime_type"]);
+		}
 		const read = await request("tools/call", {
 			name: "read_page",
 			arguments: {
@@ -1339,6 +1352,203 @@ test("MCP reads private attachments and edits captions without replacing their b
 		expect(JSON.stringify(f.activities)).not.toContain(
 			"Private attachment text",
 		);
+	} finally {
+		await f.database.close();
+	}
+});
+
+test("MCP attaches files privately, preserves content/history, and reads the uploaded bytes", async () => {
+	const f = await fixture("edit");
+	f.ctx.ports.storage = createMemoryStorage();
+	try {
+		const before = await f.read();
+		const inlineFile = {
+			name: "notes.txt",
+			mimeType: "text/plain",
+			data: Buffer.from("agent attachment").toString("base64"),
+		};
+		const attached = (await f.execute("attach_file_to_page", {
+			expectedRevision: before.revision,
+			inlineFile,
+			caption: "Research notes",
+		})) as { blockId: string; revision: string; historyVersionId: string };
+		const after = await f.read();
+		expect(after.blocks.slice(0, -1)).toEqual(before.blocks);
+		expect(after.blocks.at(-1)).toMatchObject({
+			id: attached.blockId,
+			type: "file",
+			props: { name: "notes.txt", caption: "Research notes" },
+		});
+		expect(after.revision).toBe(attached.revision);
+		const key = String(after.blocks.at(-1)!.props!.url).slice(
+			"/api/files/".length,
+		);
+		expect(await f.ctx.ports.storage.stat(key)).toMatchObject({
+			visibility: "private",
+			contentType: "text/plain",
+			metadata: { pageId: f.page.id, workspaceId: f.workspaceId },
+		});
+		expect(
+			await f.execute("read_page_attachment", { blockId: attached.blockId }),
+		).toMatchObject({ text: "agent attachment" });
+		expect(
+			(
+				await f.database.repositories.pageVersions.findById(
+					f.scope,
+					attached.historyVersionId,
+				)
+			)?.content,
+		).toEqual(before.blocks);
+		await expect(
+			f.execute("attach_file_to_page", {
+				expectedRevision: before.revision,
+				inlineFile,
+			}),
+		).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+		expect((await f.read()).blocks).toHaveLength(before.blocks.length + 1);
+	} finally {
+		await f.database.close();
+	}
+});
+
+test("MCP attachment failures remove unreferenced storage and roll back document/history", async () => {
+	const f = await fixture("edit");
+	f.ctx.ports.storage = createMemoryStorage();
+	const storage = f.ctx.ports.storage;
+	const keys: string[] = [];
+	const put = storage.put.bind(storage);
+	storage.put = async (...args) => {
+		keys.push(args[0]);
+		return put(...args);
+	};
+	try {
+		const before = await f.read();
+		const reader = f.ctx.ports.agentFiles.read.bind(f.ctx.ports.agentFiles);
+		f.ctx.ports.agentFiles = {
+			read: async (...args) => {
+				const file = await reader(...args);
+				await f.edit([
+					{ op: "update", blockId: "intro", content: text("Concurrent edit") },
+				]);
+				return file;
+			},
+		};
+		await expect(
+			f.execute("attach_file_to_page", {
+				expectedRevision: before.revision,
+				inlineFile: { name: "x.txt", mimeType: "text/plain", data: "aGk=" },
+			}),
+		).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
+		expect(keys).toHaveLength(1);
+		expect(await storage.stat(keys[0]!)).toBeNull();
+		expect((await f.read()).blocks).toHaveLength(before.blocks.length);
+		expect(
+			await f.database.repositories.pageVersions.listMetaByPage(
+				f.scope,
+				f.page.id,
+			),
+		).toHaveLength(1);
+	} finally {
+		await f.database.close();
+	}
+});
+
+test("attachment authorization rejects viewers, foreign pages and revoked membership before persistence", async () => {
+	for (const profile of ["view", "edit"] as const) {
+		const f = await fixture(profile);
+		f.ctx.ports.storage = createMemoryStorage();
+		let reads = 0;
+		const reader = f.ctx.ports.agentFiles.read.bind(f.ctx.ports.agentFiles);
+		f.ctx.ports.agentFiles = {
+			read: async (...args) => {
+				reads++;
+				return reader(...args);
+			},
+		};
+		try {
+			const input = {
+				expectedRevision: (await f.read()).revision,
+				inlineFile: { name: "x.txt", mimeType: "text/plain", data: "aGk=" },
+			};
+			if (profile === "view") {
+				await expect(f.execute("attach_file_to_page", input)).rejects.toThrow();
+			} else {
+				await expect(
+					f.execute("attach_file_to_page", {
+						...input,
+						pageId: crypto.randomUUID(),
+					}),
+				).rejects.toThrow();
+			}
+			expect(reads).toBe(0);
+		} finally {
+			await f.database.close();
+		}
+	}
+	const f = await fixture("edit");
+	f.ctx.ports.storage = createMemoryStorage();
+	try {
+		const before = await f.read();
+		const reader = f.ctx.ports.agentFiles.read.bind(f.ctx.ports.agentFiles);
+		f.ctx.ports.agentFiles = {
+			read: async (...args) => {
+				const file = await reader(...args);
+				const { member } = await import("@/infra/db/schema");
+				await f.database.db.delete(member);
+				return file;
+			},
+		};
+		await expect(
+			f.execute("attach_file_to_page", {
+				expectedRevision: before.revision,
+				inlineFile: { name: "x.txt", mimeType: "text/plain", data: "aGk=" },
+			}),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		expect(await f.read()).toEqual(before);
+	} finally {
+		await f.database.close();
+	}
+});
+
+test("page image uploads create native image blocks and a post-commit hint failure cannot delete their bytes", async () => {
+	const f = await fixture("edit");
+	f.ctx.ports.storage = createMemoryStorage();
+	try {
+		const sharp = (await import("sharp")).default;
+		const bytes = await sharp({
+			create: { width: 32, height: 24, channels: 3, background: "blue" },
+		})
+			.png()
+			.toBuffer();
+		const before = await f.read();
+		f.ctx.ports.taskAssignmentDelivery = {
+			schedule() {
+				throw new Error("hint unavailable");
+			},
+		};
+		await expect(
+			f.execute("attach_file_to_page", {
+				expectedRevision: before.revision,
+				inlineFile: {
+					name: "chart.png",
+					mimeType: "image/png",
+					data: bytes.toString("base64"),
+				},
+			}),
+		).rejects.toThrow();
+		const after = await f.read();
+		const image = after.blocks.at(-1)!;
+		expect(image).toMatchObject({
+			type: "image",
+			props: { name: "chart.png", previewWidth: 32 },
+		});
+		const read = (await f.execute("read_page_attachment", {
+			blockId: image.id,
+		})) as { data: string };
+		expect(
+			(await sharp(Buffer.from(read.data, "base64")).metadata()).width,
+		).toBe(32);
+		expect(after.blocks.slice(0, -1)).toEqual(before.blocks);
 	} finally {
 		await f.database.close();
 	}

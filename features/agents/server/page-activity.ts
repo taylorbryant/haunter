@@ -14,6 +14,7 @@ const actions: Record<string, PageAgentActivity["action"]> = {
 	list_page_attachments: "read",
 	read_page_attachment: "read",
 	append_to_page: "append",
+	attach_file_to_page: "append",
 	edit_page_blocks: "update",
 	create_canvas_block: "update",
 	replace_page_content: "update",

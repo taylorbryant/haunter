@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+	AgentFileSourceSchema,
+	hasOneFileSource,
+} from "@/features/agents/file-input";
 
 const Coordinate = z.number().finite().min(-1_000_000).max(1_000_000);
 const Dimension = z.number().finite().min(1).max(10_000);
@@ -155,8 +159,55 @@ export const PreviewCanvasInputSchema = CanvasTargetSchema.extend({
 	shapeIds: z.array(ShapeId).min(1).max(100).optional(),
 	expectedRevision: CanvasRevisionSchema.optional(),
 });
+export const CanvasImagePlacementSchema = CanvasTargetSchema.extend({
+	expectedRevision: CanvasRevisionSchema,
+	x: Coordinate.describe(
+		"Horizontal position, local to parentId when supplied.",
+	),
+	y: Coordinate.describe("Vertical position, local to parentId when supplied."),
+	width: Dimension.optional().describe(
+		"Display width; height preserves the image aspect ratio. Defaults to at most 800.",
+	),
+	parentId: ShapeId.optional(),
+	pageId: PageId.optional(),
+});
+export const InsertCanvasImageInputSchema = CanvasImagePlacementSchema.extend(
+	AgentFileSourceSchema.shape,
+)
+	.strict()
+	.refine(hasOneFileSource, "Supply exactly one of file or inlineFile.");
+export const CanvasImageDataSchema = z
+	.object({
+		name: z.string().max(200),
+		mimeType: z.literal("image/png"),
+		data: z.string().min(4).max(2_796_204),
+		width: z.number().int().positive().max(16_000_000),
+		height: z.number().int().positive().max(16_000_000),
+	})
+	.strict();
+export const ReadCanvasImageInputSchema = CanvasTargetSchema.extend({
+	shapeId: ShapeId,
+	expectedRevision: CanvasRevisionSchema.optional(),
+});
+export const CanvasImageMetadataSchema = z.object({
+	canvasId: z.uuid(),
+	revision: CanvasRevisionSchema,
+	shapeId: ShapeId,
+	name: z.string(),
+	mimeType: z.literal("image/png"),
+	width: z.number(),
+	height: z.number(),
+});
+export const CanvasImageOutputSchema = CanvasImageMetadataSchema.extend({
+	data: z.string(),
+});
 export const CanvasCommandSchema = z.discriminatedUnion("action", [
 	ReadCanvasInputSchema.extend({ action: z.literal("read") }),
+	ReadCanvasImageInputSchema.extend({ action: z.literal("read-image") }),
+	CanvasImagePlacementSchema.extend({
+		action: z.literal("insert-image"),
+		image: CanvasImageDataSchema,
+	}),
 	PreviewCanvasInputSchema.extend({ action: z.literal("preview") }),
 	EditCanvasInputSchema.extend({ action: z.literal("edit") }),
 	InsertCanvasLibraryItemInputSchema.extend({
@@ -168,7 +219,8 @@ export type CanvasCommand = z.infer<typeof CanvasCommandSchema>;
 export const isCanvasWrite = (command: CanvasCommand) =>
 	command.action === "edit" ||
 	command.action === "delete" ||
-	command.action === "insert-library";
+	command.action === "insert-library" ||
+	command.action === "insert-image";
 export type CanvasOperation = z.infer<typeof CanvasOperationSchema>;
 export const CanvasReadOutputSchema = z.object({
 	canvasId: z.uuid(),
@@ -250,6 +302,7 @@ export const CanvasCommandOutputSchema = z.union([
 	CanvasEditOutputSchema,
 	InsertCanvasLibraryItemOutputSchema,
 	CanvasPreviewOutputSchema,
+	CanvasImageOutputSchema,
 ]);
 export type CanvasCommandOutput = z.infer<typeof CanvasCommandOutputSchema>;
 export const canvasRevision = (canvasId: string, revision: number) =>

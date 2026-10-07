@@ -277,3 +277,9 @@ Dismiss notice hides the expanded message without deleting any copies; use
 Previous copies to reopen it and download one. A later reset with a new recovery
 copy shows the notice again. Older documents without action metadata use a
 neutral recovery message.
+
+## Add files and images
+
+Use `attach_file_to_page` to append private images or documents with revision and
+recovery protection. See [MCP files](mcp-files.md) for host file inputs, base64
+fallbacks, supported types, limits and release steps.

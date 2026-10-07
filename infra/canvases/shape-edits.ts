@@ -87,7 +87,7 @@ export function prepareCanvasEdit(
 		const record = records[createdShapes[id] ?? id];
 		if (!record || record.typeName !== "shape")
 			return invalid(`Shape ${id} does not exist.`);
-		if (!["geo", "text", "note", "arrow"].includes(record.type))
+		if (!["geo", "text", "note", "arrow", "image"].includes(record.type))
 			return invalid(`Editing ${record.type} shapes is not supported.`);
 		ancestorPage(record);
 		if (
@@ -141,7 +141,26 @@ export function prepareCanvasEdit(
 				);
 			if (ids.has(record.fromId)) deleted.add(record.id);
 		}
-		for (const id of ids) deleted.add(id);
+		for (const id of ids) {
+			deleted.add(id);
+			const removed = records[id];
+			if (
+				removed?.typeName === "shape" &&
+				removed.type === "image" &&
+				removed.props.assetId
+			) {
+				const assetId = removed.props.assetId;
+				const used = Object.values(records).some(
+					(record) =>
+						record.typeName === "shape" &&
+						!ids.has(record.id) &&
+						"assetId" in record.props &&
+						record.props.assetId === assetId,
+				);
+				if (!used && records[assetId]?.typeName === "asset")
+					deleted.add(assetId);
+			}
+		}
 		for (const id of deleted) delete records[id];
 	} else
 		for (const op of command.operations) {
@@ -226,6 +245,13 @@ export function prepareCanvasEdit(
 			} else if (op.op === "update") {
 				const current = shape(op.shapeId);
 				if (
+					current.type === "image" &&
+					(op.text !== undefined || op.color !== undefined)
+				)
+					invalid(
+						"Images support position and dimensions, not text or color edits.",
+					);
+				if (
 					current.type === "arrow" &&
 					(op.x !== undefined || op.y !== undefined)
 				)
@@ -233,11 +259,16 @@ export function prepareCanvasEdit(
 				if (
 					op.width !== undefined &&
 					current.type !== "geo" &&
-					current.type !== "text"
+					current.type !== "text" &&
+					current.type !== "image"
 				)
-					invalid("Only geometry and text shapes support width edits.");
-				if (op.height !== undefined && current.type !== "geo")
-					invalid("Only geometry shapes support height edits.");
+					invalid("Only geometry, text and image shapes support width edits.");
+				if (
+					op.height !== undefined &&
+					current.type !== "geo" &&
+					current.type !== "image"
+				)
+					invalid("Only geometry and image shapes support height edits.");
 				put({
 					...current,
 					...(op.x !== undefined ? { x: op.x } : {}),
@@ -250,7 +281,12 @@ export function prepareCanvasEdit(
 									...(current.type === "text" ? { autoSize: false } : {}),
 								}
 							: {}),
-						...(op.height !== undefined ? { h: op.height, growY: 0 } : {}),
+						...(op.height !== undefined
+							? {
+									h: op.height,
+									...(current.type === "geo" ? { growY: 0 } : {}),
+								}
+							: {}),
 						...(op.color !== undefined ? { color: op.color } : {}),
 						...(op.text !== undefined ? { richText: richText(op.text) } : {}),
 					},

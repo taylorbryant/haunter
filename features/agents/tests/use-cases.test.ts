@@ -337,6 +337,7 @@ describe("agents.getPending", () => {
 				"get_active_context",
 				"search_canvas_library",
 				"read_canvas",
+				"read_canvas_image",
 				"preview_canvas",
 				"list_workspaces",
 				"list_workspace_members",

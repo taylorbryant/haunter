@@ -39,6 +39,7 @@ const movable = new Set([
 	"highlight",
 	"group",
 	"frame",
+	"image",
 ]);
 
 /** Runs only against a detached editor. Nothing reaches a live room until the whole batch succeeds. */

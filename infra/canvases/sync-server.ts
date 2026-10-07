@@ -18,6 +18,7 @@ import {
 	projectCanvasRoom,
 	normalizeCanvasSnapshot,
 } from "@/features/canvases/lib/document";
+import { prepareCanvasImageInsertion, readCanvasImage } from "./image-edits";
 import { canEditContent } from "@/lib/org-roles";
 import {
 	CanvasCommandSchema,
@@ -331,7 +332,7 @@ export function createCanvasSyncServer(options: {
 						details: { currentRevision },
 					});
 				const before = projectCanvasRoom(entry.storage.getSnapshot());
-				if (command.action === "preview") {
+				if (command.action === "preview" || command.action === "read-image") {
 					// Detach from the live room before releasing its mutation queue.
 					return {
 						snapshot: structuredClone(before),
@@ -344,15 +345,17 @@ export function createCanvasSyncServer(options: {
 				if (nativeEdit && !options.structureEditor)
 					throw appError("CanvasWorkerUnavailable");
 				const edit =
-					command.action === "insert-library"
-						? prepareCanvasLibraryInsertion(before, command)
-						: nativeEdit && command.action === "edit"
-							? await options.structureEditor!.prepare({
-									snapshot: structuredClone(before),
-									command,
-								})
-							: prepareCanvasEdit(before, command);
-				if (nativeEdit) {
+					command.action === "insert-image"
+						? await prepareCanvasImageInsertion(before, command)
+						: command.action === "insert-library"
+							? prepareCanvasLibraryInsertion(before, command)
+							: nativeEdit && command.action === "edit"
+								? await options.structureEditor!.prepare({
+										snapshot: structuredClone(before),
+										command,
+									})
+								: prepareCanvasEdit(before, command);
+				if (nativeEdit || command.action === "insert-image") {
 					if (stopping || options.canWrite?.() === false)
 						throw appError("CanvasWorkerUnavailable");
 					if (refreshContext) ctx = await refreshContext();
@@ -420,12 +423,18 @@ export function createCanvasSyncServer(options: {
 				};
 			});
 			if (!("snapshot" in result)) return result;
-			if (command.action !== "preview" || !options.previewRenderer)
+			if (
+				command.action !== "read-image" &&
+				(command.action !== "preview" || !options.previewRenderer)
+			)
 				throw appError("CanvasPreviewUnavailable");
-			const preview = await options.previewRenderer.render({
-				snapshot: result.snapshot,
-				command,
-			});
+			const preview =
+				command.action === "read-image"
+					? await readCanvasImage(result.snapshot, command.shapeId)
+					: await options.previewRenderer!.render({
+							snapshot: result.snapshot,
+							command,
+						});
 			// Rendering must not block edits, but revoked readers must not receive an image.
 			if (stopping || options.canWrite?.() === false)
 				throw appError("CanvasWorkerUnavailable");

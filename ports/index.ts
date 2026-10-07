@@ -1,4 +1,5 @@
 import type { EmbeddedEditorSessionPort } from "@/features/agents/embedded-editor-session";
+import type { AgentFilesPort } from "@/features/agents/file-input";
 import type { BroadcastPort } from "@beignet/core/broadcasting/server";
 import type { ErrorReporterPort } from "@beignet/core/error-reporting";
 import type { IdempotencyPort } from "@beignet/core/idempotency";
@@ -93,6 +94,7 @@ export type AppTransactionPorts = {
 export type AppGate = BoundGate<AppPolicies>;
 
 export type AppPorts = {
+	agentFiles: AgentFilesPort;
 	canvasEditing: CanvasEditingPort;
 	documentMaintenance: DocumentMaintenancePort;
 	documentRecovery: DocumentRecoveryPort;

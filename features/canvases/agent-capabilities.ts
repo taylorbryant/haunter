@@ -1,5 +1,10 @@
 import "@beignet/core/server-only";
 import { z } from "zod";
+import {
+	InsertCanvasImageInputSchema,
+	ReadCanvasImageInputSchema,
+	CanvasImageOutputSchema,
+} from "./editing";
 import { defineAgentCapability } from "@/lib/agent-capabilities";
 import { AGENT_CAPABILITY_DESCRIPTIONS } from "@/features/agents/capability-catalog";
 import {
@@ -38,6 +43,31 @@ function canvasMetadata({ id, userId: _, ...canvas }: CanvasListItem) {
 }
 
 export const canvasAgentCapabilities = [
+	defineAgentCapability("insert_canvas_image", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.insert_canvas_image,
+		input: InsertCanvasImageInputSchema.safeExtend(workspace),
+		output: CanvasEditOutputSchema,
+		async handle({ ctx, input: { workspaceId: _, ...input } }) {
+			const { insertCanvasImageUseCase } = await import(
+				"./use-cases/insert-canvas-image"
+			);
+			return insertCanvasImageUseCase.run({ ctx, input });
+		},
+	}),
+	defineAgentCapability("read_canvas_image", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.read_canvas_image,
+		input: ReadCanvasImageInputSchema.extend(workspace),
+		output: CanvasImageOutputSchema,
+		async handle({ ctx, input: { workspaceId: _, ...input } }) {
+			const { canvasCommandUseCase } = await import("./use-cases/edit-canvas");
+			return CanvasImageOutputSchema.parse(
+				await canvasCommandUseCase.run({
+					ctx,
+					input: { ...input, action: "read-image" },
+				}),
+			);
+		},
+	}),
 	defineAgentCapability("list_canvases", {
 		description: AGENT_CAPABILITY_DESCRIPTIONS.list_canvases,
 		input: z.object(workspace),

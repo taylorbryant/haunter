@@ -2,6 +2,7 @@ import "@beignet/core/server-only";
 import type { AppContext } from "@/app-context";
 import {
 	CanvasEditOutputSchema,
+	InsertCanvasImageInputSchema,
 	EditCanvasInputSchema,
 	InsertCanvasLibraryItemInputSchema,
 	InsertCanvasLibraryItemOutputSchema,
@@ -13,6 +14,8 @@ import type { CanvasAgentActivity } from "../canvas-activity";
 
 const actions: Record<string, CanvasAgentActivity["action"]> = {
 	read_canvas: "read",
+	read_canvas_image: "read",
+	insert_canvas_image: "edit",
 	preview_canvas: "preview",
 	edit_canvas: "edit",
 	insert_canvas_library_item: "edit",
@@ -67,6 +70,14 @@ function changedShapes(
 			]),
 		].slice(0, 100);
 	}
+	const imageResult = CanvasEditOutputSchema.safeParse(output);
+	if (
+		imageResult.success &&
+		imageResult.data.canvasId === canvasId &&
+		imageResult.data.createdShapes.image &&
+		InsertCanvasImageInputSchema.safeParse(args).success
+	)
+		return [imageResult.data.createdShapes.image];
 	const input = EditCanvasInputSchema.safeParse(args);
 	const result = CanvasEditOutputSchema.safeParse(output);
 	if (!input.success || !result.success || result.data.canvasId !== canvasId)

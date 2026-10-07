@@ -89,7 +89,7 @@ leaf shapes on a tldraw page or inside groups and frames, including nested group
 A lock on any ancestor blocks edits, creation, connections and deletion inside it.
 Move a connected node to change an arrow's path; the API does not translate arrows.
 Groups and frames can also be organized through the operations below. Use the
-canvas editor to edit images, freehand points, rich text formatting, rotation,
+canvas editor to edit image crops/pixels, freehand points, rich text formatting, rotation,
 and other unsupported properties.
 
 ## Organize groups and frames
@@ -261,7 +261,7 @@ underscores, or hyphens. Native IDs start with `shape:`.
 
 An edit accepts up to 100 operations. Text is limited to 5,000 characters per
 operation; dimensions to 1–10,000 canvas units; coordinates to ±1,000,000.
-The command must fit within 1 MB. Saved drawings retain the existing canvas
+The command must fit within 3 MB (including transferred image data). Saved drawings retain the existing canvas
 limits of 30,000 records and 5 MB of record JSON, with an 8 MiB room limit.
 Use explicit `align`/`distribute` operations for layout; ordinary leaf edits do
 not measure text or automatically fit containers.
@@ -293,7 +293,8 @@ returns the same metadata with `image: { mimeType: "image/png", data: "BASE64" }
   opaque background, 32 canvas units of padding, and at most 1600 pixels per
   side. An empty page returns a blank 640 × 360 image.
 - Native geometry, text, notes, arrows, lines, freehand drawings, highlights,
-  groups and frames are supported. Selected images, videos, bookmarks, and
+  groups, frames and uploaded raster images are supported. See
+  [image limits](mcp-files.md). Selected external images, videos, bookmarks, and
   embeds return `INVALID_CANVAS_PREVIEW`. Use `shapeIds` to select supported
   shapes on a mixed page. Pages are limited to 1000 shapes, including children.
 - Rendering uses a detached snapshot and does not hold the canvas editing
@@ -394,3 +395,5 @@ allowed at a time. The existing browser installation also powers organization.
 
 Follow the [collaboration deployment guide](collaboration.md#worker-deployment)
 for worker configuration and the single-worker requirement.
+
+Image insertion, reads, previews and file transport are covered in [MCP files](mcp-files.md).

@@ -1,3 +1,7 @@
+import {
+	CanvasImageOutputSchema,
+	CanvasImageMetadataSchema,
+} from "@/features/canvases/editing";
 import "@beignet/core/server-only";
 import {
 	ReadAttachmentMetadataSchema,
@@ -179,13 +183,24 @@ export function registerRemoteMcpTools(
 			{
 				description: capability.description,
 				inputSchema: capability.input as ZodType,
+				...(["attach_file_to_page", "insert_canvas_image"].includes(
+					capability.name,
+				)
+					? { _meta: { "openai/fileParams": ["file"] } }
+					: {}),
 				outputSchema:
-					capability.name === "preview_canvas"
-						? CanvasPreviewMetadataSchema
-						: capability.name === "read_page_attachment"
-							? ReadAttachmentMetadataSchema
-							: (capability.output as ZodType),
+					capability.name === "read_canvas_image"
+						? CanvasImageMetadataSchema
+						: capability.name === "preview_canvas"
+							? CanvasPreviewMetadataSchema
+							: capability.name === "read_page_attachment"
+								? ReadAttachmentMetadataSchema
+								: (capability.output as ZodType),
 				annotations: {
+					openWorldHint: [
+						"attach_file_to_page",
+						"insert_canvas_image",
+					].includes(capability.name),
 					readOnlyHint: [
 						"list_canvases",
 						"list_canvas_favorites",
@@ -199,6 +214,7 @@ export function registerRemoteMcpTools(
 						"preview_canvas",
 						"search_canvas_library",
 						"read_canvas",
+						"read_canvas_image",
 						"list_workspaces",
 						"list_workspace_members",
 						"list_pages",
@@ -233,6 +249,7 @@ export function registerRemoteMcpTools(
 						"preview_canvas",
 						"search_canvas_library",
 						"read_canvas",
+						"read_canvas_image",
 						"list_workspaces",
 						"list_workspace_members",
 						"list_pages",
@@ -256,6 +273,16 @@ export function registerRemoteMcpTools(
 						},
 						{ getServer: input.getServer },
 					);
+					if (capability.name === "read_canvas_image") {
+						const { data, ...metadata } = CanvasImageOutputSchema.parse(result);
+						return {
+							content: [
+								{ type: "text" as const, text: JSON.stringify(metadata) },
+								{ type: "image" as const, mimeType: metadata.mimeType, data },
+							],
+							structuredContent: metadata,
+						};
+					}
 					if (capability.name === "read_page_attachment") {
 						const { text, data, ...metadata } =
 							ReadAttachmentOutputSchema.parse(result);

@@ -10,7 +10,7 @@ import type { CanvasEditingPort } from "@/features/canvases/ports";
 import { appError } from "@/features/shared/errors";
 import type { CanvasSyncServer } from "./sync-server";
 
-const MAX_BODY = 1_000_000;
+const MAX_BODY = 3_000_000;
 const publicErrors = {
 	INVALID_CANVAS_PREVIEW: "InvalidCanvasPreview",
 	CANVAS_PREVIEW_UNAVAILABLE: "CanvasPreviewUnavailable",
@@ -51,7 +51,7 @@ export function createCanvasEditingClient(options: {
 			const body = JSON.stringify(Envelope.parse(input));
 			if (Buffer.byteLength(body) > MAX_BODY)
 				throw appError("InvalidCanvasEdit", {
-					message: "Canvas commands must be 1 MB or smaller.",
+					message: "Canvas commands must be 3 MB or smaller.",
 				});
 			const expires = String(Date.now() + 30_000);
 			try {
