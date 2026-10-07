@@ -14,10 +14,16 @@ export function createCanvasRenderingService(
 		onMetric?: (metric: CanvasBrowserMetric) => void;
 	} = {},
 ) {
-	const runner = createCanvasBrowserRunner({ onMetric: options.onMetric });
+	let verified = false;
+	const runner = createCanvasBrowserRunner({
+		onMetric(metric) {
+			if (metric.outcome === "error" || metric.outcome === "timeout")
+				verified = false;
+			options.onMetric?.(metric);
+		},
+	});
 	const preview = createCanvasPreviewRenderer({ ...options, runner });
 	const structure = createCanvasStructureEditor({ ...options, runner });
-	let verified = false;
 	let warming: Promise<void> | undefined;
 	return {
 		preview,
@@ -26,13 +32,15 @@ export function createCanvasRenderingService(
 			const health = runner.health();
 			return {
 				...health,
-				ready: verified && health.ready,
+				ready: verified && !warming && health.ready,
 				verified,
 				warming: !!warming,
 			};
 		},
 		warmup() {
 			warming ??= (async () => {
+				verified = false;
+				const failures = runner.health().failed;
 				// Exercise fonts, raster export, and native layout without a database or
 				// a user document. Nothing produced here is persisted or broadcast.
 				const canvasId = crypto.randomUUID();
@@ -82,6 +90,10 @@ export function createCanvasRenderingService(
 				});
 				if (image.width < 1 || image.height < 1 || image.shapeIds.length < 2)
 					throw new Error("Canvas warmup did not render the drawing");
+				// User jobs can run between these two checks. A failure during either
+				// part of verification requires a fresh, complete warmup.
+				if (runner.health().failed !== failures)
+					throw new Error("Canvas renderer failed during warmup");
 				verified = true;
 			})().finally(() => {
 				warming = undefined;

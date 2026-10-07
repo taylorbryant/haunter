@@ -166,8 +166,12 @@ The worker runs a synthetic grouping operation and PNG export at startup.
 `/health/renderer` returns 200 only after this verification succeeds and the
 renderer is healthy; otherwise it returns 503. It includes readiness, active
 and queued work, completed/failed/rejected counts, and the last successful job
-time. Failed verification or a runtime failure triggers another synthetic probe
-while idle, at most once per minute. Probes never read or write user documents.
+time. Runtime errors and timeouts invalidate verification; successful user jobs
+do not restore it. Both synthetic checks must finish without an intervening
+runtime failure before readiness returns. Invalid user input and queue rejection
+do not invalidate verification. Failed verification or a runtime failure triggers
+another synthetic probe while idle, at most once per minute. Probes never read
+or write user documents.
 
 Keep Fly's routing check on `/health`, which reflects collaboration readiness.
 Monitor `/health/renderer` separately and run the verification command after
