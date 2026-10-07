@@ -1,4 +1,5 @@
 .next
+.canvas-runtime
 next-env.d.ts
 node_modules
 dist

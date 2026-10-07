@@ -6,6 +6,7 @@ import { normalizeCanvasSnapshot } from "@/features/canvases/lib/document";
 import {
 	createCanvasBrowserRunner,
 	canvasBrowserOrigin,
+	type CanvasBrowserRunner,
 } from "./browser-runtime";
 import type {
 	BrowserStructureInput,
@@ -13,12 +14,11 @@ import type {
 } from "./structure-browser";
 
 export function createCanvasStructureEditor(
-	options: { licenseKey?: string } = {},
+	options: { licenseKey?: string; runner?: CanvasBrowserRunner } = {},
 ): CanvasStructureEditor & { stop(): Promise<void> } {
-	const runner = createCanvasBrowserRunner();
+	const runner = options.runner ?? createCanvasBrowserRunner();
 	return {
 		async prepare(input) {
-			if (!runner.available) throw appError("CanvasWorkerUnavailable");
 			if (
 				Object.values(input.snapshot.store).filter(
 					(r) => r.typeName === "shape",
@@ -29,7 +29,8 @@ export function createCanvasStructureEditor(
 						"Canvas organization supports at most 1,000 shapes per canvas.",
 				});
 			try {
-				return await runner.run(async (page) => {
+				return await runner.run("structure", async (job) => {
+					const page = await job.page();
 					const result = await page.evaluate(
 						(serialized: string) =>
 							(
@@ -55,10 +56,10 @@ export function createCanvasStructureEditor(
 				});
 			} catch (error) {
 				if (isAppError(error)) throw error;
-				console.error("Canvas structure editor failed", error);
+				// The shared runner emits bounded metrics without logging drawing content.
 				throw appError("CanvasWorkerUnavailable");
 			}
 		},
-		stop: runner.stop,
+		stop: options.runner ? async () => {} : runner.stop,
 	};
 }

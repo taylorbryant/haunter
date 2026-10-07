@@ -128,11 +128,78 @@ fly deploy --config fly.collaboration.toml --ha=false
 fly machine list --app haunter-collaboration
 fly checks list --app haunter-collaboration
 curl --fail https://collab.haunter.app/health
+bun --no-env-file scripts/verify-canvas-renderer.ts https://collab.haunter.app
 ```
 
 Keep `--ha=false` and verify that exactly one Machine exists. Do not add replicas
 or switch this configuration to canary or bluegreen deployment. Apply database
 schema migrations separately as described in the [README](../README.md#deploy-haunter).
+
+### Canvas rendering on the same worker
+
+Previews and native canvas organization share one admission queue: one active
+job and at most two waiting jobs per worker. A preview acquires its slot before
+selecting shapes or decoding images. Overflow fails with the existing
+`CANVAS_PREVIEW_UNAVAILABLE` or `CANVAS_WORKER_UNAVAILABLE` error. Plain canvas
+edits and document collaboration do not enter this queue.
+
+Each job has 20 seconds from admission, including queue wait, image preparation,
+browser startup and rendering. Cleanup has up to four additional seconds,
+keeping the normal response bound below the command bridge's 30-second timeout.
+Browser startup is capped at 12 seconds within the job's remaining budget.
+Chromium gets two seconds to close gracefully before its process group is
+force-killed. A timed-out job retains its slot until preparation and browser
+termination actually finish. If cleanup cannot be confirmed, rendering remains
+degraded rather than starting another browser alongside it.
+
+The Docker build creates `.canvas-runtime/preview.js`; production startup never
+compiles the tldraw bundle. Local development and tests compile the current
+source once per process. To verify the production bundle locally without a
+database or credentials:
+
+```sh
+bun --no-env-file scripts/build-canvas-browser.ts
+NODE_ENV=production bun --no-env-file scripts/verify-canvas-renderer.ts
+```
+
+The worker runs a synthetic grouping operation and PNG export at startup.
+`/health/renderer` returns 200 only after this verification succeeds and the
+renderer is healthy; otherwise it returns 503. It includes readiness, active
+and queued work, completed/failed/rejected counts, and the last successful job
+time. Runtime errors and timeouts invalidate verification; successful user jobs
+do not restore it. Both synthetic checks must finish without an intervening
+runtime failure before readiness returns. Invalid user input and queue rejection
+do not invalidate verification. Failed verification or a runtime failure triggers
+another synthetic probe while idle, at most once per minute. Probes never read
+or write user documents.
+
+Keep Fly's routing check on `/health`, which reflects collaboration readiness.
+Monitor `/health/renderer` separately and run the verification command after
+deployment. A browser failure must not disconnect people editing pages. An
+unconfirmed cleanup requires investigating the worker and, if necessary, a
+graceful restart.
+
+Each job uses a fresh Chromium process with its OS sandbox explicitly enabled,
+a loopback-only Playwright control socket, and a temporary HOME/TMPDIR. Only
+PATH, HOME, TMPDIR, LANG and TZ are passed into the process; worker credentials
+are not inherited. Browser requests remain restricted to exact in-memory
+renderer assets; service workers, WebSockets and downloads are blocked. Run the
+container as the provided non-root `bun` user and retain sandbox support when
+changing hosts. Sandbox startup was verified on the current Fly Machine.
+Ubuntu 24.04 CI additionally installs an executable-specific AppArmor profile
+for the downloaded headless shell, following
+[Chromium's user-namespace guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
+This runner configuration is separate from the Fly container.
+
+Structured `canvas.browser.job` logs contain operation kind, outcome, queue,
+preparation, launch, render, cleanup and total milliseconds, plus force-kill and
+incomplete-cleanup flags. They sample worker RSS and machine free memory while
+the job is active. These are process/machine observations, not per-browser RSS
+or a hard memory limit. Logs omit drawing contents, document IDs and raw browser
+errors. Watch queue rejection, timeout and incomplete-cleanup rates, along with
+memory and collaboration latency. One worker still shares CPU and RAM across
+rendering and collaboration; the queue bounds overlap but does not provide
+separate resource isolation.
 
 ### Preview origins and authentication
 

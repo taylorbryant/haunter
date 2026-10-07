@@ -143,8 +143,9 @@ arrows reject the entire batch. Unrelated unsupported shapes remain untouched.
 
 These operations use a detached native tldraw editor with bundled fonts and no
 external network access. The canvas must contain at most 1,000 shapes, and the
-worker prepares one organization batch at a time. Preparation has a 20-second
-deadline including browser startup. A missing/busy browser or timeout returns
+worker shares one browser job slot between organization and previews, with at
+most two waiting jobs. Preparation has a 20-second deadline including queue wait
+and browser startup, followed by at most four seconds for cleanup. A missing/busy browser or timeout returns
 `CANVAS_WORKER_UNAVAILABLE`; reread before retrying. The canvas's mutation queue
 is held during preparation so concurrent writes cannot invalidate its revision.
 Access is checked again before saving. No partial changes or temporary editor
@@ -301,7 +302,8 @@ returns the same metadata with `image: { mimeType: "image/png", data: "BASE64" }
   queue. The returned revision identifies that snapshot; newer edits can
   arrive while it renders. A preview does not create history or alter shapes.
 
-The worker renders one preview at a time in a fresh browser context with no
+The worker renders one preview or organization job at a time, admitting previews
+before image decoding. Each job uses a fresh sandboxed Chromium process with no
 network access beyond locally served renderer assets and fonts. Images are
 returned directly and are not saved or published to a URL. A busy renderer,
 timeout, missing browser, or oversized image returns `CANVAS_PREVIEW_UNAVAILABLE`;
@@ -376,7 +378,7 @@ worker returns `CANVAS_WORKER_UNAVAILABLE` for canvas reads and edits.
 Previews require deploying both the updated web app and worker, with no new
 database migration beyond the canvas editing migration above. The worker
 Dockerfile installs Playwright's pinned Chromium headless shell and its system
-dependencies. For local workers and tests, install the browser once after
+dependencies and prebuilds the browser bundle. For local workers and tests, install the browser once after
 `bun install` (repeat after upgrading Playwright):
 
 ```sh
@@ -386,12 +388,14 @@ bunx --bun playwright install chromium --only-shell
 On Linux, add `--with-deps` to install system dependencies. Supply
 `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` to the worker as well as the web app when using
 a tldraw license. The browser and tldraw bundle run only in the collaboration
-worker; the web app forwards authenticated requests. Browser startup has an
-8-second timeout within a 20-second overall deadline for bundling, startup and
-rendering/preparation, below the command bridge's 30-second request deadline.
-Monitor worker memory under preview and organization load: each request starts
-a separate Chromium process, with one preview and one organization batch
-allowed at a time. The existing browser installation also powers organization.
+worker; the web app forwards authenticated requests. Browser startup has a
+12-second cap within a 20-second deadline for queue wait, preparation, startup
+and rendering. Cleanup has up to four more seconds, below the command bridge's
+30-second request deadline. The worker verifies native layout and PNG export at
+startup; `/health/renderer` reports this separately from collaboration health.
+Monitor memory and the structured `canvas.browser.job` logs under preview and
+organization load. Both use one shared queue with one active and two waiting
+jobs, and a timed-out job retains its slot until cleanup finishes.
 
 Follow the [collaboration deployment guide](collaboration.md#worker-deployment)
 for worker configuration and the single-worker requirement.

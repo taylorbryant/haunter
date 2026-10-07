@@ -40,6 +40,29 @@ jobs:
       - name: Install canvas preview browser
         run: bunx --bun playwright install --with-deps chromium --only-shell
 
+      - name: Allow the downloaded Chromium sandbox on Ubuntu
+        # Ubuntu 24.04 restricts user namespaces for executables without a profile.
+        # Allow only this installed browser, preserving Chromium's own sandbox.
+        run: |
+          browsers=("$HOME"/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell)
+          test "${#browsers[@]}" -eq 1
+          test -x "${browsers[0]}"
+          sudo tee /etc/apparmor.d/haunter-canvas-chromium > /dev/null <<EOF
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile haunter-canvas-chromium "${browsers[0]}" flags=(unconfined) {
+            userns,
+          }
+          EOF
+          sudo apparmor_parser -r /etc/apparmor.d/haunter-canvas-chromium
+
+      - name: Build and verify the production canvas runtime
+        env:
+          DEBUG: pw:browser
+        run: |
+          bun --no-env-file scripts/build-canvas-browser.ts
+          NODE_ENV=production bun --no-env-file scripts/verify-canvas-renderer.ts
+
       - name: Install Redis for isolated Lua regression tests
         run: |
           sudo apt-get update

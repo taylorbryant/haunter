@@ -435,15 +435,19 @@ test("oversized pages and cyclic shape hierarchies are rejected before opening a
 	);
 });
 
-test("renderer refuses overlapping work and stays unavailable after shutdown", async () => {
+test("renderer bounds queued work and stays unavailable after shutdown", async () => {
 	const renderer = createCanvasPreviewRenderer();
 	const input = { snapshot: normalizeCanvasSnapshot({}), command };
 	try {
-		const first = renderer.render(input);
+		const pending = [
+			renderer.render(input),
+			renderer.render(input),
+			renderer.render(input),
+		];
 		await expect(renderer.render(input)).rejects.toMatchObject({
 			code: "CANVAS_PREVIEW_UNAVAILABLE",
 		});
-		await first;
+		await Promise.all(pending);
 	} finally {
 		await renderer.stop();
 	}

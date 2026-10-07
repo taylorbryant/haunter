@@ -9,6 +9,8 @@
 		"dev": "bun run build:mcp-app && next dev",
 		"build": "bun run build:mcp-app && next build",
 		"build:mcp-app": "bun scripts/build-mcp-app.ts",
+		"build:canvas-browser": "bun --no-env-file scripts/build-canvas-browser.ts",
+		"verify:canvas-renderer": "bun --no-env-file scripts/verify-canvas-renderer.ts",
 		"preview:mcp-app": "bun scripts/preview-mcp-editor.ts",
 		"preview:mcp-editor": "bun scripts/preview-mcp-editor.ts",
 		"verify:mcp-canvas": "bun scripts/verify-mcp-canvas.ts",
