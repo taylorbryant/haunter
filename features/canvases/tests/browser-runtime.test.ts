@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
+import { setImmediate as yieldToIO } from "node:timers/promises";
 import type { Browser, BrowserServer, chromium } from "playwright";
 import { appError } from "@/features/shared/errors";
 import {
@@ -6,6 +7,19 @@ import {
 	createCanvasBrowserRunner,
 	type CanvasBrowserMetric,
 } from "@/infra/canvases/browser-runtime";
+
+beforeEach(() => jest.useFakeTimers());
+afterEach(() => {
+	jest.clearAllTimers();
+	jest.useRealTimers();
+});
+
+// Drive deadlines independently of CI scheduling and real temporary-directory
+// I/O. Yielding lets promise continuations register the next cleanup timer.
+async function advance(ms: number) {
+	jest.advanceTimersByTime(ms);
+	await yieldToIO();
+}
 
 function gate<T = void>() {
 	let resolve!: (value: T | PromiseLike<T>) => void;
@@ -16,10 +30,11 @@ function gate<T = void>() {
 }
 
 async function until(predicate: () => boolean) {
-	const deadline = Date.now() + 2000;
+	const deadline = process.hrtime.bigint() + BigInt(2_000_000_000);
 	while (!predicate()) {
-		if (Date.now() > deadline) throw new Error("Condition did not become true");
-		await Bun.sleep(5);
+		if (process.hrtime.bigint() > deadline)
+			throw new Error("Condition did not become true");
+		await yieldToIO();
 	}
 }
 
@@ -100,9 +115,11 @@ test("preview preparation and native layout share FIFO admission with only two w
 
 test("queue wait counts against the deadline and expired jobs never prepare", async () => {
 	const release = gate();
+	const preparing = gate();
 	const runner = createCanvasBrowserRunner({ timeoutMs: 40, cleanupMs: 10 });
 	const first = runner
 		.run("preview", async () => {
+			preparing.resolve();
 			await release.promise;
 		})
 		.catch((error) => error);
@@ -112,7 +129,10 @@ test("queue wait counts against the deadline and expired jobs never prepare", as
 			prepared = true;
 		})
 		.catch((error) => error);
+	await preparing.promise;
+	await advance(40);
 	expect(await second).toBeInstanceOf(Error);
+	await advance(10);
 	expect(await first).toBeInstanceOf(Error);
 	expect(prepared).toBe(false);
 	expect(runner.health()).toMatchObject({
@@ -135,12 +155,18 @@ test("timed-out decoding retains its slot until settled and cannot launch a late
 		onMetric: (m) => metrics.push(m),
 	});
 	const release = gate();
-	await expect(
-		runner.run("preview", async (job) => {
+	const preparing = gate();
+	const first = runner
+		.run("preview", async (job) => {
+			preparing.resolve();
 			await release.promise;
 			await job.page();
-		}),
-	).rejects.toThrow("timed out");
+		})
+		.catch((error) => error);
+	await preparing.promise;
+	await advance(40);
+	await advance(10);
+	expect(await first).toHaveProperty("message", "Canvas browser timed out");
 	expect(metrics[0]).toMatchObject({
 		outcome: "timeout",
 		cleanupIncomplete: true,
@@ -184,6 +210,8 @@ test("a browser launched after cancellation is killed before another job starts"
 		})
 		.catch((error) => error);
 	await until(() => fixture.calls.launched === 1);
+	await advance(100);
+	await advance(10);
 	expect(await first).toBeInstanceOf(Error);
 	let nextStarted = false;
 	const next = runner.run("structure", async () => {
@@ -202,6 +230,7 @@ test("a browser launched after cancellation is killed before another job starts"
 test("render deadline closes the browser, and stuck graceful close escalates to kill", async () => {
 	const fixture = browserFixture();
 	const terminated = gate();
+	const rendering = gate();
 	const metrics: CanvasBrowserMetric[] = [];
 	fixture.server.close = async () => {
 		fixture.calls.closed++;
@@ -217,12 +246,18 @@ test("render deadline closes the browser, and stuck graceful close escalates to 
 		cleanupMs: 40,
 		onMetric: (m) => metrics.push(m),
 	});
-	await expect(
-		runner.run("preview", async (job) => {
+	const first = runner
+		.run("preview", async (job) => {
 			await job.page();
+			rendering.resolve();
 			await terminated.promise;
-		}),
-	).rejects.toThrow("timed out");
+		})
+		.catch((error) => error);
+	await rendering.promise;
+	await advance(80);
+	expect(fixture.calls).toMatchObject({ closed: 1, killed: 0 });
+	await advance(20);
+	expect(await first).toHaveProperty("message", "Canvas browser timed out");
 	expect(fixture.calls).toMatchObject({ closed: 1, killed: 1 });
 	expect(metrics[0]).toMatchObject({
 		outcome: "timeout",
@@ -255,15 +290,22 @@ test("a failed kill after a late launch leaves rendering unavailable", async () 
 		})
 		.catch((error) => error);
 	await until(() => fixture.calls.launched === 1);
+	await advance(100);
+	await advance(10);
 	expect(await first).toBeInstanceOf(Error);
 	launched.resolve(fixture.server);
 	await until(() => fixture.calls.killed === 1);
 	let nextStarted = false;
-	await expect(
-		runner.run("structure", async () => {
+	const next = runner
+		.run("structure", async () => {
 			nextStarted = true;
-		}),
-	).rejects.toThrow("queue timed out");
+		})
+		.catch((error) => error);
+	await advance(100);
+	expect(await next).toHaveProperty(
+		"message",
+		"Canvas browser queue timed out",
+	);
 	expect(nextStarted).toBe(false);
 	expect(runner.health()).toMatchObject({ active: true, ready: false });
 	await runner.stop();
@@ -273,18 +315,32 @@ test("unconfirmed browser termination holds the slot even after returning an err
 	const fixture = browserFixture();
 	const close = gate();
 	const kill = gate();
-	fixture.server.close = () => close.promise;
-	fixture.server.kill = () => kill.promise;
+	fixture.server.close = () => {
+		fixture.calls.closed++;
+		return close.promise;
+	};
+	fixture.server.kill = () => {
+		fixture.calls.killed++;
+		return kill.promise;
+	};
 	const runner = createCanvasBrowserRunner({
 		...fixture.options,
 		timeoutMs: 500,
 		cleanupMs: 20,
 	});
-	await expect(
-		runner.run("preview", async (job) => {
+	const first = runner
+		.run("preview", async (job) => {
 			await job.page();
-		}),
-	).rejects.toThrow("cleanup");
+		})
+		.catch((error) => error);
+	await until(() => fixture.calls.closed === 1);
+	await advance(10);
+	expect(fixture.calls.killed).toBe(1);
+	await advance(10);
+	expect(await first).toHaveProperty(
+		"message",
+		"Canvas browser cleanup did not finish",
+	);
 	let nextStarted = false;
 	const next = runner.run("structure", async () => {
 		nextStarted = true;
