@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceSearchParams } from "@/client/workspace-navigation";
 
 import { createReactBlockSpec } from "@blocknote/react";
 import dynamic from "next/dynamic";
@@ -82,6 +83,13 @@ function CanvasBlockView({ canvasId }: { canvasId: string }) {
 	const [expanded, setExpanded] = useState(false);
 	const [saveState, setSaveState] = useState<CanvasSaveState>("saved");
 	const overlayRef = useRef<HTMLDivElement>(null);
+	const searchParams = useWorkspaceSearchParams();
+	// Scroll again when navigating to another match within the same canvas.
+	const focusedTarget =
+		searchParams.get("canvasId") === canvasId ? searchParams.toString() : null;
+	useEffect(() => {
+		if (focusedTarget) overlayRef.current?.scrollIntoView({ block: "center" });
+	}, [focusedTarget]);
 	const headerButtonRef = useRef<HTMLButtonElement>(null);
 	const handleSaveStateChange = useCallback((state: CanvasSaveState) => {
 		setSaveState(state);

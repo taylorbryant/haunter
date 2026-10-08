@@ -44,6 +44,7 @@ import {
 	getEmbeddedAppearance,
 	updateEmbeddedAppearance,
 } from "@/features/agents/contracts";
+import { searchWorkspace } from "@/features/search/contracts";
 import { appError } from "@/features/shared/errors";
 import { canAccessEmbeddedCanvas } from "@/features/agents/embedded-editor-session";
 import { requireActiveWorkspaceScope } from "@/lib/auth";
@@ -87,6 +88,7 @@ export const embeddedEditorAuthHooks: ServerHook<AppContext> = {
 				listPages,
 				getPageNavigation,
 				searchPages,
+				searchWorkspace,
 				getPage,
 				getPageMetadata,
 				listPageVersions,

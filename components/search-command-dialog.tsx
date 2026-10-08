@@ -1,7 +1,12 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { CornerDownLeftIcon, FileTextIcon } from "lucide-react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+	CornerDownLeftIcon,
+	FileTextIcon,
+	ShapesIcon,
+	CheckSquareIcon,
+} from "lucide-react";
 import { useWorkspacePathname as usePathname } from "@/client/workspace-navigation";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useEffect, useRef, useState } from "react";
@@ -16,11 +21,11 @@ import {
 	CommandList,
 	CommandShortcut,
 } from "@/components/ui/command";
-import {
-	getPageNavigationQueryOptions,
-	searchPagesQueryOptions,
-} from "@/features/pages/client/queries";
+import { getPageNavigationQueryOptions } from "@/features/pages/client/queries";
 import { formatViewedAt } from "@/features/pages/lib/format-viewed-at";
+
+import { searchWorkspaceQueryOptions } from "@/features/search/client/queries";
+import type { SearchKind } from "@/features/search/schemas";
 
 function useDebouncedValue(value: string, delayMs: number) {
 	const [debounced, setDebounced] = useState(value);
@@ -47,23 +52,32 @@ export function SearchCommandDialog({
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [query, setQuery] = useState("");
+	const [kind, setKind] = useState<SearchKind>("all");
 
 	const isCommandMode = query.startsWith(COMMAND_PREFIX);
 	const commandQuery = isCommandMode ? query.slice(COMMAND_PREFIX.length) : "";
 	const debounced = useDebouncedValue(query.trim(), 200);
 
-	const search = useQuery({
-		...searchPagesQueryOptions(debounced),
-		enabled: open && !isCommandMode && debounced.length >= 2,
-		placeholderData: keepPreviousData,
+	const search = useInfiniteQuery({
+		...searchWorkspaceQueryOptions(workspaceId ?? "", debounced, kind),
+		enabled:
+			open && Boolean(workspaceId) && !isCommandMode && debounced.length >= 2,
 	});
 	const navigation = useQuery({
 		...getPageNavigationQueryOptions(workspaceId ?? ""),
 		enabled: open && Boolean(workspaceId) && debounced.length === 0,
 	});
 
-	const pageItems =
-		!isCommandMode && debounced.length >= 2 ? (search.data?.items ?? []) : [];
+	const results =
+		!isCommandMode && query.trim() === debounced && debounced.length >= 2
+			? [
+					...new Map(
+						(search.data?.pages.flatMap((page) => page.items) ?? []).map(
+							(item) => [`${item.kind}:${item.id}`, item],
+						),
+					).values(),
+				]
+			: [];
 	const commandGroups = useFilteredCommandGroups(commandQuery);
 
 	function close() {
@@ -84,21 +98,48 @@ export function SearchCommandDialog({
 			description={
 				isCommandMode
 					? "Run a command"
-					: "Search pages by title or content, or type > for commands"
+					: "Search pages, tasks, and canvases, or type > for commands"
 			}
 			initialFocus={inputRef}
 		>
 			<Command shouldFilter={false}>
 				<CommandInput
 					ref={inputRef}
+					maxLength={200}
 					placeholder={
 						isCommandMode
 							? "Type a command..."
-							: "Search pages, or > for commands..."
+							: "Search workspace, or > for commands..."
 					}
 					value={query}
 					onValueChange={setQuery}
 				/>
+				{!isCommandMode && (
+					<fieldset
+						className="flex gap-1 border-b px-3 py-2"
+						aria-label="Search types"
+					>
+						{(["all", "page", "task", "canvas"] as const).map((value) => (
+							<Button
+								key={value}
+								type="button"
+								size="sm"
+								variant={kind === value ? "secondary" : "ghost"}
+								aria-pressed={kind === value}
+								onClick={() => setKind(value)}
+							>
+								{
+									{
+										all: "All",
+										page: "Pages",
+										task: "Tasks",
+										canvas: "Canvases",
+									}[value]
+								}
+							</Button>
+						))}
+					</fieldset>
+				)}
 				<CommandList>
 					{isCommandMode ? (
 						commandGroups.length > 0 ? (
@@ -170,7 +211,10 @@ export function SearchCommandDialog({
 								</CommandItem>
 							))}
 						</CommandGroup>
-					) : search.isError ? (
+					) : search.isError &&
+						results.length === 0 &&
+						debounced.length >= 2 &&
+						query.trim() === debounced ? (
 						<div className="flex flex-col items-center gap-2 py-6 text-center text-destructive text-sm">
 							<p role="alert">Search could not be completed.</p>
 							<Button
@@ -182,24 +226,38 @@ export function SearchCommandDialog({
 								Try again
 							</Button>
 						</div>
-					) : pageItems.length > 0 ? (
-						<CommandGroup heading="Pages">
-							{pageItems.map((item) => (
+					) : results.length > 0 ? (
+						<CommandGroup heading="Results">
+							{results.map((item) => (
 								<CommandItem
-									key={item.id}
-									value={item.id}
+									key={`${item.kind}:${item.id}`}
+									value={`${item.kind}:${item.id}`}
 									onSelect={() => {
 										close();
-										router.push(`/w/${item.workspaceId}/p/${item.id}`);
+										router.push(item.path);
 									}}
 								>
 									{item.icon ? (
 										<span aria-hidden>{item.icon}</span>
+									) : item.kind === "canvas" ? (
+										<ShapesIcon className="text-muted-foreground" />
+									) : item.kind === "task" ? (
+										<CheckSquareIcon className="text-muted-foreground" />
 									) : (
 										<FileTextIcon className="text-muted-foreground" />
 									)}
 									<div className="flex min-w-0 flex-col">
 										<span className="truncate">{item.title || "Untitled"}</span>
+										<span className="truncate text-muted-foreground text-xs">
+											{
+												{
+													page: "Page",
+													task: item.completed ? "Completed task" : "Task",
+													canvas: "Canvas",
+												}[item.kind]
+											}
+											{item.pageTitle ? ` · ${item.pageTitle}` : ""}
+										</span>
 										{item.snippet ? (
 											<span className="truncate text-muted-foreground text-xs">
 												{item.snippet}
@@ -208,6 +266,20 @@ export function SearchCommandDialog({
 									</div>
 								</CommandItem>
 							))}
+							{search.hasNextPage && (
+								<CommandItem
+									value="load-more"
+									disabled={search.isFetchingNextPage}
+									onSelect={() => void search.fetchNextPage()}
+								>
+									{search.isFetchingNextPage ? "Loading…" : "Load more results"}
+								</CommandItem>
+							)}
+							{search.isFetchNextPageError && (
+								<p role="alert" className="px-3 py-2 text-sm text-destructive">
+									Could not load more results. Try again.
+								</p>
+							)}
 						</CommandGroup>
 					) : (
 						<div className="py-6 text-center text-muted-foreground text-sm">
@@ -217,9 +289,9 @@ export function SearchCommandDialog({
 									: "No recently viewed pages."
 								: debounced.length < 2
 									? "Type at least 2 characters."
-									: search.isFetching
+									: search.isFetching || query.trim() !== debounced
 										? "Searching..."
-										: "No pages found."}
+										: "No results found."}
 						</div>
 					)}
 				</CommandList>

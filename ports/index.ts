@@ -1,3 +1,4 @@
+import type { WorkspaceSearchRepository } from "@/features/search/ports";
 import type { EmbeddedEditorSessionPort } from "@/features/agents/embedded-editor-session";
 import type { AgentFilesPort } from "@/features/agents/file-input";
 import type { BroadcastPort } from "@beignet/core/broadcasting/server";
@@ -68,6 +69,7 @@ export type AppPolicies = [
 ];
 
 export type AppTransactionPorts = {
+	workspaceSearch: WorkspaceSearchRepository;
 	documents: DocumentRepository;
 	adminUsers: AdminUserRepository;
 	agents: AgentAdminRepository;
@@ -94,6 +96,7 @@ export type AppTransactionPorts = {
 export type AppGate = BoundGate<AppPolicies>;
 
 export type AppPorts = {
+	workspaceSearch: WorkspaceSearchRepository;
 	agentFiles: AgentFilesPort;
 	canvasEditing: CanvasEditingPort;
 	documentMaintenance: DocumentMaintenancePort;

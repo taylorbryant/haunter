@@ -15,6 +15,7 @@ import {
 	type TLStoreSnapshot,
 	type TLUserPreferences,
 } from "tldraw";
+import { invalidateWorkspaceSearch } from "@/features/search/client/queries";
 import { apiClient } from "@/client";
 import { draftRegistry } from "@/client/draft-registry";
 import { getBrowserSessionRecovery } from "@/client/session-recovery";
@@ -48,8 +49,12 @@ import {
 	importRecovery,
 } from "@/features/documents/contracts";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
-import { WorkspaceNavigationContext } from "@/client/workspace-navigation";
+import {
+	WorkspaceNavigationContext,
+	useWorkspaceSearchParams,
+} from "@/client/workspace-navigation";
 import { useLiveContext } from "@/features/live-context/client/provider";
+import { observeCanvasSearchResult } from "../client/search-focus";
 import { observeCanvasContext } from "../client/live-context";
 import { AGENT_HIGHLIGHT_OVERLAYS } from "../client/agent-highlights";
 import { CanvasAgentActivity } from "./canvas-agent-activity";
@@ -127,7 +132,20 @@ function CollaborativeCanvasSurface({
 	editable: boolean;
 }) {
 	const liveContext = useLiveContext();
+	const queryClient = useQueryClient();
+	const searchParams = useWorkspaceSearchParams();
+	const focusedCanvasId = searchParams.get("canvasId");
+	const focusedShapeId = searchParams.get("shapeId");
 	const [contextEditor, setContextEditor] = useState<Editor | null>(null);
+	useEffect(() => {
+		if (
+			!contextEditor ||
+			!focusedShapeId ||
+			(pageId && focusedCanvasId !== canvasId)
+		)
+			return;
+		return observeCanvasSearchResult(contextEditor, focusedShapeId);
+	}, [contextEditor, canvasId, pageId, focusedCanvasId, focusedShapeId]);
 	useEffect(() => {
 		if (!contextEditor || !liveContext) return;
 		return observeCanvasContext(contextEditor, liveContext, {
@@ -244,6 +262,7 @@ function CollaborativeCanvasSurface({
 				);
 				receipt.current = message.fingerprint;
 				recovery.current?.acknowledge(message.fingerprint);
+				void invalidateWorkspaceSearch(queryClient, workspaceId);
 			}
 		},
 	});

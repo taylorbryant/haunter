@@ -1,3 +1,4 @@
+import { createWorkspaceSearchRepository } from "@/infra/search/workspace-search-repository";
 import { createEmbeddedEditorSessionRepository } from "@/infra/agents/embedded-editor-session-repository";
 import { createDrizzleEmbeddedAppearanceRepository } from "@/infra/agents/drizzle-embedded-appearance-repository";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
@@ -36,6 +37,7 @@ export function createRepositories(
 		tasks,
 	});
 	return {
+		workspaceSearch: createWorkspaceSearchRepository(db),
 		documents,
 		adminUsers: createDrizzleAdminUserRepository(db),
 		agents: createDrizzleAgentAdminRepository(db),

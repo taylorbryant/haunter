@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
 import { contractsFromRoutes, defineRoutes } from "@beignet/core/server";
 import type { AppContext } from "@/app-context";
+import { searchRoutes } from "@/features/search/routes";
 import { adminRoutes } from "@/features/admin/routes";
 import { agentRoutes, embeddedEditorRoutes } from "@/features/agents/routes";
 import { canvasRoutes } from "@/features/canvases/routes";
@@ -16,6 +17,7 @@ import { liveContextRoutes } from "../features/live-context/routes";
 import { memberRoutes } from "@/features/members/routes";
 
 export const routes = defineRoutes<AppContext>([
+	searchRoutes,
 	adminRoutes,
 	memberRoutes,
 	agentRoutes,

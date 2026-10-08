@@ -1,3 +1,4 @@
+import { invalidateWorkspaceSearch } from "@/features/search/client/queries";
 import type { ContractUseMutationOptions } from "@beignet/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
@@ -217,7 +218,10 @@ export function searchPagesQueryOptions(q: string) {
 }
 
 export function invalidatePageSearch(queryClient: QueryClient) {
-	return rq(searchPages).invalidate(queryClient);
+	return Promise.all([
+		rq(searchPages).invalidate(queryClient),
+		invalidateWorkspaceSearch(queryClient),
+	]).then(() => {});
 }
 
 export function listBacklinksQueryOptions(id: string) {
@@ -242,7 +246,10 @@ export function purgePageMutationOptions() {
 }
 
 export function invalidatePages(queryClient: QueryClient) {
-	return rq(listPages).invalidate(queryClient);
+	return Promise.all([
+		rq(listPages).invalidate(queryClient),
+		invalidateWorkspaceSearch(queryClient),
+	]).then(() => {});
 }
 
 export function invalidateTrash(queryClient: QueryClient) {

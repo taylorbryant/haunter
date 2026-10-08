@@ -980,6 +980,8 @@ export const canvases = sqliteTable(
 		}),
 		title: text("title"),
 		snapshot: text("snapshot").notNull().default("{}"),
+		// Maintained by SQLite triggers, including writes from older collab workers.
+		searchContent: text("search_content").notNull().default("[]"),
 		snapshotUpdatedAt: text("snapshot_updated_at").notNull(),
 		createdAt: text("created_at").notNull(),
 		updatedAt: text("updated_at").notNull(),
