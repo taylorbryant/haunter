@@ -15,18 +15,29 @@ const liveUpdatesEnabled = process.env.NEXT_PUBLIC_LIVE_UPDATES === "true";
 
 export function WorkspaceEventSubscriber({
 	workspaceId,
+	navigation,
 }: {
 	workspaceId: string;
+	/** Embedded navigation changes without changing the Next.js route params. */
+	navigation?: {
+		pageId: string | undefined;
+		onPageRemoved(pageId: string): void;
+	};
 }) {
 	const queryClient = useQueryClient();
 	const requestsEnabled = useProtectedRequestsEnabled();
 	const currentUserId = useCurrentUser()?.id;
 	const router = useDraftSafeRouter();
 	const params = useParams<{ pageId?: string | string[] }>();
-	const activePageIdRef = useRef<string | undefined>(undefined);
-	activePageIdRef.current = Array.isArray(params.pageId)
-		? params.pageId[0]
-		: params.pageId;
+	const pageId = navigation
+		? navigation.pageId
+		: Array.isArray(params.pageId)
+			? params.pageId[0]
+			: params.pageId;
+	// Navigation callbacks must stay current without reconnecting the stream
+	// every time the embedded workspace changes its local route.
+	const viewRef = useRef({ pageId, navigation, router });
+	viewRef.current = { pageId, navigation, router };
 	useEffect(() => {
 		if (!requestsEnabled || !currentUserId || !liveUpdatesEnabled) return;
 		const client = createAppBroadcastClient();
@@ -38,10 +49,12 @@ export function WorkspaceEventSubscriber({
 			userId: currentUserId,
 			workspaceId,
 			getClock: client.getClock,
-			getCurrentPageId: () => activePageIdRef.current,
+			getCurrentPageId: () => viewRef.current.pageId,
 			onPageRemoved(pageId) {
-				if (activePageIdRef.current === pageId)
-					router.replace(`/w/${workspaceId}/home`);
+				const view = viewRef.current;
+				if (view.pageId !== pageId) return;
+				if (view.navigation) view.navigation.onPageRemoved(pageId);
+				else view.router.replace(`/w/${workspaceId}/home`);
 			},
 			onError(error) {
 				// Per-channel denial arrives inside a successful SSE response, so it
@@ -64,6 +77,6 @@ export function WorkspaceEventSubscriber({
 				client.close();
 			}
 		};
-	}, [requestsEnabled, currentUserId, queryClient, router, workspaceId]);
+	}, [requestsEnabled, currentUserId, queryClient, workspaceId]);
 	return null;
 }
