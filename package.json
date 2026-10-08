@@ -82,7 +82,7 @@
 		"@shikijs/themes": "4.4.3",
 		"@tanstack/react-query": "5.103.1",
 		"@tldraw/assets": "5.4.2",
-		"@tldraw/sync": "5.4.2",
+		"@tldraw/sync": "5.5.2",
 		"@tldraw/sync-core": "5.4.2",
 		"@tldraw/tlschema": "5.4.2",
 		"@tldraw/utils": "5.4.2",
