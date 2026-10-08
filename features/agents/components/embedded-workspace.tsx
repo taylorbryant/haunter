@@ -19,6 +19,7 @@ import { WorkspaceHeader } from "@/components/workspace-header";
 import { HeaderPageActions } from "@/components/header-page-actions";
 import { WorkspaceSidebar } from "@/components/workspace-sidebar";
 import { WorkspacePicker } from "@/features/workspaces/components/workspace-picker";
+import { WorkspaceEventSubscriber } from "@/features/collab/client/workspace-events";
 import { CanvasList } from "@/features/canvases/components/canvas-list";
 import {
 	createCanvasMutationOptions,
@@ -164,8 +165,8 @@ export function EmbeddedWorkspace({ initialPath }: { initialPath: string }) {
 					error={error}
 					onRemoved={(ids) => {
 						if (!target.pageId || !ids.includes(target.pageId)) return false;
-						// The confirmed removal already flushed this view. Its server sessions
-						// are now invalid, so another remote flush cannot succeed.
+						// A removed page no longer accepts remote writes. Local edits have
+						// recovery copies; do not block navigation on a remote flush.
 						send(readBridge(), { type: "haunter/workspace/view", view: null });
 						setError("");
 						setPath(`/w/${encodeURIComponent(target.workspaceId)}/home`);
@@ -247,6 +248,13 @@ function WorkspaceShell({
 				className="h-svh min-h-0 overflow-hidden bg-background text-foreground"
 			>
 				<CreateDialogProvider workspaceId={target.workspaceId}>
+					<WorkspaceEventSubscriber
+						workspaceId={target.workspaceId}
+						navigation={{
+							pageId: target.pageId,
+							onPageRemoved: (pageId) => onRemoved([pageId]),
+						}}
+					/>
 					<WorkspaceSidebar
 						workspaceId={target.workspaceId}
 						preferShiftShortcut

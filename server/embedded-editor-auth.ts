@@ -74,6 +74,9 @@ export const embeddedEditorAuthHooks: ServerHook<AppContext> = {
 		)
 			return;
 		if (grant.scope === "workspace") {
+			// Channel bindings validate the requested workspace and, for personal
+			// channels, the user. Document grants cannot subscribe to workspace data.
+			if (contract.name === "broadcasts.subscribe") return;
 			// A viewer can save their own appearance; this grants no content writes.
 			if (
 				[getEmbeddedAppearance.name, updateEmbeddedAppearance.name].includes(
