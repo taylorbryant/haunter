@@ -230,3 +230,29 @@ test("canvas structure activity resolves refs and highlights layout targets with
 		],
 	});
 });
+
+test("canvas restoration announces progress without sending historical content or changing selection", async () => {
+	const f = await canvasActivityFixture({ profile: "full" });
+	await f.execute("restore_canvas_version", {
+		expectedRevision: "v1",
+		historyVersionId: crypto.randomUUID(),
+	});
+	expect(
+		f.events.map((event) => [event.action, event.phase, event.changedShapeIds]),
+	).toEqual([
+		["restore", "active", []],
+		["restore", "completed", []],
+	]);
+	expect(f.events.every(isCanvasAgentActivity)).toBe(true);
+	const denied = await canvasActivityFixture({
+		profile: "full",
+		role: "viewer",
+	});
+	await expect(
+		denied.execute("restore_canvas_version", {
+			expectedRevision: "v1",
+			historyVersionId: crypto.randomUUID(),
+		}),
+	).rejects.toThrow();
+	expect(denied.events).toEqual([]);
+});

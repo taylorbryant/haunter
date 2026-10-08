@@ -327,7 +327,7 @@ The operation deletes drawings, not the page's canvas block.
 | --- | --- |
 | View only | Search library items, read current drawings and retained history, and preview current drawings. |
 | View and edit | Also add canvas blocks, insert library items, create/update shapes and frames, connect nodes, group/ungroup, reparent, align and distribute. |
-| Full access | Also delete shapes. |
+| Full access | Also delete shapes and restore saved canvas versions. |
 
 Local Agent Auth requires an explicit workspace-scoped grant for each tool.
 Workspace membership and content permissions still apply. Canvases attached to
@@ -340,7 +340,8 @@ in canvas history, which retains the latest 50 agent snapshots. Read an older dr
 passing its `historyVersionId` to `read_canvas`. Its returned revision describes
 that older drawing and cannot authorize a current edit. You can inspect old
 properties and use them to prepare targeted corrections against a fresh read.
-There is no whole-canvas restore tool or canvas history UI in this release.
+Use `restore_canvas_version` for whole-canvas recovery as described below. There
+is no canvas history UI in this release.
 
 On `CANVAS_REVISION_CONFLICT`, read the canvas again and reconsider the edit. The
 hosted MCP error includes `currentRevision`. On `CANVAS_WORKER_UNAVAILABLE`, read
@@ -354,7 +355,52 @@ changes received by the worker; a disconnected client's pending changes are not
 included. Concurrent edits to the same shape property follow tldraw's normal
 conflict behavior and should be reviewed after reconnection.
 
+## Restore a saved canvas version
+
+1. Call `read_canvas` to list retained history IDs, then inspect the desired
+   drawing with `read_canvas` and its `historyVersionId`.
+2. Call `read_canvas` again **without** `historyVersionId` to get the current
+   revision. A historical revision cannot authorize restoration.
+3. Call `restore_canvas_version` with Full access (or an explicit workspace-scoped
+   Agent Auth grant):
+
+```json
+{
+  "workspaceId": "YOUR_WORKSPACE_ID",
+  "canvasId": "YOUR_CANVAS_UUID",
+  "historyVersionId": "SAVED_VERSION_UUID",
+  "expectedRevision": "REVISION_FROM_CURRENT_READ"
+}
+```
+
+This replaces all drawing records, including internal canvas pages, locked
+shapes, groups, bindings, and image assets. It preserves the canvas ID, title,
+and parent Haunter page. Open editors receive the changes through the existing
+collaboration room; the historical author's camera, selection, and presence are
+not restored. Normal editor behavior still applies when selected shapes or the
+current canvas page are removed.
+
+The response returns the new `revision`, `restoredHistoryVersionId` (the selected
+version), and `historyVersionId` (a recovery snapshot of the drawing immediately
+before restoration). To undo the restore, restore that recovery version using a
+fresh current revision. The recovery snapshot and drawing update commit together:
+failed validation or a failed database transaction leaves neither a partial
+restore nor an extra recovery entry. History retains the latest 50 snapshots,
+including recovery snapshots; it is not an unlimited undo log.
+
+A missing, pruned, or incompatible saved version returns `INVALID_CANVAS_EDIT`.
+A stale current revision returns `CANVAS_REVISION_CONFLICT`; reread the current
+drawing and reconsider before retrying. Restoration captures changes already
+received by the worker. Changes still pending on disconnected clients may sync
+later and should be reviewed after reconnection.
+
 ## Deployment
+
+For `restore_canvas_version`, deploy the collaboration worker first, then the
+web app/MCP. No new database migration or browser renderer is required. An older
+worker does not recognize restore commands. Refresh the client's MCP tool list
+after deploying to discover the tool. Hosted connections need Full access;
+Agent Auth needs an explicit grant for the new capability.
 
 For library insertion and canvas organization, deploy the collaboration worker first, then
 the web app/MCP. No database migration is required for this extension. Older

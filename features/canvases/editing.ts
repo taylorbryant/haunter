@@ -150,6 +150,14 @@ export const DeleteCanvasShapesInputSchema = CanvasTargetSchema.extend({
 export const ReadCanvasInputSchema = CanvasTargetSchema.extend({
 	historyVersionId: z.uuid().optional(),
 });
+export const RestoreCanvasVersionInputSchema = CanvasTargetSchema.extend({
+	historyVersionId: z
+		.uuid()
+		.describe("A retained history ID from read_canvas."),
+	expectedRevision: CanvasRevisionSchema.describe(
+		"The current revision from a fresh read_canvas without historyVersionId.",
+	),
+});
 export const PreviewCanvasInputSchema = CanvasTargetSchema.extend({
 	pageId: z
 		.string()
@@ -203,6 +211,7 @@ export const CanvasImageOutputSchema = CanvasImageMetadataSchema.extend({
 });
 export const CanvasCommandSchema = z.discriminatedUnion("action", [
 	ReadCanvasInputSchema.extend({ action: z.literal("read") }),
+	RestoreCanvasVersionInputSchema.extend({ action: z.literal("restore") }),
 	ReadCanvasImageInputSchema.extend({ action: z.literal("read-image") }),
 	CanvasImagePlacementSchema.extend({
 		action: z.literal("insert-image"),
@@ -218,6 +227,7 @@ export const CanvasCommandSchema = z.discriminatedUnion("action", [
 export type CanvasCommand = z.infer<typeof CanvasCommandSchema>;
 export const isCanvasWrite = (command: CanvasCommand) =>
 	command.action === "edit" ||
+	command.action === "restore" ||
 	command.action === "delete" ||
 	command.action === "insert-library" ||
 	command.action === "insert-image";
@@ -265,6 +275,16 @@ export const CanvasEditOutputSchema = z.object({
 	createdShapes: z.record(z.string(), z.string()),
 	historyVersionId: z.uuid(),
 });
+export const RestoreCanvasVersionOutputSchema = z.object({
+	canvasId: z.uuid(),
+	revision: CanvasRevisionSchema,
+	historyVersionId: z
+		.uuid()
+		.describe("Recovery snapshot saved before this restore."),
+	restoredHistoryVersionId: z
+		.uuid()
+		.describe("The saved version that was restored."),
+});
 export const InsertCanvasLibraryItemOutputSchema = z.object({
 	canvasId: z.uuid(),
 	revision: CanvasRevisionSchema,
@@ -300,6 +320,7 @@ export type CanvasPreviewOutput = z.infer<typeof CanvasPreviewOutputSchema>;
 export const CanvasCommandOutputSchema = z.union([
 	CanvasReadOutputSchema,
 	CanvasEditOutputSchema,
+	RestoreCanvasVersionOutputSchema,
 	InsertCanvasLibraryItemOutputSchema,
 	CanvasPreviewOutputSchema,
 	CanvasImageOutputSchema,

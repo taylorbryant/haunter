@@ -1,7 +1,7 @@
 # Canvas agent activity
 
 When a connected agent uses `read_canvas`, `preview_canvas`, `edit_canvas`,
-`insert_canvas_library_item`, or `delete_canvas_shapes`, the open canvas shows
+`insert_canvas_library_item`, `delete_canvas_shapes`, or `restore_canvas_version`, the open canvas shows
 the agent's name, the workspace member who connected it, and the action in progress. This works in embedded and
 standalone canvases, for remote MCP connections and registered Agent Auth agents.
 
@@ -16,7 +16,7 @@ After a successful edit, created shapes, new arrows, and explicitly updated
 shapes receive a violet outline for six seconds. Outlines follow the current
 canvas page and viewport. They do not select shapes, move the camera, capture
 pointer input, change the drawing, or add undo/history entries. Deleted shapes
-have completion feedback but no outline. Shapes that arrive through sync during
+and restored drawings have completion feedback but no outline. Shapes that arrive through sync during
 the six-second window are outlined when they appear.
 
 ## Delivery and expiry
@@ -46,8 +46,10 @@ delivery cannot fail or indefinitely delay an otherwise valid canvas operation.
 
 ## Release
 
-Deploy the web app/MCP. No database migration or collaboration worker deployment
-is required. The existing workspace broadcast configuration must be enabled:
+Deploy the web app/MCP for activity indicators. The `restore_canvas_version`
+command itself also requires the updated collaboration worker (see
+[canvas restoration](./mcp-canvas-editing.md#restore-a-saved-canvas-version)).
+No new database migration is required. The existing workspace broadcast configuration must be enabled:
 `NEXT_PUBLIC_LIVE_UPDATES=true`, `REDIS_BROADCAST_URL`, the matching
 `REDIS_BROADCAST_PREFIX`, and Upstash Redis REST credentials used for stream
 leases. Live session context alone does not require this stream, but canvas

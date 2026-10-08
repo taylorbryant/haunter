@@ -52,6 +52,7 @@ export const agentCapabilityMetadata = {
 	list_page_versions: workspaceScope,
 	read_page_version: workspaceScope,
 	restore_page_version: workspaceScope,
+	restore_canvas_version: workspaceScope,
 	list_active_sessions: workspaceScope,
 	get_active_context: workspaceScope,
 	create_canvas_block: workspaceScope,

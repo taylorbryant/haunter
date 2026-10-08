@@ -16,6 +16,7 @@ again on execution, using the same use cases as the web app.
 | `list_trash` | View only | List archived page subtree roots and their deletion times. |
 | `list_page_versions`, `read_page_version` | View only | Browse retained page history and inspect saved bodies. |
 | `restore_page_version` | Full access | Restore a saved page body with a current revision precondition. |
+| `restore_canvas_version` | Full access | Restore a retained drawing with a current revision precondition and a recovery snapshot. See [canvas restoration](./mcp-canvas-editing.md#restore-a-saved-canvas-version). |
 
 ## Standalone canvases and favorites
 
@@ -72,9 +73,9 @@ Archived pages must first be recovered with `restore_page`.
 
 ## Release and grants
 
-This batch requires a web/MCP server deployment. It introduces no database
-migration and no collaboration-worker change. Canvas drawing tools still use
-the existing collaboration worker; standalone metadata and favorites do not.
+These tools require a web/MCP server deployment and no new database migration.
+For `restore_canvas_version`, deploy the updated collaboration worker first.
+Standalone metadata and favorites do not use the collaboration worker.
 
 Refresh the plugin's tool discovery after deployment if the new tools do not
 appear. Hosted connections gain tools within their existing permission profile;

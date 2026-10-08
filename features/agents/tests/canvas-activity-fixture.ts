@@ -43,6 +43,13 @@ export async function canvasActivityFixture(
 	});
 	f.ports.canvasEditing = {
 		async execute({ command }) {
+			if (command.action === "restore")
+				return {
+					canvasId: canvas.id,
+					revision: "v2",
+					historyVersionId: crypto.randomUUID(),
+					restoredHistoryVersionId: command.historyVersionId,
+				};
 			if (command.action === "insert-library")
 				return {
 					canvasId: canvas.id,

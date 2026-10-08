@@ -18,6 +18,7 @@ const actions: Record<string, CanvasAgentActivity["action"]> = {
 	insert_canvas_image: "edit",
 	preview_canvas: "preview",
 	edit_canvas: "edit",
+	restore_canvas_version: "restore",
 	insert_canvas_library_item: "edit",
 	delete_canvas_shapes: "delete",
 };
@@ -140,7 +141,8 @@ export async function startCanvasAgentActivity({
 		const scope = requireActiveWorkspaceScope(ctx, workspaceId);
 		const canvas = await ctx.ports.canvases.findMetaById(scope, canvasId);
 		if (expired() || !canvas) return;
-		const write = action === "edit" || action === "delete";
+		const write =
+			action === "edit" || action === "delete" || action === "restore";
 		await ctx.gate.authorize(
 			write ? "canvases.update" : "canvases.read",
 			canvas,
