@@ -1,3 +1,4 @@
+import { invalidateWorkspaceSearch } from "@/features/search/client/queries";
 import { protectedRefetchInterval } from "@/client/session-recovery";
 import type { ContractUseMutationOptions } from "@beignet/react-query";
 import type { QueryClient } from "@tanstack/react-query";
@@ -191,13 +192,18 @@ export function invalidateCanvasList(
 	queryClient: QueryClient,
 	workspaceId?: string,
 ) {
-	return workspaceId
-		? rq(listCanvases).invalidate(queryClient, { path: { workspaceId } })
-		: rq(listCanvases).invalidate(queryClient);
+	return Promise.all([
+		invalidateWorkspaceSearch(queryClient, workspaceId),
+		rq(listCanvases).invalidate(
+			queryClient,
+			workspaceId ? { path: { workspaceId } } : undefined,
+		),
+	]).then(() => {});
 }
 
 export function invalidateCanvases(queryClient: QueryClient) {
 	return Promise.all([
+		invalidateWorkspaceSearch(queryClient),
 		rq(getCanvas).invalidate(queryClient),
 		rq(listCanvases).invalidate(queryClient),
 		rq(getCanvasNavigation).invalidate(queryClient),

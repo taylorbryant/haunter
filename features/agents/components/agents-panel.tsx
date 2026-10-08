@@ -62,6 +62,7 @@ function formatActivityDate(iso: string) {
 const activityLabels: Record<string, string> = {
 	list_workspaces: "Listed workspaces",
 	list_pages: "Listed pages",
+	search_workspace: "Searched workspace",
 	search_pages: "Searched pages",
 	read_page: "Read a page",
 	create_page: "Created a page",

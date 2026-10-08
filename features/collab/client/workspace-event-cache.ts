@@ -17,6 +17,7 @@ import {
 	listTrash,
 	searchPages,
 } from "@/features/pages/contracts";
+import { searchWorkspace } from "@/features/search/contracts";
 import { listTasks } from "@/features/tasks/contracts";
 import {
 	isWorkspaceCanvasEvent,
@@ -28,12 +29,14 @@ import {
 
 function taskQueries(workspaceId: string): QueryFilters[] {
 	return [
+		rq(searchWorkspace).filter({ path: { workspaceId } }),
 		rq(listTasks).filter({ path: { workspaceId } }),
 		rq(listNotifications).filter(),
 	];
 }
 function pageQueries(workspaceId: string): QueryFilters[] {
 	return [
+		rq(searchWorkspace).filter({ path: { workspaceId } }),
 		rq(listPages).filter({ path: { workspaceId } }),
 		rq(getPageNavigation).filter({ path: { workspaceId } }),
 		rq(listTrash).filter({ path: { workspaceId } }),
@@ -45,6 +48,7 @@ function pageQueries(workspaceId: string): QueryFilters[] {
 }
 function canvasQueries(workspaceId: string): QueryFilters[] {
 	return [
+		rq(searchWorkspace).filter({ path: { workspaceId } }),
 		rq(listCanvases).filter({ path: { workspaceId } }),
 		rq(getCanvasNavigation).filter({ path: { workspaceId } }),
 	];

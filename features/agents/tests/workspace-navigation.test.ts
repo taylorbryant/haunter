@@ -42,3 +42,26 @@ test("assistant task targets round trip with their filters", () => {
 		section: "tasks",
 	});
 });
+
+test("canvas search links allow only scoped drawing destinations and valid shape IDs", () => {
+	const pageId = crypto.randomUUID();
+	const canvasId = crypto.randomUUID();
+	expect(
+		parseWorkspacePath(
+			`/w/team/p/${pageId}?canvasId=${canvasId}&shapeId=shape%3Amatch`,
+		).pageId,
+	).toBe(pageId);
+	expect(
+		parseWorkspacePath(`/w/team/c/${canvasId}?shapeId=shape%3Amatch`).canvasId,
+	).toBe(canvasId);
+	for (const path of [
+		`/w/team/p/${pageId}?shapeId=shape%3Amatch`,
+		`/w/team/p/${pageId}?canvasId=bad`,
+		`/w/team/c/${canvasId}?shapeId=asset%3Amatch`,
+		`/w/team/c/${canvasId}?shapeId=shape%3Aone&shapeId=shape%3Atwo`,
+		`/w/team/c/${canvasId}?canvasId=${canvasId}`,
+		`/w/team/home?canvasId=${canvasId}`,
+		`/w/team/p/${pageId}?canvasId=${canvasId}&next=https://other.test`,
+	])
+		expect(() => parseWorkspacePath(path)).toThrow();
+});

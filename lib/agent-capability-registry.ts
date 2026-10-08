@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { searchWorkspaceCapability } from "@/features/search/agent-capabilities";
 import { liveContextAgentCapabilities } from "@/features/live-context/agent-capabilities";
 import { canvasAgentCapabilities } from "@/features/canvases/agent-capabilities";
 import { listWorkspaceMembersCapability } from "@/features/members/agent-capabilities";
@@ -14,6 +15,7 @@ export function createHaunterAgentCapabilityRegistry(
 	dependencies: TaskAgentCapabilityDependencies = {},
 ) {
 	return defineAgentCapabilityRegistry([
+		searchWorkspaceCapability,
 		...liveContextAgentCapabilities,
 		listWorkspacesCapability,
 		listWorkspaceMembersCapability,

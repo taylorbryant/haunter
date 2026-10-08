@@ -1,6 +1,11 @@
 import { createAppError, defineErrors } from "@beignet/core/errors";
 
 export const errors = defineErrors({
+	InvalidSearchCursor: {
+		code: "INVALID_SEARCH_CURSOR",
+		status: 400,
+		message: "This search cursor is invalid. Start a new search.",
+	},
 	AttachmentNotFound: {
 		code: "ATTACHMENT_NOT_FOUND",
 		status: 404,

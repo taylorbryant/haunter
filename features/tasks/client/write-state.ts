@@ -8,6 +8,7 @@ import { rq } from "@/client";
 import { protectedRefetchInterval } from "@/client/session-recovery";
 import { listNotifications } from "@/features/notifications/contracts";
 import { getPage, getPageMetadata } from "@/features/pages/contracts";
+import { searchWorkspace } from "@/features/search/contracts";
 import { listTasks } from "../contracts";
 
 type CachedQuery = Parameters<typeof matchQuery>[1];
@@ -32,6 +33,7 @@ export function taskWriteQueries(
 	identity: Pick<TaskWriteIdentity, "workspaceId" | "pageId">,
 ): QueryFilters[] {
 	return [
+		rq(searchWorkspace).filter({ path: { workspaceId: identity.workspaceId } }),
 		rq(listTasks).filter({ path: { workspaceId: identity.workspaceId } }),
 		rq(listNotifications).filter(),
 		...(identity.pageId

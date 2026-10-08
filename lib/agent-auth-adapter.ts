@@ -63,6 +63,7 @@ export const agentCapabilityMetadata = {
 	delete_canvas_shapes: workspaceScope,
 	list_workspace_members: workspaceScope,
 	list_pages: workspaceScope,
+	search_workspace: workspaceScope,
 	search_pages: workspaceScope,
 	read_page: workspaceScope,
 	list_page_attachments: workspaceScope,

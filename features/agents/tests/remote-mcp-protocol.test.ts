@@ -78,8 +78,49 @@ function legacyRequest(
 	});
 }
 
+test("hosted MCP searches saved workspace content and rejects revoked membership", async () => {
+	const { embeddedEditorFixture } = await import("./embedded-editor-fixture");
+	const { eq } = await import("drizzle-orm");
+	const schema = await import("@/infra/db/schema");
+	const f = await embeddedEditorFixture("view", "view");
+	try {
+		const handler = createRemoteMcpRequestHandler({
+			connection: f.connection,
+			identity: { userId: f.userId, clientId: "embedded-client" },
+			getServer: async () => ({
+				ports: f.ctx.ports,
+				createServiceContext: async () => f.ctx,
+			}),
+		});
+		const request = (workspaceId: string) =>
+			modernRequest("tools/call", {
+				name: "search_workspace",
+				arguments: { workspaceId, query: "Document" },
+			});
+		const result = await json(await handler(request(f.workspaceId)));
+		expect(result.error).toBeUndefined();
+		expect(result.result?.isError).not.toBeTrue();
+		expect(result.result?.structuredContent).toMatchObject({
+			items: [expect.objectContaining({ kind: "page", id: f.page.id })],
+			nextCursor: null,
+		});
+		const foreign = await json(await handler(request("other")));
+		expect(foreign.result?.isError).toBeTrue();
+		expect(foreign.result?.structuredContent).toBeUndefined();
+		await f.database.db
+			.delete(schema.member)
+			.where(eq(schema.member.userId, f.userId));
+		const revoked = await json(await handler(request(f.workspaceId)));
+		expect(revoked.result?.isError).toBeTrue();
+		expect(revoked.result?.structuredContent).toBeUndefined();
+	} finally {
+		await f.database.close();
+	}
+});
+
 test("content management discovery respects profiles and declares write semantics", async () => {
 	const readers = [
+		"search_workspace",
 		"list_canvases",
 		"list_canvas_favorites",
 		"list_page_favorites",

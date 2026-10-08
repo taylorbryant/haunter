@@ -121,20 +121,33 @@ export function parseWorkspacePath(path: string) {
 		throw new Error("This destination is not available in embedded Haunter.");
 	const params = new URLSearchParams(search);
 	for (const [key, value] of params) {
-		const values = {
+		const taskValues = {
 			filter: ["open", "completed", "all"],
 			scope: ["mine", "everyone"],
 			compose: ["1"],
 		};
-		if (
-			!pathname.endsWith("/tasks") ||
+		const taskParam =
+			pathname.endsWith("/tasks") &&
 			(key === "taskId"
-				? !z.uuid().safeParse(value).success
-				: !Object.hasOwn(values, key) ||
-					!values[key as keyof typeof values].includes(value)) ||
+				? z.uuid().safeParse(value).success
+				: Object.hasOwn(taskValues, key) &&
+					taskValues[key as keyof typeof taskValues].includes(value));
+		const canvasParam =
+			/\/p\/[^/]+$/.test(pathname) &&
+			key === "canvasId" &&
+			z.uuid().safeParse(value).success;
+		const shapeParam =
+			key === "shapeId" &&
+			z.string().startsWith("shape:").min(7).max(512).safeParse(value)
+				.success &&
+			(/\/c\/[^/]+$/.test(pathname) ||
+				(/\/p\/[^/]+$/.test(pathname) &&
+					z.uuid().safeParse(params.get("canvasId")).success));
+		if (
+			(!taskParam && !canvasParam && !shapeParam) ||
 			params.getAll(key).length !== 1
 		)
-			throw new Error("This task filter is not available in embedded Haunter.");
+			throw new Error("This destination is not available in embedded Haunter.");
 	}
 	const match =
 		/^\/w\/([^/]+)\/(home|tasks|canvases|trash|p\/[0-9a-f-]{36}|c\/[0-9a-f-]{36})$/i.exec(

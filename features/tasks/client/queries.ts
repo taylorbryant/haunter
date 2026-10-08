@@ -2,6 +2,7 @@ import type { ContractCacheParams } from "@beignet/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { rq } from "@/client";
 import { protectedRefetchInterval } from "@/client/session-recovery";
+import { searchWorkspace } from "@/features/search/contracts";
 import { listTasks } from "@/features/tasks/contracts";
 import type {
 	ListTasksOutput,
@@ -130,6 +131,7 @@ export function invalidateTasks(
 	workspaceId?: string,
 ) {
 	return refreshAfterTaskWrites(queryClient, [
+		rq(searchWorkspace).filter({ path: { workspaceId } }),
 		rq(listTasks).filter(workspaceId ? { path: { workspaceId } } : undefined),
 	]);
 }

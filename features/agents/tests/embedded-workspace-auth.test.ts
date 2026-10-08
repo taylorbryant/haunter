@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import type { AppContext } from "@/app-context";
 import { canvasRoutes } from "@/features/canvases/routes";
 import { documentRoutes } from "@/features/documents/routes";
+import { searchRoutes } from "@/features/search/routes";
 import { pageRoutes } from "@/features/pages/routes";
 import * as schema from "@/infra/db/schema";
 import { checkDocumentAccess } from "@/infra/documents/access";
@@ -31,6 +32,7 @@ test.each(["view", "edit"] as const)(
 			hooks: [embeddedEditorAuthHooks],
 			routes: defineRoutes<AppContext>([
 				pageRoutes,
+				searchRoutes,
 				canvasRoutes,
 				documentRoutes,
 				embeddedEditorRoutes,
@@ -77,6 +79,33 @@ test.each(["view", "edit"] as const)(
 				(await request(`/api/workspaces/${f.workspaceId}/pages`)).status,
 			).toBe(200);
 			expect((await request("/api/workspaces/other/pages")).status).toBe(403);
+			const searched = await request(
+				`/api/workspaces/${f.workspaceId}/search?query=Document&kind=page&limit=1`,
+			);
+			expect(searched.status).toBe(200);
+			expect((await searched.json()).items[0]?.id).toBe(f.page.id);
+			expect(
+				(await request("/api/workspaces/other/search?query=Document")).status,
+			).toBe(403);
+			const documentSession = await f.login();
+			expect(
+				(
+					await request(
+						`/api/workspaces/${f.workspaceId}/search?query=Document`,
+						"GET",
+						undefined,
+						documentSession.token,
+					)
+				).status,
+			).toBe(403);
+			expect(
+				(
+					await request(
+						`/api/workspaces/${f.workspaceId}/search?query=Document&limit=100`,
+					)
+				).status,
+			).toBe(422);
+
 			expect(
 				(
 					await request("/api/pages", "POST", {

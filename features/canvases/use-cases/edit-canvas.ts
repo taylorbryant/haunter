@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { scheduleWorkspaceCanvasEvent } from "@/features/collab/server/workspace-events";
 import { tenantScopeId } from "@beignet/core/ports";
 import { useCase } from "@/lib/use-case";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
@@ -15,10 +16,21 @@ export const canvasCommandUseCase = useCase
 	.output(CanvasCommandOutputSchema)
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
-		await authorizeCanvas(ctx, input.canvasId, isCanvasWrite(input));
-		return ctx.ports.canvasEditing.execute({
+		const canvas = await authorizeCanvas(
+			ctx,
+			input.canvasId,
+			isCanvasWrite(input),
+		);
+		const result = await ctx.ports.canvasEditing.execute({
 			userId: user.id,
 			workspaceId: tenantScopeId(requireActiveWorkspaceScope(ctx)),
 			command: input,
 		});
+		if (isCanvasWrite(input))
+			scheduleWorkspaceCanvasEvent(ctx, {
+				workspaceId: canvas.workspaceId,
+				canvasId: canvas.id,
+				pageId: canvas.pageId,
+			});
+		return result;
 	});

@@ -344,6 +344,13 @@
       "when": 1791254790331,
       "tag": "0048_opposite_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1791428721437,
+      "tag": "0049_cool_kate_bishop",
+      "breakpoints": true
     }
   ]
 }

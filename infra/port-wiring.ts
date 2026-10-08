@@ -47,6 +47,7 @@ export const appPorts = definePorts<AppPorts>()({
 		mcpServerConfiguration: { resourceUrl: mcpResourceUrl },
 	},
 	deferred: [
+		"workspaceSearch",
 		"documentMaintenance",
 		"documents",
 		"adminUsers",

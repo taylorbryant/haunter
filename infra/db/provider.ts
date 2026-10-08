@@ -30,6 +30,7 @@ export const appDatabaseProvider = createProvider<{
 
 		const providedPorts: Pick<
 			AppPorts,
+			| "workspaceSearch"
 			| "canvases"
 			| "documents"
 			| "documentMaintenance"
