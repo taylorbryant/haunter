@@ -14,7 +14,7 @@ afterEach(async () => {
 test("both patched BlockNote bundles remain valid JavaScript", async () => {
 	const entry = import.meta.resolve("@blocknote/core");
 	const transpiler = new Bun.Transpiler({ loader: "js" });
-	for (const filename of ["blocks-Dol85hpH.js", "blocks-CTB_5Vyj.cjs"]) {
+	for (const filename of ["blocks-DaEUT0O1.js", "blocks-DLgTreVu.cjs"]) {
 		const source = await Bun.file(new URL(filename, entry)).text();
 		expect(() => transpiler.transformSync(source)).not.toThrow();
 	}

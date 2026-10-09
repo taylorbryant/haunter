@@ -45,11 +45,9 @@ try {
 		secondWorkspaceId: string;
 	};
 	const page = await context.newPage();
-	async function expectCurrentView(expected: Record<string, string> | null) {
+	async function expectCurrentView(expected: Record<string, string | null>) {
 		await page.waitForFunction((expected) => {
 			const text = document.getElementById("context")?.textContent ?? "";
-			if (expected === null)
-				return text.startsWith("No Haunter page is currently open");
 			try {
 				const current = JSON.parse(text.split("\n")[1] ?? "null");
 				return (
@@ -191,12 +189,13 @@ try {
 	await linkedPages.first().waitFor();
 	assert.equal(await linkedPages.count(), 2);
 
-	assert.equal(
-		await editorFrame
-			.getByRole("button", { name: /Open page history/ })
-			.count(),
-		0,
-	);
+	await editorFrame
+		.getByRole("button", { name: /Open page history/ })
+		.click();
+	const history = editorFrame.getByRole("dialog", { name: "Page history" });
+	await history.waitFor();
+	await history.press("Escape");
+	await history.waitFor({ state: "hidden" });
 	await editorFrame
 		.getByRole("button", { name: "Expand code", exact: true })
 		.click();
@@ -241,7 +240,7 @@ try {
 		"PASS: linked pages and mentions display current titles; code-dialog edits survive navigation",
 	);
 	await editorFrame.getByRole("link", { name: "Home", exact: true }).click();
-	await expectCurrentView(null);
+	await expectCurrentView({ section: "home", pageId: null });
 	assert.ok(
 		!(await page.locator("#context").textContent())?.includes(panelText),
 	);
