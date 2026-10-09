@@ -21,6 +21,8 @@ import {
 	CanvasEditOutputSchema,
 	PreviewCanvasInputSchema,
 	CanvasPreviewOutputSchema,
+	RestoreCanvasVersionInputSchema,
+	RestoreCanvasVersionOutputSchema,
 } from "./editing";
 import {
 	SearchCanvasLibraryInputSchema,
@@ -222,6 +224,20 @@ export const canvasAgentCapabilities = [
 				await canvasCommandUseCase.run({
 					ctx,
 					input: { ...input, action: "read" },
+				}),
+			);
+		},
+	}),
+	defineAgentCapability("restore_canvas_version", {
+		description: AGENT_CAPABILITY_DESCRIPTIONS.restore_canvas_version,
+		input: RestoreCanvasVersionInputSchema.extend(workspace),
+		output: RestoreCanvasVersionOutputSchema,
+		async handle({ ctx, input: { workspaceId: _, ...input } }) {
+			const { canvasCommandUseCase } = await import("./use-cases/edit-canvas");
+			return RestoreCanvasVersionOutputSchema.parse(
+				await canvasCommandUseCase.run({
+					ctx,
+					input: { ...input, action: "restore" },
 				}),
 			);
 		},

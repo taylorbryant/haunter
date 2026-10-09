@@ -228,6 +228,7 @@ export function registerRemoteMcpTools(
 					destructiveHint: [
 						"delete_canvas",
 						"restore_page_version",
+						"restore_canvas_version",
 						"edit_canvas",
 						"delete_canvas_shapes",
 						"delete_task",

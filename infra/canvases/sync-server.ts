@@ -33,6 +33,7 @@ import { appError } from "@/features/shared/errors";
 import { prepareCanvasEdit, describeCanvas } from "./shape-edits";
 import { needsCanvasStructureEditor } from "./structure-selection";
 import { prepareCanvasLibraryInsertion } from "./library-insertion";
+import { prepareCanvasHistoryRestoration } from "./history-restoration";
 
 type Socket = Pick<WebSocketMinimal, "send" | "close" | "readyState">;
 type Entry = {
@@ -344,18 +345,39 @@ export function createCanvasSyncServer(options: {
 					needsCanvasStructureEditor(before, command);
 				if (nativeEdit && !options.structureEditor)
 					throw appError("CanvasWorkerUnavailable");
+				const historyVersion =
+					command.action === "restore"
+						? await ctx.ports.canvases.findHistory(
+								scope,
+								canvas.id,
+								command.historyVersionId,
+							)
+						: null;
+				if (command.action === "restore" && !historyVersion)
+					throw appError("InvalidCanvasEdit", {
+						message: "This canvas history version is unavailable.",
+					});
 				const edit =
-					command.action === "insert-image"
-						? await prepareCanvasImageInsertion(before, command)
-						: command.action === "insert-library"
-							? prepareCanvasLibraryInsertion(before, command)
-							: nativeEdit && command.action === "edit"
-								? await options.structureEditor!.prepare({
-										snapshot: structuredClone(before),
-										command,
-									})
-								: prepareCanvasEdit(before, command);
-				if (nativeEdit || command.action === "insert-image") {
+					command.action === "restore"
+						? prepareCanvasHistoryRestoration(
+								before,
+								historyVersion!.snapshotJson,
+							)
+						: command.action === "insert-image"
+							? await prepareCanvasImageInsertion(before, command)
+							: command.action === "insert-library"
+								? prepareCanvasLibraryInsertion(before, command)
+								: nativeEdit && command.action === "edit"
+									? await options.structureEditor!.prepare({
+											snapshot: structuredClone(before),
+											command,
+										})
+									: prepareCanvasEdit(before, command);
+				if (
+					nativeEdit ||
+					command.action === "insert-image" ||
+					command.action === "restore"
+				) {
 					if (stopping || options.canWrite?.() === false)
 						throw appError("CanvasWorkerUnavailable");
 					if (refreshContext) ctx = await refreshContext();
@@ -416,9 +438,11 @@ export function createCanvasSyncServer(options: {
 				return {
 					canvasId: canvas.id,
 					revision: canvasRevision(canvas.id, entry.revision),
-					...("insertion" in edit
-						? edit.insertion
-						: { createdShapes: edit.createdShapes }),
+					...(command.action === "restore"
+						? { restoredHistoryVersionId: command.historyVersionId }
+						: "insertion" in edit
+							? edit.insertion
+							: { createdShapes: edit.createdShapes }),
 					historyVersionId: result.historyVersionId,
 				};
 			});

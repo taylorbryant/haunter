@@ -18,6 +18,7 @@ import {
 } from "@/server/agent-capabilities";
 import * as schema from "@/infra/db/schema";
 import {
+	RestoreCanvasVersionOutputSchema,
 	CanvasReadOutputSchema,
 	CanvasEditOutputSchema,
 	InsertCanvasLibraryItemOutputSchema,
@@ -1508,6 +1509,361 @@ test("image insertion rejects stale revisions, invalid parents and revoked acces
 			canvas.canvasId,
 		);
 		expect(JSON.stringify(saved?.snapshot)).not.toContain('"typeName":"asset"');
+	} finally {
+		await f.stop();
+	}
+});
+
+test.each([false, true])(
+	"MCP restores canvas history with recoverable current content (standalone=%s)",
+	async (standalone) => {
+		const f = await fixture();
+		try {
+			const canvasId = standalone
+				? (
+						await f.database.repositories.canvases.create(f.scope, {
+							userId: f.userId,
+							pageId: null,
+							title: "Keep this title",
+						})
+					).id
+				: (await f.create()).canvasId;
+			const made = await f.edit(canvasId, diagram);
+			const drawing = await f.read(canvasId);
+			const removed = CanvasEditOutputSchema.parse(
+				await f.execute("delete_canvas_shapes", {
+					canvasId,
+					expectedRevision: made.revision,
+					shapeIds: [made.createdShapes.api, made.createdShapes.request],
+				}),
+			);
+			const before = await f.read(canvasId);
+			const deferred: Array<
+				Parameters<typeof f.ctx.ports.bestEffortWork.defer>[0]
+			> = [];
+			const events: unknown[] = [];
+			f.ctx.ports.broadcast = {
+				...f.ctx.ports.broadcast,
+				publish: async (_channel, event) => {
+					events.push(event.data);
+				},
+			};
+			f.ctx.ports.bestEffortWork.defer = (work) => {
+				deferred.push(work);
+			};
+			const restored = RestoreCanvasVersionOutputSchema.parse(
+				await f.execute("restore_canvas_version", {
+					canvasId,
+					historyVersionId: removed.historyVersionId,
+					expectedRevision: before.revision,
+				}),
+			);
+			expect(restored).toMatchObject({
+				canvasId,
+				restoredHistoryVersionId: removed.historyVersionId,
+			});
+			expect(restored.revision).not.toBe(before.revision);
+			expect(restored.revision).not.toBe(drawing.revision);
+			expect(restored.historyVersionId).not.toBe(removed.historyVersionId);
+			const current = await f.read(canvasId);
+			expect(current).toMatchObject({
+				pages: drawing.pages,
+				pageId: before.pageId,
+				title: before.title,
+				revision: restored.revision,
+			});
+			expect(
+				current.shapes.toSorted((a, b) => a.id.localeCompare(b.id)),
+			).toEqual(drawing.shapes.toSorted((a, b) => a.id.localeCompare(b.id)));
+			expect(
+				current.bindings.toSorted((a, b) => a.id.localeCompare(b.id)),
+			).toEqual(drawing.bindings.toSorted((a, b) => a.id.localeCompare(b.id)));
+			expect(current.history).toHaveLength(before.history.length + 1);
+			expect(deferred).toHaveLength(1);
+			for (const work of deferred) await work();
+			expect(events).toEqual([
+				expect.objectContaining({
+					type: "canvas.changed",
+					workspaceId: f.workspaceId,
+					canvasId,
+					pageId: before.pageId,
+				}),
+			]);
+			expect(await f.read(canvasId, restored.historyVersionId)).toMatchObject({
+				shapes: before.shapes,
+				bindings: before.bindings,
+				revision: before.revision,
+			});
+			await f.execute("restore_canvas_version", {
+				canvasId,
+				historyVersionId: restored.historyVersionId,
+				expectedRevision: restored.revision,
+			});
+			expect(await f.read(canvasId)).toMatchObject({
+				shapes: before.shapes,
+				bindings: before.bindings,
+			});
+		} finally {
+			await f.stop();
+		}
+	},
+);
+
+test("canvas restoration rejects stale revisions and unavailable, foreign, or malformed versions without mutation", async () => {
+	const f = await fixture();
+	try {
+		const { canvasId } = await f.create();
+		const made = await f.edit(canvasId, diagram);
+		const before = await f.read(canvasId);
+		const args = {
+			canvasId,
+			historyVersionId: made.historyVersionId,
+			expectedRevision: before.revision,
+		};
+		await expect(
+			f.execute("restore_canvas_version", {
+				...args,
+				expectedRevision: (await f.read(canvasId, made.historyVersionId))
+					.revision,
+			}),
+		).rejects.toMatchObject({ code: "CANVAS_REVISION_CONFLICT" });
+		const other = await f.create();
+		const otherEdit = await f.edit(other.canvasId, diagram);
+		for (const historyVersionId of [
+			crypto.randomUUID(),
+			otherEdit.historyVersionId,
+		])
+			await expect(
+				f.execute("restore_canvas_version", { ...args, historyVersionId }),
+			).rejects.toMatchObject({ code: "INVALID_CANVAS_EDIT" });
+		const invalid = await f.ctx.ports.canvases.saveHistory(f.scope, {
+			canvasId,
+			revision: 0,
+			snapshotJson: '{"schema":{}}',
+			createdBy: f.userId,
+		});
+		await expect(
+			f.execute("restore_canvas_version", {
+				...args,
+				historyVersionId: invalid,
+			}),
+		).rejects.toMatchObject({ code: "INVALID_CANVAS_EDIT" });
+		await f.database.db
+			.delete(schema.canvasHistory)
+			.where(eq(schema.canvasHistory.id, invalid));
+		const deferred: unknown[] = [];
+		f.ctx.ports.bestEffortWork.defer = (work) => {
+			deferred.push(work);
+		};
+		for (const malformed of [
+			{ expectedRevision: undefined },
+			{ historyVersionId: "invalid" },
+			{ snapshot: {} },
+		])
+			await expect(
+				f.execute("restore_canvas_version", { ...args, ...malformed }),
+			).rejects.toThrow();
+		expect(await f.read(canvasId)).toEqual(before);
+		expect(deferred).toEqual([]);
+		await f.database.db
+			.delete(schema.canvasHistory)
+			.where(eq(schema.canvasHistory.id, made.historyVersionId));
+		await expect(
+			f.execute("restore_canvas_version", args),
+		).rejects.toMatchObject({ code: "INVALID_CANVAS_EDIT" });
+	} finally {
+		await f.stop();
+	}
+});
+
+test("canvas restoration requires Full access and current resource authorization", async () => {
+	const f = await fixture();
+	try {
+		const { canvasId } = await f.create();
+		const made = await f.edit(canvasId, diagram);
+		const args = {
+			canvasId,
+			historyVersionId: made.historyVersionId,
+			expectedRevision: made.revision,
+		};
+		for (const profile of ["view", "edit"] as const) {
+			f.connection.permissionProfile = profile;
+			await expect(f.execute("restore_canvas_version", args)).rejects.toThrow(
+				"does not allow",
+			);
+		}
+		f.connection.permissionProfile = "full";
+		await expect(
+			f.execute("restore_canvas_version", { ...args, workspaceId: "other" }),
+		).rejects.toThrow("cannot access");
+		await f.database.db
+			.update(schema.member)
+			.set({ role: "viewer" })
+			.where(eq(schema.member.userId, f.userId));
+		await expect(f.execute("restore_canvas_version", args)).rejects.toThrow();
+		await f.database.db
+			.update(schema.member)
+			.set({ role: "owner" })
+			.where(eq(schema.member.userId, f.userId));
+		await f.database.repositories.pages.setDeletedByIds(
+			f.scope,
+			[f.page.id],
+			new Date().toISOString(),
+		);
+		await expect(
+			f.execute("restore_canvas_version", args),
+		).rejects.toMatchObject({ code: "CANVAS_NOT_FOUND" });
+		await f.database.db
+			.delete(schema.member)
+			.where(eq(schema.member.userId, f.userId));
+		await expect(f.execute("restore_canvas_version", args)).rejects.toThrow(
+			"not a member",
+		);
+	} finally {
+		await f.stop();
+	}
+});
+
+test("canvas restore and its recovery snapshot roll back together on commit failure", async () => {
+	const f = await fixture();
+	const original = f.ctx.ports.uow.transaction;
+	try {
+		const { canvasId } = await f.create();
+		const made = await f.edit(canvasId, diagram);
+		const before = await f.read(canvasId);
+		const stored = await f.ctx.ports.canvases.findSyncRoom(f.scope, canvasId);
+		const deferred: unknown[] = [];
+		f.ctx.ports.bestEffortWork.defer = (work) => {
+			deferred.push(work);
+		};
+		f.ctx.ports.uow.transaction = (work) =>
+			original((tx) =>
+				work({
+					...tx,
+					canvases: {
+						...tx.canvases,
+						commitSyncRoom: async () => {
+							throw new Error("Commit failed after history");
+						},
+					},
+				}),
+			);
+		await expect(
+			f.execute("restore_canvas_version", {
+				canvasId,
+				historyVersionId: made.historyVersionId,
+				expectedRevision: made.revision,
+			}),
+		).rejects.toMatchObject({ code: "CANVAS_WORKER_UNAVAILABLE" });
+		f.ctx.ports.uow.transaction = original;
+		expect(await f.read(canvasId)).toEqual(before);
+		expect(await f.ctx.ports.canvases.findSyncRoom(f.scope, canvasId)).toEqual(
+			stored,
+		);
+		expect(deferred).toEqual([]);
+	} finally {
+		f.ctx.ports.uow.transaction = original;
+		await f.stop();
+	}
+});
+
+test("a restore and concurrent edit cannot both commit with the same canvas revision", async () => {
+	const f = await fixture();
+	try {
+		const { canvasId } = await f.create();
+		const made = await f.edit(canvasId, diagram);
+		const results = await Promise.allSettled([
+			f.execute("restore_canvas_version", {
+				canvasId,
+				historyVersionId: made.historyVersionId,
+				expectedRevision: made.revision,
+			}),
+			f.edit(
+				canvasId,
+				[
+					{
+						op: "update",
+						shapeId: made.createdShapes.api,
+						text: "Competing edit",
+					},
+				],
+				made.revision,
+			),
+		]);
+		expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+		expect(results.find((r) => r.status === "rejected")).toMatchObject({
+			reason: { code: "CANVAS_REVISION_CONFLICT" },
+		});
+		expect((await f.read(canvasId)).history).toHaveLength(2);
+	} finally {
+		await f.stop();
+	}
+});
+
+test("canvas restoration rechecks membership after loading history", async () => {
+	const f = await fixture();
+	const findHistory = f.ctx.ports.canvases.findHistory;
+	try {
+		const { canvasId } = await f.create();
+		const made = await f.edit(canvasId, diagram);
+		const stored = await f.ctx.ports.canvases.findSyncRoom(f.scope, canvasId);
+		f.ctx.ports.canvases.findHistory = async (...args) => {
+			const history = await findHistory(...args);
+			await f.database.db
+				.update(schema.member)
+				.set({ role: "viewer" })
+				.where(eq(schema.member.userId, f.userId));
+			return history;
+		};
+		await expect(
+			f.execute("restore_canvas_version", {
+				canvasId,
+				historyVersionId: made.historyVersionId,
+				expectedRevision: made.revision,
+			}),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		expect(await f.ctx.ports.canvases.findSyncRoom(f.scope, canvasId)).toEqual(
+			stored,
+		);
+		expect(
+			await f.ctx.ports.canvases.listHistory(f.scope, canvasId),
+		).toHaveLength(1);
+	} finally {
+		f.ctx.ports.canvases.findHistory = findHistory;
+		await f.stop();
+	}
+});
+
+test("Agent Auth restores canvas versions only with an explicit workspace constraint", async () => {
+	const f = await fixture();
+	try {
+		const { canvasId } = await f.create();
+		const made = await f.edit(canvasId, diagram);
+		const adapter = createHaunterAgentAuthAdapter(() =>
+			createHaunterAgentCapabilityExecutor({ getServer: async () => f.server }),
+		);
+		if (!adapter.onExecute) throw new Error("Missing Agent Auth executor");
+		const context = (constraints: { workspaceId: string } | null) =>
+			createBetterAuthAgentCapabilityTestContext({
+				capability: "restore_canvas_version",
+				agentId: "agent_test",
+				userId: f.userId,
+				constraints,
+				arguments: {
+					workspaceId: f.workspaceId,
+					canvasId,
+					historyVersionId: made.historyVersionId,
+					expectedRevision: made.revision,
+				},
+			});
+		await expect(adapter.onExecute(context(null))).rejects.toThrow(
+			"missing required constraints",
+		);
+		const result = RestoreCanvasVersionOutputSchema.parse(
+			await adapter.onExecute(context({ workspaceId: f.workspaceId })),
+		);
+		expect(result.restoredHistoryVersionId).toBe(made.historyVersionId);
+		expect((await f.read(canvasId)).shapes).toEqual([]);
 	} finally {
 		await f.stop();
 	}

@@ -135,7 +135,11 @@ test("content management discovery respects profiles and declares write semantic
 		"set_canvas_favorite",
 		"set_page_favorite",
 	];
-	const destructive = ["delete_canvas", "restore_page_version"];
+	const destructive = [
+		"delete_canvas",
+		"restore_page_version",
+		"restore_canvas_version",
+	];
 	for (const profile of ["view", "edit", "full"] as const) {
 		const body = await json(
 			await createHandler(profile)(modernRequest("tools/list")),
@@ -174,6 +178,17 @@ test("content management discovery respects profiles and declares write semantic
 					readOnlyHint: false,
 					destructiveHint: true,
 				});
+				if (name === "restore_canvas_version") {
+					expect(tool?.annotations.idempotentHint).toBe(false);
+					expect(tool?.inputSchema.required).toEqual(
+						expect.arrayContaining([
+							"workspaceId",
+							"canvasId",
+							"historyVersionId",
+							"expectedRevision",
+						]),
+					);
+				}
 				if (name === "restore_page_version")
 					expect(tool?.inputSchema.required).toEqual(
 						expect.arrayContaining([

@@ -13,7 +13,7 @@ export const CanvasAgentActivitySchema = PageAgentActivitySchema.omit({
 	type: z.literal("agent.canvasActivity"),
 	canvasId: z.uuid(),
 	pageId: z.uuid().nullable(),
-	action: z.enum(["read", "preview", "edit", "delete"]),
+	action: z.enum(["read", "preview", "edit", "delete", "restore"]),
 	// Only successful edits carry these IDs. No text or drawing payloads travel
 	// through the workspace presence channel.
 	changedShapeIds: z
@@ -35,6 +35,7 @@ const labels = {
 	read: { active: "Reading canvas", completed: "Read canvas" },
 	preview: { active: "Previewing canvas", completed: "Preview ready" },
 	edit: { active: "Updating canvas", completed: "Updated canvas" },
+	restore: { active: "Restoring canvas", completed: "Restored canvas" },
 	delete: { active: "Removing shapes", completed: "Removed shapes" },
 };
 export function canvasAgentActivityLabel(activity: CanvasAgentActivity) {

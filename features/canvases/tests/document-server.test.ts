@@ -26,7 +26,11 @@ import { createDocumentSessionTokens } from "@/infra/documents/session-token";
 import { createDocumentMaintenance } from "@/infra/documents/migration";
 import * as schema from "@/infra/db/schema";
 import { projectCanvasRoom, canvasFingerprint } from "../lib/document";
-import { CanvasEditOutputSchema, CanvasReadOutputSchema } from "../editing";
+import {
+	CanvasEditOutputSchema,
+	CanvasReadOutputSchema,
+	RestoreCanvasVersionOutputSchema,
+} from "../editing";
 async function until(condition: () => boolean | Promise<boolean>) {
 	const deadline = Date.now() + 8000;
 	while (!(await condition())) {
@@ -548,3 +552,136 @@ test("deleting a dirty canvas releases its room without blocking shutdown or rec
 		await h.stop();
 	}
 }, 15000);
+
+test("canvas restoration syncs document replacement to two editors without restoring session state", async () => {
+	const h = await harness();
+	try {
+		const a = h.client(),
+			b = h.client();
+		await until(() => a.loaded && b.loaded);
+		const read = async () =>
+			CanvasReadOutputSchema.parse(
+				await h.engine.execute(h.ctx, {
+					action: "read",
+					canvasId: h.canvas.id,
+				}),
+			);
+		const initial = CanvasEditOutputSchema.parse(
+			await h.engine.execute(h.ctx, {
+				action: "edit",
+				canvasId: h.canvas.id,
+				expectedRevision: (await read()).revision,
+				operations: [
+					{
+						op: "create",
+						ref: "api",
+						type: "rectangle",
+						x: 0,
+						y: 0,
+						text: "API",
+					},
+					{ op: "create", ref: "db", type: "rectangle", x: 400, y: 0 },
+					{ op: "connect", ref: "arrow", fromId: "api", toId: "db" },
+				],
+			}),
+		);
+		const shapeId = initial.createdShapes.api as TLRecord["id"];
+		await until(() => !!a.store.get(shapeId) && !!b.store.get(shapeId));
+		const camera = a.store.schema.types.camera.create({
+			id: "camera:page:page",
+			x: 123,
+			y: 456,
+			z: 2,
+		});
+		const extraPage = a.store.schema.types.page.create({
+			id: "page:second",
+			name: "Second page",
+			index: "a2",
+		});
+		a.store.put([
+			camera,
+			extraPage,
+			{ ...a.store.get(shapeId)!, isLocked: true } as TLRecord,
+		]);
+		rename(a, "Saved drawing");
+		await until(async () => {
+			const current = await read();
+			return (
+				current.pages.length === 2 &&
+				current.shapes.find((shape) => shape.id === shapeId)?.isLocked ===
+					true &&
+				current.pages.some((page) => page.name === "Saved drawing")
+			);
+		});
+		await expect(
+			h.engine.execute(h.ctx, {
+				action: "restore",
+				canvasId: h.canvas.id,
+				historyVersionId: initial.historyVersionId,
+				expectedRevision: initial.revision,
+			}),
+		).rejects.toMatchObject({ code: "CANVAS_REVISION_CONFLICT" });
+		const savedDrawing = a.store.getStoreSnapshot();
+		const beforeRoom = await h.ctx.ports.canvases.findSyncRoom(
+			h.scope,
+			h.canvas.id,
+		);
+		const cleared = RestoreCanvasVersionOutputSchema.parse(
+			await h.engine.execute(h.ctx, {
+				action: "restore",
+				canvasId: h.canvas.id,
+				historyVersionId: initial.historyVersionId,
+				expectedRevision: (await read()).revision,
+			}),
+		);
+		await until(
+			() =>
+				!a.store.get(shapeId) &&
+				!b.store.get(shapeId) &&
+				!a.store.get(extraPage.id) &&
+				!b.store.get(extraPage.id),
+		);
+		expect(a.store.get(camera.id)).toEqual(camera);
+		expect((await read()).bindings).toEqual([]);
+		const restored = RestoreCanvasVersionOutputSchema.parse(
+			await h.engine.execute(h.ctx, {
+				action: "restore",
+				canvasId: h.canvas.id,
+				historyVersionId: cleared.historyVersionId,
+				expectedRevision: cleared.revision,
+			}),
+		);
+		await until(
+			async () =>
+				(await canvasFingerprint(a.store.getStoreSnapshot())) ===
+					(await canvasFingerprint(savedDrawing)) &&
+				(await canvasFingerprint(b.store.getStoreSnapshot())) ===
+					(await canvasFingerprint(savedDrawing)),
+		);
+		expect(a.store.get(camera.id)).toEqual(camera);
+		const afterRoom = await h.ctx.ports.canvases.findSyncRoom(
+			h.scope,
+			h.canvas.id,
+		);
+		expect(afterRoom!.revision).toBeGreaterThan(beforeRoom!.revision);
+		expect(JSON.parse(afterRoom!.roomJson).documentClock).toBeGreaterThan(
+			JSON.parse(beforeRoom!.roomJson).documentClock,
+		);
+		expect((await read()).revision).toBe(restored.revision);
+		expect(
+			await canvasFingerprint(
+				projectCanvasRoom(JSON.parse(afterRoom!.roomJson)),
+			),
+		).toBe(await canvasFingerprint(savedDrawing));
+		a.socket.close();
+		b.socket.close();
+		await h.restart();
+		const reconnected = h.client();
+		await until(() => reconnected.loaded);
+		expect(await canvasFingerprint(reconnected.store.getStoreSnapshot())).toBe(
+			await canvasFingerprint(savedDrawing),
+		);
+	} finally {
+		await h.stop();
+	}
+});
