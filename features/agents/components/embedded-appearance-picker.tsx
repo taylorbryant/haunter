@@ -1,21 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
-import { useEmbeddedHostTheme } from "@/components/theme-provider";
 import { APP_THEMES } from "@/lib/themes";
-import { useEmbeddedAppearance } from "../client/embedded-appearance";
+import type { useEmbeddedAppearance } from "../client/embedded-appearance";
 import { EmbeddedAppearanceSchema } from "../schemas";
 
 export function EmbeddedAppearancePicker({
-	hostTheme,
+	appearance,
 }: {
-	hostTheme: "light" | "dark";
+	appearance: ReturnType<typeof useEmbeddedAppearance>;
 }) {
-	const appearance = useEmbeddedAppearance();
-	const setTheme = useEmbeddedHostTheme();
-	useEffect(() => {
-		setTheme?.(appearance.theme === "host" ? hostTheme : appearance.theme);
-	}, [appearance.theme, hostTheme, setTheme]);
 	return (
 		<div className="px-2 text-xs text-muted-foreground">
 			<label className="flex items-center gap-2">

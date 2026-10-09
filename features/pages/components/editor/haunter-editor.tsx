@@ -25,6 +25,7 @@ import {
 	useCreateBlockNote,
 	useExtension,
 	useExtensionState,
+	usePortalElement,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useQueryClient } from "@tanstack/react-query";
@@ -125,6 +126,7 @@ function RemoveBlockMenuItem() {
 
 function StableDragHandleButton() {
 	const Components = useComponentsContext();
+	const portalElement = usePortalElement();
 	const editor = useBlockNoteEditor(editorSchema);
 	const sideMenu = useExtension(SideMenuExtension, { editor });
 	const hoveredBlock = useExtensionState(SideMenuExtension, {
@@ -144,6 +146,7 @@ function StableDragHandleButton() {
 				}
 			}}
 			position="left"
+			portalElement={portalElement}
 		>
 			<Components.Generic.Menu.Trigger>
 				<Components.SideMenu.Button

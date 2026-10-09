@@ -13,6 +13,7 @@ import { useCurrentUser } from "@/components/app-session-provider";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
 import { CreateDialogProvider } from "@/components/create-dialog-provider";
 import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
+import { useEmbeddedHostTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { WorkspaceHeader } from "@/components/workspace-header";
@@ -42,6 +43,7 @@ import type { TaskView, SelectedTask } from "@/features/tasks/current-view";
 import { TrashList } from "@/features/pages/components/trash-list";
 import { EmbeddedEditorContext } from "@/features/pages/components/editor/embedded-editor-context";
 import { EmbeddedAppearancePicker } from "./embedded-appearance-picker";
+import { useEmbeddedAppearance } from "../client/embedded-appearance";
 import { listEmbeddedWorkspaces } from "../contracts";
 import { pageResourceUri } from "../mcp-app/schemas";
 import { observeEmbeddedTextSelection } from "../client/embedded-text-selection";
@@ -194,6 +196,12 @@ function WorkspaceShell({
 	const canEdit = useCanEditWorkspace();
 	const [open, setOpen] = useState(true);
 	const [hostTheme, setHostTheme] = useState<"light" | "dark">("light");
+	const appearance = useEmbeddedAppearance();
+	const setTheme = useEmbeddedHostTheme();
+	// The mobile sidebar unmounts when closed; theme synchronization must survive it.
+	useEffect(() => {
+		setTheme?.(appearance.theme === "host" ? hostTheme : appearance.theme);
+	}, [appearance.theme, hostTheme, setTheme]);
 	const workspaces = useQuery(rq(listEmbeddedWorkspaces).queryOptions({}));
 	useEffect(() => {
 		try {
@@ -279,7 +287,7 @@ function WorkspaceShell({
 							onRemoved,
 							beforeRemove,
 						}}
-						footer={<EmbeddedAppearancePicker hostTheme={hostTheme} />}
+						footer={<EmbeddedAppearancePicker appearance={appearance} />}
 					/>
 					<SidebarInset className="min-h-0" data-haunter-embedded-workspace>
 						<WorkspaceHeader>
