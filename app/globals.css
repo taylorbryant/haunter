@@ -52,15 +52,6 @@
 	--code-block-background: #ffffff;
 	--code-block-header-background: #f6f8fa;
 	--code-block-foreground: #24292e;
-	/* Selection must remain visible when muted and popover match. Use the theme
-	   accent for the outline; light palettes can adjust it for surface contrast. */
-	--selected-control-background: color-mix(
-		in srgb,
-		var(--primary) 8%,
-		var(--popover)
-	);
-	--selected-control-foreground: var(--popover-foreground);
-	--selected-control-outline: var(--primary);
 }
 
 @theme inline {
@@ -104,14 +95,6 @@
 	--radius-2xl: calc(var(--radius) * 1.8);
 	--radius-3xl: calc(var(--radius) * 2.2);
 	--radius-4xl: calc(var(--radius) * 2.6);
-}
-
-/* The inset selection outline leaves the outer keyboard focus ring intact. */
-@utility selected-control {
-	background-color: var(--selected-control-background);
-	color: var(--selected-control-foreground);
-	outline: 1px solid var(--selected-control-outline);
-	outline-offset: -1px;
 }
 
 /* tldraw owns a separate set of UI variables from the rest of the app.
@@ -350,11 +333,6 @@
 
 :root.everforest-light {
 	color-scheme: light;
-	--selected-control-outline: color-mix(
-		in srgb,
-		var(--primary) 55%,
-		var(--popover-foreground)
-	);
 	--background: #fdf6e3;
 	--foreground: #5c6a72;
 	--code-block-background: #fdf6e3;
@@ -393,11 +371,6 @@
 
 :root.solarized-light {
 	color-scheme: light;
-	--selected-control-outline: color-mix(
-		in srgb,
-		var(--primary) 25%,
-		var(--popover-foreground)
-	);
 	--background: #fdf6e3;
 	--foreground: #657b83;
 	--code-block-background: #fdf6e3;
@@ -875,10 +848,10 @@
 }
 
 /* BlockNote's pressed toggle uses --muted, which matches --popover in several
-   themes. Give active formatting a tinted fill and inset outline in both the
+   themes. Use the existing accent fill for active formatting in both the
    floating desktop toolbar and the body-portaled mobile toolbar. */
 .bn-shadcn .bn-formatting-toolbar .bn-button[aria-pressed="true"] {
-	@apply selected-control;
+	@apply bg-accent text-accent-foreground;
 }
 
 /* Placeholder ("Enter text or type '/' …"): BlockNote styles it italic and
