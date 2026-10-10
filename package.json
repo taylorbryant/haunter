@@ -73,7 +73,7 @@
 		"@hocuspocus/server": "4.7.0",
 		"@hookform/resolvers": "5.9.1",
 		"@libsql/client": "0.18.0",
-		"@modelcontextprotocol/ext-apps": "1.7.5",
+		"@modelcontextprotocol/ext-apps": "2.0.3",
 		"@modelcontextprotocol/server": "2.3.1",
 		"@openai/mcp-extensions": "0.1.0",
 		"@shikijs/core": "4.5.0",
