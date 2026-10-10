@@ -1366,6 +1366,14 @@ html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
 	padding-inline: 0;
 }
 
+/* Match the shared title and loading skeleton below the md breakpoint.
+   Read-only pages have no block controls that need the editing gutter. */
+@media (width < 48rem) {
+	.shared-page-reader .bn-editor {
+		padding-inline: 0;
+	}
+}
+
 /* The inline canvas block lives inside BlockNote's contenteditable, whose
    `[contenteditable] * { user-select: text }` cascades into tldraw at the same
    specificity as tldraw's own `.tl-container * { user-select: none }` and wins

@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import type { Editor } from "tldraw";
 import { rq } from "@/client";
 import { Button } from "@/components/ui/button";
+import { fitSharedCanvas } from "@/features/canvases/client/fit-shared-canvas";
 import { TldrawWithFonts } from "@/features/canvases/components/tldraw-with-fonts";
 import { haunterShapeUtils } from "@/features/canvases/lib/shape-utils";
 import { loadableSnapshot } from "@/features/canvases/lib/snapshot";
@@ -63,6 +64,7 @@ export default function SharedCanvasSurface({
 	function handleMount(editor: Editor) {
 		syncCanvasTheme(editor);
 		editor.updateInstanceState({ isReadonly: true });
+		return fitSharedCanvas(editor);
 	}
 
 	return (
