@@ -847,6 +847,16 @@
 	display: none;
 }
 
+/* BlockNote's pressed toggle uses --muted, which matches --popover in several
+   themes. Give active formatting a tinted fill and inset outline in both the
+   floating desktop toolbar and the body-portaled mobile toolbar. */
+.bn-shadcn .bn-formatting-toolbar .bn-button[aria-pressed="true"] {
+	background-color: color-mix(in srgb, var(--primary) 8%, var(--popover));
+	color: var(--popover-foreground);
+	outline: 1px solid color-mix(in srgb, var(--primary) 60%, var(--popover));
+	outline-offset: -1px;
+}
+
 /* Placeholder ("Enter text or type '/' …"): BlockNote styles it italic and
    near-invisible; make it upright and readable. */
 .bn-shadcn .bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after {
