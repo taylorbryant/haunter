@@ -52,19 +52,15 @@
 	--code-block-background: #ffffff;
 	--code-block-header-background: #f6f8fa;
 	--code-block-foreground: #24292e;
-	/* Selection must remain visible when a theme gives muted and popover the
-	   same color. Mix the outline toward the readable foreground, not the surface. */
+	/* Selection must remain visible when muted and popover match. Use the theme
+	   accent for the outline; light palettes can adjust it for surface contrast. */
 	--selected-control-background: color-mix(
 		in srgb,
 		var(--primary) 8%,
 		var(--popover)
 	);
 	--selected-control-foreground: var(--popover-foreground);
-	--selected-control-outline: color-mix(
-		in srgb,
-		var(--primary) 25%,
-		var(--popover-foreground)
-	);
+	--selected-control-outline: var(--primary);
 }
 
 @theme inline {
@@ -354,6 +350,11 @@
 
 :root.everforest-light {
 	color-scheme: light;
+	--selected-control-outline: color-mix(
+		in srgb,
+		var(--primary) 55%,
+		var(--popover-foreground)
+	);
 	--background: #fdf6e3;
 	--foreground: #5c6a72;
 	--code-block-background: #fdf6e3;
@@ -392,6 +393,11 @@
 
 :root.solarized-light {
 	color-scheme: light;
+	--selected-control-outline: color-mix(
+		in srgb,
+		var(--primary) 25%,
+		var(--popover-foreground)
+	);
 	--background: #fdf6e3;
 	--foreground: #657b83;
 	--code-block-background: #fdf6e3;
