@@ -28,5 +28,9 @@ export function SharedPageReader({
 	content: SharedPage["content"];
 	token: string;
 }) {
-	return <ReadOnlyEditor content={content} shareToken={token} />;
+	return (
+		<div className="shared-page-reader min-w-0">
+			<ReadOnlyEditor content={content} shareToken={token} />
+		</div>
+	);
 }
