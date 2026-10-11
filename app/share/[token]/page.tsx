@@ -1,30 +1,22 @@
-import { isAppError } from "@beignet/core/errors";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { GhostLogo } from "@/components/ghost-logo";
 import { SharedPageReader } from "@/features/shares/components/shared-page-reader";
-import type { SharedPage as SharedPageData } from "@/features/shares/schemas";
-import { getSharedPageUseCase } from "@/features/shares/use-cases";
-import { getAppRequestContext } from "@/lib/server-react-query";
+import { createSharedPageMetadata } from "@/features/shares/lib/page-preview";
+import { env } from "@/lib/env";
+import { getSharedPageOrNotFound } from "./_data";
 
-async function getSharedPageOrNotFound(token: string): Promise<SharedPageData> {
-	const ctx = await getAppRequestContext();
+type SharedPageProps = { params: Promise<{ token: string }> };
 
-	try {
-		return await getSharedPageUseCase.run({ ctx, input: { token } });
-	} catch (error) {
-		if (isAppError(error) && error.code === "SHARE_NOT_FOUND") {
-			notFound();
-		}
-		throw error;
-	}
+export async function generateMetadata({
+	params,
+}: SharedPageProps): Promise<Metadata> {
+	const { token } = await params;
+	const page = await getSharedPageOrNotFound(token);
+	return createSharedPageMetadata(page, token, env.APP_URL);
 }
 
-export default async function SharedPage({
-	params,
-}: {
-	params: Promise<{ token: string }>;
-}) {
+export default async function SharedPage({ params }: SharedPageProps) {
 	const { token } = await params;
 	const page = await getSharedPageOrNotFound(token);
 
