@@ -266,6 +266,9 @@ function WorkspaceShell({
 					<WorkspaceSidebar
 						workspaceId={target.workspaceId}
 						preferShiftShortcut
+						onOpenHelp={() =>
+							send(readBridge(), { type: "haunter/workspace/open-help" })
+						}
 						workspaceSwitcher={
 							<WorkspacePicker
 								workspaces={

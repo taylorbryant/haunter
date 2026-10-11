@@ -1,6 +1,12 @@
 "use client";
 
-import { HouseIcon, ListTodoIcon, ShapesIcon, Trash2Icon } from "lucide-react";
+import {
+	BookOpenIcon,
+	HouseIcon,
+	ListTodoIcon,
+	ShapesIcon,
+	Trash2Icon,
+} from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import {
 	WorkspaceLink,
@@ -39,6 +45,7 @@ export function WorkspaceSidebar({
 	footer,
 	showTasks = true,
 	preferShiftShortcut = false,
+	onOpenHelp,
 	pageTreeProps,
 	className,
 }: {
@@ -49,6 +56,7 @@ export function WorkspaceSidebar({
 	footer: ReactNode;
 	showTasks?: boolean;
 	preferShiftShortcut?: boolean;
+	onOpenHelp?: () => void;
 	pageTreeProps?: Omit<ComponentProps<typeof PageTree>, "workspaceId">;
 	className?: string;
 }) {
@@ -81,18 +89,36 @@ export function WorkspaceSidebar({
 						<PageTree {...pageTreeProps} workspaceId={workspaceId} />
 					</>
 				) : null}
-				{workspaceId || utilityActions ? (
-					<SidebarGroup className="mt-auto">
-						<SidebarGroupContent>
-							<SidebarMenu>
-								{utilityActions}
-								{workspaceId ? (
-									<WorkspaceNavItem workspaceId={workspaceId} section="trash" />
-								) : null}
-							</SidebarMenu>
-						</SidebarGroupContent>
-					</SidebarGroup>
-				) : null}
+				<SidebarGroup className="mt-auto">
+					<SidebarGroupContent>
+						<SidebarMenu>
+							{utilityActions}
+							{workspaceId ? (
+								<WorkspaceNavItem workspaceId={workspaceId} section="trash" />
+							) : null}
+							<SidebarMenuItem>
+								<SidebarMenuButton
+									tooltip="Help"
+									onClick={onOpenHelp}
+									render={
+										onOpenHelp ? undefined : (
+											// biome-ignore lint/a11y/useAnchorContent: SidebarMenuButton supplies the Help label and icon.
+											<a
+												href="/help"
+												aria-label="Help (opens in a new tab)"
+												target="_blank"
+												rel="noopener noreferrer"
+											/>
+										)
+									}
+								>
+									<BookOpenIcon />
+									<span>Help</span>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
+						</SidebarMenu>
+					</SidebarGroupContent>
+				</SidebarGroup>
 			</SidebarContent>
 			<SidebarFooter>{footer}</SidebarFooter>
 			<SidebarRail />

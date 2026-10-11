@@ -85,6 +85,7 @@ const nextConfig = {
 	outputFileTracingIncludes: {
 		"/*": [`${yjsLib0Directory}/**/*.{js,mjs,cjs,json}`],
 		"/changelog": ["./content/changelog/*.md"],
+		"/help/*": ["./content/help/*.md"],
 		"/mcp": ["./features/agents/mcp-app/dist/companion.html"],
 	},
 	turbopack: {

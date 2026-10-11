@@ -89,14 +89,22 @@ export default async function ChangelogPage() {
 						</span>
 						Haunter
 					</Link>
-					<Button
-						size="sm"
-						variant="outline"
-						nativeButton={false}
-						render={<Link href="/" />}
-					>
-						Open Haunter
-					</Button>
+					<div className="flex items-center gap-4 text-sm">
+						<Link
+							href="/help"
+							className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+						>
+							Help
+						</Link>
+						<Button
+							size="sm"
+							variant="outline"
+							nativeButton={false}
+							render={<Link href="/" />}
+						>
+							Open Haunter
+						</Button>
+					</div>
 				</div>
 			</header>
 			<main className="mx-auto w-full max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
