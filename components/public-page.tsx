@@ -1,8 +1,15 @@
+import type { Viewport } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { GhostLogo } from "@/components/ghost-logo";
 import { Button } from "@/components/ui/button";
+import { getResolvedThemeColor } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+
+export const publicPageViewport: Viewport = {
+	themeColor: getResolvedThemeColor("dracula"),
+	colorScheme: "dark",
+};
 
 export const publicPageContainerClassName =
 	"mx-auto w-full max-w-7xl px-5 sm:px-8";

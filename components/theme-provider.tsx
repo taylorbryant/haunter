@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
 import {
 	type ComponentProps,
@@ -174,6 +175,14 @@ export function ThemeProvider({
 	storageKey = "theme",
 	...props
 }: ComponentProps<typeof NextThemesProvider>) {
+	const pathname = usePathname();
+	// Keep public reading pages consistent without replacing workspace preferences.
+	const publicPageTheme =
+		pathname === "/guides" ||
+		pathname.startsWith("/guides/") ||
+		pathname === "/changelog"
+			? "dracula"
+			: undefined;
 	const [hostTheme, setHostTheme] = useState<string>();
 	const acceptHostTheme = useCallback((theme: AppThemeId) => {
 		if (window.parent !== window) setHostTheme(theme);
@@ -190,7 +199,7 @@ export function ThemeProvider({
 			/>
 			<NextThemesProvider
 				{...props}
-				forcedTheme={hostTheme ?? props.forcedTheme}
+				forcedTheme={publicPageTheme ?? hostTheme ?? props.forcedTheme}
 				nonce={nonce}
 				storageKey={storageKey}
 				themes={APP_THEME_IDS}

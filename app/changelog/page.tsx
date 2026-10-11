@@ -3,6 +3,7 @@ import {
 	PublicPageHeader,
 	PublicPageIntro,
 	publicPageContainerClassName,
+	publicPageViewport,
 } from "@/components/public-page";
 import { Badge } from "@/components/ui/badge";
 import { ChangelogSeenTracker } from "@/features/changelog/components/changelog-seen-tracker";
@@ -12,6 +13,8 @@ import {
 	type ChangelogRelease,
 } from "@/features/changelog/releases";
 import { cn } from "@/lib/utils";
+
+export const viewport = publicPageViewport;
 
 export const metadata: Metadata = {
 	title: "Changelog · Haunter",

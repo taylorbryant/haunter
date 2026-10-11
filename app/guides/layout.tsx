@@ -3,9 +3,12 @@ import type { ReactNode } from "react";
 import {
 	PublicPageHeader,
 	publicPageContainerClassName,
+	publicPageViewport,
 } from "@/components/public-page";
 import { HelpNavigation } from "@/features/help/components/help-navigation";
 import "./help.css";
+
+export const viewport = publicPageViewport;
 
 export const metadata: Metadata = {
 	title: { default: "Guides · Haunter", template: "%s · Haunter Guides" },
