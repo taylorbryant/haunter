@@ -41,4 +41,4 @@ If a task seems missing, check the workspace, completion filter, and assignment 
 
 Create a page called “This week.” Add headings for your projects and task blocks for the next actions. Assign the tasks and set their dates, then use Home for today's work and the page for the broader plan.
 
-With a [connected AI assistant](/help/ai), you can ask: “Turn the action items on this page into tasks and assign them to me.” In a compatible embedded panel, clicking or focusing a task also gives your assistant context for requests such as “Move this task to Friday.”
+With a [connected AI assistant](/help/ai), you can ask: “Turn the action items on the This week page into tasks and assign them to me.” Include the workspace name if you have more than one page with that title. Review the tasks in the web app after the assistant creates them.

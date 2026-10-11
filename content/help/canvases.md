@@ -40,10 +40,10 @@ Deleting a standalone canvas from the Canvases list is permanent; it does not mo
 
 ## Draw with an assistant
 
-In a compatible [AI app](/help/ai), open a canvas, select the shapes you want to change, and describe the result. For example:
+With a [connected AI assistant](/help/ai), name the canvas and describe the changes you want. Include the workspace name when needed, and identify shapes by their labels. For example:
 
-- “Align these cards and space them evenly.”
-- “Put these shapes in a frame called Checkout.”
-- “Add a wireframe template for a settings screen.”
+- “In the Project plan canvas, align the Research, Design, and Build cards and space them evenly.”
+- “In the Checkout flow canvas, put the Cart, Payment, and Confirmation steps in a frame called Checkout.”
+- “Add a settings screen wireframe template to the App ideas canvas.”
 
-The assistant can inspect and edit drawing elements, including groups, frames, and images, when its connection has the required access. You can continue using the same canvas tools yourself.
+The assistant can inspect and edit drawing elements, including groups, frames, and images, when its connection has the required access. Open the canvas in the web app to review the changes and continue drawing.

@@ -34,8 +34,6 @@ Use the star on a page or canvas to keep it in your favorites. Favorites are per
 
 Open your account menu at the bottom of the web app's sidebar, then choose **Settings → Appearance** to change your theme. You can also set light, dark, or system mode from the account menu.
 
-Inside an AI app, use **Appearance** at the bottom of the Haunter sidebar. Choose a named theme such as Dracula or **Follow host** for the host's light or dark mode. The embedded theme is saved separately from your web app theme.
-
 The sidebar button at the top of the workspace gives you more room to write. On small screens, it opens and closes navigation.
 
 ## Try a small workflow

@@ -38,12 +38,12 @@ Backlinks show other pages that link to the page you are reading. Use them to fo
 
 Search includes saved page text, task titles, canvas titles, and text inside drawings. A matching drawing opens at its matching shape, including drawings inside pages. A task result opens a focused task view; choose **Show all tasks** to return to the full list.
 
-Inside an AI app, try **Cmd+Shift+K** or **Ctrl+Shift+K** if the host uses the usual shortcut. You can also use the sidebar Search button. Type `>` in Search to find commands instead of content.
+Type `>` in Search to find commands instead of content.
 
 Search does not read text inside image pixels or attached files. It also excludes Trash and older versions. Use [Trash or page history](/help/sharing-and-recovery) for that work.
 
 ## Bring notes in or take them with you
 
-In the web app, open the menu beside **Pages** and choose **Import Markdown** to bring in a Markdown file. Import is available in the web app rather than the embedded panel.
+Open the menu beside **Pages** and choose **Import Markdown** to bring in a Markdown file.
 
 To download a page, open its header's options menu and choose a Markdown or HTML export. [Read about export formats](/help/sharing-and-recovery#export-a-page) before using them as a backup.
