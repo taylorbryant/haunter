@@ -40,10 +40,10 @@ Search includes saved page text, task titles, canvas titles, and text inside dra
 
 Type `>` in Search to find commands instead of content.
 
-Search does not read text inside image pixels or attached files. It also excludes Trash and older versions. Use [Trash or page history](/guides/sharing-and-recovery) for that work.
+Search does not read text inside image pixels or attached files. It also excludes Trash and older versions. Use [Trash or page history](/guides/saving-and-recovery) for that work.
 
 ## Bring notes in or take them with you
 
 Open the menu beside **Pages** and choose **Import Markdown** to bring in a Markdown file.
 
-To download a page, open its header's options menu and choose a Markdown or HTML export. [Read about export formats](/guides/sharing-and-recovery#export-a-page) before using them as a backup.
+To download a page, open its header's options menu and choose a Markdown or HTML export. [Read about export formats](/guides/sharing-and-exporting#export-a-page) before using them as a backup.

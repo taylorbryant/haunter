@@ -1,30 +1,10 @@
-Invite people into a workspace when you want to work together. Publish a page when someone only needs to read it. Use history and Trash to recover saved work, and pay attention to save status when your connection is interrupted.
+Check whether your latest edits have saved, restore earlier versions, and recover deleted pages or unsynced drafts.
 
-## Collaborate in a workspace
+## Check that your work is saved
 
-In the web app, open the workspace switcher and choose **Members** to view its members. If your role allows member management, invite someone by email and choose their role.
+Pages and canvases save automatically. Before closing one, check that its latest changes have saved.
 
-Workspace roles determine who can view, edit, or manage members. People with editing access can work in the same page or canvas at the same time. You can see other participants while connected.
-
-## Publish a read-only page
-
-1. Open the page you want to share.
-2. Open the page header's options menu and choose **Share**.
-3. Choose **Publish**, then copy the public link.
-4. Send that link to the people who should be able to read the page.
-
-Anyone with the public link can view the page without a Haunter account. It shows the saved page, including supported inline canvases, in a read-only view. Later saved edits appear at the same link. Sharing one page does not grant access to the rest of the workspace.
-
-Public links include a title-and-icon preview image for apps that display link previews. To stop sharing, return to **Share**, choose **Revoke link**, and confirm. You can publish a new link later.
-
-## Export a page
-
-Open the page header's options menu and choose **Export Markdown** or **Export HTML**.
-
-- **Markdown** is useful for moving text into another editor. Some rich formatting and Haunter-specific content cannot be represented exactly.
-- **HTML** creates a standalone page in your current Haunter theme for reading in a browser.
-
-These exports are not full workspace backups. In particular, a Markdown export does not contain an editable canvas drawing. Keep the original page and canvas when you need to preserve their editing behavior.
+If the editor reports unsaved changes, reconnect and wait for confirmation that they have saved before closing it. **Saved in this browser** means the draft is stored locally, not that it has reached your other devices.
 
 ## Restore a page version
 
@@ -49,8 +29,6 @@ A connected assistant with **Full access** can inspect saved canvas versions and
 Canvas history is separate from page history. There is no canvas history picker in the web app. Restoring a canvas version replaces the saved drawing and keeps a recovery version of the current drawing. [Set up an AI connection](/guides/ai) if you want to use this workflow.
 
 ## Recover work that has not synced
-
-If the editor reports unsaved changes, reconnect and wait for confirmation that they have saved before closing it. **Saved in this browser** means the draft is stored locally, not that it has reached your other devices.
 
 If Haunter offers a recovery download, save it before clearing browser data or signing out. To import a Haunter JSON recovery file, open the menu beside **Pages** and choose **Recover drafts**. The dialog creates new pages and canvases from the file and leaves existing work in place. For a Markdown recovery download, use **Import Markdown** in the web app instead.
 

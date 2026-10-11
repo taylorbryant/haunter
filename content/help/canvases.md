@@ -36,7 +36,7 @@ Add an image using the canvas's media controls, or drag an image file onto the d
 
 Canvas changes save automatically. Other workspace members with editing access can work on the same drawing. Check the save or connection status before closing, especially when working offline.
 
-Deleting a standalone canvas from the Canvases list is permanent; it does not move to the page Trash. A page's version history restores the placement of an inline canvas, not an older drawing. [Learn about canvas recovery](/guides/sharing-and-recovery#recover-a-canvas-version).
+Deleting a standalone canvas from the Canvases list is permanent; it does not move to the page Trash. A page's version history restores the placement of an inline canvas, not an older drawing. [Learn about canvas recovery](/guides/saving-and-recovery#recover-a-canvas-version).
 
 ## Draw with an assistant
 

@@ -35,7 +35,7 @@ Home shows your overdue work, today's tasks, and tasks coming up in the next sev
 
 Check a task to complete it. To reopen one, switch to **Completed** or **All**, then clear its checkbox.
 
-If a task seems missing, check the workspace, completion filter, and assignment filter. Tasks belonging to a page in Trash do not appear in the active task list; [restore the page](/guides/sharing-and-recovery#restore-a-page-from-trash) to bring it back.
+If a task seems missing, check the workspace, completion filter, and assignment filter. Tasks belonging to a page in Trash do not appear in the active task list; [restore the page](/guides/saving-and-recovery#restore-a-page-from-trash) to bring it back.
 
 ## Plan a week from one page
 

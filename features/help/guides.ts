@@ -30,10 +30,16 @@ export const HELP_GUIDES = [
 			"Connect an assistant, choose its access, and work together in Haunter.",
 	},
 	{
-		slug: "sharing-and-recovery",
-		title: "Sharing and recovering work",
+		slug: "sharing-and-exporting",
+		title: "Sharing and exporting",
 		description:
-			"Collaborate, publish a page, export your notes, and recover earlier work.",
+			"Work with other people, publish a page, and export your notes.",
+	},
+	{
+		slug: "saving-and-recovery",
+		title: "Saving and recovery",
+		description:
+			"Check save status, restore earlier versions, and recover pages and drafts.",
 	},
 ] as const;
 

@@ -15,7 +15,7 @@ A workspace contains its own pages, tasks, canvases, and members. Check the work
 3. Click or tap below the title and start writing.
 4. Type `/` on a new line to open the block menu. Try a heading, a task, or a canvas.
 
-Changes save automatically. Watch the save status before closing the page, especially if your connection drops. [Learn about saving and recovery](/guides/sharing-and-recovery#recover-work-that-has-not-synced).
+Changes save automatically. Watch the save status before closing the page, especially if your connection drops. [Learn about saving and recovery](/guides/saving-and-recovery#recover-work-that-has-not-synced).
 
 Your first workspace includes **Start here** and **This week** as example pages. Edit them or move them to Trash when you no longer need them.
 
