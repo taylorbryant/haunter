@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { ServiceWorkerRegistrar } from "@/components/service-worker";
 import { APPLE_STARTUP_IMAGE_SPECS } from "@/lib/apple-startup-images";
 import { ThemeProvider } from "@/components/theme-provider";
+import { DEFAULT_DARK_THEME_ID, getResolvedThemeColor } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import { Providers } from "./providers";
 
@@ -31,10 +32,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-	themeColor: [
-		{ media: "(prefers-color-scheme: light)", color: "#ffffff" },
-		{ media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-	],
+	themeColor: getResolvedThemeColor(DEFAULT_DARK_THEME_ID),
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -47,7 +45,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 			<body>
 				<ThemeProvider
 					attribute="class"
-					defaultTheme="system"
+					defaultTheme={DEFAULT_DARK_THEME_ID}
 					enableSystem
 					disableTransitionOnChange
 				>

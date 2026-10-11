@@ -233,7 +233,7 @@ export const DARK_APP_THEMES = APP_THEMES.filter(
 );
 
 export const DEFAULT_LIGHT_THEME_ID = "light" satisfies LightThemeId;
-export const DEFAULT_DARK_THEME_ID = "dark" satisfies DarkThemeId;
+export const DEFAULT_DARK_THEME_ID = "dracula" satisfies DarkThemeId;
 
 export const THEME_STORAGE_KEYS = {
 	mode: "haunter-theme-mode",
@@ -248,7 +248,7 @@ export type ThemePreferences = {
 };
 
 export const DEFAULT_THEME_PREFERENCES: ThemePreferences = {
-	mode: "system",
+	mode: "dark",
 	lightTheme: DEFAULT_LIGHT_THEME_ID,
 	darkTheme: DEFAULT_DARK_THEME_ID,
 };
@@ -303,11 +303,14 @@ export function parseThemePreferences({
 			(legacyAppTheme?.colorScheme === "light"
 				? legacyAppTheme.id
 				: DEFAULT_LIGHT_THEME_ID),
+		// Legacy System followed the original Dark palette, not the new default.
 		darkTheme:
 			getThemeIdForColorScheme(darkTheme, "dark") ??
 			(legacyAppTheme?.colorScheme === "dark"
 				? legacyAppTheme.id
-				: DEFAULT_DARK_THEME_ID),
+				: legacyTheme === "system"
+					? "dark"
+					: DEFAULT_DARK_THEME_ID),
 	};
 }
 
