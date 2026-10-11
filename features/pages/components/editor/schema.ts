@@ -261,7 +261,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			expandButton.type = "button";
 			expandButton.className = "haunter-code-block-expand keyboard-focus-ring";
 			expandButton.setAttribute("aria-label", "Expand code");
-			expandButton.style.setProperty("display", "flex", "important");
+			expandButton.style.setProperty("display", "flex");
 			expandButton.style.setProperty("width", "28px");
 			expandButton.style.setProperty("height", "28px");
 			expandButton.style.setProperty("flex-shrink", "0");
