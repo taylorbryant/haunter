@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { GhostLogo } from "@/components/ghost-logo";
+import {
+	PublicPageHeader,
+	PublicPageIntro,
+	publicPageContainerClassName,
+} from "@/components/public-page";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ChangelogSeenTracker } from "@/features/changelog/components/changelog-seen-tracker";
 import { loadChangelogReleases } from "@/features/changelog/content";
 import {
 	CHANGELOG_RELEASES,
 	type ChangelogRelease,
 } from "@/features/changelog/releases";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
 	title: "Changelog · Haunter",
@@ -37,8 +40,8 @@ function Release({
 	latest: boolean;
 }) {
 	return (
-		<article className="grid gap-6 border-border/70 border-t py-10 first:border-t-0 first:pt-0 md:grid-cols-[9rem_minmax(0,1fr)] md:gap-10 md:py-14">
-			<div className="flex items-center gap-3 md:flex-col md:items-start md:gap-2">
+		<article className="grid gap-6 border-border/70 border-t py-10 first:border-t-0 first:pt-0 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-16 sm:py-14">
+			<div className="flex items-center gap-3 lg:flex-col lg:items-start lg:gap-2">
 				<p className="font-medium text-sm tabular-nums">
 					{formatReleaseDate(release.date)}
 				</p>
@@ -49,7 +52,7 @@ function Release({
 					{latest ? <Badge>Latest</Badge> : null}
 				</div>
 			</div>
-			<div className="min-w-0">
+			<div className="min-w-0 max-w-[70ch]">
 				<h2 className="text-balance font-semibold text-2xl tracking-tight">
 					{release.title}
 				</h2>
@@ -57,7 +60,7 @@ function Release({
 					{release.sections.map((section) => (
 						<section key={section.title}>
 							<h3 className="font-semibold text-base">{section.title}</h3>
-							<ul className="mt-3 list-disc space-y-2 pl-5 text-pretty text-muted-foreground">
+							<ul className="mt-3 list-disc space-y-2.5 pl-6 text-pretty text-base/7 text-foreground marker:text-muted-foreground">
 								{section.items.map((item) => (
 									<li key={item} className="pl-1">
 										{item}
@@ -76,50 +79,18 @@ export default async function ChangelogPage() {
 	const releases = await loadChangelogReleases();
 
 	return (
-		<div className="min-h-dvh bg-background">
+		<div className="isolate min-h-dvh bg-background text-foreground antialiased">
 			<ChangelogSeenTracker />
-			<header className="border-border/70 border-b">
-				<div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4 sm:px-6">
-					<Link
-						href="/"
-						className="flex items-center gap-2 font-medium text-sm"
-					>
-						<span aria-hidden>
-							<GhostLogo className="size-5" />
-						</span>
-						Haunter
-					</Link>
-					<div className="flex items-center gap-4 text-sm">
-						<Link
-							href="/guides"
-							className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-						>
-							Guides
-						</Link>
-						<Button
-							size="sm"
-							variant="outline"
-							nativeButton={false}
-							render={<Link href="/" />}
-						>
-							Open Haunter
-						</Button>
-					</div>
-				</div>
-			</header>
-			<main className="mx-auto w-full max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
-				<div className="max-w-2xl">
-					<p className="font-medium text-muted-foreground text-sm">
-						What’s new
-					</p>
-					<h1 className="mt-3 text-balance font-semibold text-4xl tracking-tight sm:text-5xl">
-						Changelog
-					</h1>
-					<p className="mt-4 max-w-[60ch] text-pretty text-base text-muted-foreground sm:text-lg">
-						New features, thoughtful improvements, and fixes in every release.
-					</p>
-				</div>
-				<div className="mt-14 sm:mt-16">
+			<PublicPageHeader section="changelog" />
+			<main className={cn(publicPageContainerClassName, "py-10 sm:py-14")}>
+				<PublicPageIntro
+					eyebrow="What’s new"
+					title="Changelog"
+					className="lg:ml-72"
+				>
+					New features, thoughtful improvements, and fixes in every release.
+				</PublicPageIntro>
+				<div className="mt-10 sm:mt-14">
 					{releases.map((release) => (
 						<Release
 							key={release.version}

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 export function HelpNavigation({ mobile = false }: { mobile?: boolean }) {
 	const pathname = usePathname();
 	const links = (
-		<nav aria-label={mobile ? "Mobile help guides" : "Help guides"}>
+		<nav aria-label={mobile ? "Mobile guides" : "Guides"}>
 			{/* biome-ignore lint/a11y/noRedundantRoles: Preserve list semantics in Safari when Tailwind removes list markers. */}
 			<ul role="list" className="flex flex-col gap-1">
 				{[{ slug: "", title: "All guides" }, ...HELP_GUIDES].map((guide) => {
@@ -32,16 +32,6 @@ export function HelpNavigation({ mobile = false }: { mobile?: boolean }) {
 						</li>
 					);
 				})}
-				{mobile ? (
-					<li className="text-base sm:hidden">
-						<Link
-							href="/changelog"
-							className="flex min-h-11 items-center rounded-md px-3 py-2 font-medium text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-						>
-							Changelog
-						</Link>
-					</li>
-				) : null}
 			</ul>
 		</nav>
 	);

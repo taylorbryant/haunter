@@ -98,14 +98,14 @@ export function WorkspaceSidebar({
 							) : null}
 							<SidebarMenuItem>
 								<SidebarMenuButton
-									tooltip="Help"
+									tooltip="Guides"
 									onClick={onOpenHelp}
 									render={
 										onOpenHelp ? undefined : (
-											// biome-ignore lint/a11y/useAnchorContent: SidebarMenuButton supplies the Help label and icon.
+											// biome-ignore lint/a11y/useAnchorContent: SidebarMenuButton supplies the Guides label and icon.
 											<a
 												href="/guides"
-												aria-label="Help (opens in a new tab)"
+												aria-label="Guides (opens in a new tab)"
 												target="_blank"
 												rel="noopener noreferrer"
 											/>
@@ -113,7 +113,7 @@ export function WorkspaceSidebar({
 									}
 								>
 									<BookOpenIcon />
-									<span>Help</span>
+									<span>Guides</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>
 						</SidebarMenu>

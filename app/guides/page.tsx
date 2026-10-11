@@ -1,19 +1,14 @@
 import Link from "next/link";
+import { PublicPageIntro } from "@/components/public-page";
 import { HELP_GUIDES } from "@/features/help/guides";
 
-export default function HelpPage() {
+export default function GuidesPage() {
 	return (
 		<div className="flex flex-col gap-10 sm:gap-14">
-			<div className="flex flex-col gap-4">
-				<p className="font-medium text-muted-foreground">Haunter Help</p>
-				<h1 className="text-balance font-semibold text-4xl tracking-tight sm:text-5xl">
-					Your guide to Haunter
-				</h1>
-				<p className="max-w-[60ch] text-pretty text-base/7 text-muted-foreground">
-					Learn your way around pages, tasks, and canvases, or bring an AI
-					assistant into your workspace.
-				</p>
-			</div>
+			<PublicPageIntro eyebrow="Haunter Guides" title="Your guide to Haunter">
+				Learn your way around pages, tasks, and canvases, or bring an AI
+				assistant into your workspace.
+			</PublicPageIntro>
 			<div className="grid gap-x-10 sm:grid-cols-2">
 				{HELP_GUIDES.map((guide, index) => (
 					<Link
