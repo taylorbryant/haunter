@@ -1,12 +1,6 @@
 "use client";
 
-import {
-	BookOpenIcon,
-	HouseIcon,
-	ListTodoIcon,
-	ShapesIcon,
-	Trash2Icon,
-} from "lucide-react";
+import { HouseIcon, ListTodoIcon, ShapesIcon, Trash2Icon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import {
 	WorkspaceLink,
@@ -45,7 +39,6 @@ export function WorkspaceSidebar({
 	footer,
 	showTasks = true,
 	preferShiftShortcut = false,
-	onOpenHelp,
 	pageTreeProps,
 	className,
 }: {
@@ -56,7 +49,6 @@ export function WorkspaceSidebar({
 	footer: ReactNode;
 	showTasks?: boolean;
 	preferShiftShortcut?: boolean;
-	onOpenHelp?: () => void;
 	pageTreeProps?: Omit<ComponentProps<typeof PageTree>, "workspaceId">;
 	className?: string;
 }) {
@@ -89,36 +81,18 @@ export function WorkspaceSidebar({
 						<PageTree {...pageTreeProps} workspaceId={workspaceId} />
 					</>
 				) : null}
-				<SidebarGroup className="mt-auto">
-					<SidebarGroupContent>
-						<SidebarMenu>
-							{utilityActions}
-							{workspaceId ? (
-								<WorkspaceNavItem workspaceId={workspaceId} section="trash" />
-							) : null}
-							<SidebarMenuItem>
-								<SidebarMenuButton
-									tooltip="Guides"
-									onClick={onOpenHelp}
-									render={
-										onOpenHelp ? undefined : (
-											// biome-ignore lint/a11y/useAnchorContent: SidebarMenuButton supplies the Guides label and icon.
-											<a
-												href="/guides"
-												aria-label="Guides (opens in a new tab)"
-												target="_blank"
-												rel="noopener noreferrer"
-											/>
-										)
-									}
-								>
-									<BookOpenIcon />
-									<span>Guides</span>
-								</SidebarMenuButton>
-							</SidebarMenuItem>
-						</SidebarMenu>
-					</SidebarGroupContent>
-				</SidebarGroup>
+				{workspaceId || utilityActions ? (
+					<SidebarGroup className="mt-auto">
+						<SidebarGroupContent>
+							<SidebarMenu>
+								{utilityActions}
+								{workspaceId ? (
+									<WorkspaceNavItem workspaceId={workspaceId} section="trash" />
+								) : null}
+							</SidebarMenu>
+						</SidebarGroupContent>
+					</SidebarGroup>
+				) : null}
 			</SidebarContent>
 			<SidebarFooter>{footer}</SidebarFooter>
 			<SidebarRail />

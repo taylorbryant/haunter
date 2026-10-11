@@ -19,7 +19,6 @@ afterEach(async () => {
 
 function fixture(toolError?: Error) {
 	const calls: string[] = [];
-	const links: string[] = [];
 	const contexts: ContextSnapshot[] = [];
 	const messages: Record<string, unknown>[] = [];
 	const frame = document.querySelector<HTMLIFrameElement>("iframe")!;
@@ -66,9 +65,7 @@ function fixture(toolError?: Error) {
 			if (toolError) throw toolError;
 			return { id: crypto.randomUUID() };
 		},
-		async openLink(url) {
-			links.push(url);
-		},
+		async openLink() {},
 		canUseContext: () => true,
 		async setContext(snapshot) {
 			contexts.push(snapshot);
@@ -76,7 +73,6 @@ function fixture(toolError?: Error) {
 	});
 	return {
 		calls,
-		links,
 		contexts,
 		messages,
 		frame,
@@ -86,22 +82,6 @@ function fixture(toolError?: Error) {
 		},
 	};
 }
-
-test("Help opens through the host without navigating away from the editor", async () => {
-	const f = fixture();
-	await adapter.initialize(destination());
-	const src = f.frame.src;
-	f.emit(
-		{ type: "haunter/workspace/open-help" },
-		{ origin: "https://other.test" },
-	);
-	f.emit({ type: "haunter/workspace/open-help", nonce: "wrong" });
-	expect(f.links).toEqual([]);
-	f.emit({ type: "haunter/workspace/open-help" });
-	await waitFor(() => expect(f.links).toEqual(["https://haunter.test/guides"]));
-	expect(f.frame.src).toBe(src);
-	expect(f.calls).toEqual([]);
-});
 
 test("assistant page changes reuse the workspace frame and UI calls only authorize the workspace", async () => {
 	const f = fixture();

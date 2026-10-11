@@ -86,10 +86,6 @@ export const WorkspaceBridgeMessageSchema = z.discriminatedUnion("type", [
 	}),
 	z.object({ type: z.literal("haunter/workspace/ready"), nonce: z.string() }),
 	z.object({
-		type: z.literal("haunter/workspace/open-help"),
-		nonce: z.string(),
-	}),
-	z.object({
 		type: z.literal("haunter/workspace/view"),
 		nonce: z.string(),
 		view: WorkspaceViewSchema.nullable(),
