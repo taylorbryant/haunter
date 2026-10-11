@@ -96,9 +96,11 @@ describe("app themes", () => {
 			lightTheme: "light",
 			darkTheme: "dracula",
 		});
-		expect(parseThemePreferences({ legacyTheme: "system" })).toEqual(
-			DEFAULT_THEME_PREFERENCES,
-		);
+		expect(parseThemePreferences({ legacyTheme: "system" })).toEqual({
+			mode: "system",
+			lightTheme: "light",
+			darkTheme: "dark",
+		});
 		expect(
 			parseThemePreferences({
 				mode: "system",
@@ -111,6 +113,32 @@ describe("app themes", () => {
 			lightTheme: "light",
 			darkTheme: "catppuccin",
 		});
+	});
+
+	test("starts new users in Dracula regardless of the system appearance", () => {
+		const preferences = parseThemePreferences({});
+		expect(preferences).toEqual(DEFAULT_THEME_PREFERENCES);
+		expect(resolveThemePreference(preferences, "light")).toBe("dracula");
+		expect(resolveThemePreference(preferences, "dark")).toBe("dracula");
+	});
+
+	test("keeps saved theme choices when the default changes", () => {
+		for (const mode of ["light", "dark", "system"] as const) {
+			const preferences = {
+				mode,
+				lightTheme: "alucard",
+				darkTheme: "nord",
+			} as const;
+			expect(parseThemePreferences(preferences)).toEqual(preferences);
+		}
+		for (const legacyTheme of ["light", "dark", "nord"] as const) {
+			const preferences = parseThemePreferences({ legacyTheme });
+			expect(resolveThemePreference(preferences, "light")).toBe(legacyTheme);
+			expect(resolveThemePreference(preferences, "dark")).toBe(legacyTheme);
+		}
+		const system = parseThemePreferences({ legacyTheme: "system" });
+		expect(resolveThemePreference(system, "light")).toBe("light");
+		expect(resolveThemePreference(system, "dark")).toBe("dark");
 	});
 
 	test("resolves system, light, and dark modes with independent palettes", () => {

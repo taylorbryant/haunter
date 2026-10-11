@@ -54,7 +54,7 @@ function getThemeBootstrapScript(storageKey: string) {
 		defaults: DEFAULT_THEME_PREFERENCES,
 	});
 
-	return `(()=>{try{const c=${config};const legacy=localStorage.getItem(c.storageKey);const storedMode=localStorage.getItem(c.keys.mode);const mode=["system","light","dark"].includes(storedMode)?storedMode:legacy==="system"?"system":c.lightThemes.includes(legacy)?"light":c.darkThemes.includes(legacy)?"dark":c.defaults.mode;const storedLight=localStorage.getItem(c.keys.lightTheme);const storedDark=localStorage.getItem(c.keys.darkTheme);const light=c.lightThemes.includes(storedLight)?storedLight:c.lightThemes.includes(legacy)?legacy:c.defaults.lightTheme;const dark=c.darkThemes.includes(storedDark)?storedDark:c.darkThemes.includes(legacy)?legacy:c.defaults.darkTheme;localStorage.setItem(c.keys.mode,mode);localStorage.setItem(c.keys.lightTheme,light);localStorage.setItem(c.keys.darkTheme,dark);const systemDark=window.matchMedia("(prefers-color-scheme: dark)").matches;const active=mode==="light"?light:mode==="dark"?dark:systemDark?dark:light;localStorage.setItem(c.storageKey,active)}catch{}})();`;
+	return `(()=>{try{const c=${config};const legacy=localStorage.getItem(c.storageKey);const storedMode=localStorage.getItem(c.keys.mode);const mode=["system","light","dark"].includes(storedMode)?storedMode:legacy==="system"?"system":c.lightThemes.includes(legacy)?"light":c.darkThemes.includes(legacy)?"dark":c.defaults.mode;const storedLight=localStorage.getItem(c.keys.lightTheme);const storedDark=localStorage.getItem(c.keys.darkTheme);const light=c.lightThemes.includes(storedLight)?storedLight:c.lightThemes.includes(legacy)?legacy:c.defaults.lightTheme;const dark=c.darkThemes.includes(storedDark)?storedDark:c.darkThemes.includes(legacy)?legacy:legacy==="system"?"dark":c.defaults.darkTheme;localStorage.setItem(c.keys.mode,mode);localStorage.setItem(c.keys.lightTheme,light);localStorage.setItem(c.keys.darkTheme,dark);const systemDark=window.matchMedia("(prefers-color-scheme: dark)").matches;const active=mode==="light"?light:mode==="dark"?dark:systemDark?dark:light;localStorage.setItem(c.storageKey,active)}catch{}})();`;
 }
 
 function ThemePreferencesSync({
@@ -176,11 +176,13 @@ export function ThemeProvider({
 	...props
 }: ComponentProps<typeof NextThemesProvider>) {
 	const pathname = usePathname();
-	// Keep public reading pages consistent without replacing workspace preferences.
+	// Public and sign-in pages use a fixed palette without replacing preferences.
 	const publicPageTheme =
 		pathname === "/guides" ||
 		pathname.startsWith("/guides/") ||
-		pathname === "/changelog"
+		pathname === "/changelog" ||
+		pathname === "/sign-in" ||
+		pathname === "/sign-up"
 			? "dracula"
 			: undefined;
 	const [hostTheme, setHostTheme] = useState<string>();
