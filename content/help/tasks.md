@@ -33,6 +33,8 @@ Home shows your overdue work, today's tasks, and tasks coming up in the next sev
 - **Mine** limits the list to tasks assigned to you.
 - **Everyone** includes the workspace's tasks, including unassigned ones.
 
+![The Tasks view with Open and Everyone selected, showing page tasks linked to This week alongside standalone tasks, with assignees and due dates.](/guides/images/tasks.webp "Page tasks and standalone tasks share one list. Use the filters above it to choose what you see.")
+
 Check a task to complete it. To reopen one, switch to **Completed** or **All**, then clear its checkbox.
 
 If a task seems missing, check the workspace, completion filter, and assignment filter. Tasks belonging to a page in Trash do not appear in the active task list; [restore the page](/guides/saving-and-recovery#restore-a-page-from-trash) to bring it back.

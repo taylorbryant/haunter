@@ -7,6 +7,8 @@ Use a canvas for a diagram, wireframe, sketch, or collection of ideas. Put it in
 3. Use the drawing tools inside the canvas to add shapes, arrows, text, or freehand strokes.
 4. Use the expand control on the canvas when you need more room.
 
+![An inline canvas on the Workshop plan page, with Welcome, Plant together, and Share & learn connected by arrows. The expand control sits at the top right.](/guides/images/inline-canvas.webp "Sketch a flow alongside your notes, then use the expand control for more room.")
+
 An inline canvas stays connected to its page. Return to the page to keep writing around the drawing. It does not appear as a standalone item in the Canvases list, but workspace search can find its title and drawing text.
 
 ## Create a standalone canvas

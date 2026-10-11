@@ -30,6 +30,8 @@ Your first workspace includes **Start here** and **This week** as example pages.
 
 Use the star on a page or canvas to keep it in your favorites. Favorites are personal to you.
 
+![The Studio workspace with Home, Tasks, Canvases, favorites, and pages in the sidebar, beside a This week page containing notes and two tasks.](/guides/images/workspace.webp "Keep your notes and tasks together, with workspace navigation in the sidebar.")
+
 ## Make it comfortable
 
 Open your account menu at the bottom of the web app's sidebar, then choose **Settings → Appearance** to change your theme. You can also set light, dark, or system mode from the account menu.

@@ -37,6 +37,10 @@ test("all guide sections render with working anchors and internal links", async 
 		for (const match of html.matchAll(/href="(\/guides[^" ]*)"/g)) {
 			const url = new URL(match[1], "https://haunter.test");
 			if (url.pathname === "/guides") continue;
+			if (url.pathname.startsWith("/guides/images/")) {
+				expect(await Bun.file(`public${url.pathname}`).exists()).toBe(true);
+				continue;
+			}
 			const target = guides.find(
 				(item) => `/guides/${item?.slug}` === url.pathname,
 			);

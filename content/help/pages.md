@@ -6,6 +6,8 @@ A page can hold prose, tasks, tables, code, files, and drawings. Use one page fo
 2. Type `/` to open the insert menu. Search for a block by name or choose one from the list.
 3. Start with headings and paragraphs. Add lists, a quote, or a callout when they help organize your thinking.
 
+![The slash menu open inside a page, showing block types you can insert into your notes.](/guides/images/block-menu.webp "Type / on a new line to choose a block, or keep typing to search the menu.")
+
 Select text to apply formatting such as bold, italic, or a link. On mobile, formatting controls appear above the keyboard while you edit. Active controls indicate the formatting at your current selection.
 
 Use the handle beside a block to open its menu or drag it to another position on desktop. You can edit the page title directly and choose an icon above it.
