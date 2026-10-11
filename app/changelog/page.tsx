@@ -94,7 +94,7 @@ export default async function ChangelogPage() {
 							href="/guides"
 							className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 						>
-							Help
+							Guides
 						</Link>
 						<Button
 							size="sm"

@@ -45,7 +45,8 @@ export default function HelpLayout({ children }: { children: ReactNode }) {
 							Changelog
 						</Link>
 						<Button
-							variant="ghost"
+							size="sm"
+							variant="outline"
 							nativeButton={false}
 							render={<Link href="/" />}
 						>
