@@ -23,9 +23,9 @@ export default function Loading() {
 									<Skeleton className="mt-1 h-5 w-40 max-w-full" />
 								</div>
 							</div>
-							<div className="flex gap-2 @2xl:shrink-0">
-								<Skeleton className="h-12 flex-1 @2xl:h-8 @2xl:w-24 @2xl:flex-none pointer-coarse:min-h-12" />
-								<Skeleton className="h-12 flex-1 @2xl:h-8 @2xl:w-32 @2xl:flex-none pointer-coarse:min-h-12" />
+							<div className="flex flex-wrap gap-2 pl-5 @2xl:shrink-0 @2xl:pl-0">
+								<Skeleton className="h-12 w-24 @2xl:h-8 pointer-coarse:min-h-12" />
+								<Skeleton className="h-12 w-32 @2xl:h-8 pointer-coarse:min-h-12" />
 							</div>
 						</div>
 					</li>

@@ -144,12 +144,11 @@ export function TrashList({
 								</div>
 							</div>
 							{canEdit ? (
-								<div className="flex flex-wrap gap-2 @2xl:shrink-0">
+								<div className="flex flex-wrap gap-2 pl-5 @2xl:shrink-0 @2xl:pl-0">
 									<Button
 										type="button"
-										variant="secondary"
-										size="sm"
-										className="h-12 flex-1 gap-2 px-3 text-base @2xl:h-8 @2xl:flex-none @2xl:text-sm pointer-coarse:min-h-12"
+										variant="ghost"
+										className="h-12 @2xl:h-8 pointer-coarse:min-h-12"
 										disabled={restoreMutation.isPending}
 										onClick={() =>
 											restoreMutation.mutate(
@@ -170,8 +169,7 @@ export function TrashList({
 										<Button
 											type="button"
 											variant="ghost"
-											size="sm"
-											className="h-12 flex-1 gap-2 px-3 text-base text-destructive hover:text-destructive @2xl:h-8 @2xl:flex-none @2xl:text-sm pointer-coarse:min-h-12"
+											className="h-12 text-destructive hover:text-destructive @2xl:h-8 pointer-coarse:min-h-12"
 											disabled={purgeMutation.isPending}
 											onClick={() =>
 												setPageToPurge({ id: page.id, title: page.title })
