@@ -72,7 +72,8 @@ function applyHeadingStyles(
 	element.style.setProperty("--prev-level", style.fontSize);
 	element.style.setProperty("font-size", style.fontSize, "important");
 	element.style.setProperty("line-height", style.lineHeight, "important");
-	element.style.setProperty("font-weight", "700", "important");
+	// Font weight belongs in CSS: an inline weight is parsed as a bold mark
+	// when ProseMirror reads native edits or pasted heading HTML back in.
 }
 
 function getHeadingLevel(level: unknown): HeadingLevel {

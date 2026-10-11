@@ -763,6 +763,12 @@
 	}
 }
 
+/* Keep heading typography out of inline styles, which the editor parses as
+   explicit bold formatting when it reads the rendered HTML back in. */
+.bn-editor .haunter-heading {
+	font-weight: 700 !important;
+}
+
 /* BlockNote slash menu renders unbounded; cap it like a normal combobox. */
 #bn-suggestion-menu {
 	max-height: min(360px, 45vh);
