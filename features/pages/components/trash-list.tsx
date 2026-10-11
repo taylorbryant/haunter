@@ -7,6 +7,7 @@ import { useState } from "react";
 import { userErrorMessage } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { Button } from "@/components/ui/button";
+import { QueryError } from "@/components/query-error";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	invalidatePageNavigation,
@@ -72,26 +73,19 @@ export function TrashList({
 
 	if (trashQuery.isPending) {
 		return (
-			<p className="text-base text-muted-foreground sm:text-sm">Loading…</p>
+			<p className="text-base text-muted-foreground sm:text-sm">
+				Loading deleted pages…
+			</p>
 		);
 	}
 
 	if (trashQuery.isError && !trashQuery.data) {
 		return (
-			<div className="flex flex-wrap items-center gap-3 text-base sm:text-sm">
-				<p role="alert" className="text-destructive">
-					The trash could not be loaded.
-				</p>
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					className="h-12 text-base sm:h-8 sm:text-sm pointer-coarse:min-h-12"
-					onClick={() => void trashQuery.refetch()}
-				>
-					Try again
-				</Button>
-			</div>
+			<QueryError
+				message="The trash could not be loaded."
+				retrying={trashQuery.isFetching}
+				onRetry={() => void trashQuery.refetch()}
+			/>
 		);
 	}
 
@@ -148,7 +142,6 @@ export function TrashList({
 									<Button
 										type="button"
 										variant="ghost"
-										className="h-12 @2xl:h-8 pointer-coarse:min-h-12"
 										disabled={restoreMutation.isPending}
 										onClick={() =>
 											restoreMutation.mutate(
@@ -169,7 +162,7 @@ export function TrashList({
 										<Button
 											type="button"
 											variant="ghost"
-											className="h-12 text-destructive hover:text-destructive @2xl:h-8 pointer-coarse:min-h-12"
+											className="text-destructive hover:text-destructive"
 											disabled={purgeMutation.isPending}
 											onClick={() =>
 												setPageToPurge({ id: page.id, title: page.title })

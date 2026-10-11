@@ -40,7 +40,7 @@ import { HomeView } from "@/features/home/components/home-view";
 import { TasksView } from "@/features/tasks/components/tasks-view";
 import { TaskViewProvider } from "@/features/tasks/client/task-view-context";
 import type { TaskView, SelectedTask } from "@/features/tasks/current-view";
-import { TrashList } from "@/features/pages/components/trash-list";
+import { TrashView } from "@/features/pages/components/trash-view";
 import { EmbeddedEditorContext } from "@/features/pages/components/editor/embedded-editor-context";
 import { EmbeddedAppearancePicker } from "./embedded-appearance-picker";
 import { useEmbeddedAppearance } from "../client/embedded-appearance";
@@ -643,14 +643,7 @@ function WorkspaceDocument({
 			</div>
 		);
 	return (
-		<div className="min-h-0 flex-1 overflow-auto p-6">
-			<h1 className="mb-6 text-2xl font-semibold">
-				{target.section === "trash"
-					? "Trash"
-					: target.section === "canvases"
-						? "Canvases"
-						: workspaceName}
-			</h1>
+		<div className="min-h-0 flex-1 overflow-auto">
 			{target.section === "canvases" ? (
 				<CanvasList
 					workspaceId={workspaceId}
@@ -658,7 +651,7 @@ function WorkspaceDocument({
 					allowFavorites={canEdit}
 				/>
 			) : target.section === "trash" ? (
-				<TrashList workspaceId={workspaceId} allowPurge={false} />
+				<TrashView workspaceId={workspaceId} allowPurge={false} />
 			) : null}
 		</div>
 	);

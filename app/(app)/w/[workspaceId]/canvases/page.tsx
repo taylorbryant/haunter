@@ -30,9 +30,7 @@ export default async function CanvasesPage({
 
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>
-			<div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-				<CanvasList workspaceId={workspaceId} />
-			</div>
+			<CanvasList workspaceId={workspaceId} />
 		</HydrationBoundary>
 	);
 }

@@ -1,5 +1,12 @@
 "use client";
-import { cn } from "@/lib/utils";
+import { PlusIcon } from "lucide-react";
+import { useCreateDialog } from "@/components/create-dialog-provider";
+import { Button } from "@/components/ui/button";
+import {
+	WorkspaceScreen,
+	WorkspaceScreenHeader,
+} from "@/components/workspace-screen";
+import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { TaskList } from "./task-list";
 
 export function TasksView({
@@ -9,15 +16,22 @@ export function TasksView({
 	workspaceId: string;
 	className?: string;
 }) {
+	const canEdit = useCanEditWorkspace();
+	const { openCreateTask } = useCreateDialog();
 	return (
-		<div
-			className={cn(
-				"mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-10",
-				className,
-			)}
-		>
-			<h1 className="font-heading font-semibold text-xl">Tasks</h1>
+		<WorkspaceScreen className={className}>
+			<WorkspaceScreenHeader
+				title="Tasks"
+				actions={
+					canEdit ? (
+						<Button type="button" onClick={openCreateTask}>
+							<PlusIcon data-icon="inline-start" />
+							Add task
+						</Button>
+					) : null
+				}
+			/>
 			<TaskList workspaceId={workspaceId} />
-		</div>
+		</WorkspaceScreen>
 	);
 }
