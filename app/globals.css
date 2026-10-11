@@ -1373,6 +1373,12 @@ html[data-keyboard-nav="true"] .code-edit-focus-ring:has(textarea:focus) {
 	padding-inline: 0;
 }
 
+/* Public readers do not mount the code dialog. Override the node view's
+   inline display style so its inactive trigger is also removed from tab order. */
+.shared-page-reader .haunter-code-block-expand {
+	display: none !important;
+}
+
 /* Match the shared title and loading skeleton below the md breakpoint.
    Read-only pages have no block controls that need the editing gutter. */
 @media (width < 48rem) {
