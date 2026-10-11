@@ -11,6 +11,7 @@ import {
 	WorkspaceScreen,
 	WorkspaceScreenHeader,
 } from "@/components/workspace-screen";
+import { HomeNavigationSkeleton, HomeTasksSkeleton } from "./home-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCanvasNavigationQueryOptions } from "@/features/canvases/client/queries";
 import {
@@ -139,31 +140,11 @@ export function HomeView({ workspaceId }: { workspaceId: string }) {
 					/>
 				</>
 			) : (
-				<section
-					className="flex flex-col gap-8"
-					aria-label="Loading device-local tasks"
-				>
-					<div className="flex flex-col gap-3">
-						<Skeleton className="h-9 w-full" />
-						<Skeleton className="h-4 w-16" />
-						<Skeleton className="h-5 w-3/5" />
-					</div>
-					<div className="flex flex-col gap-3 border-t pt-6">
-						<Skeleton className="h-4 w-24" />
-						<Skeleton className="h-5 w-2/5" />
-					</div>
-				</section>
+				<HomeTasksSkeleton />
 			)}
 
 			{navigationPending ? (
-				<section
-					className="flex flex-col gap-3 border-t pt-6"
-					aria-label="Loading favorites and recent items"
-				>
-					<Skeleton className="h-4 w-24" />
-					<Skeleton className="h-5 w-2/5" />
-					<Skeleton className="h-5 w-1/3" />
-				</section>
+				<HomeNavigationSkeleton />
 			) : navigationError ? (
 				<section
 					className="flex flex-col gap-2 border-t pt-6"
