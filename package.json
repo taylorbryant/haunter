@@ -108,6 +108,7 @@
 		"react-day-picker": "10.0.2",
 		"react-dom": "19.3.0",
 		"react-hook-form": "7.89.0",
+		"react-markdown": "10.1.0",
 		"resend": "6.32.1",
 		"shadcn": "4.21.4",
 		"sharp": "0.35.5",

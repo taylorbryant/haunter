@@ -10,6 +10,7 @@ Let an AI client help without opening up your entire account. You decide what
 each client can do and which workspaces it can reach.
 
 [Open Haunter](https://haunter.app) ·
+[Read the guides](https://haunter.app/guides) ·
 [View the changelog](https://haunter.app/changelog)
 
 ![Haunter — a demo Home dashboard with today’s tasks, favorite pages, and recently viewed notes](docs/screenshot.png)

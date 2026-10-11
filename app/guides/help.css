@@ -1,0 +1,107 @@
+.help-prose {
+	color: var(--foreground);
+	font-size: 1rem;
+	line-height: 1.75;
+	overflow-wrap: anywhere;
+}
+
+.help-prose > * + * {
+	margin-top: 1.25rem;
+}
+.help-prose :is(h2, h3, h4, h5, h6) {
+	scroll-margin-top: 6rem;
+	font-weight: 600;
+	text-wrap: pretty;
+}
+.help-prose h2 {
+	margin-top: 3rem;
+	font-size: 1.5rem;
+	line-height: 1.4;
+	letter-spacing: -0.025em;
+}
+.help-prose h3 {
+	margin-top: 2rem;
+	font-size: 1.125rem;
+}
+.help-prose p {
+	text-wrap: pretty;
+}
+.help-prose a {
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+	text-decoration-color: var(--muted-foreground);
+}
+.help-prose a:hover {
+	text-decoration-color: currentColor;
+}
+.help-prose a:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+.help-prose strong {
+	font-weight: 600;
+}
+.help-prose :is(ul, ol) {
+	padding-left: 1.5rem;
+}
+.help-prose ul {
+	list-style: disc;
+}
+.help-prose ol {
+	list-style: decimal;
+}
+.help-prose li {
+	padding-left: 0.25rem;
+}
+.help-prose li + li {
+	margin-top: 0.625rem;
+}
+.help-prose li::marker {
+	color: var(--muted-foreground);
+}
+.help-prose code {
+	background: var(--muted);
+	border-radius: var(--radius-sm);
+	padding: 0.15em 0.35em;
+}
+.help-prose pre {
+	overflow-x: auto;
+	background: var(--muted);
+	border-radius: var(--radius);
+	padding: 1rem;
+}
+.help-prose pre code {
+	background: transparent;
+	padding: 0;
+}
+.help-prose blockquote {
+	border-left: 2px solid var(--border);
+	padding-left: 1rem;
+	color: var(--muted-foreground);
+}
+.help-prose img {
+	max-width: 100%;
+	height: auto;
+	border-radius: var(--radius);
+}
+
+.help-prose figure {
+	margin-block: 2rem;
+}
+.help-prose figure > a {
+	display: block;
+	border-radius: var(--radius);
+	cursor: zoom-in;
+}
+.help-prose figure img {
+	display: block;
+	width: 100%;
+	border: 1px solid var(--border);
+}
+.help-prose figcaption {
+	margin-top: 0.75rem;
+	color: var(--muted-foreground);
+	font-size: 0.875rem;
+	line-height: 1.5;
+}
