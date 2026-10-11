@@ -2,13 +2,7 @@
 
 import { contractErrorMessage } from "@beignet/core/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-	BellIcon,
-	CalendarIcon,
-	FileTextIcon,
-	PlusIcon,
-	Trash2Icon,
-} from "lucide-react";
+import { BellIcon, CalendarIcon, FileTextIcon, Trash2Icon } from "lucide-react";
 import {
 	WorkspaceLink as Link,
 	useWorkspacePathname as usePathname,
@@ -23,6 +17,7 @@ import { DestructiveConfirmationDialog } from "@/components/destructive-confirma
 import { useDeviceTime } from "@/components/device-time-provider";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
+import { QueryError } from "@/components/query-error";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import type { TaskCreationInput } from "@/features/tasks/client/mutations";
@@ -454,7 +449,7 @@ export function TaskList({
 									<button
 										type="button"
 										className={cn(
-											"block max-w-full cursor-text truncate text-left text-sm",
+											"keyboard-focus-ring block max-w-full cursor-text rounded-sm text-left text-base leading-6 [overflow-wrap:anywhere] [--keyboard-focus-ring-size:2px] sm:text-sm",
 											task.completed && "text-muted-foreground line-through",
 										)}
 										disabled={pendingTaskIds.has(task.id)}
@@ -472,7 +467,7 @@ export function TaskList({
 								) : (
 									<p
 										className={cn(
-											"truncate text-sm",
+											"text-base leading-6 [overflow-wrap:anywhere] sm:text-sm",
 											task.completed && "text-muted-foreground line-through",
 										)}
 									>
@@ -487,7 +482,7 @@ export function TaskList({
 								{task.pageId ? (
 									<Link
 										href={`/w/${workspaceId}/p/${task.pageId}`}
-										className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
+										className="keyboard-focus-ring flex w-fit items-center gap-1 rounded-sm text-muted-foreground text-xs hover:text-foreground [--keyboard-focus-ring-size:2px]"
 									>
 										<FileTextIcon className="size-3" />
 										{task.pageTitle || "Untitled"}
@@ -590,7 +585,11 @@ export function TaskList({
 	}
 
 	if (!deviceTime.ready) {
-		return <p className="text-muted-foreground text-sm">Loading…</p>;
+		return (
+			<p className="text-base text-muted-foreground sm:text-sm">
+				Loading tasks…
+			</p>
+		);
 	}
 
 	return (
@@ -607,86 +606,80 @@ export function TaskList({
 					</Button>
 				</div>
 			) : null}
-			{!canEdit ? null : isTodayView ? (
+			{canEdit && isTodayView ? (
 				<TaskComposer
 					currentUserId={currentUser?.id ?? null}
 					defaultDueDate={resolvedTodayDate}
 					mode="compact"
 					onSubmit={createTask}
 				/>
-			) : isUpcomingView ? null : (
-				<Button
-					type="button"
-					variant="ghost"
-					size="sm"
-					className="w-fit text-muted-foreground"
-					onClick={openCreateTask}
-				>
-					<PlusIcon />
-					Add task
-				</Button>
-			)}
+			) : null}
 			{isHomeView ? null : (
-				<div className="flex flex-wrap items-center gap-1">
-					{FILTERS.map(({ value, label }) => (
-						<Button
-							key={value}
-							type="button"
-							size="sm"
-							variant={filter === value ? "secondary" : "ghost"}
-							onClick={() => setTaskListParams({ filter: value })}
-						>
-							{label}
-						</Button>
-					))}
-					<div className="mx-1 h-4 w-px bg-border" />
-					{(
-						[
-							{ value: "everyone", label: "Everyone" },
-							{ value: "mine", label: "Mine" },
-						] as const
-					).map(({ value, label }) => (
-						<Button
-							key={value}
-							type="button"
-							size="sm"
-							variant={scope === value ? "secondary" : "ghost"}
-							onClick={() => setTaskListParams({ scope: value })}
-						>
-							{label}
-						</Button>
-					))}
+				<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+					<fieldset
+						aria-label="Task status"
+						className="flex items-center gap-1"
+					>
+						{FILTERS.map(({ value, label }) => (
+							<Button
+								key={value}
+								type="button"
+								size="sm"
+								variant={filter === value ? "secondary" : "ghost"}
+								aria-pressed={filter === value}
+								onClick={() => setTaskListParams({ filter: value })}
+							>
+								{label}
+							</Button>
+						))}
+					</fieldset>
+					<fieldset
+						aria-label="Task assignee"
+						className="flex items-center gap-1"
+					>
+						{(
+							[
+								{ value: "everyone", label: "Everyone" },
+								{ value: "mine", label: "Mine" },
+							] as const
+						).map(({ value, label }) => (
+							<Button
+								key={value}
+								type="button"
+								size="sm"
+								variant={scope === value ? "secondary" : "ghost"}
+								aria-pressed={scope === value}
+								onClick={() => setTaskListParams({ scope: value })}
+							>
+								{label}
+							</Button>
+						))}
+					</fieldset>
 				</div>
 			)}
 			{tasksQuery.isPending ? (
-				<p className="text-muted-foreground text-sm">Loading…</p>
+				<p className="text-base text-muted-foreground sm:text-sm">
+					Loading tasks…
+				</p>
 			) : tasksQuery.isError && !tasksQuery.data ? (
-				<div className="flex items-center gap-2 text-sm">
-					<p className="text-muted-foreground">
-						{isTodayView
+				<QueryError
+					message={
+						isTodayView
 							? "Today could not be loaded."
 							: isUpcomingView
 								? "Coming up could not be loaded."
-								: "Tasks could not be loaded."}
-					</p>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onClick={() =>
-							void invalidateTasksWhenIdle(queryClient, workspaceId)
-						}
-					>
-						Retry
-					</Button>
-				</div>
+								: "Tasks could not be loaded."
+					}
+					retrying={tasksQuery.isFetching}
+					onRetry={() => void invalidateTasksWhenIdle(queryClient, workspaceId)}
+				/>
 			) : isTodayView ? (
 				<div className="flex flex-col gap-6">
 					{overdueTasks.length > 0 ? (
 						<section aria-labelledby="overdue-heading">
 							<h2
 								id="overdue-heading"
-								className="mb-1 font-medium text-muted-foreground text-sm"
+								className="mb-1 font-medium text-base sm:text-sm"
 							>
 								Overdue
 							</h2>
@@ -696,14 +689,14 @@ export function TaskList({
 					<section aria-labelledby="today-tasks-heading">
 						<h2
 							id="today-tasks-heading"
-							className="mb-1 font-medium text-muted-foreground text-sm"
+							className="mb-1 font-medium text-base sm:text-sm"
 						>
 							Today
 						</h2>
 						{todayTasks.length > 0 ? (
 							renderTaskRows(todayTasks)
 						) : (
-							<p className="py-2 text-muted-foreground text-sm">
+							<p className="py-2 text-base text-muted-foreground sm:text-sm">
 								Nothing due today.
 							</p>
 						)}
@@ -742,14 +735,14 @@ export function TaskList({
 					{hasMore ? (
 						<Link
 							href={`/w/${workspaceId}/tasks?scope=mine`}
-							className="mt-3 inline-flex w-fit text-muted-foreground text-base hover:text-foreground sm:text-sm"
+							className="keyboard-focus-ring mt-3 inline-flex w-fit rounded-sm text-muted-foreground text-base hover:text-foreground sm:text-sm"
 						>
 							View all tasks
 						</Link>
 					) : null}
 				</section>
 			) : tasks.length === 0 ? (
-				<p className="text-muted-foreground text-sm">
+				<p className="text-base text-muted-foreground sm:text-sm">
 					{scope === "mine"
 						? "Nothing assigned to you."
 						: filter === "open"

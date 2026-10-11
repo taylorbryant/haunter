@@ -6,6 +6,11 @@ import { WorkspaceLink as Link } from "@/client/workspace-navigation";
 import { useState } from "react";
 import { useDeviceTime } from "@/components/device-time-provider";
 import { Button } from "@/components/ui/button";
+import { QueryError } from "@/components/query-error";
+import {
+	WorkspaceScreen,
+	WorkspaceScreenHeader,
+} from "@/components/workspace-screen";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCanvasNavigationQueryOptions } from "@/features/canvases/client/queries";
 import {
@@ -41,7 +46,7 @@ function HomeNavigationList({
 								? `/w/${workspaceId}/p/${item.id}`
 								: `/w/${workspaceId}/c/${item.id}`
 						}
-						className="keyboard-focus-ring flex min-w-0 items-center gap-3 rounded-sm py-2 hover:bg-muted/50 [--keyboard-focus-ring-size:2px]"
+						className="keyboard-focus-ring flex min-w-0 items-center gap-3 -mx-2 rounded-md px-2 py-2 hover:bg-accent hover:text-accent-foreground [--keyboard-focus-ring-size:2px]"
 					>
 						<div className="flex size-5 shrink-0 items-center justify-center">
 							{item.icon ??
@@ -111,19 +116,17 @@ export function HomeView({ workspaceId }: { workspaceId: string }) {
 		canvasNavigationQuery.isError;
 
 	return (
-		<div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10">
-			<header className="flex flex-col gap-1">
-				<h1 className="text-balance font-heading font-semibold text-xl">
-					Home
-				</h1>
-				{deviceTime.ready ? (
-					<p className="text-pretty text-muted-foreground text-base sm:text-sm">
-						{formatHomeDate(deviceTime.today)}
-					</p>
-				) : (
-					<Skeleton className="h-5 w-44" aria-label="Loading local date" />
-				)}
-			</header>
+		<WorkspaceScreen className="gap-8 sm:gap-10">
+			<WorkspaceScreenHeader
+				title="Home"
+				description={
+					deviceTime.ready ? (
+						<p>{formatHomeDate(deviceTime.today)}</p>
+					) : (
+						<Skeleton className="h-6 w-44" aria-label="Loading local date" />
+					)
+				}
+			/>
 
 			{deviceTime.ready && upcomingRange ? (
 				<>
@@ -172,24 +175,18 @@ export function HomeView({ workspaceId }: { workspaceId: string }) {
 					>
 						Workspace
 					</h2>
-					<div className="flex items-center gap-2 text-base sm:text-sm">
-						<p className="text-pretty text-muted-foreground">
-							Favorites and recent items could not be loaded.
-						</p>
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							onClick={() =>
-								void Promise.all([
-									pageNavigationQuery.refetch(),
-									canvasNavigationQuery.refetch(),
-								])
-							}
-						>
-							Retry
-						</Button>
-					</div>
+					<QueryError
+						message="Favorites and recent items could not be loaded."
+						retrying={
+							pageNavigationQuery.isFetching || canvasNavigationQuery.isFetching
+						}
+						onRetry={() =>
+							void Promise.all([
+								pageNavigationQuery.refetch(),
+								canvasNavigationQuery.refetch(),
+							])
+						}
+					/>
 				</section>
 			) : favorites.length > 0 || recentItems.length > 0 ? (
 				<div className="flex flex-col gap-6 border-t pt-6">
@@ -242,6 +239,6 @@ export function HomeView({ workspaceId }: { workspaceId: string }) {
 					) : null}
 				</div>
 			) : null}
-		</div>
+		</WorkspaceScreen>
 	);
 }
