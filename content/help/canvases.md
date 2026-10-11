@@ -36,11 +36,11 @@ Add an image using the canvas's media controls, or drag an image file onto the d
 
 Canvas changes save automatically. Other workspace members with editing access can work on the same drawing. Check the save or connection status before closing, especially when working offline.
 
-Deleting a standalone canvas from the Canvases list is permanent; it does not move to the page Trash. A page's version history restores the placement of an inline canvas, not an older drawing. [Learn about canvas recovery](/help/sharing-and-recovery#recover-a-canvas-version).
+Deleting a standalone canvas from the Canvases list is permanent; it does not move to the page Trash. A page's version history restores the placement of an inline canvas, not an older drawing. [Learn about canvas recovery](/guides/sharing-and-recovery#recover-a-canvas-version).
 
 ## Draw with an assistant
 
-With a [connected AI assistant](/help/ai), name the canvas and describe the changes you want. Include the workspace name when needed, and identify shapes by their labels. For example:
+With a [connected AI assistant](/guides/ai), name the canvas and describe the changes you want. Include the workspace name when needed, and identify shapes by their labels. For example:
 
 - “In the Project plan canvas, align the Research, Design, and Build cards and space them evenly.”
 - “In the Checkout flow canvas, put the Cart, Payment, and Confirmation steps in a frame called Checkout.”

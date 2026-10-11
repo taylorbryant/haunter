@@ -50,7 +50,7 @@ export default async function HelpGuidePage({
 			<header className="flex flex-col gap-4">
 				<p className="text-base text-muted-foreground sm:text-sm">
 					<Link
-						href="/help"
+						href="/guides"
 						className="rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						All guides
@@ -84,7 +84,7 @@ export default async function HelpGuidePage({
 				className="max-w-[70ch] border-border/70 border-t pt-6 text-base"
 			>
 				<Link
-					href={next ? `/help/${next.slug}` : "/help"}
+					href={next ? `/guides/${next.slug}` : "/guides"}
 					className="flex flex-col gap-2 rounded-sm py-2 underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					<p className="text-muted-foreground">

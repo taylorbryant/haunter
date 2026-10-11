@@ -104,7 +104,7 @@ export function WorkspaceSidebar({
 										onOpenHelp ? undefined : (
 											// biome-ignore lint/a11y/useAnchorContent: SidebarMenuButton supplies the Help label and icon.
 											<a
-												href="/help"
+												href="/guides"
 												aria-label="Help (opens in a new tab)"
 												target="_blank"
 												rel="noopener noreferrer"

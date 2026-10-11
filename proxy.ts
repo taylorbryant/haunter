@@ -38,12 +38,13 @@ export const config = {
 	matcher: [
 		// accept-invite handles its own signed-out state (it prompts sign-in), so
 		// invitees who aren't signed in yet must not be bounced away from it.
-		// Help and the changelog are public. Only changelog read-state needs a session.
+		// Guides and the changelog are public.
+		// Only changelog read-state needs a session.
 		// .well-known serves anonymous protocol discovery (agent-configuration).
 		// /mcp authenticates with an OAuth bearer token, not a browser session.
 		// PWA assets (manifest, service worker, generated icons) must stay
 		// publicly fetchable — the browser requests them without a session, and a
 		// redirect to /sign-in would break installability.
-		"/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons|icon.svg|apple-icon|sign-in|sign-up|accept-invite|share|changelog|help(?:/|$)|mcp|embed(?:/|$)|\\.well-known).*)",
+		"/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons|icon.svg|apple-icon|sign-in|sign-up|accept-invite|share|changelog|guides(?:/|$)|mcp|embed(?:/|$)|\\.well-known).*)",
 	],
 };

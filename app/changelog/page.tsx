@@ -91,7 +91,7 @@ export default async function ChangelogPage() {
 					</Link>
 					<div className="flex items-center gap-4 text-sm">
 						<Link
-							href="/help"
+							href="/guides"
 							className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 						>
 							Help

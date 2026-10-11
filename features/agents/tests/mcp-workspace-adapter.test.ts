@@ -98,7 +98,7 @@ test("Help opens through the host without navigating away from the editor", asyn
 	f.emit({ type: "haunter/workspace/open-help", nonce: "wrong" });
 	expect(f.links).toEqual([]);
 	f.emit({ type: "haunter/workspace/open-help" });
-	await waitFor(() => expect(f.links).toEqual(["https://haunter.test/help"]));
+	await waitFor(() => expect(f.links).toEqual(["https://haunter.test/guides"]));
 	expect(f.frame.src).toBe(src);
 	expect(f.calls).toEqual([]);
 });

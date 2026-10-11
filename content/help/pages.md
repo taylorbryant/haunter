@@ -18,7 +18,7 @@ Choose **Code Block** for source code. Select its language for syntax highlighti
 
 Choose **Image** or **File** from the insert menu and use the block's upload controls. This keeps a reference image or document alongside your notes.
 
-For work you want to track or draw, insert a [task](/help/tasks#add-a-task-inside-a-page) or [canvas](/help/canvases#draw-inside-a-page).
+For work you want to track or draw, insert a [task](/guides/tasks#add-a-task-inside-a-page) or [canvas](/guides/canvases#draw-inside-a-page).
 
 ## Organize and connect pages
 
@@ -40,10 +40,10 @@ Search includes saved page text, task titles, canvas titles, and text inside dra
 
 Type `>` in Search to find commands instead of content.
 
-Search does not read text inside image pixels or attached files. It also excludes Trash and older versions. Use [Trash or page history](/help/sharing-and-recovery) for that work.
+Search does not read text inside image pixels or attached files. It also excludes Trash and older versions. Use [Trash or page history](/guides/sharing-and-recovery) for that work.
 
 ## Bring notes in or take them with you
 
 Open the menu beside **Pages** and choose **Import Markdown** to bring in a Markdown file.
 
-To download a page, open its header's options menu and choose a Markdown or HTML export. [Read about export formats](/help/sharing-and-recovery#export-a-page) before using them as a backup.
+To download a page, open its header's options menu and choose a Markdown or HTML export. [Read about export formats](/guides/sharing-and-recovery#export-a-page) before using them as a backup.

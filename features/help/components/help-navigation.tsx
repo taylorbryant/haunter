@@ -13,7 +13,7 @@ export function HelpNavigation({ mobile = false }: { mobile?: boolean }) {
 			{/* biome-ignore lint/a11y/noRedundantRoles: Preserve list semantics in Safari when Tailwind removes list markers. */}
 			<ul role="list" className="flex flex-col gap-1">
 				{[{ slug: "", title: "All guides" }, ...HELP_GUIDES].map((guide) => {
-					const href = guide.slug ? `/help/${guide.slug}` : "/help";
+					const href = guide.slug ? `/guides/${guide.slug}` : "/guides";
 					const active = pathname === href;
 					return (
 						<li key={href} className="text-base sm:text-sm">

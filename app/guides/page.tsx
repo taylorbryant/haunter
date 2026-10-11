@@ -18,7 +18,7 @@ export default function HelpPage() {
 				{HELP_GUIDES.map((guide, index) => (
 					<Link
 						key={guide.slug}
-						href={`/help/${guide.slug}`}
+						href={`/guides/${guide.slug}`}
 						className="group flex flex-col gap-3 border-border/70 border-t py-7 outline-none hover:text-foreground focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						<p className="text-sm text-muted-foreground tabular-nums">

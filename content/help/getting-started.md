@@ -15,7 +15,7 @@ A workspace contains its own pages, tasks, canvases, and members. Check the work
 3. Click or tap below the title and start writing.
 4. Type `/` on a new line to open the block menu. Try a heading, a task, or a canvas.
 
-Changes save automatically. Watch the save status before closing the page, especially if your connection drops. [Learn about saving and recovery](/help/sharing-and-recovery#recover-work-that-has-not-synced).
+Changes save automatically. Watch the save status before closing the page, especially if your connection drops. [Learn about saving and recovery](/guides/sharing-and-recovery#recover-work-that-has-not-synced).
 
 Your first workspace includes **Start here** and **This week** as example pages. Edit them or move them to Trash when you no longer need them.
 
@@ -40,4 +40,4 @@ The sidebar button at the top of the workspace gives you more room to write. On 
 
 Write three priorities on your new page. Add a task for the first priority, assign it to yourself, and give it a due date of today. Open **Home** to see it under Today, then follow its page link back to your notes.
 
-Continue with [writing and organizing](/help/pages), [managing tasks](/help/tasks), or [working with canvases](/help/canvases).
+Continue with [writing and organizing](/guides/pages), [managing tasks](/guides/tasks), or [working with canvases](/guides/canvases).

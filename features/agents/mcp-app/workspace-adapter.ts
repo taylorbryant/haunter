@@ -102,7 +102,7 @@ export function createWorkspaceAdapter(bridge: CompanionBridge) {
 		} else if (data.type === "haunter/editor/flushed") {
 			flushes.get(data.requestId)?.(data.locallySaved && data.saved);
 		} else if (data.type === "haunter/workspace/open-help") {
-			await bridge.openLink(new URL("/help", origin).href);
+			await bridge.openLink(new URL("/guides", origin).href);
 		} else if (data.type === "haunter/workspace/open-web") {
 			parseWorkspacePath(data.path);
 			await bridge.openLink(new URL(data.path, origin).href);

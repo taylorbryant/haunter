@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 				{children}
 				<p className="text-center text-base text-muted-foreground sm:text-sm">
 					<Link
-						href="/help"
+						href="/guides"
 						className="rounded-sm underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						Explore the Haunter guides

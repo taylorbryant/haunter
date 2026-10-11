@@ -46,7 +46,7 @@ Choose **Delete forever** only when you want to permanently remove a page and it
 
 A connected assistant with **Full access** can inspect saved canvas versions and restore one. Ask it to show the available versions first, then identify the version you want. For example: “Show the saved versions of the checkout canvas before restoring anything.”
 
-Canvas history is separate from page history. There is no canvas history picker in the web app. Restoring a canvas version replaces the saved drawing and keeps a recovery version of the current drawing. [Set up an AI connection](/help/ai) if you want to use this workflow.
+Canvas history is separate from page history. There is no canvas history picker in the web app. Restoring a canvas version replaces the saved drawing and keeps a recovery version of the current drawing. [Set up an AI connection](/guides/ai) if you want to use this workflow.
 
 ## Recover work that has not synced
 

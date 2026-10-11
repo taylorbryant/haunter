@@ -3,11 +3,11 @@ import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { config } from "@/proxy";
 import { HELP_GUIDES } from "../guides";
 
-test("Help index and every guide bypass the session proxy", () => {
+test("guides index and every guide bypass the session proxy", () => {
 	for (const path of [
-		"/help",
-		"/help/",
-		...HELP_GUIDES.map(({ slug }) => `/help/${slug}`),
+		"/guides",
+		"/guides/",
+		...HELP_GUIDES.map(({ slug }) => `/guides/${slug}`),
 	]) {
 		expect(
 			unstable_doesMiddlewareMatch({
@@ -18,11 +18,15 @@ test("Help index and every guide bypass the session proxy", () => {
 	}
 });
 
-test("the Help exception does not bypass protection for other app paths", () => {
+test("the guides exception does not bypass protection for other app paths", () => {
 	for (const path of [
 		"/",
+		"/help",
+		"/help/pages",
 		"/helpful",
 		"/help-admin",
+		"/guides-admin",
+		"/guides-private",
 		"/w/example/home",
 		"/w/example/p/123",
 	]) {

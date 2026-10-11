@@ -34,11 +34,11 @@ test("all guide sections render with working anchors and internal links", async 
 		for (const heading of guide.headings) {
 			expect(html).toContain(`<h2 id="${heading.id}">`);
 		}
-		for (const match of html.matchAll(/href="(\/help[^" ]*)"/g)) {
+		for (const match of html.matchAll(/href="(\/guides[^" ]*)"/g)) {
 			const url = new URL(match[1], "https://haunter.test");
-			if (url.pathname === "/help") continue;
+			if (url.pathname === "/guides") continue;
 			const target = guides.find(
-				(item) => `/help/${item?.slug}` === url.pathname,
+				(item) => `/guides/${item?.slug}` === url.pathname,
 			);
 			expect(target, `${guide.slug}: ${match[1]}`).toBeDefined();
 			if (url.hash) {
