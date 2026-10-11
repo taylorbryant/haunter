@@ -71,12 +71,14 @@ export function TrashList({
 	}
 
 	if (trashQuery.isPending) {
-		return <p className="text-muted-foreground text-sm">Loading…</p>;
+		return (
+			<p className="text-base text-muted-foreground sm:text-sm">Loading…</p>
+		);
 	}
 
 	if (trashQuery.isError && !trashQuery.data) {
 		return (
-			<div className="flex items-center gap-2 text-sm">
+			<div className="flex flex-wrap items-center gap-3 text-base sm:text-sm">
 				<p role="alert" className="text-destructive">
 					The trash could not be loaded.
 				</p>
@@ -84,6 +86,7 @@ export function TrashList({
 					type="button"
 					variant="outline"
 					size="sm"
+					className="h-12 text-base sm:h-8 sm:text-sm pointer-coarse:min-h-12"
 					onClick={() => void trashQuery.refetch()}
 				>
 					Try again
@@ -93,71 +96,94 @@ export function TrashList({
 	}
 
 	if (items.length === 0) {
-		return <p className="text-muted-foreground text-sm">The trash is empty.</p>;
+		return (
+			<p className="text-base text-muted-foreground sm:text-sm">
+				The trash is empty.
+			</p>
+		);
 	}
 
 	return (
 		<>
-			<ul className="flex flex-col divide-y">
+			<ul aria-label="Deleted pages" className="flex flex-col divide-y">
 				{items.map((page) => (
-					<li key={page.id} className="flex items-center gap-3 py-2">
-						{page.icon ? (
-							<span
-								className="flex size-4 shrink-0 items-center justify-center"
-								aria-hidden="true"
-							>
-								{page.icon}
-							</span>
-						) : (
-							<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-						)}
-						<div className="min-w-0 flex-1">
-							<p className="truncate text-sm">{page.title || "Untitled"}</p>
-							{page.deletedAt ? (
-								<p className="text-muted-foreground text-xs">
-									Deleted {new Date(page.deletedAt).toLocaleString()}
-								</p>
-							) : null}
-						</div>
-						{canEdit ? (
-							<>
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									disabled={restoreMutation.isPending}
-									onClick={() =>
-										restoreMutation.mutate(
-											{ path: { id: page.id } },
-											{
-												onSuccess: async (restored) => {
-													await refresh();
-													router.push(`/w/${workspaceId}/p/${restored.id}`);
-												},
-											},
-										)
-									}
-								>
-									<Undo2Icon className="size-3.5" />
-									Restore
-								</Button>
-								{allowPurge ? (
+					<li key={page.id} className="@container py-4">
+						<div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:gap-6">
+							<div className="flex min-w-0 flex-1 items-start gap-3">
+								{page.icon ? (
+									<span
+										className="mt-0.5 flex size-5 shrink-0 items-center justify-center @2xl:size-4"
+										aria-hidden="true"
+									>
+										{page.icon}
+									</span>
+								) : (
+									<FileTextIcon
+										aria-hidden="true"
+										className="mt-0.5 size-5 shrink-0 text-muted-foreground @2xl:size-4"
+									/>
+								)}
+								<div className="min-w-0 flex-1">
+									<p className="font-medium text-base leading-6 [overflow-wrap:anywhere] @2xl:text-sm">
+										{page.title || "Untitled"}
+									</p>
+									{page.deletedAt ? (
+										<p className="text-base text-muted-foreground leading-6 @2xl:text-sm">
+											Deleted{" "}
+											<time
+												dateTime={page.deletedAt}
+												title={new Date(page.deletedAt).toLocaleString()}
+											>
+												{new Date(page.deletedAt).toLocaleDateString(
+													undefined,
+													{ dateStyle: "medium" },
+												)}
+											</time>
+										</p>
+									) : null}
+								</div>
+							</div>
+							{canEdit ? (
+								<div className="flex flex-wrap gap-2 @2xl:shrink-0">
 									<Button
 										type="button"
-										variant="ghost"
+										variant="secondary"
 										size="sm"
-										className="text-destructive hover:text-destructive"
-										disabled={purgeMutation.isPending}
+										className="h-12 flex-1 gap-2 px-3 text-base @2xl:h-8 @2xl:flex-none @2xl:text-sm pointer-coarse:min-h-12"
+										disabled={restoreMutation.isPending}
 										onClick={() =>
-											setPageToPurge({ id: page.id, title: page.title })
+											restoreMutation.mutate(
+												{ path: { id: page.id } },
+												{
+													onSuccess: async (restored) => {
+														await refresh();
+														router.push(`/w/${workspaceId}/p/${restored.id}`);
+													},
+												},
+											)
 										}
 									>
-										<Trash2Icon className="size-3.5" />
-										Delete forever
+										<Undo2Icon aria-hidden="true" className="size-4" />
+										Restore
 									</Button>
-								) : null}
-							</>
-						) : null}
+									{allowPurge ? (
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											className="h-12 flex-1 gap-2 px-3 text-base text-destructive hover:text-destructive @2xl:h-8 @2xl:flex-none @2xl:text-sm pointer-coarse:min-h-12"
+											disabled={purgeMutation.isPending}
+											onClick={() =>
+												setPageToPurge({ id: page.id, title: page.title })
+											}
+										>
+											<Trash2Icon aria-hidden="true" className="size-4" />
+											Delete forever
+										</Button>
+									) : null}
+								</div>
+							) : null}
+						</div>
 					</li>
 				))}
 			</ul>
