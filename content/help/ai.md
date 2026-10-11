@@ -7,7 +7,7 @@ Connect Haunter to an AI client to find information, create content, and edit yo
 3. Choose the workspaces this connection may access and a permission level.
 4. Return to the client and ask it to find a page by name.
 
-Choose a client that supports remote MCP servers and OAuth. Connection setup and availability depend on the client and your plan. For a self-hosted Haunter installation, use your installation's address followed by `/mcp`.
+Choose a client that supports remote MCP servers and OAuth. Connection setup and availability depend on the client and your plan.
 
 ## Choose the right access
 
