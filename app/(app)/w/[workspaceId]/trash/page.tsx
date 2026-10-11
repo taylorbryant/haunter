@@ -11,11 +11,11 @@ export default function TrashPage({
 	const { workspaceId } = use(params);
 
 	return (
-		<div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-10">
-			<div className="flex flex-col gap-1">
+		<div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:gap-6 sm:px-6 sm:py-10">
+			<div className="flex flex-col gap-2">
 				<h1 className="font-heading font-semibold text-xl">Trash</h1>
-				<p className="text-muted-foreground text-sm">
-					Deleted pages live here until you restore them or delete them forever.
+				<p className="text-base text-muted-foreground leading-6 sm:text-sm">
+					Restore deleted pages or permanently remove them.
 				</p>
 			</div>
 			<TrashList workspaceId={workspaceId} />
