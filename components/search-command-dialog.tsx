@@ -10,7 +10,10 @@ import {
 import { useWorkspacePathname as usePathname } from "@/client/workspace-navigation";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useEffect, useRef, useState } from "react";
-import { useFilteredCommandGroups } from "@/components/command-palette/registry";
+import {
+	type Command as PaletteCommand,
+	useFilteredCommandGroups,
+} from "@/components/command-palette/registry";
 import { Button } from "@/components/ui/button";
 import {
 	Command,
@@ -51,7 +54,7 @@ export function SearchCommandDialog({
 	const pathname = usePathname();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const inputRef = useRef<HTMLInputElement>(null);
-	const commandSelectedRef = useRef(false);
+	const transfersFocusRef = useRef(false);
 	const [query, setQuery] = useState("");
 	const [kind, setKind] = useState<SearchKind>("all");
 
@@ -86,12 +89,12 @@ export function SearchCommandDialog({
 		onOpenChange(false);
 	}
 
-	function runCommand(run: () => void) {
+	function runCommand(command: PaletteCommand) {
 		// The palette unmounts immediately. Read a ref during its focus cleanup
-		// so restoring the launcher cannot steal focus from the command's dialog.
-		commandSelectedRef.current = true;
+		// so dialog commands keep focus, while navigation restores the launcher.
+		transfersFocusRef.current = command.opensDialog === true;
 		close();
-		run();
+		command.run();
 	}
 
 	return (
@@ -105,7 +108,7 @@ export function SearchCommandDialog({
 					: "Search pages, tasks, and canvases, or type > for commands"
 			}
 			initialFocus={inputRef}
-			finalFocus={() => !commandSelectedRef.current}
+			finalFocus={() => !transfersFocusRef.current}
 		>
 			<Command shouldFilter={false}>
 				<CommandInput
@@ -154,7 +157,7 @@ export function SearchCommandDialog({
 										<CommandItem
 											key={command.id}
 											value={command.id}
-											onSelect={() => runCommand(command.run)}
+											onSelect={() => runCommand(command)}
 										>
 											{command.icon ? (
 												<command.icon className="text-muted-foreground" />
