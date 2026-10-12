@@ -32,6 +32,8 @@ export type Command = {
 	 * registration order. Defaults to 0.
 	 */
 	weight?: number;
+	/** Opens a dialog that takes focus instead of returning to the palette launcher. */
+	opensDialog?: boolean;
 	run: () => void;
 };
 
@@ -123,6 +125,7 @@ export function useCommand(command: Command | null | false): void {
 	const icon = command ? command.icon : undefined;
 	const shortcut = command ? command.shortcut : undefined;
 	const weight = command ? command.weight : undefined;
+	const opensDialog = command ? command.opensDialog : undefined;
 
 	useEffect(() => {
 		if (!id || title == null || group == null) return;
@@ -134,10 +137,11 @@ export function useCommand(command: Command | null | false): void {
 			icon,
 			shortcut,
 			weight,
+			opensDialog,
 			run: () => runRef.current?.(),
 		});
 		return () => store.remove(id);
-	}, [store, id, title, group, keywords, icon, shortcut, weight]);
+	}, [store, id, title, group, keywords, icon, shortcut, weight, opensDialog]);
 }
 
 /**

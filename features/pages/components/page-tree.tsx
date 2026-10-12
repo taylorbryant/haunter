@@ -289,6 +289,7 @@ export function PageTree({
 		canEdit && synced && allowImports
 			? {
 					id: "page.import-markdown",
+					opensDialog: true,
 					title: "Import Markdown",
 					group: "Pages",
 					keywords: "upload file note",
@@ -302,6 +303,7 @@ export function PageTree({
 		canEdit && synced && allowRecovery
 			? {
 					id: "page.recover-drafts",
+					opensDialog: true,
 					title: "Recover drafts",
 					group: "Pages",
 					keywords: "import recovery backup json",
@@ -859,6 +861,11 @@ export function PageTree({
 									side="right"
 									align="start"
 									finalFocus={() => {
+										// These dialogs take focus before the menu's exit animation
+										// finishes; returning to the row would steal it back.
+										if (iconPageId === node.id || pageToTrash?.id === node.id) {
+											return false;
+										}
 										if (menuFocusTransferPageId.current !== node.id) {
 											return true;
 										}

@@ -438,6 +438,7 @@ export function CreateDialogProvider({
 		canEdit
 			? {
 					id: "page.create",
+					opensDialog: true,
 					title: "Create page",
 					group: "Create",
 					keywords: "new note add",
@@ -453,6 +454,7 @@ export function CreateDialogProvider({
 		canEdit
 			? {
 					id: "canvas.create",
+					opensDialog: true,
 					title: "Create canvas",
 					group: "Create",
 					keywords: "new draw drawing sketch",
@@ -466,6 +468,7 @@ export function CreateDialogProvider({
 		canEdit && allowTasks
 			? {
 					id: "task.create",
+					opensDialog: true,
 					title: "Create task",
 					group: "Create",
 					keywords: "new todo add",

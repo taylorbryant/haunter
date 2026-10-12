@@ -128,6 +128,7 @@ export function NavUser({
 
 	useCommand({
 		id: "nav.changelog",
+		opensDialog: true,
 		title: "Open changelog",
 		group: "Go to",
 		keywords: "whats new updates releases",
@@ -137,6 +138,7 @@ export function NavUser({
 
 	useCommand({
 		id: "settings.open",
+		opensDialog: true,
 		title: "Open settings",
 		group: "General",
 		keywords: "profile appearance account preferences",
