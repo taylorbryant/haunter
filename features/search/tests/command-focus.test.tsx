@@ -32,6 +32,7 @@ mock.module("@/components/app-session-provider", () => ({
 
 let SearchCommand: typeof import("@/components/search-command").SearchCommand;
 let CreateDialogProvider: typeof import("@/components/create-dialog-provider").CreateDialogProvider;
+let useCreateDialog: typeof import("@/components/create-dialog-provider").useCreateDialog;
 let SidebarProvider: typeof import("@/components/ui/sidebar").SidebarProvider;
 let Sidebar: typeof import("@/components/ui/sidebar").Sidebar;
 let SidebarTrigger: typeof import("@/components/ui/sidebar").SidebarTrigger;
@@ -41,7 +42,7 @@ const clients: QueryClient[] = [];
 beforeAll(async () => {
 	installTestDom();
 	({ SearchCommand } = await import("@/components/search-command"));
-	({ CreateDialogProvider } = await import(
+	({ CreateDialogProvider, useCreateDialog } = await import(
 		"@/components/create-dialog-provider"
 	));
 	({ SidebarProvider, Sidebar, SidebarTrigger } = await import(
@@ -78,6 +79,7 @@ function setup(width = 1024) {
 						persistCookie={false}
 					>
 						<CreateDialogProvider workspaceId="a">
+							<CreationButtons />
 							<SidebarTrigger />
 							<Sidebar>
 								<ul>
@@ -182,6 +184,16 @@ for (const width of [1024, 390]) {
 					expect(within(sidebar).getByRole("button", { name: /^Search/ })).toBe(
 						launcher,
 					);
+					await user.keyboard("{Escape}");
+					await waitFor(() =>
+						expect(view.queryByRole("dialog") === null).toBe(true),
+					);
+					await waitFor(() =>
+						expect(
+							document.activeElement ===
+								view.getByRole("button", { name: "Toggle Sidebar" }),
+						).toBe(true),
+					);
 				}
 			});
 		}
@@ -203,3 +215,45 @@ test("dismissing the palette still returns focus after a command was run", async
 	await user.keyboard("{Escape}");
 	await waitFor(() => expect(document.activeElement === launcher).toBe(true));
 });
+
+function CreationButtons() {
+	const { openCreateCanvas, openCreatePage, openCreateTask } =
+		useCreateDialog();
+	return (
+		<>
+			<button type="button" onClick={openCreateCanvas}>
+				New canvas
+			</button>
+			<button type="button" onClick={openCreatePage}>
+				New page
+			</button>
+			<button type="button" onClick={openCreateTask}>
+				New task
+			</button>
+		</>
+	);
+}
+for (const width of [1024, 390]) {
+	for (const kind of ["canvas", "page", "task"]) {
+		test(`closing ${kind} creation returns to its own button after using another popup (${width}px)`, async () => {
+			const view = setup(width);
+			const user = userEvent.setup({ document });
+			// Prime Base UI's previous-focus history with an unrelated launcher.
+			const search = await openSearch(view, user, width);
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(document.activeElement === search).toBe(true));
+			if (width < 768) await user.keyboard("{Escape}");
+			await waitFor(() =>
+				expect(view.queryByRole("dialog") === null).toBe(true),
+			);
+			const launcher = view.getByRole("button", { name: `New ${kind}` });
+			await user.click(launcher);
+			const input = await view.findByRole("textbox", {
+				name: kind === "task" ? "Task name" : "Title",
+			});
+			await waitFor(() => expect(document.activeElement).toBe(input));
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(document.activeElement).toBe(launcher));
+		});
+	}
+}

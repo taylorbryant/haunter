@@ -52,6 +52,7 @@ import {
 	isDueOverdue,
 	parseIsoDate,
 } from "@/lib/due-date";
+import { useInlineEditFocus } from "@/hooks/use-inline-edit-focus";
 import { cn } from "@/lib/utils";
 
 const TASK_PAGE_SIZE = 50;
@@ -130,6 +131,7 @@ export function TaskList({
 				? UPCOMING_TASK_SUMMARY_LIMIT
 				: TASK_PAGE_SIZE,
 	);
+	const renameFocus = useInlineEditFocus();
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [titleDrafts, setTitleDrafts] = useState<Record<string, TitleDraft>>(
 		{},
@@ -436,6 +438,10 @@ export function TaskList({
 											}));
 										}}
 										onKeyDown={(event) => {
+											if (event.key === "Enter" || event.key === "Escape") {
+												event.preventDefault();
+												renameFocus.requestReturn(event.currentTarget);
+											}
 											if (event.key === "Enter") void commitTitle(task);
 											if (event.key === "Escape") {
 												discardTitle(task.id);
@@ -452,8 +458,10 @@ export function TaskList({
 											"keyboard-focus-ring block max-w-full cursor-text rounded-sm text-left text-base leading-6 [overflow-wrap:anywhere] [--keyboard-focus-ring-size:2px] sm:text-sm",
 											task.completed && "text-muted-foreground line-through",
 										)}
-										disabled={pendingTaskIds.has(task.id)}
+										ref={renameFocus.returnTargetRef}
+										aria-disabled={pendingTaskIds.has(task.id)}
 										onClick={() => {
+											if (pendingTaskIds.has(task.id)) return;
 											editSession.current++;
 											setTitleDrafts((current) => ({
 												...current,

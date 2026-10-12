@@ -41,6 +41,10 @@ const editorSingletonPackages = [
 
 /** @type {import("next").NextConfig} */
 const nextConfig = {
+	// Allow the configured app hostname when testing through a development tunnel.
+	allowedDevOrigins: process.env.APP_URL
+		? [new URL(process.env.APP_URL).hostname]
+		: undefined,
 	async headers() {
 		const origins = new Set([
 			new URL(process.env.APP_URL ?? "http://localhost:3000").origin,

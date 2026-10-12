@@ -384,3 +384,39 @@ test("a delete failure reopens its confirmation for retry when there was no late
 	expect(view.queryByRole("button", { name: "Task A" })).toBeNull();
 	expect(view.queryByRole("dialog")).toBeNull();
 });
+
+for (const key of ["Escape", "Enter"]) {
+	test(`inline task ${key} returns focus to the title without saving an unchanged draft`, async () => {
+		const { view, user, requests } = setup();
+		await user.click(view.getByRole("button", { name: "Task A" }));
+		await user.keyboard(`{${key}}`);
+		expect(document.activeElement).toBe(
+			view.getByRole("button", { name: "Task A" }),
+		);
+		expect(requests).toHaveLength(0);
+	});
+}
+test("saving a task title keeps the title focused while pending and does not steal a later click", async () => {
+	const { view, user, edit, settle, requests } = setup();
+	await edit("Task A", "Renamed A");
+	await user.keyboard("{Enter}");
+	await waitFor(() => expect(requests).toHaveLength(1));
+	const title = view.getByRole("button", { name: "Renamed A" });
+	expect(document.activeElement).toBe(title);
+	expect(title.getAttribute("aria-disabled")).toBe("true");
+	await user.click(title);
+	expect(view.queryByRole("textbox", { name: "Task name" })).toBeNull();
+	await edit("Task B", "Draft B");
+	const secondInput = titleInput(view);
+	await settle(0);
+	expect(document.activeElement).toBe(secondInput);
+});
+test("clicking away from a task title preserves focus on the clicked control", async () => {
+	const { view, user, edit, settle } = setup();
+	await edit("Task A", "Renamed A");
+	const target = view.getByRole("button", { name: "Completed" });
+	await user.click(target);
+	expect(document.activeElement).toBe(target);
+	await settle(0);
+	expect(document.activeElement).toBe(target);
+});

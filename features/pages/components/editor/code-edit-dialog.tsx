@@ -46,6 +46,7 @@ export function CodeEditDialog({
 	});
 	const [highlightedHtml, setHighlightedHtml] = useState("");
 	const overlayRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const theme = getCodeTheme(activeTheme);
 
 	// Re-highlight through the same shiki instance the editor uses. The
@@ -105,6 +106,15 @@ export function CodeEditDialog({
 	return (
 		<Dialog open onOpenChange={(open) => !open && commitAndClose()}>
 			<DialogContent
+				initialFocus={inputRef}
+				// Saving rebuilds the code node view, so the original button can be gone.
+				finalFocus={() =>
+					editor.domElement?.querySelector<HTMLElement>(
+						`[data-id="${CSS.escape(blockId)}"] .haunter-code-block-expand`,
+					) ??
+					editor.domElement ??
+					true
+				}
 				showCloseButton={false}
 				className="top-0 left-0 block h-dvh w-screen max-w-none translate-x-0 translate-y-0 overflow-hidden rounded-none p-0 ring-0 sm:max-w-none md:top-1/2 md:left-1/2 md:h-[85dvh] md:w-[90vw] md:max-w-[90vw] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:ring-1"
 			>
@@ -131,7 +141,7 @@ export function CodeEditDialog({
 								dangerouslySetInnerHTML={{ __html: highlightedHtml }}
 							/>
 							<textarea
-								autoFocus
+								ref={inputRef}
 								value={text}
 								aria-label="Code"
 								spellCheck={false}

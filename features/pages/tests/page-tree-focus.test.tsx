@@ -193,3 +193,17 @@ for (const width of [1024, 390]) {
 		});
 	}
 }
+
+test("canceling a sidebar rename returns focus to the page link", async () => {
+	const view = setup(1024);
+	const user = userEvent.setup({ document });
+	await user.click(await view.findByRole("button", { name: "Page actions" }));
+	await user.click(view.getByRole("menuitem", { name: "Rename" }));
+	const input = await view.findByRole("textbox", { name: "Page name" });
+	await act(async () => finishClosing());
+	expect(document.activeElement).toBe(input);
+	await user.keyboard("{Escape}");
+	expect(document.activeElement).toBe(
+		view.getByRole("link", { name: /Test page/ }),
+	);
+});

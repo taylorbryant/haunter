@@ -109,6 +109,7 @@ import {
 } from "@/features/pages/schemas";
 import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
+import { useInlineEditFocus } from "@/hooks/use-inline-edit-focus";
 import { cn } from "@/lib/utils";
 
 const PageIconPanel = dynamic(
@@ -263,6 +264,7 @@ export function PageTree({
 	});
 
 	const { expanded, toggle } = useExpandedState(workspaceId);
+	const renameFocus = useInlineEditFocus();
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [renameValue, setRenameValue] = useState("");
 	const [actionError, setActionError] = useState<string | null>(null);
@@ -671,6 +673,7 @@ export function PageTree({
 				>
 					{isRenaming ? (
 						<SidebarInput
+							aria-label="Page name"
 							autoFocus
 							className="h-8"
 							value={renameValue}
@@ -681,6 +684,10 @@ export function PageTree({
 								setRenameError(null);
 							}}
 							onKeyDown={(event) => {
+								if (event.key === "Enter" || event.key === "Escape") {
+									event.preventDefault();
+									renameFocus.requestReturn(event.currentTarget);
+								}
 								if (event.key === "Enter") void commitRename(node.id);
 								if (event.key === "Escape") setRenamingId(null);
 							}}
@@ -690,6 +697,7 @@ export function PageTree({
 						<SidebarMenuButton
 							render={
 								<Link
+									ref={renameFocus.returnTargetRef}
 									href={`/w/${workspaceId}/p/${node.id}`}
 									onFocus={() => prefetchPage(node.id)}
 									onPointerDown={() => prefetchPage(node.id)}
