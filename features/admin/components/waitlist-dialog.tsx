@@ -72,6 +72,7 @@ export function WaitlistDialogProvider({
 	useCommand(
 		enabled && {
 			id: "admin.waitlist",
+			opensDialog: true,
 			title: "Open waitlist",
 			group: "Go to",
 			keywords: "admin approve access",

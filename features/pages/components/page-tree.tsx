@@ -291,6 +291,7 @@ export function PageTree({
 		canEdit && synced && allowImports
 			? {
 					id: "page.import-markdown",
+					opensDialog: true,
 					title: "Import Markdown",
 					group: "Pages",
 					keywords: "upload file note",
@@ -304,6 +305,7 @@ export function PageTree({
 		canEdit && synced && allowRecovery
 			? {
 					id: "page.recover-drafts",
+					opensDialog: true,
 					title: "Recover drafts",
 					group: "Pages",
 					keywords: "import recovery backup json",

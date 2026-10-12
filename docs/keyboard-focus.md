@@ -6,6 +6,8 @@
   inside the dialog; Escape closes it and returns to the control that opened it.
 - A menu action that opens a dialog transfers focus to that dialog. The menu's
   closing animation must not pull focus back underneath the dialog.
+- Navigation commands keep the palette's normal return-focus behavior. Only
+  commands marked `opensDialog` suppress it to hand focus to the new dialog.
 - Closing a nested picker returns to its control in the parent dialog. Escape
   dismisses one layer at a time.
 - Enter or Escape finishes an inline rename and focuses the same row's title.
@@ -28,7 +30,7 @@ desktop and mobile widths, and component regression tests. It covered:
 
 | Area | Checks |
 | --- | --- |
-| Command palette | Page, canvas, and task creation by keyboard and pointer; dismissal and return focus |
+| Command palette | Page, canvas, and task creation by keyboard and pointer through the real mobile sidebar; Home/Tasks navigation, dismissal, and return focus |
 | Creation dialogs | Initial input, Tab containment, and return to the actual launcher after using unrelated popups |
 | Sidebar | Page action handoff to icon/trash dialogs; inline rename cancellation; mobile sidebar and workspace drawer dismissal |
 | Workspace menu | Escape, new/edit workspace and members dialog handoff, and return to the switcher |
@@ -40,8 +42,9 @@ desktop and mobile widths, and component regression tests. It covered:
 
 Fixed findings were workspace-menu dismissal losing focus, creation dialogs
 returning to an unrelated previous popup, inline page/task renames losing focus,
-and fullscreen code editing returning to a removed node. The sidebar rename
-input also gained an accessible name.
+and fullscreen code editing returning to a removed node. Hidden sidebar
+tooltips are disabled so they cannot consume Escape before the mobile sheet.
+The sidebar rename input also gained an accessible name.
 
 This is focus coverage, not a complete accessibility certification. Mobile
 checks used a narrow Chromium viewport, not physical iOS/Safari or VoiceOver.

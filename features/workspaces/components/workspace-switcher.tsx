@@ -121,6 +121,7 @@ export function WorkspaceSwitcher({
 	// same roles as the menu items below.
 	useCommand({
 		id: "workspace.new",
+		opensDialog: true,
 		title: "New workspace",
 		group: "Workspace",
 		keywords: "create organization",
@@ -130,6 +131,7 @@ export function WorkspaceSwitcher({
 	useCommand(
 		active && {
 			id: "workspace.members",
+			opensDialog: true,
 			title: "Workspace members",
 			group: "Workspace",
 			keywords: "people invite team",
@@ -141,6 +143,7 @@ export function WorkspaceSwitcher({
 		active &&
 			canEditWorkspace && {
 				id: "workspace.edit",
+				opensDialog: true,
 				title: "Edit workspace",
 				group: "Workspace",
 				keywords: "rename emoji icon",
@@ -152,6 +155,7 @@ export function WorkspaceSwitcher({
 		active &&
 			canDeleteWorkspace && {
 				id: "workspace.delete",
+				opensDialog: true,
 				title: "Delete workspace",
 				group: "Workspace",
 				keywords: "remove",
