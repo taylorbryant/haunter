@@ -32,6 +32,7 @@ export function TaskComposer({
 	onSuccess,
 	defaultDueDate = null,
 	mode = "full",
+	inputRef: providedInputRef,
 }: {
 	currentUserId: string | null;
 	onSubmit: (input: {
@@ -46,9 +47,11 @@ export function TaskComposer({
 	onSuccess?: () => void;
 	defaultDueDate?: string | null;
 	mode?: "full" | "compact" | "dialog";
+	inputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
 	const errorId = useId();
-	const inputRef = useRef<HTMLInputElement>(null);
+	const localInputRef = useRef<HTMLInputElement>(null);
+	const inputRef = providedInputRef ?? localInputRef;
 	const [text, setText] = useState("");
 	// Undefined means untouched, so a parsed phrase can override the contextual
 	// default. Null means the user explicitly cleared the date.
@@ -288,8 +291,9 @@ export function TaskComposer({
 					<input
 						ref={inputRef}
 						disabled={pending}
-						// biome-ignore lint/a11y/noAutofocus: full and dialog composers open after an explicit user action
-						autoFocus
+						// Dialogs manage initial focus so they can remember their launcher.
+						// biome-ignore lint/a11y/noAutofocus: the full composer opens after an explicit user action
+						autoFocus={mode !== "dialog"}
 						value={text}
 						placeholder="Task name, e.g. “pick up meds tomorrow at 2”"
 						aria-label="Task name"

@@ -31,13 +31,14 @@ mock.module("@/components/app-session-provider", () => ({
 
 let SearchCommand: typeof import("@/components/search-command").SearchCommand;
 let CreateDialogProvider: typeof import("@/components/create-dialog-provider").CreateDialogProvider;
+let useCreateDialog: typeof import("@/components/create-dialog-provider").useCreateDialog;
 let SidebarProvider: typeof import("@/components/ui/sidebar").SidebarProvider;
 const clients: QueryClient[] = [];
 
 beforeAll(async () => {
 	installTestDom();
 	({ SearchCommand } = await import("@/components/search-command"));
-	({ CreateDialogProvider } = await import(
+	({ CreateDialogProvider, useCreateDialog } = await import(
 		"@/components/create-dialog-provider"
 	));
 	({ SidebarProvider } = await import("@/components/ui/sidebar"));
@@ -69,6 +70,7 @@ function setup(width = 1024) {
 						persistCookie={false}
 					>
 						<CreateDialogProvider workspaceId="a">
+							<CreationButtons />
 							<ul>
 								<SearchCommand />
 							</ul>
@@ -129,3 +131,42 @@ test("dismissing the palette still returns focus after a command was run", async
 	await user.keyboard("{Escape}");
 	await waitFor(() => expect(document.activeElement === launcher).toBe(true));
 });
+
+function CreationButtons() {
+	const { openCreateCanvas, openCreatePage, openCreateTask } =
+		useCreateDialog();
+	return (
+		<>
+			<button type="button" onClick={openCreateCanvas}>
+				New canvas
+			</button>
+			<button type="button" onClick={openCreatePage}>
+				New page
+			</button>
+			<button type="button" onClick={openCreateTask}>
+				New task
+			</button>
+		</>
+	);
+}
+for (const width of [1024, 390]) {
+	for (const kind of ["canvas", "page", "task"]) {
+		test(`closing ${kind} creation returns to its own button after using another popup (${width}px)`, async () => {
+			const view = setup(width);
+			const user = userEvent.setup({ document });
+			// Prime Base UI's previous-focus history with an unrelated launcher.
+			await user.click(view.getByRole("button", { name: /^Search/ }));
+			await view.findByRole("combobox");
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+			const launcher = view.getByRole("button", { name: `New ${kind}` });
+			await user.click(launcher);
+			const input = await view.findByRole("textbox", {
+				name: kind === "task" ? "Task name" : "Title",
+			});
+			await waitFor(() => expect(document.activeElement).toBe(input));
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(document.activeElement).toBe(launcher));
+		});
+	}
+}

@@ -157,8 +157,6 @@ export function WorkspacePicker({
 							align="start"
 							side="bottom"
 							sideOffset={4}
-							// Returning focus would steal it from dialogs opened by actions.
-							finalFocus={() => false}
 						>
 							<DropdownMenuGroup>
 								<DropdownMenuLabel className="text-muted-foreground text-xs">

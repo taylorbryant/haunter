@@ -11,6 +11,7 @@ import {
 	useContext,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
@@ -96,6 +97,7 @@ function CreatePageDialog({
 	onPendingChange: (pending: boolean) => void;
 	workspaceId: string;
 }) {
+	const inputRef = useRef<HTMLInputElement>(null);
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	const mutation = useMutation({
@@ -149,6 +151,7 @@ function CreatePageDialog({
 
 	return (
 		<ResponsiveDialog
+			initialFocus={inputRef}
 			open={open}
 			onOpenChange={(next) => {
 				if (!mutation.isPending) onOpenChange(next);
@@ -163,7 +166,7 @@ function CreatePageDialog({
 					<Input
 						id="create-page-title"
 						name="title"
-						autoFocus
+						ref={inputRef}
 						autoComplete="off"
 						maxLength={PAGE_TITLE_MAX_LENGTH}
 						value={title}
@@ -237,6 +240,7 @@ function CreateTaskDialog({
 	onPendingChange: (pending: boolean) => void;
 	workspaceId: string;
 }) {
+	const inputRef = useRef<HTMLInputElement>(null);
 	const currentUser = useCurrentUser();
 	const [pending, setPending] = useState(false);
 	const mutations = useTaskMutations(workspaceId);
@@ -269,6 +273,7 @@ function CreateTaskDialog({
 
 	return (
 		<ResponsiveDialog
+			initialFocus={inputRef}
 			open={open}
 			onOpenChange={(next) => {
 				if (!pending) onOpenChange(next);
@@ -279,6 +284,7 @@ function CreateTaskDialog({
 		>
 			{open ? (
 				<TaskComposer
+					inputRef={inputRef}
 					currentUserId={currentUser?.id ?? null}
 					mode="dialog"
 					onSubmit={createTask}
@@ -302,6 +308,7 @@ function CreateCanvasDialog({
 	onPendingChange: (pending: boolean) => void;
 	workspaceId: string;
 }) {
+	const inputRef = useRef<HTMLInputElement>(null);
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	const mutation = useMutation({
@@ -345,6 +352,7 @@ function CreateCanvasDialog({
 
 	return (
 		<ResponsiveDialog
+			initialFocus={inputRef}
 			open={open}
 			onOpenChange={(next) => {
 				if (!mutation.isPending) onOpenChange(next);
@@ -359,7 +367,7 @@ function CreateCanvasDialog({
 					<Input
 						id="create-canvas-title"
 						name="title"
-						autoFocus
+						ref={inputRef}
 						autoComplete="off"
 						maxLength={CANVAS_TITLE_MAX_LENGTH}
 						value={title}
