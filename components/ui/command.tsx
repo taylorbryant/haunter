@@ -36,6 +36,7 @@ function CommandDialog({
 	className,
 	showCloseButton = false,
 	initialFocus,
+	finalFocus,
 	...props
 }: Omit<React.ComponentProps<typeof Dialog>, "children"> & {
 	title?: string;
@@ -43,6 +44,7 @@ function CommandDialog({
 	className?: string;
 	showCloseButton?: boolean;
 	initialFocus?: React.ComponentProps<typeof DialogContent>["initialFocus"];
+	finalFocus?: React.ComponentProps<typeof DialogContent>["finalFocus"];
 	children: React.ReactNode;
 }) {
 	return (
@@ -58,6 +60,7 @@ function CommandDialog({
 				)}
 				showCloseButton={showCloseButton}
 				initialFocus={initialFocus}
+				finalFocus={finalFocus}
 			>
 				{children}
 			</DialogContent>

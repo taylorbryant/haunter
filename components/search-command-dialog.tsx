@@ -51,6 +51,7 @@ export function SearchCommandDialog({
 	const pathname = usePathname();
 	const workspaceId = pathname.match(/^\/w\/([^/]+)/)?.[1] ?? null;
 	const inputRef = useRef<HTMLInputElement>(null);
+	const commandSelectedRef = useRef(false);
 	const [query, setQuery] = useState("");
 	const [kind, setKind] = useState<SearchKind>("all");
 
@@ -86,6 +87,9 @@ export function SearchCommandDialog({
 	}
 
 	function runCommand(run: () => void) {
+		// The palette unmounts immediately. Read a ref during its focus cleanup
+		// so restoring the launcher cannot steal focus from the command's dialog.
+		commandSelectedRef.current = true;
 		close();
 		run();
 	}
@@ -101,6 +105,7 @@ export function SearchCommandDialog({
 					: "Search pages, tasks, and canvases, or type > for commands"
 			}
 			initialFocus={inputRef}
+			finalFocus={() => !commandSelectedRef.current}
 		>
 			<Command shouldFilter={false}>
 				<CommandInput

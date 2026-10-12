@@ -859,6 +859,11 @@ export function PageTree({
 									side="right"
 									align="start"
 									finalFocus={() => {
+										// These dialogs take focus before the menu's exit animation
+										// finishes; returning to the row would steal it back.
+										if (iconPageId === node.id || pageToTrash?.id === node.id) {
+											return false;
+										}
 										if (menuFocusTransferPageId.current !== node.id) {
 											return true;
 										}
