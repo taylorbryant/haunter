@@ -50,7 +50,7 @@ import { Button } from "@/components/ui/button";
 import { createCanvas } from "@/features/canvases/contracts";
 import type { PageDocumentSession } from "@/features/documents/client/session";
 import { usePageDocument } from "@/features/documents/client/use-page-document";
-import { DocumentRecoveryNotice } from "@/features/documents/components/document-recovery-notice";
+import { PageRecoveryNotice } from "@/features/documents/components/document-recovery-notice";
 import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
 import { useLiveContext } from "@/features/live-context/client/provider";
 import {
@@ -386,6 +386,7 @@ function CollaborativePageBody(
 	});
 	const queryClient = useQueryClient();
 	const storage = useDurableDraftStorage<BlockJson[]>();
+	const [recoveryFocusRequest, setRecoveryFocusRequest] = useState(0);
 	const [oldDraft, setOldDraft] = useState<BlockJson[] | null>(null);
 	useEffect(() => {
 		let active = true;
@@ -441,7 +442,11 @@ function CollaborativePageBody(
 	return (
 		<>
 			{session ? (
-				<DocumentRecoveryNotice snapshot={snapshot} session={session} />
+				<PageRecoveryNotice
+					key={session.identity.key}
+					session={session}
+					onDismissed={() => setRecoveryFocusRequest((value) => value + 1)}
+				/>
 			) : null}
 
 			{oldDraft ? (
@@ -511,6 +516,7 @@ function CollaborativePageBody(
 					{...props}
 					onSaveStateChange={undefined}
 					collaboration={session}
+					focusRequest={(props.focusRequest ?? 0) + recoveryFocusRequest}
 				/>
 			) : (
 				<EditorBodySkeleton />

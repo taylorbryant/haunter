@@ -111,10 +111,11 @@ export function HeaderSaveIndicator({
 			>
 				{label}
 			</button>
-			{historyPageId === pageId ? (
+			{historyPageId === pageId && workspaceId ? (
 				<PageHistoryDialog
 					key={pageId}
 					pageId={pageId}
+					workspaceId={workspaceId}
 					onOpenChange={(open) => {
 						if (!open) setHistoryPageId(null);
 					}}

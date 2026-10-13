@@ -235,12 +235,23 @@ to create a separate canvas or download a copy.
 For pages, save errors offer retry and download actions. **Pages → Recover drafts**
 imports downloaded recovery files into new pages. Restoring page history advances
 the document generation so old offline edits cannot overwrite the restored body.
-The prior local generation remains available as a recovery download, including
-its unsent edits; restoring also resets the editor's undo history.
-Whole-page replacements use the same protection. The recovery notice identifies
-replacement or restoration when known. Dismiss notice keeps the copies and
-collapses the message to Previous copies, where they can still be downloaded;
-a later reset shows the notice again when it creates another recovery copy.
+The prior local generation stays in **Page history → On this device**, including
+any edits that had not reached the server. Copies can be previewed, opened as
+new pages, or downloaded; none of these actions changes the restored page.
+Whole-page replacements use the same protection.
+
+A normal restore shows a brief confirmation. A compact **Review copy** notice
+appears when an archived copy contains edits not confirmed saved, or when an
+older copy's sync status is unknown. **Dismiss** hides the notice without deleting
+the copy from History. New edits arriving from an older tab can show the notice
+again, even within the same generation. Save receipts and archive timestamps are
+stored in IndexedDB; older copies without this metadata remain available.
+Copies dismissed by older app versions appear for review once more because those
+dismissals did not record which edits were reviewed. Dismissing them again records
+their content, so only subsequent edits can bring the notice back.
+Opening a copy uses the existing recovery import endpoint and a stable idempotency
+key for retries. A page copy does not include a historical snapshot of its linked
+canvases; canvas history is separate.
 
 Browser copies are not account backups. Avoid clearing site data while unsynced
 work or recovery copies remain. If browser storage fails, keep the tab open and

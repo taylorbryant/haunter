@@ -6,6 +6,7 @@ import * as Y from "yjs";
 import { PageDocumentSession } from "../client/session";
 import {
 	advanceDocumentGeneration,
+	listDocumentRecoveryCopies,
 	documentCacheKey,
 	loadDocumentHead,
 	LocalDocumentStore,
@@ -123,6 +124,11 @@ test("active and offline browser sessions switch generations, keep recoverable e
 				left.getSnapshot().saved,
 		);
 		expect(firstText(left.doc).toString()).toBe("Restored body");
+		// Both tabs share one local archive; include the offline tab's persisted edits,
+		// even before that tab notices the reset.
+		expect(
+			(await listDocumentRecoveryCopies(left.identity.key))[0]!.syncStatus,
+		).toBe("unsynced");
 		expect(right.getSnapshot().generation).toBe(0);
 		right.resume();
 		await until(
@@ -208,6 +214,9 @@ test("active and offline browser sessions switch generations, keep recoverable e
 		expect(reloaded.getSnapshot().resetReason).toBe("replacement");
 		expect(reloaded.getSnapshot().recoveryNoticeDismissed).toBe(false);
 		expect(reloaded.getSnapshot().recoveries).toEqual([1, 0]);
+		expect(
+			(await listDocumentRecoveryCopies(reloaded.identity.key))[0]!.syncStatus,
+		).toBe("saved");
 		expect(firstText(reloaded.doc).toString()).toBe("Replacement body");
 	} finally {
 		await Promise.all(sessions.map((session) => session.destroy(() => true)));

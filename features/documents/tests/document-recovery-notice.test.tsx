@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -11,101 +11,77 @@ afterEach(async () => {
 	await uninstallTestDom();
 });
 
-test("recovery notices distinguish replacement, restore, and older unknown resets", () => {
-	const session = {
-		dismissRecoveryNotice: async () => {},
-		recoveryDownload: async () => "{}",
-	};
-	const snapshot = {
-		recoveries: [0],
-		resetReason: "replacement" as const,
-		recoveryNoticeDismissed: false,
+test("confirmed saved copies are quiet; unsynced and older unknown copies can be reviewed", async () => {
+	const onReview = mock((_generation: number) => {});
+	const onDismiss = async () => {};
+	const copy = {
+		generation: 2,
+		syncStatus: "saved" as const,
+		dismissed: false,
 	};
 	const view = render(
-		<DocumentRecoveryNotice snapshot={snapshot} session={session} />,
-	);
-	expect(view.getByText(/This page’s content was replaced/)).not.toBeNull();
-	expect(view.queryByText(/This page was restored/)).toBeNull();
-	view.rerender(
 		<DocumentRecoveryNotice
-			snapshot={{ ...snapshot, resetReason: "restore" }}
-			session={session}
+			copy={copy}
+			onReview={onReview}
+			onDismiss={onDismiss}
 		/>,
 	);
-	expect(view.getByText(/This page was restored/)).not.toBeNull();
-	view.rerender(
-		<DocumentRecoveryNotice
-			snapshot={{ ...snapshot, resetReason: null }}
-			session={session}
-		/>,
-	);
-	expect(
-		view.getByText(/An earlier copy of this page is available/),
-	).not.toBeNull();
+	expect(view.queryByRole("status")).toBeNull();
+	for (const syncStatus of ["unsynced", "unknown"] as const) {
+		view.rerender(
+			<DocumentRecoveryNotice
+				copy={{ ...copy, syncStatus }}
+				onReview={onReview}
+				onDismiss={onDismiss}
+			/>,
+		);
+		expect(view.getByRole("status").textContent).toBe(
+			"Earlier edits are saved on this device.",
+		);
+		await userEvent
+			.setup({ document })
+			.click(view.getByRole("button", { name: "Review copy" }));
+	}
+	expect(onReview.mock.calls).toEqual([[2], [2]]);
 });
 
-test("dismissed notices can be reopened to select and download earlier copies", async () => {
-	let dismissals = 0;
-	const downloads: number[] = [];
+test("dismissal removes the notice without an extra collapsed banner", async () => {
+	const dismiss = mock(async () => {});
 	function Harness() {
 		const [dismissed, setDismissed] = useState(false);
 		return (
 			<DocumentRecoveryNotice
-				snapshot={{
-					recoveries: [2, 0],
-					resetReason: "replacement",
-					recoveryNoticeDismissed: dismissed,
-				}}
-				session={{
-					dismissRecoveryNotice: async () => {
-						dismissals++;
-						setDismissed(true);
-					},
-					recoveryDownload: async (generation = 2) => {
-						downloads.push(generation);
-						throw new Error("Test download failure");
-					},
+				copy={{ generation: 0, syncStatus: "unsynced", dismissed }}
+				onReview={() => {}}
+				onDismiss={async () => {
+					await dismiss();
+					setDismissed(true);
 				}}
 			/>
 		);
 	}
-	const user = userEvent.setup({ document });
 	const view = render(<Harness />);
-	await user.click(view.getByRole("button", { name: "Dismiss notice" }));
+	await userEvent
+		.setup({ document })
+		.click(view.getByRole("button", { name: "Dismiss" }));
 	await waitFor(() => expect(view.queryByRole("status")).toBeNull());
-	expect(dismissals).toBe(1);
-	await user.click(view.getByRole("button", { name: "Previous copies (2)" }));
-	await user.selectOptions(
-		view.getByRole("combobox", { name: "Recovery copy" }),
-		"0",
-	);
-	await user.click(
-		view.getByRole("button", { name: "Download previous copy" }),
-	);
-	await waitFor(() => expect(downloads).toEqual([0]));
-	expect(await view.findByRole("alert")).not.toBeNull();
+	expect(view.queryByRole("button")).toBeNull();
+	expect(dismiss).toHaveBeenCalledTimes(1);
 });
 
-test("failed dismissal keeps recovery controls available", async () => {
-	const user = userEvent.setup({ document });
+test("failed dismissal keeps review and retry available", async () => {
 	const view = render(
 		<DocumentRecoveryNotice
-			snapshot={{
-				recoveries: [0],
-				resetReason: "restore",
-				recoveryNoticeDismissed: false,
-			}}
-			session={{
-				dismissRecoveryNotice: async () => {
-					throw new Error("Quota");
-				},
-				recoveryDownload: async () => "{}",
+			copy={{ generation: 0, syncStatus: "unsynced", dismissed: false }}
+			onReview={() => {}}
+			onDismiss={async () => {
+				throw new Error("Quota");
 			}}
 		/>,
 	);
-	await user.click(view.getByRole("button", { name: "Dismiss notice" }));
+	await userEvent
+		.setup({ document })
+		.click(view.getByRole("button", { name: "Dismiss" }));
 	expect(await view.findByRole("alert")).not.toBeNull();
-	expect(
-		view.getByRole("button", { name: "Download previous copy" }),
-	).not.toBeNull();
+	expect(view.getByRole("button", { name: "Review copy" })).not.toBeNull();
 });
