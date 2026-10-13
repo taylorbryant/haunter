@@ -208,7 +208,9 @@ test("a failed browser read leaves download available and can be retried in the 
 		{ wrapper: Wrapper },
 	);
 	await user.click(view.getByRole("button", { name: "Open as a new page" }));
-	expect(await view.findByRole("alert")).not.toBeNull();
+	expect((await view.findByRole("alert")).textContent).toBe(
+		"The recovery copy could not be opened. Your copy is still saved in this browser.",
+	);
 	expect(fetchSpy).not.toHaveBeenCalled();
 	expect(
 		view
@@ -221,6 +223,75 @@ test("a failed browser read leaves download available and can be retried in the 
 		expect(navigate).toHaveBeenCalledWith(`/w/workspace/p/${recoveredPageId}`),
 	);
 	expect(push).not.toHaveBeenCalled();
+});
+
+test("download progress and failures describe the selected copy across layout changes", async () => {
+	const read = deferred<string>();
+	const download = mock((_generation: number) => read.promise);
+	const source = { recoveryDownload: download };
+	const fetchSpy = mockImport(async () => recovered());
+	const user = userEvent.setup({ document });
+	const view = render(
+		<RecoveryActionsHarness
+			workspaceId="workspace"
+			generation={0}
+			source={source}
+		/>,
+		{ wrapper: Wrapper },
+	);
+	await user.dblClick(view.getByRole("button", { name: "Download copy" }));
+	expect(
+		view.getByRole("button", { name: "Downloading…" }).hasAttribute("disabled"),
+	).toBe(true);
+	const open = view.getByRole("button", { name: "Open as a new page" });
+	expect(open.hasAttribute("disabled")).toBe(true);
+	await user.click(open);
+	expect(download.mock.calls).toEqual([[0]]);
+	// Switching copies must not announce that a different copy is downloading.
+	view.rerender(
+		<RecoveryActionsHarness
+			workspaceId="workspace"
+			generation={2}
+			source={source}
+			mobile
+		/>,
+	);
+	expect(
+		view.queryByRole("button", { name: /Opening|Downloading/ }),
+	).toBeNull();
+	expect(
+		view
+			.getByRole("button", { name: "Download copy" })
+			.hasAttribute("disabled"),
+	).toBe(true);
+	view.rerender(
+		<RecoveryActionsHarness
+			workspaceId="workspace"
+			generation={0}
+			source={source}
+		/>,
+	);
+	expect(
+		view.getByRole("button", { name: "Downloading…" }).hasAttribute("disabled"),
+	).toBe(true);
+	await act(async () => read.reject(new Error("Storage unavailable")));
+	expect((await view.findByRole("alert")).textContent).toBe(
+		"The recovery copy could not be downloaded. Your copy is still saved in this browser.",
+	);
+	for (const name of ["Open as a new page", "Download copy"])
+		expect(view.getByRole("button", { name }).hasAttribute("disabled")).toBe(
+			false,
+		);
+	expect(fetchSpy).not.toHaveBeenCalled();
+	expect(push).not.toHaveBeenCalled();
+	view.rerender(
+		<RecoveryActionsHarness
+			workspaceId="workspace"
+			generation={2}
+			source={source}
+		/>,
+	);
+	expect(view.queryByRole("alert")).toBeNull();
 });
 
 test("a lost response retains its error, payload, and retry key across responsive layouts", async () => {

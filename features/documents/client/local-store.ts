@@ -75,12 +75,14 @@ export async function advanceDocumentGeneration(
 			...head,
 			key,
 			generation: Math.max(head.generation, to),
-			archivedAt: state
-				? {
-						...head.archivedAt,
-						[from]: head.archivedAt?.[from] ?? new Date().toISOString(),
-					}
-				: head.archivedAt,
+			// A late old tab can append to a legacy archive whose date is unknown.
+			archivedAt:
+				state && !head.recoveries.includes(from)
+					? {
+							...head.archivedAt,
+							[from]: head.archivedAt?.[from] ?? new Date().toISOString(),
+						}
+					: head.archivedAt,
 			recoveries: [
 				...new Set([...head.recoveries, ...(state ? [from] : [])]),
 			].sort((a, b) => b - a),
@@ -156,7 +158,6 @@ export async function listDocumentRecoveryCopies(
 					rows.map((row) => row.id),
 					head.receipts?.[generation],
 					head.dismissedReceipts?.[generation],
-					head.dismissedRecoveryThrough,
 					head.archivedAt?.[generation],
 				]);
 				const cached = cache?.get(generation);
@@ -167,9 +168,11 @@ export async function listDocumentRecoveryCopies(
 					Y.applyUpdate(doc, update);
 					const receipt = head.receipts?.[generation];
 					const dismissedReceipt = head.dismissedReceipts?.[generation];
+					// Legacy generation-only dismissals cannot prove that later edits were
+					// reviewed. Offer those copies again until a content receipt is saved.
 					const dismissed = dismissedReceipt
 						? receiptCoversDocument(doc, dismissedReceipt)
-						: generation <= (head.dismissedRecoveryThrough ?? -1);
+						: false;
 
 					const copy: LocalRecoveryCopy = {
 						generation,

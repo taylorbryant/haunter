@@ -12,6 +12,10 @@ export function RecoveryCopyActions({
 	actions: ReturnType<typeof useRecoveryCopyActions>;
 	canCreate?: boolean;
 }) {
+	const activeKind =
+		actions.activeAction?.generation === generation
+			? actions.activeAction.kind
+			: null;
 	return (
 		<div className="space-y-2">
 			{actions.error?.generation === generation ? (
@@ -25,7 +29,7 @@ export function RecoveryCopyActions({
 						disabled={actions.working}
 						onClick={() => void actions.open(generation)}
 					>
-						{actions.working ? "Opening…" : "Open as a new page"}
+						{activeKind === "open" ? "Opening…" : "Open as a new page"}
 					</Button>
 				) : null}
 				<Button
@@ -33,7 +37,7 @@ export function RecoveryCopyActions({
 					disabled={actions.working}
 					onClick={() => void actions.download(generation)}
 				>
-					Download copy
+					{activeKind === "download" ? "Downloading…" : "Download copy"}
 				</Button>
 			</div>
 			<p className="text-muted-foreground text-xs">

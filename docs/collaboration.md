@@ -246,6 +246,9 @@ older copy's sync status is unknown. **Dismiss** hides the notice without deleti
 the copy from History. New edits arriving from an older tab can show the notice
 again, even within the same generation. Save receipts and archive timestamps are
 stored in IndexedDB; older copies without this metadata remain available.
+Copies dismissed by older app versions appear for review once more because those
+dismissals did not record which edits were reviewed. Dismissing them again records
+their content, so only subsequent edits can bring the notice back.
 Opening a copy uses the existing recovery import endpoint and a stable idempotency
 key for retries. A page copy does not include a historical snapshot of its linked
 canvases; canvas history is separate.

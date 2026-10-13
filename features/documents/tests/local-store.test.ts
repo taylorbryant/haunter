@@ -163,9 +163,72 @@ test("pre-metadata archives remain readable without invented timestamps or sync 
 			syncStatus: "unknown",
 			dismissed: false,
 		});
-		await legacy.table("heads").update(key, { dismissedRecoveryThrough: 0 });
-		expect((await listDocumentRecoveryCopies(key))[0]!.dismissed).toBe(true);
+		// An older tab may discover the restore much later. That is not the archive date.
+		doc.getText("draft").insert(0, "Late edit ");
+		await advanceDocumentGeneration(key, 0, 1, Y.encodeStateAsUpdate(doc));
+		expect((await listDocumentRecoveryCopies(key))[0]).toMatchObject({
+			archivedAt: null,
+			syncStatus: "unknown",
+		});
 	} finally {
+		legacy.close();
+		doc.destroy();
+	}
+});
+
+test("legacy dismissals require review once and then detect late inserts and deletions from an old tab", async () => {
+	const key = crypto.randomUUID();
+	const cache: import("../client/local-store").RecoveryReadCache = new Map();
+	const doc = new Y.Doc();
+	doc.getText("draft").insert(0, "Legacy draft");
+	await advanceDocumentGeneration(key, 0, 1, Y.encodeStateAsUpdate(doc));
+	const legacy = new Dexie("haunter-yjs-documents-v1");
+	const oldTab = new LocalDocumentStore(key, doc, () => {});
+	try {
+		await legacy.open();
+		await legacy.table("heads").put({
+			key,
+			generation: 1,
+			recoveries: [0],
+			dismissedRecoveryThrough: 0,
+		});
+		let copies = await listDocumentRecoveryCopies(key, cache);
+		expect(copies[0]!.dismissed).toBe(false);
+		await dismissDocumentRecoveryCopies(key, copies);
+		// A fresh read, without the cache, honors the new content-based dismissal.
+		expect((await listDocumentRecoveryCopies(key))[0]!.dismissed).toBe(true);
+		expect(await readDocumentRecovery(key, 0)).toEqual(copies[0]!.update);
+		await oldTab.load();
+		doc.getText("draft").delete(0, 1);
+		await oldTab.flush();
+		copies = await listDocumentRecoveryCopies(key, cache);
+		expect(copies[0]!.dismissed).toBe(false);
+		await dismissDocumentRecoveryCopies(key, copies);
+		expect((await listDocumentRecoveryCopies(key, cache))[0]!.dismissed).toBe(
+			true,
+		);
+		doc.getText("draft").insert(0, "Late edit ");
+		await oldTab.flush();
+		expect((await listDocumentRecoveryCopies(key, cache))[0]!.dismissed).toBe(
+			false,
+		);
+		await advanceDocumentGeneration(key, 0, 1, Y.encodeStateAsUpdate(doc));
+		expect((await listDocumentRecoveryCopies(key, cache))[0]).toMatchObject({
+			dismissed: false,
+			archivedAt: null,
+			syncStatus: "unknown",
+		});
+		const recovered = new Y.Doc();
+		try {
+			Y.applyUpdate(recovered, (await readDocumentRecovery(key, 0))!);
+			expect(recovered.getText("draft").toString()).toBe(
+				"Late edit egacy draft",
+			);
+		} finally {
+			recovered.destroy();
+		}
+	} finally {
+		oldTab.destroy();
 		legacy.close();
 		doc.destroy();
 	}
