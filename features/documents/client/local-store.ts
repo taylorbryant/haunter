@@ -2,6 +2,25 @@
 
 import Dexie, { type Table } from "dexie";
 import * as Y from "yjs";
+import {
+	createPersistenceReceipt,
+	receiptCoversDocument,
+	type PersistenceReceipt,
+} from "../receipt";
+
+type SavedReceipt = PersistenceReceipt & { revision: number };
+export type LocalRecoveryCopy = {
+	generation: number;
+	archivedAt: string | null;
+	syncStatus: "saved" | "unsynced" | "unknown";
+	dismissed: boolean;
+	update: Uint8Array;
+};
+
+export type RecoveryReadCache = Map<
+	number,
+	{ signature: string; copy: LocalRecoveryCopy }
+>;
 
 type UpdateRow = { id?: number; key: string; update: Uint8Array };
 type DocumentHead = {
@@ -9,6 +28,10 @@ type DocumentHead = {
 	generation: number;
 	recoveries: number[];
 	dismissedRecoveryThrough?: number;
+	// Optional fields preserve existing IndexedDB records without a schema upgrade.
+	archivedAt?: Record<number, string>;
+	receipts?: Record<number, SavedReceipt>;
+	dismissedReceipts?: Record<number, PersistenceReceipt>;
 };
 class DocumentDatabase extends Dexie {
 	updates!: Table<UpdateRow, number>;
@@ -52,6 +75,12 @@ export async function advanceDocumentGeneration(
 			...head,
 			key,
 			generation: Math.max(head.generation, to),
+			archivedAt: state
+				? {
+						...head.archivedAt,
+						[from]: head.archivedAt?.[from] ?? new Date().toISOString(),
+					}
+				: head.archivedAt,
 			recoveries: [
 				...new Set([...head.recoveries, ...(state ? [from] : [])]),
 			].sort((a, b) => b - a),
@@ -77,6 +106,117 @@ export async function dismissDocumentRecoveryNotice(
 		};
 		await db.heads.put(next);
 		return next;
+	});
+}
+
+/** Save acknowledgements survive reloads, so a saved old tab doesn't look unsynced. */
+export async function saveDocumentReceipt(
+	key: string,
+	generation: number,
+	receipt: SavedReceipt,
+) {
+	const db = getDatabase();
+	await db.transaction("rw", db.heads, async () => {
+		const head = await loadDocumentHead(key);
+		if ((head.receipts?.[generation]?.revision ?? -1) >= receipt.revision)
+			return;
+		await db.heads.put({
+			...head,
+			receipts: {
+				...head.receipts,
+				[generation]: {
+					revision: receipt.revision,
+					vector: receipt.vector,
+					deletions: receipt.deletions,
+				},
+			},
+		});
+	});
+}
+
+/** Read every tab's archived updates, rather than just the tab that noticed the reset. */
+export async function listDocumentRecoveryCopies(
+	key: string,
+	cache?: RecoveryReadCache,
+): Promise<LocalRecoveryCopy[]> {
+	const db = getDatabase();
+	return db.transaction("r", db.heads, db.updates, async () => {
+		const head = await loadDocumentHead(key);
+		return Promise.all(
+			head.recoveries.map(async (generation) => {
+				const rows = await db.updates
+					.where("key")
+					.equals(documentCacheKey(key, generation))
+					.toArray();
+				if (!rows.length)
+					throw new Error(
+						"The recovery copy is no longer available in this browser.",
+					);
+				const signature = JSON.stringify([
+					rows.map((row) => row.id),
+					head.receipts?.[generation],
+					head.dismissedReceipts?.[generation],
+					head.dismissedRecoveryThrough,
+					head.archivedAt?.[generation],
+				]);
+				const cached = cache?.get(generation);
+				if (cached?.signature === signature) return cached.copy;
+				const update = Y.mergeUpdates(rows.map((row) => row.update));
+				const doc = new Y.Doc();
+				try {
+					Y.applyUpdate(doc, update);
+					const receipt = head.receipts?.[generation];
+					const dismissedReceipt = head.dismissedReceipts?.[generation];
+					const dismissed = dismissedReceipt
+						? receiptCoversDocument(doc, dismissedReceipt)
+						: generation <= (head.dismissedRecoveryThrough ?? -1);
+
+					const copy: LocalRecoveryCopy = {
+						generation,
+						archivedAt: head.archivedAt?.[generation] ?? null,
+						syncStatus: receipt
+							? receiptCoversDocument(doc, receipt)
+								? "saved"
+								: "unsynced"
+							: "unknown",
+						dismissed,
+						update,
+					};
+					cache?.set(generation, { signature, copy });
+					return copy;
+				} finally {
+					doc.destroy();
+				}
+			}),
+		);
+	});
+}
+
+/** Dismiss only the exact copies the user saw. Never delete the underlying archive. */
+export async function dismissDocumentRecoveryCopies(
+	key: string,
+	copies: LocalRecoveryCopy[],
+) {
+	const db = getDatabase();
+	await db.transaction("rw", db.heads, async () => {
+		const head = await loadDocumentHead(key);
+		await db.heads.put({
+			...head,
+			dismissedReceipts: {
+				...head.dismissedReceipts,
+				...Object.fromEntries(
+					copies.map((copy) => {
+						const doc = new Y.Doc();
+						try {
+							Y.applyUpdate(doc, copy.update);
+							return [copy.generation, createPersistenceReceipt(doc)];
+						} finally {
+							doc.destroy();
+						}
+					}),
+				),
+			},
+		});
 	});
 }
 

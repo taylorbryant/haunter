@@ -13,16 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSidebar } from "@/components/ui/sidebar";
-import {
-	invalidatePages,
-	invalidatePageNavigation,
-	invalidateBacklinks,
-} from "@/features/pages/client/queries";
-import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
-import {
-	invalidateCanvasNavigation,
-	invalidateCanvases,
-} from "@/features/canvases/client/queries";
+import { invalidateRecoveryImport } from "../client/queries";
 import { importRecovery } from "../contracts";
 import { MAX_RECOVERY_FILE_BYTES, parseRecoveryFile } from "../recovery";
 
@@ -87,14 +78,7 @@ export function RecoveryImportDialog({
 					file: selection.file,
 				},
 			});
-			await Promise.all([
-				invalidatePages(queryClient),
-				invalidatePageNavigation(queryClient, workspaceId),
-				invalidateTasksWhenIdle(queryClient),
-				invalidateBacklinks(queryClient),
-				invalidateCanvases(queryClient),
-				invalidateCanvasNavigation(queryClient, workspaceId),
-			]);
+			await invalidateRecoveryImport(queryClient, workspaceId);
 			onOpenChange(false);
 			if (isMobile) {
 				setSuppressMobileFinalFocus(true);

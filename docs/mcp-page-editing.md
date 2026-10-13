@@ -271,12 +271,13 @@ would empty a nested container or remove another block, is rejected without
 overwriting the saved page.
 Keep the affected editor open and download its drafts before resolving the conflict.
 
-After a replacement or history restore, the editor identifies which action
-created the current page and keeps earlier browser copies available for recovery.
-Dismiss notice hides the expanded message without deleting any copies; use
-Previous copies to reopen it and download one. A later reset with a new recovery
-copy shows the notice again. Older documents without action metadata use a
-neutral recovery message.
+After a replacement or history restore, earlier browser copies remain available
+in **Page history → On this device**. Review a copy and choose **Open as a new
+page**, or download it as a recovery file. The current page is unchanged.
+Copies with edits not confirmed saved show a dismissible **Review copy** notice;
+older copies with unknown sync status are also offered for review. Dismissal
+keeps the copy in History. New edits from an older tab can show the notice again.
+Normal, confirmed-saved restores do not leave a persistent recovery banner.
 
 ## Add files and images
 

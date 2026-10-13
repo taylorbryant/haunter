@@ -1,4 +1,5 @@
 "use client";
+import { pageDocumentStorageKey, downloadPageRecovery } from "./recovery-files";
 import { encodeRecoveryUpdate } from "../update-encoding";
 
 import { HocuspocusProvider } from "@hocuspocus/provider";
@@ -20,9 +21,9 @@ import {
 	loadDocumentHead,
 	documentCacheKey,
 	advanceDocumentGeneration,
-	readDocumentRecovery,
 	dismissDocumentRecoveryNotice,
 	isRecoveryNoticeDismissed,
+	saveDocumentReceipt,
 } from "./local-store";
 
 export type DocumentSnapshot = {
@@ -93,13 +94,7 @@ export class PageDocumentSession {
 				.call({ path: { id: options.pageId }, body: {} }),
 	) {
 		this.identity = {
-			key: JSON.stringify([
-				options.url,
-				options.userId,
-				options.workspaceId,
-				options.pageId,
-				DOCUMENT_SCHEMA_VERSION,
-			]),
+			key: pageDocumentStorageKey(options),
 			userId: options.userId,
 			workspaceId: options.workspaceId,
 			resourceId: options.pageId,
@@ -314,6 +309,12 @@ export class PageDocumentSession {
 					) {
 						const saved = receiptCoversDocument(this.doc, message);
 						this.receipt = message;
+						// Receipt metadata is an aid to recovery UX; failure never drops a draft.
+						void saveDocumentReceipt(
+							this.identity.key,
+							generation,
+							message,
+						).catch(() => undefined);
 						this.publish({
 							saved,
 							revision: message.revision,
@@ -438,25 +439,7 @@ export class PageDocumentSession {
 			!this.snapshot.recoveries.includes(generation)
 		)
 			throw new Error("Choose an available recovery copy.");
-		return JSON.stringify({
-			format: "haunter-draft-recovery",
-			version: 1,
-			pages: [
-				{
-					type: "page",
-					id: `${this.options.pageId}:g${generation}`,
-					title: `Recovered page — previous copy ${generation + 1}`,
-					content: [],
-					collaborativeState: {
-						format: "haunter-yjs-v1",
-						update: encodeRecoveryUpdate(
-							await readDocumentRecovery(this.identity.key, generation),
-						),
-					},
-				},
-			],
-			canvases: [],
-		});
+		return downloadPageRecovery(this.options, generation);
 	}
 
 	pause = () => {
