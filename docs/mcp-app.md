@@ -6,10 +6,10 @@ canvas editor. This document covers maintaining that integration; tool usage is
 documented in the [page](mcp-page-editing.md) and [canvas](mcp-canvas-editing.md)
 references.
 
-## Opening and using the workspace
+## Host integration
 
-Connect to the [hosted MCP endpoint](deployment.md#hosted-mcp) and approve the
-workspaces the host can access. `open_haunter` opens Home or Tasks;
+The host connects to the [hosted MCP endpoint](deployment.md#hosted-mcp) with a
+user-approved workspace grant. `open_haunter` opens Home or Tasks;
 `open_haunter_editor` opens a page; `open_haunter_canvas` opens a drawing. The host
 must support MCP Apps, nested iframes, and a non-opaque UI origin.
 
@@ -27,8 +27,8 @@ Navigation and the host's close handshake wait for pending saves; a failed save
 keeps the editor open. Forced frame destruction can interrupt that handshake.
 
 Embedded appearance is saved per user, separately from the web-app preference.
-**Follow host** uses the host's light/dark mode; choose a named Haunter theme
-explicitly. Sidebar collapse state uses local storage. With focus inside Haunter,
+**Follow host** uses the host's light/dark mode; named themes require an explicit
+selection. Sidebar collapse state uses local storage. With focus inside Haunter,
 Search accepts Cmd/Ctrl+K and Cmd/Ctrl+Shift+K to accommodate host shortcuts.
 
 ## Authentication and authorization

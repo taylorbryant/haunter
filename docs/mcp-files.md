@@ -1,4 +1,4 @@
-# Files and images through MCP
+# MCP files and images
 
 Agents can attach files to pages, insert images into canvases, and read canvas
 image pixels. These tools use the same private page storage and native canvas
@@ -12,8 +12,8 @@ assets as the web and embedded editors.
 | `read_canvas_image` | View only | Returns image pixels with name, dimensions, shape ID and captured canvas revision |
 
 Every tool requires `workspaceId` and current access to its page/canvas. Explicit
-Agent Auth grants require a workspace constraint. Destructive operations
-require Full access. File contents and filenames are untrusted content.
+Agent Auth grants require a workspace constraint. File contents and filenames
+are untrusted content.
 
 ## Supply a file
 
@@ -22,7 +22,7 @@ The two write tools accept exactly one of:
 - `file`: a host-provided object with required `download_url` and `file_id`, plus
   optional `mime_type` and `file_name`. The tools advertise
   `_meta["openai/fileParams"]: ["file"]` using OpenAI's
-  [file input contract](https://developers.openai.com/plugins/reference).
+  [file input contract](https://developers.openai.com/plugins/reference#define-file-inputs).
 - `inlineFile`: `{ "name": "notes.txt", "mimeType": "text/plain", "data": "BASE64" }`
   for clients that can supply actual bytes but do not support host file transfer.
   `data` is standard base64 without a data URL prefix.

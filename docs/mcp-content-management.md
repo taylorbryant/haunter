@@ -1,4 +1,4 @@
-# Manage Haunter content through MCP
+# MCP content management
 
 These tools are available to the model through hosted MCP and to delegated
 agents through Agent Auth. Every call requires a `workspaceId` from
@@ -43,7 +43,7 @@ personal hints. Navigation polling provides a fallback if events are missed.
 `list_backlinks` takes `pageId`; returned pages can be inspected with `read_page`.
 Archived source pages are excluded. `list_trash` returns subtree roots, so
 children are not listed separately while their parent is also in trash.
-Use the existing Full-access `restore_page` tool to recover a root and its
+Use the Full-access `restore_page` tool to recover a root and its
 descendants. Permanent trash purging remains human-controlled.
 
 ## Restore a page version

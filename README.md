@@ -2,42 +2,20 @@
 
 # Haunter
 
-Haunter keeps notes, tasks, and canvases together. Write in nested pages, keep
-tasks next to the thinking behind them, and sketch ideas without switching
-tools.
+Haunter keeps notes, tasks, and canvases together, with real-time collaboration
+and an MCP API for connected agents.
 
-Let an AI client help without opening up your entire account. You decide what
-each client can do and which workspaces it can reach.
+This README and `docs/` are for maintainers and contributors developing,
+deploying, and debugging Haunter. For instructions on using the app or connecting
+an agent, read the public guides.
 
-[Open Haunter](https://haunter.app) ·
-[Read the guides](https://haunter.app/guides) ·
-[View the changelog](https://haunter.app/changelog)
+[Open Haunter](https://www.haunter.app) ·
+[Read the guides](https://www.haunter.app/guides) ·
+[View the changelog](https://www.haunter.app/changelog)
 
 ![Haunter — a demo Home dashboard with today’s tasks, favorite pages, and recently viewed notes](docs/screenshot.png)
 
 ![Haunter — a populated page with rich text, task blocks, a callout, and syntax-highlighted SQL](docs/page-screenshot.png)
-
-## What you can do
-
-- **Start with what matters.** Home gives you one view of overdue tasks, tasks
-  due today or in the next seven days, favorites, and recently viewed pages and
-  canvases.
-- **Build connected notes.** Use nested pages, search, and backlinks to keep
-  ideas connected. Attach files, revisit page history, and publish read-only
-  links.
-- **Think visually.** Keep a canvas inside the page it belongs to or give it a
-  place of its own. Start from a diagram or wireframe template, then arrange
-  fully editable building blocks.
-- **Keep tasks in context.** Tasks can live inside a page or on their own.
-  Assign them to workspace members, write due dates in natural language, add
-  due times, and manage them from the workspace task list.
-- **Work together with clear boundaries.** Workspace roles separate viewing,
-  editing, and member management. Edit pages and canvases together in real time.
-- **Take your pages with you.** Move pages in or out as Markdown, or create
-  standalone HTML in your chosen Haunter theme.
-- **Connect AI on your terms.** Use Haunter's hosted MCP server or a local Agent
-  Auth bridge with supported AI clients. Choose a permission profile and
-  workspaces, review recent activity, and disconnect a client at any time.
 
 ## Run Haunter locally
 
@@ -131,10 +109,11 @@ browser checks covering page readiness, typing, and synchronization.
 See [AGENTS.md](AGENTS.md) for generators, registration requirements, and coding
 conventions.
 
-## Technical documentation
+## Maintainer documentation
 
-Product instructions live in the [Haunter guides](https://haunter.app/guides).
-The documents below cover running Haunter and integrating clients.
+The references below describe operational requirements, implementation
+boundaries, and verification workflows. MCP references document the contracts
+and client behavior to preserve when changing the tools.
 
 | Topic | Reference |
 | --- | --- |
@@ -145,3 +124,5 @@ The documents below cover running Haunter and integrating clients.
 | Agent context and feedback | [Live context](docs/mcp-live-context.md), [canvas activity](docs/mcp-canvas-activity.md) |
 | Embedded editor | [MCP App integration](docs/mcp-app.md) |
 | UI maintenance | [Keyboard focus](docs/keyboard-focus.md), [editor benchmarks](docs/editor-benchmarks.md) |
+| Dependency patches | [Editor patches and upgrade checks](patches/README.md) |
+| Writing product documentation | [Guide authoring](content/help/README.md), [changelog authoring](content/changelog/README.md) |

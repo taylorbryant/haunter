@@ -1,10 +1,11 @@
-# Edit canvases through MCP
+# MCP canvas editing
 
 Add diagrams to pages with `create_canvas_block`, inspect their structure with
 `read_canvas`, see the rendered drawing with `preview_canvas`, and change their
 shapes with `edit_canvas`. Use `search_canvas_library` and
 `insert_canvas_library_item` to start from built-in templates and components.
-These tools create native tldraw shapes that you can continue editing in Haunter.
+These tools create native tldraw shapes editable through the same collaboration
+rooms as the web app.
 
 Each call requires a `workspaceId` from `list_workspaces`. Canvas reads and edits
 require a running collaboration worker. Page and canvas revisions are separate:

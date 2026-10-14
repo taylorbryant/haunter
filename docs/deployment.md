@@ -1,5 +1,7 @@
 # Deployment
 
+This is the release and configuration reference for Haunter maintainers.
+For a development environment, follow the [local setup](../README.md#run-haunter-locally).
 Use [`.env.example`](../.env.example) as the complete configuration reference.
 Configure the production environment before building and starting the app:
 
@@ -34,16 +36,6 @@ bun beignet db migrate
 bun run build
 bun run start
 ```
-
-## Collaborative editors
-
-Page bodies use Yjs/Hocuspocus, and canvases use first-party tldraw sync. Both
-protocols run in one persistent WebSocket worker alongside Next. Only one worker
-may own a database at a time; deployments must stop it before starting its
-replacement.
-
-See [Collaboration](collaboration.md) for worker deployment, preview origins,
-storage, offline recovery, and troubleshooting.
 
 ## Optional services
 
@@ -88,17 +80,16 @@ The hosted MCP endpoint defaults to `${APP_URL}/mcp`. Set `MCP_RESOURCE_URL`
 when clients should use a different stable public endpoint. The value is also
 the OAuth token audience, so it must match exactly and must not redirect.
 
-Browser-based MCP clients with a separate origin must be listed in
-`MCP_ALLOWED_ORIGINS`. Native and server-side clients generally omit the
-`Origin` header. Apply the checked-in OAuth/MCP migrations before enabling the
-endpoint.
+Browser-based MCP clients must match an exact app/auth origin or an additional
+origin in `MCP_ALLOWED_ORIGINS`. Wildcard auth origins do not authorize MCP
+requests. Native and server-side clients generally omit the `Origin` header.
 
 For embedded editor authentication, framing, and host configuration, see
 [MCP App integration](mcp-app.md).
 
 ## Task reminders and push notifications
 
-Vercel registers the production schedules in `vercel.json`:
+Vercel registers the production schedules in [`vercel.json`](../vercel.json):
 
 - `/api/cron/tasks/check-overdue` checks for due reminders and overdue tasks
   every five minutes.

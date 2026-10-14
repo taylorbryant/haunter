@@ -1,9 +1,11 @@
 # Workspace search
 
-Open Search with Cmd/Ctrl+K (or Cmd/Ctrl+Shift+K inside a host that uses that
-shortcut). Search finds saved page titles and body text, task titles, canvas
-titles, and text inside drawings. Use the All, Pages, Tasks, and Canvases filters
-to narrow results. Type `>` to use the existing command menu.
+The web app, embedded app, and MCP API share workspace search. This reference
+covers result navigation, the MCP contract, and indexing behavior. Search
+matches saved page titles and body text, task titles, canvas titles, and text
+inside drawings.
+
+## Result navigation
 
 Each result identifies its resource type and parent page where applicable.
 Canvas matches include text boxes, notes, shape and arrow labels, and frame
@@ -12,7 +14,7 @@ fits the camera to it. An embedded drawing opens within its parent page.
 Task matches include completed and unassigned tasks and open a focused task
 view with the appropriate filters.
 
-## MCP
+## MCP contract
 
 `search_workspace` uses the same workspace-scoped use case as the web and
 embedded search menus. It requires View access or higher and an explicit
