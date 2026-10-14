@@ -1,10 +1,10 @@
 # Editor dependency patches
 
-## BlockNote 0.54.2: native mobile input
+## BlockNote: native mobile input
 
-`@blocknote%2Fcore@0.54.2.patch` fixes the node-view mutation filter in the
-source, ESM bundle, and CommonJS bundle. Most of the patch's size comes from
-the minified CommonJS line.
+[`package.json`](../package.json) registers the patch for the installed
+`@blocknote/core` version. It fixes the node-view mutation filter in the source,
+ESM bundle, and CommonJS bundle. Update all three when rebasing the patch.
 
 Safari can split an editable paragraph or code block into a sibling element,
 or replace the editable element itself. BlockNote ignored these changes because
@@ -18,13 +18,10 @@ changes, toolbar changes, and unrelated insertions remain ignored. Existing
 custom filters still handle mutations inside `contentDOM`. React moving the
 existing editable element within its node view is also excluded.
 
-`features/pages/tests/editor-native-mutations.test.ts` tests the patched package
-source directly because the filter is not a public export. Browser verification
-must also exercise the distributed bundle when updating or removing this patch.
-Tiptap 3.31.3 includes the contentDOM-scoped mobile mutation fix, so its old
-3.27.1 patch is retired. The 3.30.0 patch remains for the version pinned by tldraw.
-BlockNote 0.54.2 narrows its upstream filter to Dark Reader mutations; our patch
-preserves the native-input and unrelated-UI filtering covered by these tests.
+The [mutation regression tests](../features/pages/tests/editor-native-mutations.test.ts)
+test the patched package source directly because the filter is not a public
+export. Browser verification must also exercise the distributed bundle when
+updating or removing this patch.
 
 Validation:
 
@@ -37,7 +34,4 @@ Validation:
 - Repeat ordinary typing and Enter on desktop; check code language selection
   and the expanded code editor as well.
 
-The automated WebKit iPhone-profile check reproduced five rapid Enter presses
-creating only one paragraph before the patch and five afterward. It also
-verified that replacing the inline code DOM enters autosave and survives a
-reload. WebKit emulation does not replace a physical iPhone keyboard check.
+WebKit emulation does not replace a physical iPhone keyboard check.

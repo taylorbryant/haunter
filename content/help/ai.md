@@ -2,7 +2,7 @@ Connect Haunter to an AI client to find information, create content, and edit yo
 
 ## Connect Haunter
 
-1. In your AI client's app or integration settings, add Haunter. If the client asks for an MCP server URL, use `https://haunter.app/mcp` and its OAuth sign-in option.
+1. In your AI client's app or integration settings, add Haunter. If the client asks for an MCP server URL, use `https://www.haunter.app/mcp` and its OAuth sign-in option.
 2. Sign in to Haunter when prompted.
 3. Choose the workspaces this connection may access and a permission level.
 4. Return to the client and ask it to find a page by name.

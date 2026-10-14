@@ -47,15 +47,15 @@ Canvas image previews also use this signed command route. The worker Docker
 image includes Chromium; local workers need
 `bunx --bun playwright install chromium --only-shell`. Previews render a detached
 snapshot outside the room's edit queue, allow one browser at a time, and do not
-change canvas history. See [preview limits and deployment](mcp-canvas-editing.md#preview-a-drawing).
+change canvas history. See [preview inputs and limits](mcp-canvas-editing.md#preview-a-drawing).
 
 ### Agent presence in page headers
 
 With [workspace live updates](deployment.md#optional-services) enabled
 (`REDIS_BROADCAST_URL`, Upstash REST credentials, and
 `NEXT_PUBLIC_LIVE_UPDATES=true`), page headers show MCP connections reading,
-appending to, updating, archiving, or restoring that page. Click the agent
-indicator to see its connection name, the member who connected it, and its
+appending to, updating, archiving, or restoring that page. The agent
+indicator identifies its connection name, the member who connected it, and its
 current or most recent action. Multiple connections share one participant list.
 On smaller screens, the header uses a compact agent icon.
 
@@ -243,9 +243,8 @@ older copy's sync status is unknown. **Dismiss** hides the notice without deleti
 the copy from History. New edits arriving from an older tab can show the notice
 again, even within the same generation. Save receipts and archive timestamps are
 stored in IndexedDB; older copies without this metadata remain available.
-Copies dismissed by older app versions appear for review once more because those
-dismissals did not record which edits were reviewed. Dismissing them again records
-their content, so only subsequent edits can bring the notice back.
+Legacy dismissals without a content fingerprint require review once more;
+content-aware dismissal prevents new edits from being hidden by an older dismissal.
 Opening a copy uses the existing recovery import endpoint and a stable idempotency
 key for retries. A page copy does not include a historical snapshot of its linked
 canvases; canvas history is separate.

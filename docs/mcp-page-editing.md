@@ -1,4 +1,4 @@
-# Edit pages through MCP
+# MCP page editing
 
 Use `read_page` to get the page body and its revision, then send that revision
 with `edit_page_blocks` or `replace_page_content`. Both writes save a history
@@ -9,9 +9,8 @@ transaction. Each request needs a `workspaceId` from `list_workspaces` and a
 ## Read the body
 
 `read_page` accepts `format: "markdown" | "blocks" | "both"`. The default is
-`markdown`, which preserves the existing Markdown response. Every format
-returns `pageId`, `title`, `updatedAt`, and `revision`; `blocks` and `markdown`
-are included according to the requested format.
+`markdown`. Every format returns `pageId`, `title`, `updatedAt`, and `revision`;
+`blocks` and `markdown` are included according to the requested format.
 
 ```json
 {
@@ -233,8 +232,9 @@ also fit its 8 MiB limit.
 Both writes return `pageId`, `title`, `updatedAt`, `revision`, `historyVersionId`,
 `insertedBlockIds`, `tasksChanged`, and `linksChanged`. Insertion IDs are returned
 in operation order. Replacement returns an empty insertion list; read the page
-again for its new structure. Restore a snapshot through the page's version
-history. History retains the latest 50 snapshots, including ordinary checkpoints.
+again for its new structure. See [page restoration](mcp-content-management.md#restore-a-page-version)
+for the restore workflow. History retains the latest 50 snapshots, including
+ordinary checkpoints.
 
 | Permission | Allowed operations |
 | --- | --- |
@@ -272,15 +272,11 @@ overwriting the saved page.
 Keep the affected editor open and download its drafts before resolving the conflict.
 
 After a replacement or history restore, earlier browser copies remain available
-in **Page history → On this device**. Review a copy and choose **Open as a new
-page**, or download it as a recovery file. The current page is unchanged.
-Copies with edits not confirmed saved show a dismissible **Review copy** notice;
-older copies with unknown sync status are also offered for review. Dismissal
-keeps the copy in History. New edits from an older tab can show the notice again.
-Normal, confirmed-saved restores do not leave a persistent recovery banner.
+in **Page history → On this device**. See [offline recovery](collaboration.md#offline-edits-and-recovery)
+for local-copy retention, notices, and recovery behavior.
 
 ## Add files and images
 
 Use `attach_file_to_page` to append private images or documents with revision and
 recovery protection. See [MCP files](mcp-files.md) for host file inputs, base64
-fallbacks, supported types, limits and release steps.
+fallbacks, supported types, and limits.
