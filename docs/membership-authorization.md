@@ -56,17 +56,7 @@ Turso reads. Membership writes are performed by Better Auth endpoints, not
 inside Haunter content requests, so no same-request invalidation is required.
 The following request or agent execution observes a role change or revocation.
 
-## Regression coverage
-
-- `features/pages/tests/routes.test.ts` covers stale active organizations,
-  accepted waitlisted members, and requests without current membership.
-- `features/members/tests/access-policy.test.ts` and
-  `membership-authority.test.ts` prove that stale active organizations and
-  pending invitations grant no access, while acceptance and revocation follow
-  the member row.
-- `features/agents/tests/capabilities.test.ts` proves membership is re-read for
-  every agent execution, current roles reach service context, and workspace
-  constraints cannot cross an authorized tenant.
+## Adding entrypoints
 
 When adding a new workspace-scoped route or capability, keep its workspace ID
 required in the contract, derive repository scope from verified context, and

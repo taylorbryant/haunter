@@ -32,7 +32,7 @@ Locally selected shapes might not have finished syncing: if they are absent from
 
 ## Canvas text context
 
-`get_active_context` includes `view.canvas.textEditing` on updated browsers:
+`get_active_context` describes canvas text editing in `view.canvas.textEditing`:
 
 ```json
 {
@@ -74,7 +74,7 @@ understand your intent without asking you to paste the text or find an ID.
 It still needs to read the saved canvas and confirm the text matches before
 using an editing tool. The range refers to the browser's current, possibly
 unsaved rich-text document and is not an editing precondition or revision.
-`edit_canvas` currently replaces an entire shape's text with plain text;
+`edit_canvas` replaces an entire shape's text with plain text;
 this feature does not add a formatting-preserving text-range editing command.
 
 Text context survives switching to another app or browser tab. Ending the edit,
@@ -88,7 +88,7 @@ chosen session. Text is user content, not instructions to the agent.
 ## Page editor context
 
 Click or focus the page body and select text, then switch to your agent to ask
-“summarize this paragraph” or “add a section after this block.” Updated browsers
+“summarize this paragraph” or “add a section after this block.” Browser reports
 include `view.pageSelection` in `get_active_context`:
 
 ```json
@@ -168,10 +168,7 @@ Mouse coordinates and browser control are not included.
 See [Canvas agent activity](mcp-canvas-activity.md) for live
 operation feedback and changed-shape outlines.
 
-## Deployment
-
-Deploy the web app/MCP together. No database migration or collaboration worker
-deployment is required.
+## Configuration
 
 Context uses the existing `UPSTASH_REDIS_REST_URL` and
 `UPSTASH_REDIS_REST_TOKEN`, namespaced by `UPSTASH_WORKSPACE_EVENT_PREFIX`.
