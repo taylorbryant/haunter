@@ -9,8 +9,8 @@ Successful calls briefly show completion feedback; unsuccessful calls show
 “Canvas action failed.” A failure can include an interrupted connection, so it
 does not prove that the drawing was unchanged. Inspect the canvas before retrying.
 The indicator describes actual tool execution, not an agent's thinking time or
-the completion of its entire task. Creating a canvas block continues to use the
-existing page activity indicator until the agent operates on the new canvas.
+the completion of its entire task. Creating a canvas block uses the page activity
+indicator until the agent operates on the new canvas.
 
 After a successful edit, created shapes, new arrows, and explicitly updated
 shapes receive a violet outline for six seconds. Outlines follow the current
@@ -23,10 +23,8 @@ the six-second window are outlined when they appear.
 
 Activity uses the opt-in `workspace.canvas-activity.v1` channel, sharing the
 existing authenticated stream and connection lease with workspace updates.
-The `workspace.changes` channel and its schema stay unchanged, so tabs running
-an older release continue receiving ordinary updates without seeing unfamiliar
-activity events. Both channels recheck workspace membership on connection and renewal. Workspace
-members with an open canvas can see the activity there; public shared canvases
+Both activity and workspace-change channels recheck membership on connection
+and renewal. Workspace members with an open canvas can see the activity there; public shared canvases
 do not subscribe. Events contain identifiers, attribution, action, phase, and
 up to 100 changed shape IDs, never shape text, images, or raw error messages.
 Capability grants, current membership, canvas access, and parent-page access are
@@ -44,13 +42,10 @@ Broadcasting is best effort, with a one-second preparation/publication budget
 and a separate one-second completion publication budget. Unavailable activity
 delivery cannot fail or indefinitely delay an otherwise valid canvas operation.
 
-## Release
+## Configuration
 
-Deploy the web app/MCP for activity indicators. The `restore_canvas_version`
-command itself also requires the updated collaboration worker (see
-[canvas restoration](./mcp-canvas-editing.md#restore-a-saved-canvas-version)).
-No new database migration is required. The existing workspace broadcast configuration must be enabled:
-`NEXT_PUBLIC_LIVE_UPDATES=true`, `REDIS_BROADCAST_URL`, the matching
-`REDIS_BROADCAST_PREFIX`, and Upstash Redis REST credentials used for stream
-leases. Live session context alone does not require this stream, but canvas
-activity indicators do. Without it, canvas tools continue to work normally.
+Activity requires [workspace live updates](deployment.md#optional-services):
+`NEXT_PUBLIC_LIVE_UPDATES=true`, `REDIS_BROADCAST_URL`, matching
+`REDIS_BROADCAST_PREFIX` values, and Upstash Redis REST credentials for stream
+leases. Live session context does not require this stream. Without it, canvas
+tools work without activity indicators.

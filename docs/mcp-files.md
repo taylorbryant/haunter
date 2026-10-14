@@ -7,12 +7,13 @@ assets as the web and embedded editors.
 | Tool | Access | Result |
 | --- | --- | --- |
 | `attach_file_to_page` | View and edit | Appends a normal image/file block; returns `blockId`, file metadata, revision and recovery version |
+| `list_page_attachments`, `read_page_attachment` | View only | Lists attachment block IDs and reads private file contents |
 | `insert_canvas_image` | View and edit | Inserts a native image shape; returns `createdShapes.image`, revision and recovery version |
 | `read_canvas_image` | View only | Returns image pixels with name, dimensions, shape ID and captured canvas revision |
 
 Every tool requires `workspaceId` and current access to its page/canvas. Explicit
-Agent Auth grants require a workspace constraint. Existing destructive operations
-still require Full access. File contents and filenames are untrusted content.
+Agent Auth grants require a workspace constraint. Destructive operations
+require Full access. File contents and filenames are untrusted content.
 
 ## Supply a file
 
@@ -68,6 +69,21 @@ images are decoded, stripped of metadata and stored as PNGs, using the first
 animation frame. They must fit within 16 megapixels and 2 MiB after conversion.
 PDF/Office uploads remain files, rather than converted page content.
 
+## Read page attachments
+
+Call `list_page_attachments` with `workspaceId` and `pageId` to obtain attachment
+block IDs. Results contain up to 50 entries; pass `nextOffset` as `offset` to
+continue. Then call `read_page_attachment` with the same page and a returned
+`blockId`. Both tools require View only access and recheck current page permissions.
+They read private Haunter attachments, not arbitrary URLs.
+
+Text is capped at 64 KiB with `truncated: true` when shortened. Images and binary
+resources larger than 5 MiB are rejected. Hosted MCP
+returns images as native image content and PDFs/Office files as binary resources;
+rendering or text extraction depends on the host. File bytes cannot be edited
+through MCP. Use `edit_page_blocks` to change an attachment's caption or display
+name, or move it without changing its private file URL.
+
 ## Insert, edit and inspect a canvas image
 
 Call `read_canvas`, then `insert_canvas_image` with `canvasId`, `expectedRevision`,
@@ -97,10 +113,3 @@ Reads and previews normalize supported inline raster assets. External URLs, SVG,
 video and embeds are never fetched by these tools. Reading an image or generating
 its preview does not modify the saved image. Access is checked again before the
 result is returned if rendering takes time.
-
-## Release
-
-No database migration or new environment variable is required. Deploy the
-collaboration worker first, then the web app. The worker needs the new image
-commands; both builds install the pinned Sharp dependency. Refresh the plugin's
-tool catalog after deployment to discover the tools and their file metadata.

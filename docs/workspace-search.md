@@ -37,14 +37,11 @@ or as `taskId` with `list_tasks` (`filter: "all"`, `scope: "everyone"`).
 There is one result per canvas, with its first matching shape. Existing
 `search_pages` callers keep their current response format.
 
-## Storage and release
+## Indexing and limits
 
-Run migration `0049_cool_kate_bishop.sql` before deploying the web app. It adds
-`canvases.search_content`, backfills existing drawings, and installs insert/update
-triggers that regenerate the text projection whenever a snapshot is saved.
-This also covers writes from an older collaboration worker during rollout.
-It does not change snapshots, history, or edit timestamps. The initial backfill
-scans existing snapshots, so account for database write time when scheduling it.
+The canvas text projection in `canvases.search_content` is maintained by database
+triggers when snapshots are saved. It is created and backfilled by the checked-in
+migrations; no separate indexing service is needed.
 
 Search queries read the text projection; they do not launch Chromium or fetch
 images. The projection contains only visible drawing text and shape IDs,
@@ -57,7 +54,7 @@ Archived pages, their tasks and drawings, and retained drawings whose page
 block was removed are excluded. Every request enforces current workspace access;
 document-only embedded sessions cannot search the whole workspace.
 
-This first version uses literal substring matching (ASCII case-insensitive,
+Search uses literal substring matching (ASCII case-insensitive,
 non-ASCII case-sensitive, following SQLite LIKE). It does not search image
 pixels, file contents, archived content, or historical versions. A canvas
 preview thumbnail is not generated as part of search.

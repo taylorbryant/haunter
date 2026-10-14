@@ -36,7 +36,7 @@ evaluating large documents or remote database latency.
 ## Browser measurements
 
 Use a production build and a worker connected to a disposable database. Follow
-the [configuration instructions](../README.md#deploy-haunter) before building;
+the [configuration instructions](deployment.md) before building;
 the app origin must be accepted by the worker. Do not compare development
 compilation times with release performance.
 

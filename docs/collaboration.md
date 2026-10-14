@@ -35,15 +35,13 @@ Personal favorite changes use `workspace.favorites.v1` on the same SSE
 connection and admission lease. Subscriptions require the authenticated user's
 ID, the active workspace, and current membership; authorization is rechecked on
 renewal. Hints refresh that user's page or canvas navigation without including
-item IDs or content. Older tabs keep their existing event schemas and polling
-fallback; reopen them to enable favorite hints. Page-content hints also refresh
-open page history, and reconnecting reconciles any missed updates.
+item IDs or content. Polling provides a fallback for missed events. Page-content
+hints also refresh open page history, and reconnecting reconciles missed updates.
 
 [Canvas MCP tools](mcp-canvas-editing.md) send authenticated commands to the same
 worker. Each batch saves a canvas history snapshot and commits before being
-sent to editors. Deploy migration `0044_thin_iceman.sql` and the updated worker
-before enabling these tools. The worker proxy must forward
-`POST /internal/canvas-command` alongside the WebSocket routes.
+sent to editors. The worker proxy must forward `POST /internal/canvas-command`
+alongside the WebSocket routes.
 
 Canvas image previews also use this signed command route. The worker Docker
 image includes Chromium; local workers need
@@ -53,7 +51,7 @@ change canvas history. See [preview limits and deployment](mcp-canvas-editing.md
 
 ### Agent presence in page headers
 
-With [workspace live updates](../README.md#optional-services) enabled
+With [workspace live updates](deployment.md#optional-services) enabled
 (`REDIS_BROADCAST_URL`, Upstash REST credentials, and
 `NEXT_PUBLIC_LIVE_UPDATES=true`), page headers show MCP connections reading,
 appending to, updating, archiving, or restoring that page. Click the agent
@@ -133,7 +131,7 @@ bun --no-env-file scripts/verify-canvas-renderer.ts https://collab.haunter.app
 
 Keep `--ha=false` and verify that exactly one Machine exists. Do not add replicas
 or switch this configuration to canary or bluegreen deployment. Apply database
-schema migrations separately as described in the [README](../README.md#deploy-haunter).
+schema migrations separately as described in the [deployment guide](deployment.md).
 
 ### Canvas rendering on the same worker
 
@@ -185,8 +183,7 @@ PATH, HOME, TMPDIR, LANG and TZ are passed into the process; worker credentials
 are not inherited. Browser requests remain restricted to exact in-memory
 renderer assets; service workers, WebSockets and downloads are blocked. Run the
 container as the provided non-root `bun` user and retain sandbox support when
-changing hosts. Sandbox startup was verified on the current Fly Machine.
-Ubuntu 24.04 CI additionally installs an executable-specific AppArmor profile
+changing hosts. Ubuntu 24.04 CI additionally installs an executable-specific AppArmor profile
 for the downloaded headless shell, following
 [Chromium's user-namespace guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
 This runner configuration is separate from the Fly container.
@@ -197,7 +194,7 @@ incomplete-cleanup flags. They sample worker RSS and machine free memory while
 the job is active. These are process/machine observations, not per-browser RSS
 or a hard memory limit. Logs omit drawing contents, document IDs and raw browser
 errors. Watch queue rejection, timeout and incomplete-cleanup rates, along with
-memory and collaboration latency. One worker still shares CPU and RAM across
+memory and collaboration latency. One worker shares CPU and RAM across
 rendering and collaboration; the queue bounds overlap but does not provide
 separate resource isolation.
 
@@ -216,7 +213,7 @@ origin allowlist requires restarting the worker.
 Origin checks are separate from authentication. Next issues short-lived tokens
 bound to the signed-in session, user, workspace, and resource. The worker also
 checks live access and grants viewers read-only sessions. Adding an origin does
-not grant access to a workspace. See [authentication origins](../README.md#authentication-origins)
+not grant access to a workspace. See [authentication origins](deployment.md#authentication-origins)
 for the separate settings governing sign-in.
 
 ## Offline edits and recovery

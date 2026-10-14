@@ -154,9 +154,8 @@ path. There is no automatic diagram routing, container scaling or Mermaid import
 
 ## Find and insert library items
 
-Library tools are available after deploying this release. Search requires View
-only access and does not need the collaboration worker. Insertion requires View
-and edit access and an updated worker.
+Library search requires View only access and runs on the web server. Insertion
+requires View and edit access and runs on the collaboration worker.
 
 Call `search_canvas_library` to find a template or component:
 
@@ -340,8 +339,7 @@ in canvas history, which retains the latest 50 agent snapshots. Read an older dr
 passing its `historyVersionId` to `read_canvas`. Its returned revision describes
 that older drawing and cannot authorize a current edit. You can inspect old
 properties and use them to prepare targeted corrections against a fresh read.
-Use `restore_canvas_version` for whole-canvas recovery as described below. There
-is no canvas history UI in this release.
+Use `restore_canvas_version` for whole-canvas recovery as described below.
 
 On `CANVAS_REVISION_CONFLICT`, read the canvas again and reconsider the edit. The
 hosted MCP error includes `currentRevision`. On `CANVAS_WORKER_UNAVAILABLE`, read
@@ -394,56 +392,25 @@ drawing and reconsider before retrying. Restoration captures changes already
 received by the worker. Changes still pending on disconnected clients may sync
 later and should be reviewed after reconnection.
 
-## Deployment
+## Worker requirements
 
-For `restore_canvas_version`, deploy the collaboration worker first, then the
-web app/MCP. No new database migration or browser renderer is required. An older
-worker does not recognize restore commands. Refresh the client's MCP tool list
-after deploying to discover the tool. Hosted connections need Full access;
-Agent Auth needs an explicit grant for the new capability.
+Canvas commands run on the collaboration worker. The web server reaches
+`POST /internal/canvas-command` through the HTTP(S) equivalent of
+`NEXT_PUBLIC_COLLABORATION_URL`. Forward that path through the worker's proxy
+alongside WebSockets. Both services must share `BETTER_AUTH_SECRET`; the route
+verifies a short-lived signature over the entire request.
 
-For library insertion and canvas organization, deploy the collaboration worker first, then
-the web app/MCP. No database migration is required for this extension. Older
-workers do not accept the new organization operations. Item versions prevent a worker
-from silently inserting a different template than the one returned by search.
-Existing drawings keep their stored records when the catalog changes.
+Deploy compatible web and worker versions using the
+[deployment guide](deployment.md). Canvas previews and native layout operations
+require the worker's Chromium runtime; its Dockerfile installs the pinned browser
+and prebuilds the tldraw bundle. Local workers need:
 
-For nested-shape editing, deploy the updated collaboration worker first, then
-the web app/MCP. This extension needs no database migration. Older workers reject
-nested edits and the new `create.parentId` field; existing top-level calls keep
-working with the updated worker.
-
-Apply migration `0044_thin_iceman.sql` before deploying these tools, then deploy
-both Next.js and the collaboration worker. The web server uses the HTTP(S)
-equivalent of `NEXT_PUBLIC_COLLABORATION_URL` to reach
-`POST /internal/canvas-command`. Forward that path through the worker's proxy as
-well as its WebSocket routes. Both services must share `BETTER_AUTH_SECRET`;
-the route verifies a short-lived signature over the entire request. An older
-worker returns `CANVAS_WORKER_UNAVAILABLE` for canvas reads and edits.
-
-Previews require deploying both the updated web app and worker, with no new
-database migration beyond the canvas editing migration above. The worker
-Dockerfile installs Playwright's pinned Chromium headless shell and its system
-dependencies and prebuilds the browser bundle. For local workers and tests, install the browser once after
-`bun install` (repeat after upgrading Playwright):
-
-```sh
+```bash
 bunx --bun playwright install chromium --only-shell
 ```
 
-On Linux, add `--with-deps` to install system dependencies. Supply
-`NEXT_PUBLIC_TLDRAW_LICENSE_KEY` to the worker as well as the web app when using
-a tldraw license. The browser and tldraw bundle run only in the collaboration
-worker; the web app forwards authenticated requests. Browser startup has a
-12-second cap within a 20-second deadline for queue wait, preparation, startup
-and rendering. Cleanup has up to four more seconds, below the command bridge's
-30-second request deadline. The worker verifies native layout and PNG export at
-startup; `/health/renderer` reports this separately from collaboration health.
-Monitor memory and the structured `canvas.browser.job` logs under preview and
-organization load. Both use one shared queue with one active and two waiting
-jobs, and a timed-out job retains its slot until cleanup finishes.
-
-Follow the [collaboration deployment guide](collaboration.md#worker-deployment)
-for worker configuration and the single-worker requirement.
-
-Image insertion, reads, previews and file transport are covered in [MCP files](mcp-files.md).
+Repeat after upgrading Playwright. On Linux, add `--with-deps` to install system
+dependencies. Supply the tldraw license to both services when configured. See
+[canvas renderer operation](collaboration.md#canvas-rendering-on-the-same-worker)
+for queue limits, health checks, deadlines, and troubleshooting. Image insertion,
+reads, previews, and file transport are covered in [MCP files](mcp-files.md).

@@ -36,8 +36,7 @@ Archived pages are excluded from favorites until restored.
 
 With workspace live updates enabled, successful favorite changes refresh the
 acting user's open web and embedded panels. Other members do not receive those
-personal hints. Reopen older panels after deployment to enable this refresh;
-the regular navigation polling remains available as a fallback.
+personal hints. Navigation polling provides a fallback if events are missed.
 
 ## Trash and backlinks
 
@@ -71,16 +70,13 @@ generation keeps old clients' unsaved drafts from merging into the restored
 body. Those drafts remain available for recovery through the existing editor.
 Archived pages must first be recovered with `restore_page`.
 
-## Release and grants
+## Permissions and tool discovery
 
-These tools require a web/MCP server deployment and no new database migration.
-For `restore_canvas_version`, deploy the updated collaboration worker first.
-Standalone metadata and favorites do not use the collaboration worker.
+Hosted connections expose tools within their approved permission profile. View
+and edit connections cannot restore versions or delete canvases. Agent Auth
+requires an explicit capability grant constrained by `workspaceId`. Broader
+grants without that constraint are rejected. Account security, permission
+administration, and permanent trash purging are not exposed by these tools.
 
-Refresh the plugin's tool discovery after deployment if the new tools do not
-appear. Hosted connections gain tools within their existing permission profile;
-View and edit connections cannot restore versions or delete canvases. Agent
-Auth requires an explicit grant for each new capability, constrained by
-`workspaceId`. Broader grants without that required constraint are rejected.
-Account security, permission administration, and permanent trash purging remain
-outside this tool batch.
+If a supported tool is missing, refresh the client's tool catalog and check its
+grants. See [Deployment](deployment.md) for server and worker configuration.
