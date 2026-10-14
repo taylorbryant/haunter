@@ -4,7 +4,7 @@ Haunter's page editor uses BlockNote, with Yjs and Hocuspocus for collaborative
 editing. Canvases use tldraw and its sync protocol. Next.js serves the app and
 HTTP API; one persistent Bun worker hosts both WebSocket protocols.
 
-For local setup, follow the [README](../README.md#run-haunter-locally). Run
+For local setup, follow the [contributor guide](../CONTRIBUTING.md#local-development). Run
 `bun run dev` and `bun run dev:collaboration` in separate terminals with the same
 environment. Redis is not required for collaborative editing.
 
@@ -263,7 +263,8 @@ download the available copy before navigating away.
   read-only startup check found missing collaborative state or mismatched
   projections. Confirm the target database and inspect the read-only report with
   `bun beignet task run documents.migrate --json`. Any repair requires a backup
-  and paused writers; normal worker startup does not convert data automatically.
+  and paused writers; follow the [legacy document conversion procedure](deployment.md#legacy-document-conversion).
+  Normal worker startup does not convert data automatically.
 - **Page or canvas cannot connect:** Check the worker URL embedded in the app
   build, TLS, browser origin allowlist, and matching database/auth secret. Check
   access to the resource and complete the in-app sign-in recovery flow if the

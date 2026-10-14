@@ -1,7 +1,8 @@
-# Deployment
+# Production operations
 
-This is the release and configuration reference for Haunter maintainers.
-For a development environment, follow the [local setup](../README.md#run-haunter-locally).
+This is the release and configuration reference for maintainers of the hosted
+Haunter application and its preview environments. For contributor setup, follow
+[Local development](../CONTRIBUTING.md#local-development).
 Use [`.env.example`](../.env.example) as the complete configuration reference.
 Configure the production environment before building and starting the app:
 
@@ -23,8 +24,9 @@ Configure the production environment before building and starting the app:
   [Workspace membership authorization](membership-authorization.md) for
   the authorization boundaries.
 
-On a fresh installation, also set `BOOTSTRAP_ADMIN_EMAIL` before the owner
-first signs in. Leave it unset on established installations.
+For a new preview database, set `BOOTSTRAP_ADMIN_EMAIL` before its administrator
+first signs in. Leave it unset in the established production environment. Keep
+preview databases, credentials, and workers separate from production.
 
 Apply the checked-in migrations before starting each production release. When a
 release changes worker commands, deploy the collaboration worker before the web
@@ -33,9 +35,47 @@ to flush saves and keep exactly one worker per database.
 
 ```bash
 bun beignet db migrate
+```
+
+Confirm the database target printed by the migration command. Existing data
+from before collaborative editing also requires the
+[legacy document conversion](#legacy-document-conversion) before starting either
+service; SQL migrations alone do not create its Yjs documents or native canvas rooms.
+
+After migrations and the worker rollout, build and start the web app:
+
+```bash
 bun run build
 bun run start
 ```
+
+## Legacy document conversion
+
+For a database with legacy page or canvas storage, inspect the conversion report:
+
+```bash
+bun beignet task run documents.migrate --json
+```
+
+The task defaults to a dry run. If `converted`, `projectionsUpdated`, or
+`canvasesConverted` is nonzero, the worker refuses startup until conversion is
+applied. A failed preflight requires investigating the reported resource IDs
+before proceeding.
+
+Stop all app and worker writers, preserve a full database backup, and rerun the
+dry run against the intended database. To apply, use the report's exact
+`database` value for `expectedDatabase` and an absolute path to a new backup file:
+
+```bash
+bun beignet task run documents.migrate --input '{"dryRun":false,"expectedDatabase":"DATABASE_FROM_REPORT","backupPath":"/absolute/path/to/new-document-cutover.json"}' --json
+```
+
+The task creates the cutover backup exclusively and refuses an existing path.
+That file contains document conversion data; keep the full database backup for
+account, task, history, and other application state. Rerun the dry run and verify
+all three conversion counts are zero before restarting writers. See
+[Backups and database restore](collaboration.md#backups-and-database-restore)
+for recovery requirements.
 
 ## Optional services
 

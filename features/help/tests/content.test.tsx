@@ -8,7 +8,7 @@ import { HELP_GUIDES } from "../guides";
 test("published guides have unique destinations and every guide file is registered", async () => {
 	const slugs = HELP_GUIDES.map((guide) => guide.slug);
 	expect(new Set(slugs).size).toBe(slugs.length);
-	const files = (await readdir("content/help"))
+	const files = (await readdir("content/guides"))
 		.filter((file) => file.endsWith(".md") && file !== "README.md")
 		.map((file) => file.slice(0, -3));
 	expect(files.sort()).toEqual([...slugs].sort());

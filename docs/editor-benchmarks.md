@@ -35,10 +35,34 @@ evaluating large documents or remote database latency.
 
 ## Browser measurements
 
-Use a production build and a worker connected to a disposable database. Follow
-the [configuration instructions](deployment.md) before building;
-the app origin must be accepted by the worker. Do not compare development
-compilation times with release performance.
+Complete the [local development setup](../CONTRIBUTING.md#local-development)
+with a disposable database, then switch both processes to production mode:
+
+1. Stop `bun run dev` and `bun run dev:collaboration` with Ctrl+C in their
+   respective terminals. Wait for both processes to exit so port 3000 is free
+   and the worker has released its database lease.
+2. In `.env.local`, set a unique `BETTER_AUTH_SECRET` of at least 32 characters,
+   a real `RESEND_API_KEY`, and a verified `RESEND_FROM` sender. Both processes
+   must use the same database and auth secret; the worker must accept the app's
+   origin.
+3. Build the worker's canvas runtime and the web app, then start the web app
+   from the repository root:
+
+   ```sh
+   bun run build:canvas-browser
+   bun run build
+   bun run start
+   ```
+
+4. In the second terminal, restart the worker from the same repository root
+   with the updated configuration:
+
+   ```sh
+   NODE_ENV=production bun run dev:collaboration
+   ```
+
+Keep both processes running and sign in again before measuring. Do not compare
+development compilation times with release performance.
 
 Add `?editorPerformance=1` to a page URL and reload. This enables local console
 messages and User Timing entries without document content or outgoing telemetry:

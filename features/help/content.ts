@@ -8,7 +8,7 @@ export async function loadHelpGuide(slug: string) {
 	const guide = findHelpGuide(slug);
 	if (!guide) return null;
 	const content = await readFile(
-		path.join(process.cwd(), "content", "help", `${guide.slug}.md`),
+		path.join(process.cwd(), "content", "guides", `${guide.slug}.md`),
 		"utf8",
 	);
 	const headings = Array.from(content.matchAll(/^## (.+)$/gm), (match) => ({

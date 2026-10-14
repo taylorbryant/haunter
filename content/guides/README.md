@@ -1,14 +1,16 @@
 # Guide authoring
 
-These guides are for people using Haunter and are published at `/guides` without
-a session. Add or update Markdown files here and register their title and
+This README is for maintainers writing user guides; it is not published.
+The guides explain how to use hosted Haunter and are published at `/guides`
+without a session. Add or update Markdown files here and register their title and
 description in [`features/help/guides.ts`](../../features/help/guides.ts).
-Use plain-text `##` headings for the table of contents and relative `/guides/...`
+Use plain-text `##` headings for the table of contents and root-relative `/guides/...`
 links between guides. The page layout supplies the title, so do not add an H1.
 
 Keep instructions tied to released UI labels and behavior. These guides cover
-the web app and standard MCP connections for AI tools.
-Implementation and deployment documentation belongs in [`docs/`](../../docs/).
+the web app, AI connections, and the embedded workspace in supported AI clients.
+Write in terms of actions and outcomes for the person using Haunter. Keep API
+contracts, implementation details, and production operations in [`docs/`](../../docs/).
 
 Markdown is rendered on the server with raw HTML disabled. Content tests check
 the published files, section anchors, and internal guide links. Run the normal

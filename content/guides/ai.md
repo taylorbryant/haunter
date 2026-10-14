@@ -9,6 +9,8 @@ Connect Haunter to an AI client to find information, create content, and edit yo
 
 Choose a client that supports remote MCP servers and OAuth. Connection setup and availability depend on the client and your plan.
 
+For client-specific setup instructions, open **Settings → Agents → Connect** in Haunter and choose your client. The **Local bridge** option runs on the computer running your AI client and connects to hosted Haunter when the client needs Agent Auth compatibility.
+
 ## Choose the right access
 
 - **View only:** find and read pages, tasks, canvases, favorites, and history. Use this for questions and summaries.
@@ -19,13 +21,25 @@ Your workspace role still applies. A connection cannot give an assistant more ac
 
 Account deletion, workspace membership management, permanent page deletion from Trash, and publishing public links stay under your control in Haunter.
 
+## Open Haunter inside your AI client
+
+If your client supports **MCP Apps**, ask your assistant to open Haunter, a named page, or a canvas. Haunter opens beside the conversation so you can browse Home and Tasks, write in pages, and draw while working with your assistant.
+
+To edit in that panel, choose **View and edit** or **Full access** and enable **Allow editing in the embedded editor** when approving the connection. Your workspace role must also permit editing. Without this consent, the panel is read-only even when the assistant has permission to make changes.
+
+Wait for edits to save before closing the panel. If your client does not support the embedded workspace, open Haunter in your browser to review and continue the assistant's work.
+
 ## Give your assistant context
 
 Name the page, canvas, or task you want to work on. Include the workspace name when it could be ambiguous, or paste a Haunter link. Ask the assistant to find and read the item before editing it.
 
 For a specific passage, quote the text or name its heading: “In the Launch plan page, shorten the paragraph under Goals.” For a drawing, identify the canvas and the shapes by their labels: “In the Checkout flow canvas, group the Cart, Payment, and Confirmation steps.”
 
-Wait for your web app edits to save before asking the assistant to change the same content.
+In the embedded workspace, select page text or canvas shapes before sending your next message. Clients that support selection context can use that selection to understand requests such as “Shorten this passage” or “Align these shapes.” Selecting something does not send a message or request an edit by itself.
+
+You can also ask a connected assistant to inspect your selection in an open Haunter browser tab. If you have several tabs or devices open, identify the page and workspace you mean. If the assistant cannot find the selection, return to Haunter, select it again, or quote the text in your message.
+
+Wait for your edits to save before asking the assistant to change the same content.
 
 ## Requests to try
 
@@ -37,6 +51,12 @@ Wait for your web app edits to save before asking the assistant to change the sa
 - “Show the saved versions of the Launch plan page before restoring anything.”
 
 Changes made through MCP are saved in Haunter. Open the page, task list, or canvas in the web app to review the result and continue editing.
+
+## Follow activity in a canvas
+
+When an assistant works with an open canvas, an activity indicator shows the agent's name, the member who connected it, and the action in progress. After a successful edit, created or updated shapes briefly receive a violet outline. Deleted shapes and restored drawings show completion feedback without an outline.
+
+If you see **Canvas action failed**, inspect the drawing before asking the assistant to retry. The change may have saved even if the connection was interrupted before confirmation arrived. Canvas tools can also work when activity feedback is unavailable, so an absent indicator does not mean the operation failed.
 
 ## Manage or troubleshoot a connection
 

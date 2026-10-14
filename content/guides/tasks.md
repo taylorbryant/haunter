@@ -25,6 +25,14 @@ When creating a standalone task, you can include a phrase such as “tomorrow”
 
 Home shows your overdue work, today's tasks, and tasks coming up in the next seven days. If you expect a task there, check that it is assigned to you and has the intended due date.
 
+## Set reminders and notifications
+
+To receive a reminder, assign the task to yourself and give it a due date. In the date control, choose a reminder at the due time, 15 minutes before, 1 hour before, or 1 day before. For a task without a due time, **Morning of, 9:00 AM** uses the delivery timezone shown in **Settings → Notifications**.
+
+Open **Settings → Notifications** to choose whether you receive task reminders, assignments, and overdue alerts. Enable **Push on this device** and allow the browser's notification request if you want alerts while Haunter is closed. Push availability depends on your browser or installation.
+
+Open **Notifications** in the sidebar to review alerts. You can complete a task there or snooze a reminder or overdue alert. If a reminder is missing, check the task's assignee, date and reminder setting, then your notification preferences and delivery timezone.
+
 ## Filter and complete tasks
 
 - **Open** shows work that has not been completed.

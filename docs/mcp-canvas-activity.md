@@ -1,9 +1,15 @@
 # Canvas agent activity
 
-When a connected agent uses `read_canvas`, `preview_canvas`, `edit_canvas`,
-`insert_canvas_library_item`, `delete_canvas_shapes`, or `restore_canvas_version`, the open canvas shows
-the agent's name, the workspace member who connected it, and the action in progress. This works in embedded and
-standalone canvases, for remote MCP connections and registered Agent Auth agents.
+Use this reference when maintaining canvas activity reporting and UI feedback.
+Instructions for people using Haunter belong in the
+[AI guide](../content/guides/ai.md#follow-activity-in-a-canvas).
+
+When a connected agent uses `read_canvas`, `read_canvas_image`, `preview_canvas`,
+`edit_canvas`, `insert_canvas_image`, `insert_canvas_library_item`,
+`delete_canvas_shapes`, or `restore_canvas_version`, the open canvas shows the
+agent's name, the workspace member who connected it, and the action in progress.
+This works in embedded and standalone canvases, for remote MCP connections and
+registered Agent Auth agents.
 
 Successful calls briefly show completion feedback; unsuccessful calls show
 “Canvas action failed.” A failure can include an interrupted connection, so it

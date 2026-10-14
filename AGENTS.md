@@ -13,8 +13,8 @@ Before editing files for a substantial task:
 
 This is a Beignet contract-first app. Full framework docs live at
 https://beignetjs.com (agent-friendly index at https://beignetjs.com/llms.txt).
-README.md covers setup and the app map; this file covers what is not
-discoverable from the code.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers local setup, validation, and the project
+structure; this file covers what is not discoverable from the code.
 
 ## Registration is explicit
 
