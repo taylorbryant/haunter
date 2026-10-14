@@ -91,7 +91,8 @@ test("a failed refresh preserves the recovery notice and offers a working explic
 	expect(view.getByRole("alert")).not.toBeNull();
 	allowReads();
 	await user.click(view.getByRole("button", { name: "Try again" }));
-	await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
+	// Formatting a Happy DOM node on every failed poll can block the read itself.
+	await waitFor(() => expect(view.queryAllByRole("alert").length).toBe(0));
 	expect(view.getByRole("button", { name: "Review copy" })).not.toBeNull();
 	expect(view.queryByRole("button", { name: "Try again" })).toBeNull();
 });
