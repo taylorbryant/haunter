@@ -6,9 +6,11 @@ import type {
 	CurrentPageContext,
 } from "../mcp-app/model-context";
 
-export const template = await Bun.file(
-	new URL("../mcp-app/index.html", import.meta.url),
-).text();
+// An inline document supplies contentWindow without enabling iframe network
+// loading in Happy DOM. The fixture below simulates navigation and messages.
+export const template = (
+	await Bun.file(new URL("../mcp-app/index.html", import.meta.url)).text()
+).replace('<iframe id="real-editor"', '<iframe srcdoc="" id="real-editor"');
 export const pageId = "17c05b44-c652-4d83-92cf-83cbf7056ef2";
 export const childId = "181e57bb-d220-4022-b4d6-8cd96f55ba28";
 export const workspaces = [

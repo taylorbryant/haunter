@@ -347,11 +347,26 @@ try {
 	console.log(
 		"PASS: another fresh cookie-free browser opens the saved document",
 	);
+	async function recheckSession(role: "owner" | "viewer") {
+		// Wait for the verification result, not the previous ready view. Otherwise
+		// the next consent change can race the renewal still in flight.
+		const verified = fresh.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname === "/api/embedded-editor/session",
+		);
+		await freshEditor
+			.locator("html")
+			.evaluate(() => window.dispatchEvent(new Event("online")));
+		const response = await verified;
+		assert.equal(response.status(), 200);
+		assert.equal((await response.json()).role, role);
+		await freshEditor
+			.getByRole("button", { name: "Check again", exact: true })
+			.waitFor({ state: "hidden" });
+	}
 	// Recovery requests a new credential while keeping the document identity stable.
 	const initialRenewals = renewals;
-	await freshEditor
-		.locator("html")
-		.evaluate(() => window.dispatchEvent(new Event("online")));
+	await recheckSession("owner");
 	await freshEditor.getByRole("textbox", { name: "", exact: true }).waitFor();
 	await fresh.waitForFunction(() => {
 		const value = document.getElementById("context")?.textContent ?? "";
@@ -370,9 +385,7 @@ try {
 		assert.equal(response.status, 204);
 	}
 	await access("view");
-	await freshEditor
-		.locator("html")
-		.evaluate(() => window.dispatchEvent(new Event("online")));
+	await recheckSession("viewer");
 	await freshEditor.locator('.bn-editor[contenteditable="false"]').waitFor();
 	assert.ok(authorization);
 	const writeStatus = await freshEditor.locator("html").evaluate(

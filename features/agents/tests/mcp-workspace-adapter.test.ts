@@ -9,8 +9,9 @@ let adapter: ReturnType<typeof createWorkspaceAdapter>;
 beforeEach(() => {
 	installTestDom();
 	document.documentElement.dataset.appOrigin = "https://haunter.test";
+	// Keep a real contentWindow for message-source checks without loading a URL.
 	document.body.innerHTML =
-		'<p id="connection-status"></p><iframe id="real-editor"></iframe>';
+		'<p id="connection-status"></p><iframe srcdoc="" id="real-editor"></iframe>';
 });
 afterEach(async () => {
 	adapter?.dispose();
