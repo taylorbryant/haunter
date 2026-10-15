@@ -22,7 +22,7 @@ export const appendPageContentUseCase = useCase
 				if (!page || page.deletedAt !== null) throw appError("PageNotFound");
 				await ctx.gate.authorize("pages.update", page);
 				await checkpointPageBeforeWrite(tx, scope, page.id, user.id);
-				const { content, ...saved } = await tx.pages.appendContent(
+				const { content, ...saved } = await tx.documents.appendBlocks(
 					scope,
 					page.id,
 					input.content,

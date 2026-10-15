@@ -1411,6 +1411,69 @@ test("MCP attaches files privately, preserves content/history, and reads the upl
 	}
 });
 
+test("canvas and file appends return usable revisions after restoring a page", async () => {
+	const f = await fixture();
+	f.ctx.ports.storage = createMemoryStorage();
+	try {
+		const replaced = await f.replace({
+			format: "markdown",
+			markdown: "Replacement body",
+		});
+		const restored = await restorePageVersionUseCase.run({
+			ctx: f.ctx,
+			input: {
+				id: f.page.id,
+				versionId: replaced.historyVersionId,
+				expectedRevision: replaced.revision,
+			},
+		});
+		expect(restored.documentGeneration).toBe(2);
+		const before = await f.read();
+		const canvas = PageEditOutputSchema.parse(
+			await f.execute("create_canvas_block", {
+				expectedRevision: before.revision,
+			}),
+		);
+		const attached = PageEditOutputSchema.parse(
+			await f.execute("attach_file_to_page", {
+				expectedRevision: canvas.revision,
+				inlineFile: {
+					name: "notes.txt",
+					mimeType: "text/plain",
+					data: Buffer.from("Recovered notes").toString("base64"),
+				},
+			}),
+		);
+		const edited = await f.edit(
+			[
+				{
+					op: "update",
+					blockId: attached.insertedBlockIds[0],
+					props: { caption: "Updated notes" },
+				},
+			],
+			attached.revision,
+		);
+		const after = await f.read();
+		expect(after.revision).toBe(edited.revision);
+		expect(after.blocks.slice(0, -2)).toEqual(before.blocks);
+		expect(after.blocks.at(-2)).toMatchObject({
+			id: canvas.insertedBlockIds[0],
+			type: "canvas",
+		});
+		expect(after.blocks.at(-1)).toMatchObject({
+			id: attached.insertedBlockIds[0],
+			type: "file",
+			props: { caption: "Updated notes" },
+		});
+		expect(
+			(await loadPageBody(f.ctx, f.workspaceId, f.page.id)).generation,
+		).toBe(2);
+	} finally {
+		await f.database.close();
+	}
+});
+
 test("MCP attachment failures remove unreferenced storage and roll back document/history", async () => {
 	const f = await fixture("edit");
 	f.ctx.ports.storage = createMemoryStorage();

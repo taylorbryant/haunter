@@ -35,7 +35,7 @@ export const writeTestPageBody = useCase
 
 			await checkpointPageBeforeWrite(tx, scope, page.id, user.id);
 
-			const result = await tx.pages.restoreContent(
+			const result = await tx.documents.restoreBody(
 				scope,
 				input.id,
 				input.content,

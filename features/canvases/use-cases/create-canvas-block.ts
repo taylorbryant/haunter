@@ -40,11 +40,8 @@ export const createCanvasBlockUseCase = useCase
 				const saved = await tx.documents.appendBlocks(scope, input.pageId, [
 					{ id: blockId, type: "canvas", props: { canvasId }, children: [] },
 				]);
-				const document = await tx.documents.find(scope, input.pageId);
-				if (!document) throw new Error("Page document disappeared");
 				return {
 					...saved,
-					generation: document.generation,
 					insertedBlockIds: [blockId],
 				};
 			},

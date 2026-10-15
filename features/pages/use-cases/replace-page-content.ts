@@ -39,7 +39,6 @@ export const replacePageContentUseCase = useCase
 			);
 			return {
 				...result,
-				generation: result.documentGeneration,
 				insertedBlockIds: [],
 			};
 		}),

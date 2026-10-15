@@ -352,7 +352,7 @@ test("viewer and foreign-workspace writes cannot change a collaborative document
 		const foreign = createTenantScope({ id: "foreign" });
 		await expect(
 			f.ctx.ports.uow.transaction((tx) =>
-				tx.pages.appendContent(foreign, f.page.id, [paragraph("Denied")]),
+				tx.documents.appendBlocks(foreign, f.page.id, [paragraph("Denied")]),
 			),
 		).rejects.toMatchObject({ code: "PAGE_NOT_FOUND" });
 		expect(

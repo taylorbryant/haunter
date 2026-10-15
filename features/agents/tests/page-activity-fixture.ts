@@ -1,5 +1,5 @@
 import { createTenantScope } from "@beignet/core/ports";
-import { createTestDocumentReader } from "@/features/documents/tests/read-repository";
+import { createTestDocumentRepository } from "@/features/documents/tests/repository";
 import {
 	createTestContextFactory,
 	createTestPorts,
@@ -58,7 +58,7 @@ export async function pageActivityFixture(
 		overrides: {
 			gate: appPorts.gate,
 			pages,
-			documents: createTestDocumentReader(pages),
+			documents: createTestDocumentRepository(pages),
 			members: {
 				async findRole(workspace, user) {
 					return workspace === workspaceId && user === userId ? role : null;

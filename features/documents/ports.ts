@@ -21,7 +21,7 @@ export interface DocumentRepository {
 		content: BlockJson[],
 		expectedRevision?: string,
 		reason?: DocumentResetReason,
-	): Promise<DocumentWriteResult & { documentGeneration: number }>;
+	): Promise<DocumentWriteResult>;
 	editBlocks(
 		scope: TenantScope,
 		input: {
@@ -29,9 +29,7 @@ export interface DocumentRepository {
 			expectedRevision: string;
 			operations: PageBlockOperation[];
 		},
-	): Promise<
-		DocumentWriteResult & { generation: number; insertedBlockIds: string[] }
-	>;
+	): Promise<DocumentEditResult>;
 	find(scope: TenantScope, pageId: string): Promise<StoredDocument | null>;
 	/** Read only newer snapshots for documents currently loaded by a worker. */
 	findChanged(
@@ -52,7 +50,7 @@ export interface DocumentRepository {
 			blockType: string;
 			props: Record<string, string | boolean | number>;
 		},
-	): Promise<DocumentWriteResult & { found: boolean }>;
+	): Promise<DocumentWriteResult>;
 	/** Called within the page creation or one-time migration transaction. */
 	insert(scope: TenantScope, pageId: string, state: Uint8Array): Promise<void>;
 	/** Atomically replace binary state and its SQL content projection. */
@@ -72,9 +70,14 @@ export interface DocumentRepository {
 
 export type DocumentWriteResult = {
 	revision: number;
+	generation: number;
 	updatedAt: string;
 	contentUpdatedAt: string;
 	content: BlockJson[];
+};
+
+export type DocumentEditResult = DocumentWriteResult & {
+	insertedBlockIds: string[];
 };
 
 export type DocumentGrant = {

@@ -140,7 +140,7 @@ export const importRecoveryUseCase = useCase
 			for (let index = 0; index < pages.length; index++) {
 				const page = pages[index]!;
 				const content = remap(recovered[index]!.content);
-				await tx.pages.restoreContent(scope, page.id, content);
+				await tx.documents.restoreBody(scope, page.id, content);
 				// Recovery reconstructs task projections without resending historical assignment notifications.
 				await reconcilePageDerivations(tx, scope, page, content, {
 					defaultTaskAssigneeId: user.id,

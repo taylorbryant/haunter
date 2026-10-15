@@ -48,26 +48,6 @@ export interface PageLinkRepository {
 }
 
 export interface PageRepository {
-	restoreContent(
-		scope: TenantScope,
-		id: string,
-		content: BlockJson[],
-	): Promise<{
-		content: BlockJson[];
-		updatedAt: string;
-		contentUpdatedAt: string;
-		documentGeneration?: number;
-	}>;
-	/** Append without replacing existing blocks; caller owns the surrounding transaction. */
-	appendContent(
-		scope: TenantScope,
-		id: string,
-		blocks: BlockJson[],
-	): Promise<{
-		content: BlockJson[];
-		updatedAt: string;
-		contentUpdatedAt: string;
-	}>;
 	/** Live (non-trashed) pages only. */
 	listMetaByWorkspace(scope: TenantScope): Promise<PageMeta[]>;
 	/** Minimal parent links for every page in a workspace, including trash. */

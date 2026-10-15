@@ -1,7 +1,7 @@
 import "@beignet/core/server-only";
 import type { AppContext } from "@/app-context";
 import { scheduleWorkspacePageEvent } from "@/features/collab/server/workspace-events";
-import type { DocumentWriteResult } from "@/features/documents/ports";
+import type { DocumentEditResult } from "@/features/documents/ports";
 import {
 	assertDocumentRevision,
 	documentRevision,
@@ -19,9 +19,7 @@ export async function writePageDocument(
 	write: (
 		tx: AppTransactionPorts,
 		scope: ReturnType<typeof requireActiveWorkspaceScope>,
-	) => Promise<
-		DocumentWriteResult & { generation: number; insertedBlockIds: string[] }
-	>,
+	) => Promise<DocumentEditResult>,
 	onCommitted?: () => void,
 ) {
 	const user = requireUser(ctx);

@@ -84,7 +84,7 @@ export function createDrizzleDocumentRepository(
 					contentJson: JSON.stringify(projected),
 					searchText: extractPageSearchText(projected),
 				});
-				return { ...saved, content: projected, documentGeneration: generation };
+				return { ...saved, content: projected, generation };
 			} finally {
 				doc.destroy();
 			}
@@ -292,7 +292,7 @@ export function createDrizzleDocumentRepository(
 				contentJson: JSON.stringify(content),
 				searchText: extractPageSearchText(content),
 			});
-			return { ...saved, content, found, generation: stored.generation };
+			return { ...saved, content, generation: stored.generation };
 		} finally {
 			doc.destroy();
 		}
