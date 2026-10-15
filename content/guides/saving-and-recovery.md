@@ -1,35 +1,56 @@
-Check whether your latest edits have saved, restore earlier versions, and recover deleted pages or unsynced drafts.
+Use page history for earlier content, Trash for deleted pages, and recovery copies for edits that may not have finished saving.
 
 ## Check that your work is saved
 
-Pages and canvases save automatically. Before closing one, check that its latest changes have saved.
+Pages and canvases save automatically. Check the status in the page header or canvas before closing:
 
-If the editor reports unsaved changes, reconnect and wait for confirmation that they have saved before closing it. **Saved in this browser** means the draft is stored locally, not that it has reached your other devices.
+- **Saving…:** keep the page or canvas open while the save finishes.
+- **Saved in this browser:** a copy is stored in this browser. Reconnect to finish saving it to Haunter.
+- **Save failed** or a connection warning: follow the message, reconnect, and wait for the save to finish. Download a recovery copy if one is offered.
+
+After a successful save, a page shows an edited-time label such as **Just now** or **Edited 5m ago**. A canvas shows **Saved**.
 
 ## Restore a page version
 
-1. Open the page and select its edited-time label in the header to open **History**.
-2. Choose a saved version and review the preview.
-3. Choose **Restore this version** if you want that content to replace the current page body.
+You need editing access to use page history. Wait for your current edits to save before restoring a version.
 
-Haunter saves the current content as a recovery version before restoring. Wait for your current edits to save first; a restore cannot continue if they have not synced.
+1. Open the page and select its edited-time label in the header to open **Page history**.
+2. Under **Saved versions**, choose a version and review the preview.
+3. Choose **Restore this version** to replace the page's current content with that version.
 
-Page history contains saved checkpoints, not a record of every keystroke. Restoring a page can also change its task blocks and page links. An inline canvas's placement belongs to page history, but its drawing has separate history.
+Haunter keeps the current content in history before restoring. To undo a restore, return to Page history and restore that saved copy.
+
+Saved versions are checkpoints rather than a record of every keystroke. Restoring a page can also change its task blocks and page links. Drawings inside the page have their own [canvas history](/guides/saving-and-recovery#recover-a-canvas-version).
+
+## Review a copy from this browser
+
+If you see **Earlier edits are saved on this device**, choose **Review copy**. You can also open Page history and look under **On this device**.
+
+Select a copy to preview it, then choose **Open as a new page** to work with it separately or **Download copy** to keep a recovery file. Both actions leave your current page unchanged. Choosing **Dismiss** on the notice hides the notice; the copy stays available in Page history.
+
+These copies are kept in the browser where you made the edits. Use that browser to review or download them before clearing its data.
 
 ## Restore a page from Trash
 
-Open **Trash** in the sidebar, find the page, and choose **Restore**. Moving a parent page to Trash also moves its subpages; restoring the archived page tree brings its descendants back.
+Open **Trash** in the sidebar, find the page, and choose **Restore**. When you move a page with subpages to Trash, they move together. Restoring that page brings its subpages back too.
 
-Choose **Delete forever** only when you want to permanently remove a page and its archived descendants. Permanent deletion cannot be undone through Trash or page history.
+**Delete forever** permanently removes the page and its deleted subpages. You cannot undo it through Trash or page history.
 
 ## Recover a canvas version
 
-A connected assistant with **Full access** can inspect saved canvas versions and restore one. Ask it to show the available versions first, then identify the version you want. For example: “Show the saved versions of the checkout canvas before restoring anything.”
+Use a [connected AI assistant](/guides/ai) to review saved canvas versions. Ask, for example: “Show the saved versions of the checkout canvas before restoring anything.” Once you have chosen a version, ask the assistant to restore it. Restoring requires **Full access**.
 
-Canvas history is separate from page history. There is no canvas history picker in the web app. Restoring a canvas version replaces the saved drawing and keeps a recovery version of the current drawing. [Set up an AI connection](/guides/ai) if you want to use this workflow.
+There is no canvas history picker in the web app. Restoring a canvas version replaces the drawing and keeps a recovery version of the drawing it replaced. Page history can restore where a canvas appears in a page, but cannot restore an older drawing.
 
 ## Recover work that has not synced
 
-If Haunter offers a recovery download, save it before clearing browser data or signing out. To import a Haunter JSON recovery file, open the menu beside **Pages** and choose **Recover drafts**. The dialog creates new pages and canvases from the file and leaves existing work in place. For a Markdown recovery download, use **Import Markdown** in the web app instead.
+If Haunter offers a recovery download, save it before clearing browser data or signing out. To bring a Haunter JSON recovery file back into the app:
+
+1. Open the workspace where you want the recovered content.
+2. Open the menu beside **Pages** in the sidebar and choose **Recover drafts**.
+3. Select the recovery file and review the pages and canvases it contains.
+4. Choose **Recover as new pages**.
+
+Haunter creates new pages and canvases and leaves your existing work unchanged. For a Markdown recovery download, choose **Import Markdown** from the Pages menu instead.
 
 Local drafts depend on that browser's storage. They are a fallback for interrupted saves, not a substitute for a confirmed save to Haunter.

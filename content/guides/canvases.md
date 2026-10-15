@@ -5,15 +5,18 @@ Use a canvas for a diagram, wireframe, sketch, or collection of ideas. Put it in
 1. Open a page and type `/` where the drawing belongs.
 2. Choose **Canvas**.
 3. Use the drawing tools inside the canvas to add shapes, arrows, text, or freehand strokes.
-4. Use the expand control on the canvas when you need more room.
+4. Choose **Expand canvas** when you need more room.
 
 ![An inline canvas on the Workshop plan page, with Welcome, Plant together, and Share & learn connected by arrows. The expand control sits at the top right.](/guides/images/inline-canvas.webp "Sketch a flow alongside your notes, then use the expand control for more room.")
 
-An inline canvas stays connected to its page. Return to the page to keep writing around the drawing. It does not appear as a standalone item in the Canvases list, but workspace search can find its title and drawing text.
+A drawing inside a page is called an **inline canvas**. It stays with that page, so you can keep writing around it. It does not appear in the Canvases list, but workspace search can find its title and drawing text.
 
 ## Create a standalone canvas
 
-Open **Canvases** in the sidebar and choose **New canvas**. Give it a title and create it. Open it again from the Canvases list, workspace search, or your recent items on Home.
+1. Open **Canvases** in the sidebar and choose **New canvas**.
+2. Enter a title and choose **Create canvas**.
+
+Open the drawing again from the Canvases list, workspace search, or your recent items on Home.
 
 Use the star in the Canvases list to add a drawing to your favorites. In the web app, the canvas header's options menu also lets you rename it.
 
@@ -36,9 +39,11 @@ Add an image using the canvas's media controls, or drag an image file onto the d
 
 ## Save and work together
 
-Canvas changes save automatically. Other workspace members with editing access can work on the same drawing. Check the save or connection status before closing, especially when working offline.
+Canvas changes save automatically. Other workspace members with editing access can work on the same drawing. If your connection drops, keep the canvas open until it reconnects and shows that your changes have saved.
 
-Deleting a standalone canvas from the Canvases list is permanent; it does not move to the page Trash. A page's version history restores the placement of an inline canvas, not an older drawing. [Learn about canvas recovery](/guides/saving-and-recovery#recover-a-canvas-version).
+To recover an earlier drawing, use [canvas history](/guides/saving-and-recovery#recover-a-canvas-version). Restoring a page version can bring back an inline canvas's place in the page, but does not restore the drawing to that time.
+
+Deleting a standalone canvas from the Canvases list is permanent. It does not move to Trash, and you cannot recover it through canvas history.
 
 ## Draw with an assistant
 

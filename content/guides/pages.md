@@ -1,14 +1,16 @@
-A page can hold prose, tasks, tables, code, files, and drawings. Use one page for a topic, then connect it to other pages as your notes grow.
+A page can hold text, tasks, tables, code, files, and drawings. Start with one page for a topic, then organize related pages beneath it or link them together.
 
 ## Write with blocks
 
+Each paragraph, heading, list item, or drawing is a **block**. You can add blocks as you write and move them around later.
+
 1. Open a page and click or tap in its body.
-2. Type `/` to open the insert menu. Search for a block by name or choose one from the list.
+2. Type `/` on a new line to open the insert menu. Search for a block by name or choose one from the list.
 3. Start with headings and paragraphs. Add lists, a quote, or a callout when they help organize your thinking.
 
 ![The slash menu open inside a page, showing block types you can insert into your notes.](/guides/images/block-menu.webp "Type / on a new line to choose a block, or keep typing to search the menu.")
 
-Select text to apply formatting such as bold, italic, or a link. On mobile, formatting controls appear above the keyboard while you edit. Active controls indicate the formatting at your current selection.
+Select text to make it bold or italic, or turn it into a link. On mobile, formatting controls appear above the keyboard while you edit. Highlighted controls show which formatting is applied to the selected text.
 
 Use the handle beside a block to open its menu or drag it to another position on desktop. You can edit the page title directly and choose an icon above it.
 
@@ -16,7 +18,7 @@ Use the handle beside a block to open its menu or drag it to another position on
 
 Choose **Table** from the `/` menu to organize information into rows and columns. Click a cell to edit it, and use the table controls to add or remove rows and columns.
 
-Choose **Code Block** for source code. Select its language for syntax highlighting. The code block's options menu includes **Delete**; the fullscreen editor is available on editable pages.
+Choose **Code Block** for source code, then select its language for syntax highlighting. Use **Expand code** to edit in a larger view. To remove the block, open its options menu and choose **Delete**.
 
 Choose **Image** or **File** from the insert menu and use the block's upload controls. This keeps a reference image or document alongside your notes.
 
@@ -24,12 +26,12 @@ For work you want to track or draw, insert a [task](/guides/tasks#add-a-task-ins
 
 ## Organize and connect pages
 
-- **Create a subpage:** use **Add subpage** on a page in the sidebar, or type `/` in the editor and choose **Page** to create a linked subpage.
+- **Create a subpage:** open a page's menu in the sidebar and choose **Add subpage**. You can also type `/` in the editor and choose **Page** to create a subpage with a link in your notes.
 - **Mention an existing page:** type `@`, then choose a page in the workspace. Select the mention later to open it.
 - **Reorganize pages:** on desktop, drag a page in the sidebar to change its position or nest it under another page.
 - **Keep a favorite:** select the star in the page header or choose **Add to favorites** from its sidebar menu.
 
-Backlinks show other pages that link to the page you are reading. Use them to follow the connections between meeting notes, project plans, and reference material.
+**Backlinks** show which other pages link to the page you are reading. Use them to follow connections between meeting notes, project plans, and reference material.
 
 ## Search across your workspace
 
@@ -38,11 +40,11 @@ Backlinks show other pages that link to the page you are reading. Use them to fo
 3. Choose **All**, **Pages**, **Tasks**, or **Canvases** to narrow the results.
 4. Select a result to open it.
 
-Search includes saved page text, task titles, canvas titles, and text inside drawings. A matching drawing opens at its matching shape, including drawings inside pages. A task result opens a focused task view; choose **Show all tasks** to return to the full list.
+Search includes saved page text, task titles, canvas titles, and text inside drawings. When text in a drawing matches, the result takes you to that shape, even if the drawing is inside a page. A task result opens that task in the Tasks view; choose **Show all tasks** to return to the full list.
 
 Type `>` in Search to find commands instead of content.
 
-Search does not read text inside image pixels or attached files. It also excludes Trash and older versions. Use [Trash or page history](/guides/saving-and-recovery) for that work.
+Search does not read text in images or attached files, and it excludes deleted pages and older versions. To find those, use [Trash or page history](/guides/saving-and-recovery).
 
 ## Bring notes in or take them with you
 

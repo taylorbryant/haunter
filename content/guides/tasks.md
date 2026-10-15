@@ -11,7 +11,11 @@ The checkbox in the page and the checkbox in Tasks refer to the same task. Compl
 
 ## Create a standalone task
 
-Open **Tasks**, choose **Add task**, enter a title, and create it. You can also add a task from Home's Today section.
+1. Open **Tasks** in the sidebar and choose **Add task**.
+2. Enter a title. Set an assignee and due date if you need them.
+3. Choose **Add task** in the dialog.
+
+You can also add a task from Home's Today section.
 
 A standalone task does not need a page. Select its title in Tasks to rename it. Use it for work such as “Book the meeting room”; use a page task when the surrounding notes matter, such as a follow-up from a meeting.
 
@@ -27,17 +31,26 @@ Home shows your overdue work, today's tasks, and tasks coming up in the next sev
 
 ## Set reminders and notifications
 
-To receive a reminder, assign the task to yourself and give it a due date. In the date control, choose a reminder at the due time, 15 minutes before, 1 hour before, or 1 day before. For a task without a due time, **Morning of, 9:00 AM** uses the delivery timezone shown in **Settings → Notifications**.
+1. Assign the task to yourself and give it a due date.
+2. Open its date control and choose a reminder: at the due time, 15 minutes before, 1 hour before, or 1 day before.
+3. Open your account menu, then **Settings → Notifications**, and check that **Task reminders** is enabled.
 
-Open **Settings → Notifications** to choose whether you receive task reminders, assignments, and overdue alerts. Enable **Push on this device** and allow the browser's notification request if you want alerts while Haunter is closed. Push availability depends on your browser or installation.
+For a task without a due time, **Morning of, 9:00 AM** uses the delivery timezone shown in Notifications settings. Choose **Use current timezone** there to update that setting to your device's timezone.
+
+Notifications settings also lets you choose assignment and overdue alerts. Enable **Push on this device** and allow the browser's notification request if you want alerts while Haunter is closed. Push availability depends on your browser or installation.
 
 Open **Notifications** in the sidebar to review alerts. You can complete a task there or snooze a reminder or overdue alert. If a reminder is missing, check the task's assignee, date and reminder setting, then your notification preferences and delivery timezone.
 
 ## Filter and complete tasks
 
+Use the completion filter to choose which tasks you see:
+
 - **Open** shows work that has not been completed.
 - **Completed** shows finished tasks.
 - **All** includes both.
+
+Then choose whose tasks to show:
+
 - **Mine** limits the list to tasks assigned to you.
 - **Everyone** includes the workspace's tasks, including unassigned ones.
 
