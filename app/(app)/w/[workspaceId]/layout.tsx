@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { use } from "react";
 import { CreateDialogProvider } from "@/components/create-dialog-provider";
-import { Skeleton } from "@/components/ui/skeleton";
+import { GhostLogo } from "@/components/ghost-logo";
 import { QueryError } from "@/components/query-error";
 import { WorkspaceEventSubscriber } from "@/features/collab/client/workspace-events";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
@@ -47,20 +47,14 @@ export default function WorkspaceLayout({
 
 function WorkspaceSyncFallback() {
 	return (
-		<div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-10">
-			<p role="status" className="mb-6 text-muted-foreground text-sm">
-				Switching workspace…
-			</p>
-			<div className="mb-6 px-0 md:px-[54px]" aria-hidden>
-				<Skeleton className="h-8 w-1/2 max-w-xs" />
+		<div
+			role="status"
+			className="grid min-h-[calc(100svh-3rem-var(--session-banner-height,0px))] place-content-center place-items-center gap-4 px-6 py-12 text-center text-muted-foreground"
+		>
+			<div aria-hidden className="motion-safe:animate-pulse">
+				<GhostLogo className="size-8" />
 			</div>
-			<div className="flex flex-col gap-3 px-0 md:px-[54px]" aria-hidden>
-				<Skeleton className="h-4 w-11/12" />
-				<Skeleton className="h-4 w-4/5" />
-				<Skeleton className="h-4 w-full" />
-				<Skeleton className="mt-5 h-4 w-3/4" />
-				<Skeleton className="h-4 w-2/5" />
-			</div>
+			<p className="text-sm">Switching workspace…</p>
 		</div>
 	);
 }

@@ -977,6 +977,7 @@ export function PageTree({
 					<SidebarGroupAction
 						title="New page"
 						aria-label="New page"
+						aria-busy={isCreatingPage}
 						onClick={() => createPage(null)}
 						disabled={isCreatingPage || !synced}
 					>
@@ -1024,7 +1025,7 @@ export function PageTree({
 				)}
 			</SidebarGroupContent>
 			{isCreatingPage ? (
-				<p role="status" className="px-2 text-muted-foreground text-xs">
+				<p role="status" className="sr-only">
 					Creating page…
 				</p>
 			) : null}

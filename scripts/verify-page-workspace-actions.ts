@@ -80,12 +80,9 @@ try {
 			assert.ok(page.url().endsWith(`/p/${createdId}`));
 			assert.equal(creates, 1);
 			if (mobile)
-				assert.equal(
-					await page
-						.getByRole("dialog", { name: "Sidebar", exact: true })
-						.count(),
-					0,
-				);
+				await page
+					.getByRole("dialog", { name: "Sidebar", exact: true })
+					.waitFor({ state: "hidden" });
 		} finally {
 			list.resolve();
 		}
