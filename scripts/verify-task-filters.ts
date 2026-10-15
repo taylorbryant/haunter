@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
 // Run against preview:mcp-editor's synthetic accounts and disposable database.
-const fixture = await (await fetch("http://localhost:8797/fixture")).json();
+const host = process.argv[2] ?? "http://127.0.0.1:8797";
+const fixture = await (await fetch(`${host}/fixture`)).json();
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({
 	viewport: { width: 390, height: 844 },
@@ -28,7 +29,7 @@ let holdRead = true;
 let taskNavigations = 0;
 const created: string[] = [];
 try {
-	await page.goto("http://127.0.0.1:8797/login");
+	await page.goto(`${host}/login`);
 	async function createTask(title: string, assigneeId?: null) {
 		const response = await context.request.post(
 			`${fixture.appOrigin}/api/tasks`,
@@ -80,7 +81,9 @@ try {
 	// Selection must change while the result request is still pending, with no RSC round trip.
 	await status("Completed").tap();
 	await status("Completed", true).waitFor({ timeout: 2_000 });
-	await page.getByText("Loading tasks…", { exact: true }).waitFor();
+	await page
+		.getByRole("status", { name: "Loading tasks", exact: true })
+		.waitFor();
 	await readStarted.promise;
 	assert.equal(taskNavigations, 0);
 	assert.equal(new URL(page.url()).searchParams.get("filter"), "completed");
@@ -92,7 +95,9 @@ try {
 	await status("Open", true).waitFor();
 	await row(unassigned).waitFor();
 	assert.equal(
-		await page.getByText("Loading tasks…", { exact: true }).count(),
+		await page
+			.getByRole("status", { name: "Loading tasks", exact: true })
+			.count(),
 		0,
 	);
 

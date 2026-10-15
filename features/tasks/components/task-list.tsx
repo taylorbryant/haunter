@@ -55,6 +55,7 @@ import {
 } from "@/lib/due-date";
 import { useInlineEditFocus } from "@/hooks/use-inline-edit-focus";
 import { cn } from "@/lib/utils";
+import { TaskListSkeleton } from "./task-list-skeleton";
 
 const TASK_PAGE_SIZE = 50;
 const TODAY_PAGE_SIZE = 200;
@@ -591,11 +592,7 @@ export function TaskList({
 	}
 
 	if (!deviceTime.ready) {
-		return (
-			<p className="text-base text-muted-foreground sm:text-sm">
-				Loading tasks…
-			</p>
-		);
+		return <TaskListSkeleton compact={isHomeView} />;
 	}
 
 	return (
@@ -664,9 +661,7 @@ export function TaskList({
 				</div>
 			)}
 			{tasksQuery.isPending ? (
-				<p className="text-base text-muted-foreground sm:text-sm">
-					Loading tasks…
-				</p>
+				<TaskListSkeleton compact={isHomeView} />
 			) : tasksQuery.isError && !tasksQuery.data ? (
 				<QueryError
 					message={
