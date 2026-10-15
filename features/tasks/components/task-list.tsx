@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellIcon, CalendarIcon, FileTextIcon, Trash2Icon } from "lucide-react";
 import {
 	WorkspaceLink as Link,
+	useReplaceWorkspaceSearchParams,
 	useWorkspacePathname as usePathname,
 	useWorkspaceSearchParams as useSearchParams,
 } from "@/client/workspace-navigation";
@@ -103,6 +104,7 @@ export function TaskList({
 	const pathname = usePathname();
 	const router = useRouter();
 	const searchParams = useSearchParams();
+	const replaceSearchParams = useReplaceWorkspaceSearchParams();
 	const requestsEnabled = useProtectedRequestsEnabled();
 	// Viewers see the list but get no add/toggle/edit/delete controls.
 	const canEdit = useCanEditWorkspace();
@@ -356,26 +358,22 @@ export function TaskList({
 
 	function setTaskListParams(next: { filter?: TaskFilter; scope?: TaskScope }) {
 		setLimit(TASK_PAGE_SIZE);
-		const params = new URLSearchParams(searchParams.toString());
-		params.delete("taskId");
-		const nextFilter = next.filter ?? filter;
-		const nextScope = next.scope ?? scope;
+		replaceSearchParams((params) => {
+			params.delete("taskId");
+			const nextFilter = next.filter ?? readTaskFilter(params.get("filter"));
+			const nextScope = next.scope ?? readTaskScope(params.get("scope"));
 
-		if (nextFilter === "open") {
-			params.delete("filter");
-		} else {
-			params.set("filter", nextFilter);
-		}
+			if (nextFilter === "open") {
+				params.delete("filter");
+			} else {
+				params.set("filter", nextFilter);
+			}
 
-		if (nextScope === "everyone") {
-			params.delete("scope");
-		} else {
-			params.set("scope", nextScope);
-		}
-
-		const query = params.toString();
-		router.replace(query ? `${pathname}?${query}` : pathname, {
-			scroll: false,
+			if (nextScope === "everyone") {
+				params.delete("scope");
+			} else {
+				params.set("scope", nextScope);
+			}
 		});
 	}
 
