@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
 import { authClient } from "@/client/auth-client";
 import { getBrowserSessionRecovery } from "@/client/session-recovery";
@@ -18,6 +18,11 @@ export function useWorkspaceRouteSync(
 	const [pendingWorkspaceId, setPendingWorkspaceId] = useState<string | null>(
 		null,
 	);
+	const [failure, setFailure] = useState<{
+		workspaceId: string;
+		message: string;
+	} | null>(null);
+	const inFlight = useRef<string | null>(null);
 	const synced = workspaceId !== null && activeId === workspaceId;
 
 	useEffect(() => {
@@ -36,12 +41,15 @@ export function useWorkspaceRouteSync(
 			options.syncActive !== true ||
 			workspaceId === null ||
 			activeId === workspaceId ||
-			pendingWorkspaceId === workspaceId
+			pendingWorkspaceId === workspaceId ||
+			inFlight.current === workspaceId ||
+			failure?.workspaceId === workspaceId
 		) {
 			return;
 		}
 
 		setPendingWorkspaceId(workspaceId);
+		inFlight.current = workspaceId;
 		const recovery = getBrowserSessionRecovery();
 		const epoch = recovery?.epoch;
 		void (async () => {
@@ -66,6 +74,15 @@ export function useWorkspaceRouteSync(
 				reportUserError(
 					authErrorMessage(error, "The workspace could not be activated."),
 				);
+				setFailure({
+					workspaceId,
+					message: authErrorMessage(
+						error,
+						"The workspace could not be opened.",
+					),
+				});
+			} finally {
+				if (inFlight.current === workspaceId) inFlight.current = null;
 			}
 		})();
 	}, [
@@ -73,9 +90,17 @@ export function useWorkspaceRouteSync(
 		options.syncActive,
 		activeId,
 		pendingWorkspaceId,
+		failure,
 		workspaceId,
 		router,
 	]);
 
-	return { synced };
+	return {
+		synced,
+		error: failure?.workspaceId === workspaceId ? failure.message : null,
+		retry: () => {
+			setFailure(null);
+			setPendingWorkspaceId(null);
+		},
+	};
 }

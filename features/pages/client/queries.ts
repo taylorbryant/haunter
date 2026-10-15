@@ -24,6 +24,7 @@ import {
 } from "@/features/pages/contracts";
 import type {
 	BlockJson,
+	CreatePageOutput,
 	Page,
 	PageMeta,
 	PageNavigationOutput,
@@ -203,6 +204,27 @@ export async function syncRecordedPageViewInNavigationCache(
 
 export function createPageMutationOptions() {
 	return rq(createPage).mutationOptions();
+}
+
+/** The create response is enough to render the new title and sidebar entry. */
+export function cacheCreatedPage(
+	queryClient: QueryClient,
+	page: CreatePageOutput,
+) {
+	queryClient.setQueryData(getPageMetadataQueryOptions(page.id).queryKey, page);
+	queryClient.setQueryData<{ items: PageMeta[] }>(
+		listPagesQueryOptions(page.workspaceId).queryKey,
+		(current) =>
+			current
+				? {
+						...current,
+						items: [
+							...current.items.filter((item) => item.id !== page.id),
+							page,
+						],
+					}
+				: current,
+	);
 }
 
 export function updatePageMutationOptions() {
