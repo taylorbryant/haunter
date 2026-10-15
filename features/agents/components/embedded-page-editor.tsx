@@ -6,6 +6,7 @@ import { CommandRegistryProvider } from "@/components/command-palette/registry";
 import { CreateDialogProvider } from "@/components/create-dialog-provider";
 import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { QueryError } from "@/components/query-error";
 import { WorkspaceEventSubscriber } from "@/features/collab/client/workspace-events";
 import { useCachedPage } from "@/features/pages/client/use-cached-page";
 import { PageEditor } from "@/features/pages/components/page-editor";
@@ -30,7 +31,9 @@ export function EmbeddedPageEditor({
 	scoped?: boolean;
 	pageId: string;
 }) {
-	const { synced } = useWorkspaceRouteSync(workspaceId, { syncActive: true });
+	const { synced, error, retry } = useWorkspaceRouteSync(workspaceId, {
+		syncActive: true,
+	});
 	const requestsEnabled = useProtectedRequestsEnabled();
 	const page = useCachedPage(pageId);
 	const [linkedPages, setLinkedPages] = useState<CompanionPageItem[]>([]);
@@ -170,9 +173,13 @@ export function EmbeddedPageEditor({
 	}, [scoped]);
 	if (!synced)
 		return (
-			<p className="p-6 text-sm text-muted-foreground">
-				Opening your workspace…
-			</p>
+			<div className="p-6 text-sm text-muted-foreground">
+				{error ? (
+					<QueryError message={error} onRetry={retry} />
+				) : (
+					<p role="status">Opening your workspace…</p>
+				)}
+			</div>
 		);
 	return (
 		<EmbeddedEditorFrame

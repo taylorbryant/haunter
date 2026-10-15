@@ -8,8 +8,11 @@ import {
 	UsersIcon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
-import { useState } from "react";
+import {
+	useDraftSafeRouter as useRouter,
+	navigateWithDrafts,
+} from "@/client/use-draft-safe-router";
+import { useRef, useState, useTransition } from "react";
 import { authClient } from "@/client/auth-client";
 import { authErrorMessage, reportUserError } from "@/client/error-feedback";
 import { useAppSession } from "@/components/app-session-provider";
@@ -25,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useSidebar } from "@/components/ui/sidebar";
 import { useWorkspaces } from "@/features/workspaces/client/use-workspaces";
 import { canManageMembers } from "@/lib/org-roles";
 import {
@@ -76,10 +80,13 @@ export function WorkspaceSwitcher({
 	activeWorkspaceId: string | null;
 }) {
 	const router = useRouter();
+	const { isMobile, setOpenMobile } = useSidebar();
 	const appSession = useAppSession();
 	const workspacesQuery = useWorkspaces();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const switching = useRef(false);
+	const [isSwitching, startSwitching] = useTransition();
 
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [name, setName] = useState("");
@@ -164,19 +171,25 @@ export function WorkspaceSwitcher({
 			},
 	);
 
-	async function switchTo(id: string) {
-		if (id === activeWorkspaceId) return;
-		try {
-			const result = await authClient.organization.setActive({
-				organizationId: id,
-			});
-			if (result.error) throw result.error;
-			router.push(`/w/${id}/home`);
-		} catch (switchError) {
-			reportUserError(
-				authErrorMessage(switchError, "The workspace could not be opened."),
-			);
-		}
+	function switchTo(id: string) {
+		if (id === activeWorkspaceId || switching.current || isSwitching) return;
+		switching.current = true;
+		startSwitching(async () => {
+			try {
+				// Save local drafts before leaving. The destination route owns
+				// activation and gates its content until the session is refreshed.
+				await navigateWithDrafts(() => {
+					if (isMobile) setOpenMobile(false);
+					startSwitching(() => router.push(`/w/${id}/home`));
+				});
+			} catch (switchError) {
+				reportUserError(
+					authErrorMessage(switchError, "The workspace could not be opened."),
+				);
+			} finally {
+				switching.current = false;
+			}
+		});
 	}
 
 	async function create() {
@@ -352,6 +365,7 @@ export function WorkspaceSwitcher({
 				workspaces={workspaces}
 				activeWorkspaceId={activeWorkspaceId}
 				onSelect={switchTo}
+				switching={isSwitching}
 				initialLoading={workspacesQuery.isPending && workspaces.length === 0}
 				unavailable={!!workspacesQuery.error && workspaces.length === 0}
 				onRetry={() => void workspacesQuery.refetch?.()}

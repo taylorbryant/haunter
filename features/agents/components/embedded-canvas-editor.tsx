@@ -8,6 +8,7 @@ import { useDraftRegistry } from "@/client/use-draft-registry";
 import { useProtectedRequestsEnabled } from "@/components/session-recovery-provider";
 import { GhostLogo } from "@/components/ghost-logo";
 import { Button } from "@/components/ui/button";
+import { QueryError } from "@/components/query-error";
 import { getCanvasQueryOptions } from "@/features/canvases/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { EmbeddedEditorFrame, readBridge, send } from "./embedded-editor-frame";
@@ -24,7 +25,9 @@ export function EmbeddedCanvasEditor({
 	workspaceId: string;
 	canvasId: string;
 }) {
-	const { synced } = useWorkspaceRouteSync(workspaceId, { syncActive: true });
+	const { synced, error, retry } = useWorkspaceRouteSync(workspaceId, {
+		syncActive: true,
+	});
 	const requestsEnabled = useProtectedRequestsEnabled();
 	const canvas = useQuery(getCanvasQueryOptions(canvasId));
 	const [editor, setEditor] = useState<Editor | null>(null);
@@ -130,7 +133,13 @@ export function EmbeddedCanvasEditor({
 							onEditorChange={setEditor}
 						/>
 					) : (
-						<p className="p-6 text-sm">Opening your workspace…</p>
+						<div className="p-6 text-sm">
+							{error ? (
+								<QueryError message={error} onRetry={retry} />
+							) : (
+								<p role="status">Opening your workspace…</p>
+							)}
+						</div>
 					)}
 				</div>
 			</div>

@@ -1,6 +1,11 @@
 "use client";
 
-import { CheckIcon, ChevronDownIcon, type LucideIcon } from "lucide-react";
+import {
+	CheckIcon,
+	ChevronDownIcon,
+	LoaderCircleIcon,
+	type LucideIcon,
+} from "lucide-react";
 import { Fragment } from "react";
 import { GhostLogo } from "@/components/ghost-logo";
 import { Button } from "@/components/ui/button";
@@ -50,6 +55,7 @@ export function WorkspacePicker({
 	activeWorkspaceId,
 	onSelect,
 	initialLoading = false,
+	switching = false,
 	unavailable = false,
 	onRetry,
 	actions = [],
@@ -59,6 +65,7 @@ export function WorkspacePicker({
 	activeWorkspaceId: string | null;
 	onSelect(id: string): void | Promise<void>;
 	initialLoading?: boolean;
+	switching?: boolean;
 	unavailable?: boolean;
 	onRetry?(): void;
 	actions?: readonly WorkspacePickerAction[];
@@ -69,16 +76,26 @@ export function WorkspacePicker({
 		(workspace) => workspace.id === activeWorkspaceId,
 	);
 	function selectWorkspace(id: string) {
-		if (id !== activeWorkspaceId) void onSelect(id);
+		if (!switching && id !== activeWorkspaceId) void onSelect(id);
 	}
 	const trigger = (
 		<SidebarMenuButton
 			className="w-fit px-1.5 font-medium"
 			aria-label={`Workspace: ${active ? workspaceLabel(active) : "Haunter"}`}
+			disabled={switching}
+			aria-busy={switching}
 		>
-			<GhostLogo className="size-4 shrink-0" />
+			{switching ? (
+				<LoaderCircleIcon className="size-4 shrink-0 animate-spin" />
+			) : (
+				<GhostLogo className="size-4 shrink-0" />
+			)}
 			<span className="truncate">
-				{active ? workspaceLabel(active) : "Haunter"}
+				{switching
+					? "Switching workspace…"
+					: active
+						? workspaceLabel(active)
+						: "Haunter"}
 			</span>
 			<ChevronDownIcon className="opacity-50" />
 		</SidebarMenuButton>

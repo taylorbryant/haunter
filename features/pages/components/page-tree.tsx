@@ -5,6 +5,7 @@ import {
 	ChevronRightIcon,
 	FileTextIcon,
 	FileUpIcon,
+	LoaderCircleIcon,
 	MoreHorizontalIcon,
 	PencilIcon,
 	PlusIcon,
@@ -23,6 +24,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
+	useTransition,
 } from "react";
 import { userErrorMessage } from "@/client/error-feedback";
 import { useCommand } from "@/components/command-palette/registry";
@@ -85,6 +87,7 @@ import {
 import { preloadHaunterEditor } from "@/features/pages/client/preload-editor";
 import {
 	createPageMutationOptions,
+	cacheCreatedPage,
 	deletePageMutationOptions,
 	getPageNavigationQueryOptions,
 	invalidatePage,
@@ -286,6 +289,8 @@ export function PageTree({
 	const menuFocusTransferPageId = useRef<string | null>(null);
 	const pendingMovePageIds = useRef(new Set<string>());
 	const pendingRenamePageIds = useRef(new Set<string>());
+	const creatingPage = useRef(false);
+	const [isCreatingPage, startCreatingPage] = useTransition();
 
 	useCommand(
 		canEdit && synced && allowImports
@@ -322,54 +327,50 @@ export function PageTree({
 	);
 	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 
-	async function createPage(parentPageId: string | null) {
+	function createPage(parentPageId: string | null) {
+		if (creatingPage.current || isCreatingPage || !synced) return;
+		creatingPage.current = true;
 		setActionError(null);
 		primeTitleKeyboard();
-		try {
-			if (parentPageId && !(await flushPendingPageSave(parentPageId))) {
-				setActionError("Save the current page before creating a subpage.");
-				releaseTitleKeyboardPrime();
-				return;
-			}
-		} catch (error) {
-			setActionError(
-				userErrorMessage(error, "The current page could not be saved."),
-			);
-			releaseTitleKeyboardPrime();
-			return;
-		}
-		createMutation.mutate(
-			{
-				body: {
-					workspaceId,
-					title: "",
-					...(parentPageId ? { parentPageId } : {}),
-				},
-			},
-			{
-				onSuccess: async (page) => {
-					if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
-					await Promise.all([
-						invalidatePages(queryClient),
-						parentPageId
-							? invalidatePage(queryClient, parentPageId)
-							: Promise.resolve(),
-					]);
-					focusTitleOnArrival(page.id);
-					// On mobile, close the sheet so the new page is visible.
-					if (isMobile) {
-						setSuppressMobileFinalFocus(true);
-						setOpenMobile(false);
-					}
+		startCreatingPage(async () => {
+			try {
+				if (parentPageId && !(await flushPendingPageSave(parentPageId))) {
+					throw new Error("Save the current page before creating a subpage.");
+				}
+				const page = await createMutation.mutateAsync({
+					body: {
+						workspaceId,
+						title: "",
+						...(parentPageId ? { parentPageId } : {}),
+					},
+				});
+				cacheCreatedPage(queryClient, page);
+				if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
+				// Reconcile in the background; opening the saved page does not
+				// depend on refetching the sidebar or its parent.
+				void invalidatePages(queryClient);
+				if (parentPageId) void invalidatePage(queryClient, parentPageId);
+				focusTitleOnArrival(page.id);
+				if (isMobile) {
+					setSuppressMobileFinalFocus(true);
+					setOpenMobile(false);
+				}
+				startCreatingPage(() => {
 					router.push(`/w/${workspaceId}/p/${page.id}`);
-				},
-				onError: () => {
-					setActionError("The page could not be created. Please try again.");
-					setSuppressMobileFinalFocus(false);
-					releaseTitleKeyboardPrime();
-				},
-			},
-		);
+				});
+			} catch (error) {
+				setActionError(
+					userErrorMessage(
+						error,
+						"The page could not be created. Please try again.",
+					),
+				);
+				setSuppressMobileFinalFocus(false);
+				releaseTitleKeyboardPrime();
+			} finally {
+				creatingPage.current = false;
+			}
+		});
 	}
 
 	async function commitRename(pageId: string) {
@@ -800,6 +801,7 @@ export function PageTree({
 														variant="ghost"
 														className="h-11 justify-start"
 														onClick={() => createPage(node.id)}
+														disabled={isCreatingPage}
 													/>
 												}
 											>
@@ -919,6 +921,7 @@ export function PageTree({
 									showOnHover
 									aria-label="Add subpage"
 									onClick={() => createPage(node.id)}
+									disabled={isCreatingPage}
 								>
 									<PlusIcon />
 								</SidebarMenuAction>
@@ -974,9 +977,15 @@ export function PageTree({
 					<SidebarGroupAction
 						title="New page"
 						aria-label="New page"
+						aria-busy={isCreatingPage}
 						onClick={() => createPage(null)}
+						disabled={isCreatingPage || !synced}
 					>
-						<PlusIcon />
+						{isCreatingPage ? (
+							<LoaderCircleIcon className="animate-spin" />
+						) : (
+							<PlusIcon />
+						)}
 					</SidebarGroupAction>
 				</>
 			) : null}
@@ -1015,6 +1024,11 @@ export function PageTree({
 					<SidebarMenu>{tree.map((node) => renderNode(node))}</SidebarMenu>
 				)}
 			</SidebarGroupContent>
+			{isCreatingPage ? (
+				<p role="status" className="sr-only">
+					Creating page…
+				</p>
+			) : null}
 			{actionError ? (
 				<p role="alert" className="px-2 text-destructive text-xs">
 					{actionError}
