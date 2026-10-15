@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeftIcon, XIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
@@ -79,6 +79,46 @@ function recoverySubtext(copy: LocalRecoveryCopy) {
 type Selection =
 	| { type: "version"; id: string }
 	| { type: "recovery"; generation: number };
+
+function HistoryEntry({
+	historyKey,
+	selected,
+	label,
+	description,
+	onSelect,
+}: {
+	historyKey: string;
+	selected: boolean;
+	label: string;
+	description: string;
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			data-history-key={historyKey}
+			type="button"
+			aria-pressed={selected}
+			className={cn(
+				"keyboard-focus-ring flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left hover:bg-accent md:rounded-md md:py-2.5",
+				selected && "bg-accent",
+			)}
+			onClick={onSelect}
+		>
+			<span className="flex min-w-0 flex-1 flex-col gap-1">
+				<span className="font-medium text-base md:font-normal md:text-sm">
+					{label}
+				</span>
+				<span className="text-pretty text-muted-foreground text-sm md:text-xs">
+					{description}
+				</span>
+			</span>
+			<ChevronRightIcon
+				aria-hidden
+				className="size-4 shrink-0 text-muted-foreground md:hidden"
+			/>
+		</button>
+	);
+}
 
 export function PageHistoryDialog({
 	pageId,
@@ -212,9 +252,9 @@ export function PageHistoryDialog({
 	}
 
 	const list = (
-		<div ref={listRef} className="space-y-5">
+		<div ref={listRef} className="space-y-6 md:space-y-5">
 			<section aria-label="Saved versions">
-				<h3 className="px-3 pb-2 font-medium text-muted-foreground text-xs">
+				<h3 className="px-3 pb-2 font-medium text-muted-foreground text-sm md:text-xs">
 					Saved versions
 				</h3>
 				{versionsQuery.isPending ? (
@@ -240,32 +280,26 @@ export function PageHistoryDialog({
 						No versions yet. Checkpoints appear as you edit.
 					</p>
 				) : (
-					versions.map((version) => (
-						<button
-							key={version.id}
-							data-history-key={`version-${version.id}`}
-							type="button"
-							aria-pressed={selectedVersion?.id === version.id}
-							className={cn(
-								"keyboard-focus-ring flex w-full flex-col gap-1 rounded-md px-3 py-2.5 text-left text-sm hover:bg-accent",
-								selectedVersion?.id === version.id && "bg-accent",
-							)}
-							onClick={() => {
-								setSelection({ type: "version", id: version.id });
-								setRestoreError(null);
-							}}
-						>
-							<span>{formatWhen(version.createdAt)}</span>
-							<span className="text-muted-foreground text-xs">
-								{versionSubtext(version)}
-							</span>
-						</button>
-					))
+					<div className="divide-y divide-border/50 rounded-lg bg-background/50 md:divide-y-0 md:rounded-none md:bg-transparent">
+						{versions.map((version) => (
+							<HistoryEntry
+								key={version.id}
+								historyKey={`version-${version.id}`}
+								selected={selectedVersion?.id === version.id}
+								label={formatWhen(version.createdAt)}
+								description={versionSubtext(version)}
+								onSelect={() => {
+									setSelection({ type: "version", id: version.id });
+									setRestoreError(null);
+								}}
+							/>
+						))}
+					</div>
 				)}
 			</section>
 			{identity ? (
 				<section aria-label="On this device">
-					<h3 className="px-3 pb-2 font-medium text-muted-foreground text-xs">
+					<h3 className="px-3 pb-2 font-medium text-muted-foreground text-sm md:text-xs">
 						On this device
 					</h3>
 					{local.error ? (
@@ -284,35 +318,28 @@ export function PageHistoryDialog({
 							No earlier copies in this browser.
 						</p>
 					) : (
-						local.copies.map((copy) => (
-							<button
-								key={copy.generation}
-								data-history-key={`recovery-${copy.generation}`}
-								type="button"
-								aria-pressed={selectedRecovery?.generation === copy.generation}
-								className={cn(
-									"keyboard-focus-ring flex w-full flex-col gap-1 rounded-md px-3 py-2.5 text-left text-sm hover:bg-accent",
-									selectedRecovery?.generation === copy.generation &&
-										"bg-accent",
-								)}
-								onClick={() => {
-									setSelection({
-										type: "recovery",
-										generation: copy.generation,
-									});
-									setRestoreError(null);
-								}}
-							>
-								<span>
-									{copy.archivedAt
-										? formatWhen(copy.archivedAt)
-										: `Previous copy ${copy.generation + 1}`}
-								</span>
-								<span className="text-muted-foreground text-xs">
-									{recoverySubtext(copy)}
-								</span>
-							</button>
-						))
+						<div className="divide-y divide-border/50 rounded-lg bg-background/50 md:divide-y-0 md:rounded-none md:bg-transparent">
+							{local.copies.map((copy) => (
+								<HistoryEntry
+									key={copy.generation}
+									historyKey={`recovery-${copy.generation}`}
+									selected={selectedRecovery?.generation === copy.generation}
+									label={
+										copy.archivedAt
+											? formatWhen(copy.archivedAt)
+											: `Previous copy ${copy.generation + 1}`
+									}
+									description={recoverySubtext(copy)}
+									onSelect={() => {
+										setSelection({
+											type: "recovery",
+											generation: copy.generation,
+										});
+										setRestoreError(null);
+									}}
+								/>
+							))}
+						</div>
 					)}
 				</section>
 			) : null}
@@ -378,6 +405,7 @@ export function PageHistoryDialog({
 						</p>
 					) : null}
 					<Button
+						className={isMobile ? "w-full" : undefined}
 						disabled={
 							!canEdit ||
 							restoreMutation.isPending ||
@@ -390,7 +418,7 @@ export function PageHistoryDialog({
 							? "Restoring…"
 							: "Restore this version"}
 					</Button>
-					<p className="text-muted-foreground text-xs">
+					<p className="text-center text-pretty text-muted-foreground text-sm md:text-left md:text-xs">
 						Your current page will be kept in history.
 					</p>
 				</div>
@@ -410,53 +438,61 @@ export function PageHistoryDialog({
 	if (isMobile)
 		return (
 			<Drawer showSwipeHandle open onOpenChange={onOpenChange}>
-				<DrawerContent className="h-[85dvh]">
-					<DrawerHeader className="relative pr-12 text-left">
-						<DrawerTitle
-							ref={previewHeadingRef}
-							tabIndex={-1}
-							className="outline-none"
-						>
-							{selected ? previewTitle : "Page history"}
-						</DrawerTitle>
-						<DrawerDescription>
-							{selected
-								? previewDescription
-								: "Saved versions and earlier copies on this device."}
-						</DrawerDescription>
+				<DrawerContent className="h-[90dvh] data-[swipe-axis=y]:[--drawer-content-max-height:calc(100dvh-2rem)]">
+					<DrawerHeader className="flex-row items-start gap-3 border-b px-4 pb-4 group-data-[swipe-axis=y]/drawer-popup:text-left">
+						{selected ? (
+							<Button
+								variant="ghost"
+								size="icon"
+								className="-ml-1"
+								aria-label="Back to history"
+								onClick={() => setSelection(null)}
+							>
+								<ChevronLeftIcon />
+							</Button>
+						) : null}
+						<div className="min-w-0 flex-1 space-y-1">
+							<DrawerTitle
+								ref={previewHeadingRef}
+								tabIndex={-1}
+								className="outline-none"
+							>
+								{selected ? previewTitle : "Page history"}
+							</DrawerTitle>
+							<DrawerDescription className="text-pretty">
+								{selected
+									? previewDescription
+									: "Browse saved versions and local copies."}
+							</DrawerDescription>
+						</div>
 						<Button
 							variant="ghost"
-							size="icon-sm"
-							className="absolute top-3 right-3"
+							size="icon"
+							className="-mr-1"
 							aria-label="Close history"
 							onClick={() => onOpenChange(false)}
 						>
 							<XIcon />
 						</Button>
 					</DrawerHeader>
-					{selected ? (
-						<div className="px-2">
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={() => setSelection(null)}
-							>
-								<ChevronLeftIcon />
-								Back to history
-							</Button>
-						</div>
-					) : null}
 					<div
+						key={selected ? "preview" : "list"}
 						className={cn(
-							"min-h-0 flex-1 overflow-y-auto p-3",
-							selected && "editor-flush p-4",
+							"min-h-0 flex-1 overflow-y-auto overscroll-contain p-4",
+							selected && "bg-background/40",
 						)}
 					>
-						{selected ? preview : list}
+						{selected ? (
+							<div className="editor-flush min-h-full rounded-lg bg-background p-4">
+								{preview}
+							</div>
+						) : (
+							list
+						)}
 					</div>
 					<div
 						hidden={!selected}
-						className="border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+						className="shrink-0 border-t bg-popover p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
 					>
 						{actions}
 					</div>
