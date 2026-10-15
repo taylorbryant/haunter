@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DownloadIcon,
 	FileCode2Icon,
@@ -14,7 +14,7 @@ import { useWorkspacePathname as usePathname } from "@/client/workspace-navigati
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
-import { reportUserError, userErrorMessage } from "@/client/error-feedback";
+import { reportUserError } from "@/client/error-feedback";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { ResponsiveDialog } from "@/components/responsive-dialog";
 import { Button } from "@/components/ui/button";
@@ -37,19 +37,19 @@ import {
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { HtmlExportError } from "@/features/pages/client/html-export-error";
 import {
-	deletePageMutationOptions,
 	getPageNavigationQueryOptions,
 	getPageQueryOptions,
-	invalidatePageNavigation,
-	invalidatePages,
-	invalidateTrash,
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
 import { useCachedPage } from "@/features/pages/client/use-cached-page";
+import {
+	pageTrashDestination,
+	pageTrashErrorMessage,
+	usePageTrash,
+} from "@/features/pages/client/use-page-trash";
 import { usePageFavorite } from "@/features/pages/client/use-page-favorite";
 import type { PageMeta } from "@/features/pages/schemas";
-import { invalidateTasks } from "@/features/tasks/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -88,14 +88,11 @@ export function HeaderPageActions({
 		...getPageNavigationQueryOptions(workspaceId ?? ""),
 		enabled: Boolean(workspaceId && synced),
 	});
-	const favorite = usePageFavorite(workspaceId ?? "", page);
+	const favorite = usePageFavorite(workspaceId ?? "");
 	const isFavorite = navigationQuery.data?.favorites.some(
 		(item) => item.id === pageId,
 	);
-	const deleteMutation = useMutation({
-		...deletePageMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
+	const trash = usePageTrash();
 	const [sharePageId, setSharePageId] = useState<string | null>(null);
 	const [exporting, setExporting] = useState<"markdown" | "html" | null>(null);
 	const [trashTarget, setTrashTarget] = useState<{
@@ -103,10 +100,9 @@ export function HeaderPageActions({
 		workspaceId: string;
 		title: string;
 	} | null>(null);
-	const [preparingTrash, setPreparingTrash] = useState(false);
 	const [trashError, setTrashError] = useState<string | null>(null);
-	const currentPageIdRef = useRef(pageId);
-	currentPageIdRef.current = pageId;
+	const currentPathnameRef = useRef(pathname);
+	currentPathnameRef.current = pathname;
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: close page-scoped dialogs whenever the route identity changes
 	useEffect(() => {
@@ -119,7 +115,7 @@ export function HeaderPageActions({
 
 	const activePageId = pageId;
 	const activeWorkspaceId = workspaceId;
-	const trashPending = preparingTrash || deleteMutation.isPending;
+	const trashPending = trash.isPending;
 
 	async function exportPage(format: "markdown" | "html") {
 		if (exporting) return;
@@ -215,34 +211,25 @@ export function HeaderPageActions({
 		const target = trashTarget;
 		if (trashPending || !target) return;
 		setTrashError(null);
-		setPreparingTrash(true);
 		try {
-			if (
-				!(await (beforeRemove
-					? beforeRemove()
-					: flushPendingPageSave(target.pageId)))
-			) {
-				setTrashError("Save this page before moving it to trash.");
-				return;
-			}
-			await deleteMutation.mutateAsync({ path: { id: target.pageId } });
-			setTrashTarget(null);
-			const handled = onRemoved?.([target.pageId]) ?? false;
-			await Promise.all([
-				invalidatePages(queryClient),
-				invalidatePageNavigation(queryClient, target.workspaceId),
-				invalidateTrash(queryClient),
-				invalidateTasks(queryClient),
-			]);
-			if (!handled && currentPageIdRef.current === target.pageId) {
-				router.push(`/w/${target.workspaceId}/home`);
-			}
-		} catch (error) {
-			setTrashError(
-				userErrorMessage(error, "The page could not be moved to trash."),
+			const result = await trash.moveToTrash({
+				workspaceId: target.workspaceId,
+				pageId: target.pageId,
+				beforeRemove,
+				onRemoved: (pageIds) => {
+					setTrashTarget(null);
+					return onRemoved?.(pageIds) ?? false;
+				},
+			});
+			if (!result || result.handled) return;
+			const destination = pageTrashDestination(
+				currentPathnameRef.current,
+				target.workspaceId,
+				result.pageIds,
 			);
-		} finally {
-			setPreparingTrash(false);
+			if (destination) router.push(destination);
+		} catch (error) {
+			setTrashError(pageTrashErrorMessage(error));
 		}
 	}
 
@@ -260,7 +247,7 @@ export function HeaderPageActions({
 					!navigationQuery.data ||
 					favorite.isPending
 				}
-				onClick={() => favorite.toggle(!isFavorite)}
+				onClick={() => favorite.toggle(activePageId, !isFavorite)}
 			>
 				<StarIcon className={isFavorite ? "fill-current" : undefined} />
 			</Button>

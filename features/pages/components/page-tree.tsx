@@ -87,20 +87,16 @@ import {
 import { preloadHaunterEditor } from "@/features/pages/client/preload-editor";
 import {
 	createPageMutationOptions,
-	cacheCreatedPage,
-	deletePageMutationOptions,
+	reconcileCreatedPage,
 	getPageNavigationQueryOptions,
 	invalidatePage,
 	invalidatePageNavigation,
 	invalidatePages,
-	invalidateTrash,
 	listPagesQueryOptions,
 	optimisticallySetPagePlacement,
 	optimisticallySetPageTitle,
 	restorePagePlacementInCache,
 	restorePageTitleInCache,
-	setFavoriteInNavigationCache,
-	setPageFavoriteMutationOptions,
 	setPageTitleInCache,
 	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
@@ -108,9 +104,13 @@ import { flushPendingPageSave } from "@/features/pages/client/save-state";
 import {
 	PAGE_TITLE_MAX_LENGTH,
 	PAGE_TITLE_TOO_LONG_MESSAGE,
-	type PageNavigationOutput,
 } from "@/features/pages/schemas";
-import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
+import { usePageFavorite } from "@/features/pages/client/use-page-favorite";
+import {
+	pageTrashDestination,
+	pageTrashErrorMessage,
+	usePageTrash,
+} from "@/features/pages/client/use-page-trash";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { useInlineEditFocus } from "@/hooks/use-inline-edit-focus";
 import { cn } from "@/lib/utils";
@@ -224,47 +224,8 @@ export function PageTree({
 		...updatePageMutationOptions(),
 		meta: { errorMode: "inline" },
 	});
-	const deleteMutation = useMutation({
-		...deletePageMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
-	const favoriteMutation = useMutation({
-		...setPageFavoriteMutationOptions(workspaceId, {
-			onSuccess: ({ favoritedAt }, { path }) => {
-				const page = pagesQuery.data?.items.find((item) => item.id === path.id);
-				if (page) {
-					setFavoriteInNavigationCache(
-						queryClient,
-						workspaceId,
-						page,
-						favoritedAt,
-					);
-				}
-			},
-		}),
-		meta: { errorFallback: "The favorite could not be updated." },
-		onMutate: async ({ path, body }) => {
-			const queryKey = getPageNavigationQueryOptions(workspaceId).queryKey;
-			await queryClient.cancelQueries({ queryKey, exact: true });
-			const previous = queryClient.getQueryData<PageNavigationOutput>(queryKey);
-			const page = pagesQuery.data?.items.find((item) => item.id === path.id);
-			if (page) {
-				setFavoriteInNavigationCache(
-					queryClient,
-					workspaceId,
-					page,
-					body.favorite ? new Date().toISOString() : null,
-				);
-			}
-			return { queryKey, previous };
-		},
-		onError: (_error, _variables, context) => {
-			if (context?.previous) {
-				queryClient.setQueryData(context.queryKey, context.previous);
-			}
-			void invalidatePageNavigation(queryClient, workspaceId);
-		},
-	});
+	const trash = usePageTrash();
+	const favorite = usePageFavorite(workspaceId);
 
 	const { expanded, toggle } = useExpandedState(workspaceId);
 	const renameFocus = useInlineEditFocus();
@@ -276,7 +237,6 @@ export function PageTree({
 		message: string;
 	} | null>(null);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
-	const [preparingRemoval, setPreparingRemoval] = useState(false);
 	const [iconPageId, setIconPageId] = useState<string | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [recoveryOpen, setRecoveryOpen] = useState(false);
@@ -344,12 +304,8 @@ export function PageTree({
 						...(parentPageId ? { parentPageId } : {}),
 					},
 				});
-				cacheCreatedPage(queryClient, page);
+				reconcileCreatedPage(queryClient, page);
 				if (parentPageId && !expanded[parentPageId]) toggle(parentPageId);
-				// Reconcile in the background; opening the saved page does not
-				// depend on refetching the sidebar or its parent.
-				void invalidatePages(queryClient);
-				if (parentPageId) void invalidatePage(queryClient, parentPageId);
 				focusTitleOnArrival(page.id);
 				if (isMobile) {
 					setSuppressMobileFinalFocus(true);
@@ -469,64 +425,38 @@ export function PageTree({
 
 	function toggleFavorite(node: PageTreeNode) {
 		const navigation = navigationQuery.data;
-		if (!navigation || favoriteMutation.isPending) return;
+		if (!navigation || favorite.isPending) return;
 		const wasFavorite = navigation.favorites.some(
 			(page) => page.id === node.id,
 		);
-		favoriteMutation.mutate({
-			path: { id: node.id },
-			body: { favorite: !wasFavorite },
-		});
+		favorite.toggle(node.id, !wasFavorite);
 	}
 
 	// Soft delete: the subtree moves to the workspace trash (restorable).
 	async function deletePage(node: PageTreeNode) {
-		if (preparingRemoval || deleteMutation.isPending) return;
+		if (trash.isPending) return;
 		setDeleteError(null);
-		if (beforeRemove) {
-			setPreparingRemoval(true);
-			const saved = await beforeRemove().catch(() => false);
-			setPreparingRemoval(false);
-			if (!saved) {
-				setDeleteError("Save your changes before moving this page to trash.");
-				return;
-			}
-		}
-		const subtree = subtreeIdsById.get(node.id) ?? new Set([node.id]);
-		deleteMutation.mutate(
-			{ path: { id: node.id } },
-			{
-				onSuccess: async () => {
+		try {
+			const result = await trash.moveToTrash({
+				workspaceId,
+				pageId: node.id,
+				beforeRemove,
+				onRemoved: (pageIds) => {
 					setPageToTrash(null);
 					setDeleteError(null);
-					const handled = onRemoved?.([...subtree]) ?? false;
-					await Promise.all([
-						invalidatePages(queryClient),
-						invalidatePageNavigation(queryClient, workspaceId),
-						invalidateTrash(queryClient),
-						// Tasks on trashed pages are filtered out server-side, so the
-						// subtree's tasks just left the My Tasks list.
-						invalidateTasksWhenIdle(queryClient),
-					]);
-					// Live updates or the user may have navigated during invalidation.
-					const currentRoute = currentPathnameRef.current.match(
-						/^\/w\/([^/]+)\/p\/([^/]+)/,
-					);
-					if (
-						!handled &&
-						currentRoute?.[1] === workspaceId &&
-						currentRoute[2] &&
-						subtree.has(currentRoute[2])
-					) {
-						router.push(`/w/${workspaceId}/home`);
-					}
+					return onRemoved?.(pageIds) ?? false;
 				},
-				onError: (error) =>
-					setDeleteError(
-						userErrorMessage(error, "The page could not be moved to trash."),
-					),
-			},
-		);
+			});
+			if (!result || result.handled) return;
+			const destination = pageTrashDestination(
+				currentPathnameRef.current,
+				workspaceId,
+				result.pageIds,
+			);
+			if (destination) router.push(destination);
+		} catch (error) {
+			setDeleteError(pageTrashErrorMessage(error));
+		}
 	}
 
 	const prefetchPage = useCallback(
@@ -782,7 +712,7 @@ export function PageTree({
 												disabled={
 													!allowFavorites ||
 													!navigationQuery.data ||
-													favoriteMutation.isPending
+													favorite.isPending
 												}
 												onClick={() => toggleFavorite(node)}
 											/>
@@ -887,7 +817,7 @@ export function PageTree({
 										disabled={
 											!allowFavorites ||
 											!navigationQuery.data ||
-											favoriteMutation.isPending
+											favorite.isPending
 										}
 										onClick={() => toggleFavorite(node)}
 									>
@@ -1104,7 +1034,7 @@ export function PageTree({
 			<DestructiveConfirmationDialog
 				open={pageToTrash !== null}
 				onOpenChange={(open) => {
-					if (preparingRemoval || deleteMutation.isPending) return;
+					if (trash.isPending) return;
 					if (!open) {
 						setPageToTrash(null);
 						setDeleteError(null);
@@ -1122,7 +1052,7 @@ export function PageTree({
 				}
 				actionLabel="Move to trash"
 				pendingLabel="Moving…"
-				pending={preparingRemoval || deleteMutation.isPending}
+				pending={trash.isPending}
 				error={deleteError}
 				onConfirm={() => {
 					if (pageToTrash) void deletePage(pageToTrash);

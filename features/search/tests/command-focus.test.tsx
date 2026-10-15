@@ -7,13 +7,22 @@ import {
 	spyOn,
 	test,
 } from "bun:test";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+	QueryClient,
+	QueryClientProvider,
+	QueryObserver,
+} from "@tanstack/react-query";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
 import { DeviceTimeProvider } from "@/components/device-time-provider";
 import { deviceTimeAt } from "@/lib/device-timezone";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
+import {
+	getEditorPageQueryOptions,
+	listPagesQueryOptions,
+} from "@/features/pages/client/queries";
+import type { CreatePageOutput, PageMeta } from "@/features/pages/schemas";
 
 const navigate = mock(() => {});
 mock.module("next/navigation", () => ({
@@ -54,13 +63,13 @@ afterEach(() => {
 	cleanup();
 	clients.splice(0).forEach((client) => client.clear());
 	mock.restore();
-	navigate.mockClear();
+	navigate.mockReset();
 });
 afterAll(uninstallTestDom);
 
 function setup(width = 1024) {
 	window.innerWidth = width;
-	spyOn(globalThis, "fetch").mockImplementation(
+	const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
 		Object.assign(async () => Response.json({ favorites: [], recents: [] }), {
 			preconnect: fetch.preconnect,
 		}),
@@ -69,7 +78,7 @@ function setup(width = 1024) {
 		defaultOptions: { queries: { retry: false, gcTime: 0 } },
 	});
 	clients.push(client);
-	return render(
+	const view = render(
 		<QueryClientProvider client={client}>
 			<CommandRegistryProvider>
 				<AppCommands />
@@ -92,7 +101,73 @@ function setup(width = 1024) {
 			</CommandRegistryProvider>
 		</QueryClientProvider>,
 	);
+	return { ...view, client, fetchSpy };
 }
+
+test("creating a page from the command menu warms the editor before opening without waiting for the list", async () => {
+	const view = setup();
+	const user = userEvent.setup({ document });
+	const created: CreatePageOutput = {
+		id: "00000000-0000-4000-8000-000000000001",
+		workspaceId: "a",
+		userId: "tester",
+		parentPageId: null,
+		title: "Quick note",
+		icon: null,
+		position: 1,
+		deletedAt: null,
+		createdAt: "2026-10-15T12:00:00.000Z",
+		updatedAt: "2026-10-15T12:00:00.000Z",
+		contentUpdatedAt: "2026-10-15T12:00:00.000Z",
+		parentContentUpdatedAt: null,
+	};
+	const listKey = listPagesQueryOptions("a").queryKey;
+	view.client.setQueryData(listKey, { items: [] });
+	const refreshed = Promise.withResolvers<{ items: PageMeta[] }>();
+	const observer = new QueryObserver(view.client, {
+		queryKey: listKey,
+		staleTime: Infinity,
+		queryFn: () => refreshed.promise,
+	});
+	const unsubscribe = observer.subscribe(() => {});
+	try {
+		await openSearch(view, user);
+		await user.type(await view.findByRole("combobox"), ">create page");
+		await user.keyboard("{Enter}");
+		await user.type(
+			await view.findByRole("textbox", { name: "Title" }),
+			created.title,
+		);
+		view.fetchSpy.mockImplementation(
+			Object.assign(
+				async (_input: RequestInfo | URL, init?: RequestInit) =>
+					Response.json(
+						init?.method === "POST" ? created : { favorites: [], recents: [] },
+						{ status: init?.method === "POST" ? 201 : 200 },
+					),
+				{ preconnect: fetch.preconnect },
+			),
+		);
+		navigate.mockImplementationOnce(() => {
+			expect(
+				view.client.getQueryData(
+					getEditorPageQueryOptions(created.id).queryKey,
+				),
+			).toEqual(created);
+		});
+		await user.click(
+			view.getByRole("button", { name: "Create page" }),
+		);
+		await waitFor(() => {
+			expect(view.queryByRole("alert")?.textContent).toBeUndefined();
+			expect(navigate).toHaveBeenCalledWith(`/w/a/p/${created.id}`);
+		});
+		expect(view.client.getQueryState(listKey)?.fetchStatus).toBe("fetching");
+	} finally {
+		refreshed.resolve({ items: [created] });
+		unsubscribe();
+	}
+});
 
 async function openSearch(
 	view: ReturnType<typeof setup>,

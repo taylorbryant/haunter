@@ -61,6 +61,7 @@ import { observePageContext } from "@/features/pages/client/live-context";
 import { focusTitleOnArrival } from "@/features/pages/client/new-page-focus";
 import {
 	getPageQueryOptions,
+	reconcileCreatedPage,
 	invalidateBacklinks,
 	invalidatePages,
 	listPagesQueryOptions,
@@ -747,8 +748,8 @@ const MountedHaunterEditor = memo(function MountedHaunterEditor({
 								embedded,
 								// Open the new subpage; the unmount flush persists the
 								// parent document (with the link block) on the way out.
-								onSubpageCreated: async (created) => {
-									await invalidatePages(queryClient);
+								onSubpageCreated: (created) => {
+									reconcileCreatedPage(queryClient, created);
 									focusTitleOnArrival(created.id);
 									router.push(`/w/${workspaceId}/p/${created.id}`);
 								},
