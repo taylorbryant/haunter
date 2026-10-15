@@ -2,7 +2,13 @@
 
 import NextLink from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { createContext, useContext, useMemo, type ComponentProps } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useMemo,
+	type ComponentProps,
+} from "react";
 
 /** The shared workspace UI can navigate inside an embedded React surface. */
 export const WorkspaceNavigationContext = createContext<{
@@ -22,6 +28,32 @@ export function useWorkspaceSearchParams() {
 	return useMemo(
 		() => (navigation ? new URLSearchParams(navigation.search ?? "") : params),
 		[navigation, params],
+	);
+}
+
+/** For client-owned filters; keeps the current screen mounted without a server navigation. */
+export function useReplaceWorkspaceSearchParams() {
+	const navigation = useContext(WorkspaceNavigationContext);
+	return useCallback(
+		(update: (params: URLSearchParams) => void) => {
+			// Read the current URL at click time so rapid filter changes compose.
+			const params = new URLSearchParams(
+				navigation ? navigation.search : window.location.search,
+			);
+			update(params);
+			const pathname = navigation?.pathname ?? window.location.pathname;
+			const query = params.toString();
+			const path = query ? `${pathname}?${query}` : pathname;
+			if (navigation) {
+				// Embedded navigation still owns its save guard and view context.
+				void navigation.navigate(path);
+			} else {
+				// Next syncs native history updates with useSearchParams. Pass fresh
+				// state so Next does not mistake this for one of its internal writes.
+				window.history.replaceState(null, "", path + window.location.hash);
+			}
+		},
+		[navigation],
 	);
 }
 
