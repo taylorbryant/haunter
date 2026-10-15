@@ -1,5 +1,4 @@
-import type { CompanionBridge } from "./controller";
-import { createCompanionContext } from "./model-context";
+import { createCompanionContext, type ContextSnapshot } from "./model-context";
 import { EditorOutputSchema, validateEditorOutput } from "./editor-schema";
 import { OpenHaunterOutputSchema } from "./workspace-opener";
 import {
@@ -9,8 +8,15 @@ import {
 	type WorkspaceTarget,
 } from "./workspace-bridge";
 
+export type WorkspaceAdapterBridge = {
+	callTool(name: string, args: Record<string, unknown>): Promise<unknown>;
+	openLink(url: string): Promise<void>;
+	canUseContext(): boolean;
+	setContext(snapshot: ContextSnapshot): Promise<{ updateId: string } | void>;
+};
+
 /** The MCP resource is only a host adapter. Haunter owns UI, requests and navigation. */
-export function createWorkspaceAdapter(bridge: CompanionBridge) {
+export function createWorkspaceAdapter(bridge: WorkspaceAdapterBridge) {
 	const frame = document.querySelector<HTMLIFrameElement>("#real-editor")!;
 	const message = document.querySelector<HTMLElement>("#connection-status")!;
 	const origin = new URL(document.documentElement.dataset.appOrigin!).origin;
