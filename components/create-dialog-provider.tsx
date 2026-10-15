@@ -34,8 +34,7 @@ import { CANVAS_TITLE_MAX_LENGTH } from "@/features/canvases/schemas";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	createPageMutationOptions,
-	invalidatePageNavigation,
-	invalidatePages,
+	reconcileCreatedPage,
 } from "@/features/pages/client/queries";
 import type { BlockJson } from "@/features/pages/schemas";
 import { PAGE_TITLE_MAX_LENGTH } from "@/features/pages/schemas";
@@ -131,10 +130,7 @@ function CreatePageDialog({
 					...(initialContent.length > 0 ? { initialContent } : {}),
 				},
 			});
-			void Promise.all([
-				invalidatePages(queryClient),
-				invalidatePageNavigation(queryClient, workspaceId),
-			]).catch(() => undefined);
+			reconcileCreatedPage(queryClient, page);
 			onOpenChange(false);
 			router.push(`/w/${workspaceId}/p/${page.id}`);
 		} catch (createError) {

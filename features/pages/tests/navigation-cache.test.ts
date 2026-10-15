@@ -472,3 +472,63 @@ describe("page navigation cache", () => {
 		});
 	});
 });
+
+for (const outcome of ["success", "failure"] as const) {
+	it(`shared favorite ${outcome} stays in its original workspace after switching`, async () => {
+		const { optimisticPageFavoriteMutationOptions } = await import(
+			"../client/use-page-favorite"
+		);
+		const { queryClient, queryKey } = setup();
+		const item = page(1);
+		queryClient.setQueryData(listPagesQueryOptions(item.workspaceId).queryKey, {
+			items: [item],
+		});
+		const otherKey = getPageNavigationQueryOptions("other_workspace").queryKey;
+		queryClient.setQueryData(otherKey, { favorites: [], recents: [] });
+		const response = Promise.withResolvers<{
+			pageId: string;
+			favoritedAt: string | null;
+		}>();
+		const started = Promise.withResolvers<void>();
+		const observer = new MutationObserver(queryClient, {
+			...optimisticPageFavoriteMutationOptions(queryClient, item.workspaceId),
+			mutationFn: () => {
+				started.resolve();
+				return response.promise;
+			},
+		});
+		const pending = observer.mutate({
+			path: { id: item.id },
+			body: { favorite: true },
+		});
+		await started.promise;
+		expect(
+			queryClient.getQueryData<PageNavigationOutput>(queryKey)?.favorites[0]
+				?.id,
+		).toBe(item.id);
+		observer.setOptions(
+			optimisticPageFavoriteMutationOptions(queryClient, "other_workspace"),
+		);
+		const favoritedAt = "2026-10-15T12:00:00.000Z";
+		if (outcome === "success") {
+			response.resolve({ pageId: item.id, favoritedAt });
+			await pending;
+			expect(
+				queryClient.getQueryData<PageNavigationOutput>(queryKey)?.favorites[0]
+					?.favoritedAt,
+			).toBe(favoritedAt);
+		} else {
+			response.reject(new Error("Save failed"));
+			await expect(pending).rejects.toThrow("Save failed");
+			expect(
+				queryClient.getQueryData<PageNavigationOutput>(queryKey)?.favorites,
+			).toEqual([]);
+		}
+		expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+		expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(false);
+		expect(
+			queryClient.getQueryData<PageNavigationOutput>(otherKey)?.favorites,
+		).toEqual([]);
+		queryClient.clear();
+	});
+}

@@ -24,7 +24,6 @@ import {
 } from "@/features/pages/contracts";
 import type {
 	BlockJson,
-	CreatePageOutput,
 	Page,
 	PageMeta,
 	PageNavigationOutput,
@@ -207,10 +206,7 @@ export function createPageMutationOptions() {
 }
 
 /** The create response is enough to render the new title and sidebar entry. */
-export function cacheCreatedPage(
-	queryClient: QueryClient,
-	page: CreatePageOutput,
-) {
+export function cacheCreatedPage(queryClient: QueryClient, page: PageMeta) {
 	queryClient.setQueryData(getPageMetadataQueryOptions(page.id).queryKey, page);
 	queryClient.setQueryData<{ items: PageMeta[] }>(
 		listPagesQueryOptions(page.workspaceId).queryKey,
@@ -225,6 +221,18 @@ export function cacheCreatedPage(
 					}
 				: current,
 	);
+}
+
+/** Opening a created page must not wait for background list reconciliation. */
+export function reconcileCreatedPage(queryClient: QueryClient, page: PageMeta) {
+	cacheCreatedPage(queryClient, page);
+	void Promise.all([
+		invalidatePages(queryClient),
+		invalidatePageNavigation(queryClient, page.workspaceId),
+		...(page.parentPageId
+			? [invalidatePage(queryClient, page.parentPageId)]
+			: []),
+	]).catch(() => undefined);
 }
 
 export function updatePageMutationOptions() {
