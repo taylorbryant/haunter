@@ -90,7 +90,7 @@ try {
 	const bootCalls = calls.length;
 	await body.press("ControlOrMeta+Shift+K");
 	await workspace
-		.getByPlaceholder("Search pages, or > for commands...")
+		.getByPlaceholder("Search workspace, or > for commands...")
 		.fill(">");
 	await workspace.getByRole("option", { name: /^Create page/ }).click();
 	await workspace
@@ -150,11 +150,13 @@ try {
 		.click();
 	const searchResponse = page.waitForResponse(
 		(response) =>
-			new URL(response.url()).pathname === "/api/search" &&
+			/^\/api\/workspaces\/[^/]+\/search$/.test(
+				new URL(response.url()).pathname,
+			) &&
 			response.status() === 200,
 	);
 	await workspace
-		.getByPlaceholder("Search pages, or > for commands...")
+		.getByPlaceholder("Search workspace, or > for commands...")
 		.fill(parentName);
 	await searchResponse;
 	await workspace
@@ -188,11 +190,7 @@ try {
 	await workspace
 		.getByRole("button", { name: "Move to trash", exact: true })
 		.click();
-	await page.waitForFunction(() =>
-		document
-			.getElementById("context")
-			?.textContent?.startsWith("No Haunter page"),
-	);
+	await waitView({ section: "home", pageId: null });
 	await workspace.getByRole("link", { name: "Trash", exact: true }).click();
 	await workspace
 		.locator("li")
@@ -206,7 +204,7 @@ try {
 	);
 	await workspace.getByRole("button", { name: /^Search/ }).click();
 	await workspace
-		.getByPlaceholder("Search pages, or > for commands...")
+		.getByPlaceholder("Search workspace, or > for commands...")
 		.fill(">");
 	await workspace.getByRole("option", { name: /^Create canvas/ }).click();
 	await workspace

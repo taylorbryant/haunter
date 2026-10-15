@@ -63,6 +63,9 @@ try {
 		name: "Add to favorites",
 		exact: true,
 	});
+	await workspace
+		.getByRole("menuitem", { name: /^(Add to|Remove from) favorites$/ })
+		.waitFor();
 	if (await favorite.count()) await favorite.click();
 	else
 		await workspace
@@ -97,7 +100,7 @@ try {
 	await row(todayTitle).waitFor();
 	await workspace.getByRole("button", { name: /^Search/ }).click();
 	await workspace
-		.getByPlaceholder("Search pages, or > for commands...")
+		.getByPlaceholder("Search workspace, or > for commands...")
 		.fill(">");
 	await workspace.getByRole("option", { name: /^Create task/ }).click();
 	const dialog = workspace.getByRole("dialog");
