@@ -34,6 +34,10 @@ import {
 	isTaskOverdueAt,
 	shouldCreateTaskReminder,
 } from "@/features/tasks/lib/reminder-time";
+import {
+	isTaskReminderOffset,
+	TASK_REMINDER_OFFSETS,
+} from "@/features/tasks/scheduling";
 import * as schema from "@/infra/db/schema";
 import { canEditContent } from "@/lib/org-roles";
 
@@ -137,10 +141,6 @@ function currentScheduleVersionCondition() {
 			eq(schema.notifications.entityVersion, taskOverdueEntityVersion()),
 		),
 	);
-}
-
-function isReminderOffset(value: number | null): value is 0 | 15 | 60 | 1_440 {
-	return value === 0 || value === 15 || value === 60 || value === 1_440;
 }
 
 export function createDrizzleNotificationRepository(
@@ -564,7 +564,7 @@ export function createDrizzleNotificationRepository(
 					row.taskId !== null &&
 					row.title !== null &&
 					row.dueDate !== null &&
-					isReminderOffset(row.reminderOffsetMinutes) &&
+					isTaskReminderOffset(row.reminderOffsetMinutes) &&
 					row.reminderConfiguredAt !== null &&
 					currentReminderVersion !== null &&
 					shouldCreateTaskReminder(
@@ -870,7 +870,9 @@ export function createDrizzleNotificationRepository(
 						isNotNull(schema.tasks.assigneeId),
 						isNotNull(schema.tasks.reminderOffsetMinutes),
 						isNotNull(schema.tasks.reminderConfiguredAt),
-						inArray(schema.tasks.reminderOffsetMinutes, [0, 15, 60, 1_440]),
+						inArray(schema.tasks.reminderOffsetMinutes, [
+							...TASK_REMINDER_OFFSETS,
+						]),
 						gte(schema.tasks.dueDate, fromDate),
 						lte(schema.tasks.dueDate, cutoffDate),
 						or(isNull(schema.tasks.pageId), isNull(schema.pages.deletedAt)),
@@ -911,10 +913,7 @@ export function createDrizzleNotificationRepository(
 				} =>
 					row.dueDate !== null &&
 					row.userId !== null &&
-					(row.reminderOffsetMinutes === 0 ||
-						row.reminderOffsetMinutes === 15 ||
-						row.reminderOffsetMinutes === 60 ||
-						row.reminderOffsetMinutes === 1_440) &&
+					isTaskReminderOffset(row.reminderOffsetMinutes) &&
 					row.reminderConfiguredAt !== null,
 			);
 			const last = page.at(-1);
@@ -1002,7 +1001,7 @@ export function createDrizzleNotificationRepository(
 					AND ${schema.tasks.assigneeId} = ${candidate.userId}
 					AND ${schema.tasks.completed} = false
 					AND ${schema.tasks.dueDate} IS NOT NULL
-					AND ${schema.tasks.reminderOffsetMinutes} IN (0, 15, 60, 1440)
+					AND ${inArray(schema.tasks.reminderOffsetMinutes, [...TASK_REMINDER_OFFSETS])}
 					AND ${schema.tasks.reminderConfiguredAt} IS NOT NULL
 					AND ${taskReminderEntityVersion()} = ${candidate.entityVersion}
 					AND (

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
+import { TASK_REMINDER_OFFSETS } from "@/features/tasks/scheduling";
 import {
 	member,
 	notificationPreferences,
@@ -181,6 +182,78 @@ describe("task assignment notifications", () => {
 });
 
 describe("task reminder persistence", () => {
+	it("finds and persists every supported reminder offset while rejecting unsupported values", async () => {
+		database = await createTestDatabase();
+		const now = new Date("2026-10-15T08:00:00.000Z");
+		await database.db.insert(user).values({
+			id: "user_reminded",
+			name: "Reminded User",
+			email: "reminded@example.com",
+			createdAt: now,
+			updatedAt: now,
+		});
+		await database.db.insert(organization).values({
+			id: "workspace_reminders",
+			name: "Reminder workspace",
+			slug: `reminders-${crypto.randomUUID()}`,
+			createdAt: now,
+		});
+		await database.db.insert(member).values({
+			id: crypto.randomUUID(),
+			organizationId: "workspace_reminders",
+			userId: "user_reminded",
+			role: "member",
+			createdAt: now,
+		});
+		const rows = [...TASK_REMINDER_OFFSETS, 30, null].map((offset) => ({
+			id: crypto.randomUUID(),
+			userId: "user_reminded",
+			workspaceId: "workspace_reminders",
+			assigneeId: "user_reminded",
+			title: `Reminder ${offset}`,
+			dueDate: "2026-10-15",
+			dueTime: "09:00",
+			reminderOffsetMinutes: offset,
+			reminderConfiguredAt: now.toISOString(),
+			createdAt: now.toISOString(),
+			updatedAt: now.toISOString(),
+		}));
+		await database.db.insert(tasks).values(rows);
+		const repository = database.repositories.notificationInbox;
+		const { items } = await repository.findReminderCandidates({
+			fromDate: "2026-10-14",
+			cutoffDate: "2026-10-16",
+			limit: 20,
+		});
+		expect(
+			items.map((item) => item.reminderOffsetMinutes).sort((a, b) => a - b),
+		).toEqual([...TASK_REMINDER_OFFSETS]);
+		for (const candidate of items) {
+			expect(
+				await repository.createTaskReminder(candidate, now.toISOString()),
+			).toMatchObject({
+				kind: "task.reminder",
+				payload: { reminderOffsetMinutes: candidate.reminderOffsetMinutes },
+			});
+		}
+		const unsupported = rows.find((row) => row.reminderOffsetMinutes === 30);
+		const candidate = items[0];
+		if (!unsupported || !candidate)
+			throw new Error("Expected reminder fixtures");
+		// Check the write guard independently of candidate filtering, using a
+		// matching version for an unsupported value already in storage.
+		expect(
+			await repository.createTaskReminder(
+				{
+					...candidate,
+					taskId: unsupported.id,
+					entityVersion: `2026-10-15:09:00:30:user_reminded:${now.toISOString()}`,
+				},
+				now.toISOString(),
+			),
+		).toBeNull();
+	});
+
 	it("deduplicates a reminder and suppresses the matching overdue fallback", async () => {
 		database = await createTestDatabase();
 		const now = new Date("2026-07-09T12:00:00.000Z");

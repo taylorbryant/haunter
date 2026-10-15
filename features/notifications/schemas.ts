@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+	DueDateSchema,
+	DueTimeSchema,
+	ReminderOffsetMinutesSchema,
+} from "@/features/tasks/scheduling";
 
 export const NotificationKindSchema = z.enum([
 	"task.overdue",
@@ -19,12 +24,8 @@ export type NotificationActionState = z.infer<
 export const TaskOverdueNotificationPayloadSchema = z.object({
 	taskId: z.string().uuid(),
 	title: z.string(),
-	dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-	dueTime: z
-		.string()
-		.regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-		.nullable()
-		.default(null),
+	dueDate: DueDateSchema,
+	dueTime: DueTimeSchema.nullable().default(null),
 	pageId: z.string().uuid().nullable(),
 	sourceBlockId: z.string().nullable(),
 });
@@ -47,17 +48,9 @@ export type TaskAssignedNotificationPayload = z.infer<
 export const TaskReminderNotificationPayloadSchema = z.object({
 	taskId: z.string().uuid(),
 	title: z.string(),
-	dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-	dueTime: z
-		.string()
-		.regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-		.nullable(),
-	reminderOffsetMinutes: z.union([
-		z.literal(0),
-		z.literal(15),
-		z.literal(60),
-		z.literal(1_440),
-	]),
+	dueDate: DueDateSchema,
+	dueTime: DueTimeSchema.nullable(),
+	reminderOffsetMinutes: ReminderOffsetMinutesSchema,
 	rearmed: z.boolean().optional(),
 	pageId: z.string().uuid().nullable(),
 	sourceBlockId: z.string().nullable(),

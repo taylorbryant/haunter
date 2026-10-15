@@ -1,13 +1,23 @@
-import type { Task } from "@/features/tasks/schemas";
+import {
+	type ReminderOffsetMinutes,
+	TASK_REMINDER_OFFSETS,
+} from "@/features/tasks/scheduling";
 
-export type TaskReminderOffsetMinutes = Task["reminderOffsetMinutes"];
+export type TaskReminderOffsetMinutes = ReminderOffsetMinutes | null;
+
+const reminderLabels = {
+	0: "At due time",
+	15: "15 minutes before",
+	60: "1 hour before",
+	1440: "1 day before",
+} satisfies Record<ReminderOffsetMinutes, string>;
 
 export const TASK_REMINDER_OPTIONS = [
 	{ label: "No reminder", value: "none" },
-	{ label: "At due time", dateOnlyLabel: "Morning of, 9:00 AM", value: "0" },
-	{ label: "15 minutes before", value: "15" },
-	{ label: "1 hour before", value: "60" },
-	{ label: "1 day before", value: "1440" },
+	...TASK_REMINDER_OFFSETS.map((offset) => ({
+		label: reminderLabels[offset],
+		value: String(offset),
+	})),
 ] as const;
 
 export function formatTaskReminderLabel(
@@ -19,24 +29,15 @@ export function formatTaskReminderLabel(
 		(candidate) => candidate.value === String(offsetMinutes),
 	);
 	if (!option) return "No reminder";
-	return offsetMinutes === 0 && dueTime === null && "dateOnlyLabel" in option
-		? option.dateOnlyLabel
+	return offsetMinutes === 0 && dueTime === null
+		? "Morning of, 9:00 AM"
 		: option.label;
 }
 
 export function parseTaskReminderOffset(
 	value: string,
 ): TaskReminderOffsetMinutes {
-	switch (value) {
-		case "0":
-			return 0;
-		case "15":
-			return 15;
-		case "60":
-			return 60;
-		case "1440":
-			return 1_440;
-		default:
-			return null;
-	}
+	return (
+		TASK_REMINDER_OFFSETS.find((offset) => String(offset) === value) ?? null
+	);
 }
