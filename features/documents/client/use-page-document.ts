@@ -14,6 +14,7 @@ const empty: DocumentSnapshot = {
 	resetReason: null,
 	recoveryNoticeDismissed: false,
 	ready: false,
+	initializing: true,
 	connected: false,
 	saved: false,
 	locallySaved: true,

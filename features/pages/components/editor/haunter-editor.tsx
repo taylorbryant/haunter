@@ -65,7 +65,10 @@ import {
 	invalidatePages,
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
-import { registerPageSaveFlusher } from "@/features/pages/client/save-state";
+import {
+	registerPageSaveFlusher,
+	type PageSaveState,
+} from "@/features/pages/client/save-state";
 import { uploadPageAttachment } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
 import { normalizeCodeBlockLanguages } from "@/features/pages/lib/code-block-language";
@@ -325,7 +328,7 @@ function getSlashMenuItems(
 	return Promise.resolve(filterSuggestionItems(items, query));
 }
 
-export type SaveState = "saved" | "pending" | "saving" | "error" | "paused";
+export type SaveState = PageSaveState;
 
 type HaunterEditorProps = {
 	measurement?: EditorMeasurement;
@@ -416,17 +419,20 @@ function CollaborativePageBody(
 		props.onSaveStateChange?.(
 			snapshot.error
 				? "error"
-				: snapshot.saved
-					? "saved"
-					: snapshot.paused
-						? "paused"
-						: snapshot.connected
-							? "saving"
-							: "pending",
+				: snapshot.initializing
+					? "loading"
+					: snapshot.saved
+						? "saved"
+						: snapshot.paused
+							? "paused"
+							: snapshot.connected
+								? "saving"
+								: "pending",
 		);
 	}, [
 		props.onSaveStateChange,
 		snapshot.error,
+		snapshot.initializing,
 		snapshot.saved,
 		snapshot.paused,
 		snapshot.connected,

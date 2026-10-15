@@ -66,8 +66,9 @@ export function HeaderSaveIndicator({
 			? "error"
 			: drafts.some(
 						(draft) =>
-							draft.locallySaved === false ||
-							["pending", "syncing"].includes(draft.status),
+							draft.status !== "loading" &&
+							(draft.locallySaved === false ||
+								["pending", "syncing"].includes(draft.status)),
 					)
 				? "saving"
 				: drafts.some((draft) => draft.remotePaused && draft.dirty)

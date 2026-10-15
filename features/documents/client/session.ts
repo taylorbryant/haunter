@@ -33,6 +33,8 @@ export type DocumentSnapshot = {
 	resetReason: DocumentResetReason | null;
 	recoveryNoticeDismissed: boolean;
 	ready: boolean;
+	/** Initial synchronization with no known local edits awaiting a save. */
+	initializing: boolean;
 	connected: boolean;
 	saved: boolean;
 	locallySaved: boolean;
@@ -57,6 +59,7 @@ export class PageDocumentSession {
 		resetReason: null,
 		recoveryNoticeDismissed: false,
 		ready: false,
+		initializing: true,
 		connected: false,
 		saved: false,
 		locallySaved: true,
@@ -141,6 +144,14 @@ export class PageDocumentSession {
 		)
 			return;
 		this.snapshot = { ...this.snapshot, ...next };
+		if (
+			this.snapshot.initializing &&
+			this.snapshot.ready &&
+			this.snapshot.saved &&
+			this.snapshot.locallySaved
+		) {
+			this.snapshot.initializing = false;
+		}
 		for (const listener of this.listeners) listener();
 	}
 	private ready(source: "cache" | "server") {
@@ -176,6 +187,7 @@ export class PageDocumentSession {
 			if (this.disposed) return;
 			this.loaded = true;
 			this.ready("cache");
+			this.checkCachedEdits(head.receipts?.[head.generation]);
 			this.doc.on("update", this.onUpdate);
 			this.unregister = draftRegistry.register({
 				identity: this.identity,
@@ -207,11 +219,21 @@ export class PageDocumentSession {
 			});
 		}
 	}
+	private checkCachedEdits(receipt: PersistenceReceipt | undefined) {
+		// A cached document without a covering receipt may contain offline edits.
+		// Keep reporting those as pending, even before the server is reachable.
+		if (
+			this.snapshot.ready &&
+			(!receipt || !receiptCoversDocument(this.doc, receipt))
+		)
+			this.publish({ initializing: false });
+	}
 	private onUpdate = (_update: Uint8Array, origin: unknown) => {
 		this.ready("server");
 		// Save receipts can arrive before the provider's batched document update.
 		// Recheck coverage so that update cannot leave an already saved page dirty.
 		this.publish({
+			...(origin !== this.provider ? { initializing: false } : {}),
 			saved:
 				origin === this.provider &&
 				this.receipt !== null &&
@@ -396,6 +418,7 @@ export class PageDocumentSession {
 					resetReason: null,
 					recoveryNoticeDismissed: isRecoveryNoticeDismissed(head),
 					ready: false,
+					initializing: true,
 					readySource: null,
 					revision: 0,
 					tasksRevision: 0,
@@ -404,6 +427,7 @@ export class PageDocumentSession {
 				});
 				this.doc.on("update", this.onUpdate);
 				this.ready("cache");
+				this.checkCachedEdits(head.receipts?.[generation]);
 				previous.destroy();
 			} catch (error) {
 				this.publish({
@@ -505,11 +529,15 @@ export class PageDocumentSession {
 		return {
 			status: current.storageError
 				? "storage-error"
-				: current.paused
-					? "paused"
-					: current.saved
-						? "saved"
-						: "pending",
+				: current.error
+					? "sync-error"
+					: current.paused
+						? "paused"
+						: current.initializing
+							? "loading"
+							: current.saved
+								? "saved"
+								: "pending",
 			locallySaved: current.locallySaved,
 			remotePaused: current.paused,
 			dirty: !current.saved,
