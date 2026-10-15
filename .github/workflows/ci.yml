@@ -68,8 +68,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes redis-server
 
-      - name: Run application tests
-        run: bun run test
+      - name: Run full application validation
+        run: bun beignet check
 
       - name: Build and verify packaged Yjs under Bun
         env:

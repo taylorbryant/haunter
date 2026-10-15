@@ -87,6 +87,9 @@ The command runs Beignet's dependency-direction lint and strict doctor checks,
 then the app's Biome lint, type check, and tests. Every check runs even when an
 earlier check fails. Use `bun run format` to apply Biome formatting.
 
+CI runs the same command, alongside production canvas-renderer and packaged-Yjs
+verification.
+
 Before opening a pull request, inspect the affected features and registrations:
 
 ```bash
