@@ -2,6 +2,10 @@ import "@beignet/core/server-only";
 import { z } from "zod";
 import { AGENT_CAPABILITY_DESCRIPTIONS } from "@/features/agents/capability-catalog";
 import {
+	CreateTaskInputSchema,
+	DueDateSchema,
+	DueTimeSchema,
+	ReminderOffsetMinutesSchema,
 	TASK_TITLE_MAX_LENGTH,
 	TASK_TITLE_TOO_LONG_MESSAGE,
 } from "@/features/tasks/schemas";
@@ -9,14 +13,6 @@ import { defineAgentCapability } from "@/lib/agent-capabilities";
 import { isDueOverdue } from "@/lib/due-date";
 import { localDateAndTime } from "@/lib/timezone";
 
-const DueDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const DueTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
-const ReminderOffsetMinutes = z.union([
-	z.literal(0),
-	z.literal(15),
-	z.literal(60),
-	z.literal(1_440),
-]);
 const WorkspaceInput = z.object({ workspaceId: z.string().min(1) });
 const TaskInput = WorkspaceInput.extend({ taskId: z.string().uuid() });
 
@@ -45,8 +41,8 @@ export function createTaskAgentCapabilities(
 				),
 			filter: z.enum(["open", "completed", "all"]).default("open"),
 			scope: z.enum(["mine", "everyone"]).default("mine"),
-			dueOnOrAfter: DueDate.optional(),
-			dueOnOrBefore: DueDate.optional(),
+			dueOnOrAfter: DueDateSchema.optional(),
+			dueOnOrBefore: DueDateSchema.optional(),
 			due: z.enum(["overdue", "today", "upcoming"]).optional(),
 			limit: z.number().int().min(1).max(200).default(50),
 		}).superRefine((input, ctx) => {
@@ -75,9 +71,9 @@ export function createTaskAgentCapabilities(
 					taskId: z.string().uuid(),
 					title: z.string(),
 					completed: z.boolean(),
-					dueDate: DueDate.nullable(),
-					dueTime: DueTime.nullable(),
-					reminderOffsetMinutes: ReminderOffsetMinutes.nullable(),
+					dueDate: DueDateSchema.nullable(),
+					dueTime: DueTimeSchema.nullable(),
+					reminderOffsetMinutes: ReminderOffsetMinutesSchema.nullable(),
 					assigneeId: z.string().nullable(),
 					assigneeName: z.string().nullable(),
 					pageId: z.string().uuid().nullable(),
@@ -155,28 +151,18 @@ export function createTaskAgentCapabilities(
 
 	const createTaskCapability = defineAgentCapability("create_task", {
 		description: AGENT_CAPABILITY_DESCRIPTIONS.create_task,
-		input: WorkspaceInput.extend({
+		input: CreateTaskInputSchema.safeExtend({
 			title: z.string().trim().min(1).max(TASK_TITLE_MAX_LENGTH, {
 				message: TASK_TITLE_TOO_LONG_MESSAGE,
 			}),
-			dueDate: DueDate.optional(),
-			dueTime: DueTime.optional(),
-			reminderOffsetMinutes: ReminderOffsetMinutes.optional(),
-			assigneeId: z.string().nullable().optional(),
-		}).refine(
-			(input) =>
-				(input.dueTime === undefined &&
-					input.reminderOffsetMinutes === undefined) ||
-				input.dueDate !== undefined,
-			{ message: "dueDate is required when dueTime or a reminder is set." },
-		),
+		}),
 		output: z.object({
 			taskId: z.string().uuid(),
 			title: z.string(),
 			completed: z.boolean(),
-			dueDate: DueDate.nullable(),
-			dueTime: DueTime.nullable(),
-			reminderOffsetMinutes: ReminderOffsetMinutes.nullable(),
+			dueDate: DueDateSchema.nullable(),
+			dueTime: DueTimeSchema.nullable(),
+			reminderOffsetMinutes: ReminderOffsetMinutesSchema.nullable(),
 			assigneeId: z.string().nullable(),
 			createdAt: z.string(),
 			updatedAt: z.string(),
@@ -223,9 +209,9 @@ export function createTaskAgentCapabilities(
 					message: TASK_TITLE_TOO_LONG_MESSAGE,
 				})
 				.optional(),
-			dueDate: DueDate.nullable().optional(),
-			dueTime: DueTime.nullable().optional(),
-			reminderOffsetMinutes: ReminderOffsetMinutes.nullable().optional(),
+			dueDate: DueDateSchema.nullable().optional(),
+			dueTime: DueTimeSchema.nullable().optional(),
+			reminderOffsetMinutes: ReminderOffsetMinutesSchema.nullable().optional(),
 			assigneeId: z.string().nullable().optional(),
 		}).refine(
 			(input) =>
@@ -243,9 +229,9 @@ export function createTaskAgentCapabilities(
 			taskId: z.string().uuid(),
 			title: z.string(),
 			completed: z.boolean(),
-			dueDate: DueDate.nullable(),
-			dueTime: DueTime.nullable(),
-			reminderOffsetMinutes: ReminderOffsetMinutes.nullable(),
+			dueDate: DueDateSchema.nullable(),
+			dueTime: DueTimeSchema.nullable(),
+			reminderOffsetMinutes: ReminderOffsetMinutesSchema.nullable(),
 			assigneeId: z.string().nullable(),
 			updatedAt: z.string(),
 		}),

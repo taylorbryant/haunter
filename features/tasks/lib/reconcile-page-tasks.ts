@@ -9,13 +9,14 @@ import type {
 	TaskRepository,
 } from "@/features/tasks/ports";
 import type { Task } from "@/features/tasks/schemas";
+import {
+	DueDateSchema,
+	DueTimeSchema,
+	isTaskReminderOffset,
+} from "@/features/tasks/scheduling";
 import { extractTaskBlocks } from "./extract-task-blocks";
 import { createTaskAssignmentNotification } from "./task-assignment-notifications";
 import { hasTaskSchedulingChanged } from "./task-scheduling";
-
-const DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const DUE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-const REMINDER_OFFSETS = new Set([0, 15, 60, 1_440]);
 
 type TaskReconciliationPorts = {
 	members: MemberRepository;
@@ -35,14 +36,15 @@ async function validateTaskBlock(
 	},
 	validAssignees: Set<string>,
 ) {
-	if (block.due !== null && !DUE_DATE_PATTERN.test(block.due)) {
+	if (block.due !== null && !DueDateSchema.safeParse(block.due).success) {
 		throw appError("InvalidPageContent", {
 			message: "Task due dates must be YYYY-MM-DD.",
 			details: { blockId: block.blockId, due: block.due },
 		});
 	}
 	if (
-		(block.dueTime !== null && !DUE_TIME_PATTERN.test(block.dueTime)) ||
+		(block.dueTime !== null &&
+			!DueTimeSchema.safeParse(block.dueTime).success) ||
 		(block.dueTime !== null && block.due === null)
 	) {
 		throw appError("InvalidPageContent", {
@@ -56,7 +58,7 @@ async function validateTaskBlock(
 	}
 	if (
 		block.reminderOffsetMinutes !== null &&
-		(!REMINDER_OFFSETS.has(block.reminderOffsetMinutes) || block.due === null)
+		(!isTaskReminderOffset(block.reminderOffsetMinutes) || block.due === null)
 	) {
 		throw appError("InvalidPageContent", {
 			message:

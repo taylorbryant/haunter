@@ -24,5 +24,8 @@ describe("task reminder options", () => {
 		expect(parseTaskReminderOffset("1440")).toBe(1_440);
 		expect(parseTaskReminderOffset("30")).toBeNull();
 		expect(parseTaskReminderOffset("none")).toBeNull();
+		for (const value of ["", " ", "015", "15.0", "1e1", "-15"]) {
+			expect(parseTaskReminderOffset(value)).toBeNull();
+		}
 	});
 });

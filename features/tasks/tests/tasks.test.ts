@@ -33,6 +33,7 @@ import { AUTO_TASK_ASSIGNEE } from "../lib/task-block-props";
 import { createTaskAssignmentDeliveryPort } from "../notifications/assigned";
 import type { UpdateTaskData } from "../ports";
 import { TASK_TITLE_MAX_LENGTH, TASK_TITLE_TOO_LONG_MESSAGE } from "../schemas";
+import { TASK_REMINDER_OFFSETS } from "../scheduling";
 import {
 	actOnTaskNotificationUseCase,
 	createTaskUseCase,
@@ -414,6 +415,34 @@ describe("task reconciliation on page content save", () => {
 
 		const saved = await pages.findById(scope, page.id);
 		expect(saved?.content).toEqual(content);
+	});
+
+	it("reconciles every supported reminder from page task blocks", async () => {
+		const { tasks, scope, page, tester, ctx } = await createFixture();
+		await tester.run(
+			writeTestPageBody,
+			{
+				id: page.id,
+				content: TASK_REMINDER_OFFSETS.map((offset) =>
+					taskBlock(`reminder-${offset}`, `Reminder ${offset}`, {
+						due: "2026-10-15",
+						reminder: String(offset),
+					}),
+				),
+			},
+			{ ctx },
+		);
+		const rows = await tasks.listByPage(scope, page.id);
+		expect(rows).toHaveLength(TASK_REMINDER_OFFSETS.length);
+		for (const offset of TASK_REMINDER_OFFSETS) {
+			expect(
+				rows.find((row) => row.sourceBlockId === `reminder-${offset}`),
+			).toMatchObject({
+				dueDate: "2026-10-15",
+				dueTime: null,
+				reminderOffsetMinutes: offset,
+			});
+		}
 	});
 
 	it("rejects invalid page-derived task props", async () => {

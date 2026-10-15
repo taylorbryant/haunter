@@ -1,4 +1,16 @@
 import { z } from "zod";
+import {
+	DueDateSchema,
+	DueTimeSchema,
+	ReminderOffsetMinutesSchema,
+} from "./scheduling";
+
+export {
+	DueDateSchema,
+	DueTimeSchema,
+	ReminderOffsetMinutesSchema,
+	TASK_REMINDER_OFFSETS,
+} from "./scheduling";
 
 export const TASK_TITLE_MAX_LENGTH = 1_000;
 export const TASK_TITLE_TOO_LONG_MESSAGE =
@@ -8,22 +20,6 @@ const TaskTitleInputSchema = z
 	.string()
 	.min(1)
 	.max(TASK_TITLE_MAX_LENGTH, { message: TASK_TITLE_TOO_LONG_MESSAGE });
-
-export const DueDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
-	message: "Due date must be YYYY-MM-DD",
-});
-
-export const DueTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, {
-	message: "Due time must be HH:mm",
-});
-
-export const TASK_REMINDER_OFFSETS = [0, 15, 60, 1_440] as const;
-export const ReminderOffsetMinutesSchema = z.union([
-	z.literal(0),
-	z.literal(15),
-	z.literal(60),
-	z.literal(1_440),
-]);
 
 export const TaskSchema = z.object({
 	id: z.string().uuid(),
