@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import { draftRegistry } from "@/client/draft-registry";
 import { userErrorMessage } from "@/client/error-feedback";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { buildPageTreeIndex } from "./page-tree-controller";
@@ -64,9 +65,17 @@ export function usePageTrash() {
 			inFlight.current = true;
 			setPending(true);
 			try {
-				const pages = await queryClient.ensureQueryData(
-					listPagesQueryOptions(workspaceId),
-				);
+				const hierarchy = listPagesQueryOptions(workspaceId);
+				// A cached or already-running read can predate a collaborator's move.
+				await queryClient.cancelQueries({
+					queryKey: hierarchy.queryKey,
+					exact: true,
+				});
+				const pages = await queryClient.fetchQuery({
+					...hierarchy,
+					staleTime: 0,
+					meta: { errorMode: "inline" },
+				});
 				const subtree = buildPageTreeIndex(pages.items).subtreeIdsById.get(
 					pageId,
 				);
@@ -77,6 +86,20 @@ export function usePageTrash() {
 						throw new PageTrashSaveError();
 					const saved = await Promise.all(pageIds.map(flushPendingPageSave));
 					if (!saved.every(Boolean)) throw new PageTrashSaveError();
+					// Editors unregister on navigation, but their document sessions can
+					// still be syncing. Flush them after uploads and mounted fields settle.
+					const retainedPages = draftRegistry
+						.entries()
+						.filter(
+							({ identity }) =>
+								identity.workspaceId === workspaceId &&
+								identity.resourceType === "page" &&
+								pageIds.includes(identity.resourceId),
+						);
+					const retainedSaved = await Promise.all(
+						retainedPages.map((draft) => draft.flushServer()),
+					);
+					if (!retainedSaved.every(Boolean)) throw new PageTrashSaveError();
 				} catch {
 					throw new PageTrashSaveError();
 				}
