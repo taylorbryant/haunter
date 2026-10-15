@@ -76,11 +76,8 @@ export const attachFileUseCase = useCase
 							children: [],
 						},
 					]);
-					const current = await tx.documents.find(txScope, page.id);
-					if (!current) throw appError("InvalidPageContent");
 					return {
 						...saved,
-						generation: current.generation,
 						insertedBlockIds: [blockId],
 					};
 				},

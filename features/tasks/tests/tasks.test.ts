@@ -1,3 +1,4 @@
+import { createTestDocumentRepository } from "@/features/documents/tests/repository";
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
@@ -229,6 +230,7 @@ async function createFixture(
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
+			documents: createTestDocumentRepository(pages),
 			bestEffortWork,
 			gate: appPorts.gate,
 			members,

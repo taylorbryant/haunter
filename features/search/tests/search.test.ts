@@ -90,7 +90,7 @@ async function fixture() {
 		});
 		if (pageId) {
 			const parent = await repositories.pages.findById(scope, pageId);
-			await repositories.pages.restoreContent(scope, pageId, [
+			await repositories.documents.restoreBody(scope, pageId, [
 				...(parent?.content ?? []),
 				{
 					id: crypto.randomUUID(),
@@ -156,7 +156,7 @@ describe("workspace search", () => {
 	it("finds all resource types, ranks titles first, and returns navigable excerpts", async () => {
 		const f = await fixture();
 		const page = await f.page("Release notes");
-		await f.repositories.pages.restoreContent(f.scope, page.id, [
+		await f.repositories.documents.restoreBody(f.scope, page.id, [
 			{
 				id: "p",
 				type: "paragraph",
@@ -370,7 +370,7 @@ describe("workspace search", () => {
 		const page = await f.page("Parent");
 		await f.canvas("Needle diagram", page.id);
 		expect((await f.search("Needle")).items).toHaveLength(1);
-		await f.repositories.pages.restoreContent(f.scope, page.id, []);
+		await f.repositories.documents.restoreBody(f.scope, page.id, []);
 		expect((await f.search("Needle")).items).toEqual([]);
 	});
 

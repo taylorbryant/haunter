@@ -1,3 +1,4 @@
+import { createTestDocumentRepository } from "@/features/documents/tests/repository";
 import { describe, expect, it } from "bun:test";
 import { createUseCaseTester } from "@beignet/core/application";
 import { createTenantScope } from "@beignet/core/ports";
@@ -93,6 +94,7 @@ function createTester(
 		{
 			base: appPorts,
 			overrides: {
+				documents: createTestDocumentRepository(pages),
 				bestEffortWork: {
 					defer(work) {
 						void work();

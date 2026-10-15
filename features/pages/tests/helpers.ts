@@ -176,33 +176,6 @@ export function createTestPageRepository(): TestPageRepository {
 	}
 
 	const repository: TestPageRepository = {
-		async restoreContent(scope, id, content) {
-			return {
-				...(await repository.saveContent(
-					scope,
-					id,
-					JSON.stringify(content),
-					"",
-				)),
-				content,
-			};
-		},
-		async appendContent(scope, id, blocks) {
-			for (let attempt = 0; attempt < 3; attempt++) {
-				const page = await repository.findById(scope, id);
-				if (!page || page.deletedAt !== null) throw new Error("Page not found");
-				const content = [...page.content, ...blocks];
-				const saved = await repository.saveContentIf(
-					scope,
-					id,
-					JSON.stringify(content),
-					"",
-					page.contentUpdatedAt,
-				);
-				if (saved) return { ...saved, content };
-			}
-			throw new Error("Stale append");
-		},
 		async listMetaByWorkspace(scope) {
 			const workspaceId = tenantScopeId(scope);
 			return Array.from(pages.values())

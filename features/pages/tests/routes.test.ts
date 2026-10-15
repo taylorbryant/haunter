@@ -1,3 +1,4 @@
+import { createTestDocumentRepository } from "@/features/documents/tests/repository";
 import { describe, expect, it } from "bun:test";
 import { createMemoryRateLimiter, createStaticAuth } from "@beignet/core/ports";
 import {
@@ -93,6 +94,7 @@ async function createPagesTestApp(options: {
 	const fixture = createTestPorts<AppContext["ports"], AppTransactionPorts>({
 		base: appPorts,
 		overrides: {
+			documents: createTestDocumentRepository(pages),
 			gate: appPorts.gate,
 			members,
 			pageLinks,

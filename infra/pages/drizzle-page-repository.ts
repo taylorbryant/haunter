@@ -82,20 +82,6 @@ export function createDrizzlePageRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): PageRepository {
 	const repository: PageRepository = {
-		async restoreContent(scope, id, content) {
-			return createDrizzleDocumentRepository(db).restoreBody(
-				scope,
-				id,
-				content,
-			);
-		},
-		async appendContent(scope, id, blocks) {
-			return createDrizzleDocumentRepository(db).appendBlocks(
-				scope,
-				id,
-				blocks,
-			);
-		},
 		async listMetaByWorkspace(scope) {
 			const workspaceId = tenantScopeId(scope);
 			const rows = await db

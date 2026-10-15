@@ -67,7 +67,7 @@ export const restorePageVersionUseCase = useCase
 				await tx.pageVersions.prune(scope, page.id, VERSION_RETENTION);
 			}
 
-			const { content, ...result } = await tx.pages.restoreContent(
+			const saved = await tx.documents.restoreBody(
 				scope,
 				page.id,
 				version.content,
@@ -79,7 +79,7 @@ export const restorePageVersionUseCase = useCase
 				tx,
 				scope,
 				page,
-				content,
+				saved.content,
 				{
 					assignmentUser: user,
 					defaultTaskAssigneeId: user.id,
@@ -88,7 +88,12 @@ export const restorePageVersionUseCase = useCase
 
 			const { assignmentNotifications, ...publicDerivations } = derivations;
 			return {
-				result: { ...result, ...publicDerivations },
+				result: {
+					updatedAt: saved.updatedAt,
+					contentUpdatedAt: saved.contentUpdatedAt,
+					documentGeneration: saved.generation,
+					...publicDerivations,
+				},
 				assignmentNotifications,
 				workspaceId: page.workspaceId,
 			};

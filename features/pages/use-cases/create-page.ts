@@ -62,7 +62,7 @@ export const createPageUseCase = useCase
 
 				if (parent && input.appendToParentContent !== false) {
 					const pageLinkBlock = createSubpageLinkBlock(created);
-					const saved = await tx.pages.appendContent(scope, parent.id, [
+					const saved = await tx.documents.appendBlocks(scope, parent.id, [
 						pageLinkBlock,
 					]);
 					parentContentUpdatedAt = saved.contentUpdatedAt;

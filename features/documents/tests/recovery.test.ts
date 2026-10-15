@@ -237,10 +237,10 @@ test("a late persistence failure rolls back recovered pages and canvases togethe
 			return originalUow.transaction((tx) =>
 				work({
 					...tx,
-					pages: {
-						...tx.pages,
-						async restoreContent(...args) {
-							await tx.pages.restoreContent(...args);
+					documents: {
+						...tx.documents,
+						async restoreBody(...args) {
+							await tx.documents.restoreBody(...args);
 							throw new Error("Simulated persistence failure");
 						},
 					},
