@@ -80,7 +80,7 @@
 		"@shikijs/engine-javascript": "4.5.0",
 		"@shikijs/langs-precompiled": "4.5.0",
 		"@shikijs/themes": "4.5.0",
-		"@tanstack/react-query": "5.104.1",
+		"@tanstack/react-query": "5.104.2",
 		"@tldraw/assets": "5.5.2",
 		"@tldraw/sync": "5.5.2",
 		"@tldraw/sync-core": "5.5.2",
