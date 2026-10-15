@@ -277,7 +277,7 @@ test("companion entrypoints accept empty input and serve a self-contained MCP Ap
 			env.MCP_UI_DOMAIN,
 		);
 		expect(metadata?.["openai/widgetDomain"]).toBe(env.MCP_UI_DOMAIN);
-		expect(COMPANION_URI).toBe("ui://haunter/workspace/v3");
+		expect(COMPANION_URI).toBe("ui://haunter/workspace/v4");
 		expect(EDITOR_URI).toBe(COMPANION_URI);
 	} finally {
 		await f.database.close();

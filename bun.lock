@@ -34,7 +34,7 @@
         "@libsql/client": "0.18.0",
         "@modelcontextprotocol/ext-apps": "1.7.5",
         "@modelcontextprotocol/server": "2.3.1",
-        "@openai/mcp-extensions": "0.1.0",
+        "@openai/mcp-extensions": "0.2.0",
         "@shikijs/core": "4.5.0",
         "@shikijs/engine-javascript": "4.5.0",
         "@shikijs/langs-precompiled": "4.5.0",
@@ -499,7 +499,7 @@
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
 
-    "@openai/mcp-extensions": ["@openai/mcp-extensions@0.1.0", "", { "dependencies": { "@cfworker/json-schema": "^4.1.1", "zod": "4.4.3" }, "peerDependencies": { "@modelcontextprotocol/ext-apps": "^1.7.5", "@modelcontextprotocol/sdk": "^1.29.0" }, "optionalPeers": ["@modelcontextprotocol/ext-apps"] }, "sha512-AkQ7hRS9DSUTBHgwVwd+BO6yh1y75SldqNTt8YISUnJODKD3Esg+zC2mq96FMmgzCTV7VRykkgzBzkF6W1zkdw=="],
+    "@openai/mcp-extensions": ["@openai/mcp-extensions@0.2.0", "", { "dependencies": { "@cfworker/json-schema": "^4.1.1", "@modelcontextprotocol/core": "^2.0.0", "zod": "4.4.3" }, "peerDependencies": { "@modelcontextprotocol/ext-apps": "^1.7.5", "@modelcontextprotocol/sdk": "^1.29.0", "@modelcontextprotocol/server": "^2.0.0" }, "optionalPeers": ["@modelcontextprotocol/ext-apps", "@modelcontextprotocol/sdk", "@modelcontextprotocol/server"] }, "sha512-TQ5EtrWETR9vAwT14UHqV1WHYDIhOQCsNk02Q0n+8UeZWdo9xkDpFuTAS5iKxaUpcavdxL2+C8eKZdwt+JU/yQ=="],
 
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.43.0", "", {}, "sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg=="],
 
