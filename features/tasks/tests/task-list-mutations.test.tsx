@@ -14,11 +14,13 @@ import type { ComponentProps, ComponentType } from "react";
 import { subscribeUserErrors } from "@/client/error-feedback";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 import { listTasksQueryOptions } from "../client/queries";
-import type { TaskWithPage } from "../schemas";
+import type { TaskFilter, TaskWithPage } from "../schemas";
+
+let searchParams = new URLSearchParams();
 
 mock.module("next/navigation", () => ({
 	usePathname: () => "/w/workspace_1/tasks",
-	useSearchParams: () => new URLSearchParams(),
+	useSearchParams: () => searchParams,
 }));
 mock.module("@/client/use-draft-safe-router", () => ({
 	useDraftSafeRouter: () => ({ replace() {} }),
@@ -92,6 +94,7 @@ const cleanups: Array<() => void> = [];
 afterEach(() => {
 	cleanup();
 	for (const clean of cleanups.splice(0).reverse()) clean();
+	searchParams = new URLSearchParams();
 });
 
 const taskA: TaskWithPage = {
@@ -117,6 +120,140 @@ const taskB = {
 	id: "1a6aa7dd-878c-4589-af87-f5d1eec88a3d",
 	title: "Task B",
 };
+
+function setupFilterList(initialFilter: "open" | "completed", remount = true) {
+	let serverTask = {
+		...taskA,
+		completed: initialFilter === "completed",
+		completedAt: initialFilter === "completed" ? taskA.updatedAt : null,
+	};
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false, staleTime: 60_000 } },
+	});
+	cleanups.push(() => queryClient.clear());
+	const list = (filter: string | null) => ({
+		items:
+			filter === "all" || serverTask.completed === (filter === "completed")
+				? [serverTask]
+				: [],
+		hasMore: false,
+	});
+	for (const filter of ["open", "completed", "all"] as const) {
+		queryClient.setQueryData(
+			listTasksQueryOptions("workspace_1", filter).queryKey,
+			list(filter),
+		);
+	}
+	const write = Promise.withResolvers<void>();
+	const reads: string[] = [];
+	const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
+		Object.assign(
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				if (init?.method === "PATCH") {
+					await write.promise;
+					const { completed } = JSON.parse(String(init.body));
+					serverTask = {
+						...serverTask,
+						completed,
+						completedAt: completed ? taskA.updatedAt : null,
+					};
+					return Response.json(serverTask);
+				}
+				const filter = new URL(
+					String(input),
+					"http://localhost",
+				).searchParams.get("filter");
+				reads.push(filter ?? "all");
+				return Response.json(list(filter));
+			},
+			{ preconnect: fetch.preconnect },
+		),
+	);
+	cleanups.push(() => fetchMock.mockRestore());
+	let mount = 0;
+	function tree(filter: TaskFilter) {
+		searchParams = new URLSearchParams({ filter });
+		return (
+			<QueryClientProvider client={queryClient}>
+				<TaskList key={remount ? ++mount : "tasks"} workspaceId="workspace_1" />
+			</QueryClientProvider>
+		);
+	}
+	const view = render(tree(initialFilter));
+	return {
+		view,
+		queryClient,
+		reads,
+		user: userEvent.setup({ document: window.document }),
+		show: (filter: TaskFilter) => view.rerender(tree(filter)),
+		settle: async () => {
+			await act(async () => {
+				write.resolve();
+			});
+			await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+		},
+	};
+}
+
+for (const remount of [true, false]) {
+	for (const initialFilter of ["open", "completed"] as const) {
+		test(`${remount ? "remounting" : "switching"} task filters shows a ${initialFilter === "open" ? "completed" : "reopened"} task without polling`, async () => {
+			const { view, user, show, settle, reads, queryClient } = setupFilterList(
+				initialFilter,
+				remount,
+			);
+			const nextFilter = initialFilter === "open" ? "completed" : "open";
+			await user.click(
+				view.getByRole("checkbox", {
+					name: initialFilter === "open" ? "Mark task done" : "Mark task open",
+				}),
+			);
+			await settle();
+			await waitFor(() =>
+				expect(
+					queryClient.getQueryState(
+						listTasksQueryOptions("workspace_1", nextFilter).queryKey,
+					)?.isInvalidated,
+				).toBe(true),
+			);
+			show(nextFilter);
+			await waitFor(() =>
+				expect(view.getByRole("button", { name: "Task A" })).toBeTruthy(),
+			);
+			expect(reads).toContain(nextFilter);
+		});
+	}
+}
+
+test("remounting a fresh task list reuses its cache", async () => {
+	const { show, reads, view } = setupFilterList("open");
+	show("open");
+	await act(async () => {});
+	expect(view.getByRole("button", { name: "Task A" })).toBeTruthy();
+	expect(reads).toEqual([]);
+});
+
+test("remounting a stale task list during a save preserves optimism until the write settles", async () => {
+	const { view, user, show, settle, reads, queryClient } =
+		setupFilterList("open");
+	await user.click(view.getByRole("checkbox", { name: "Mark task done" }));
+	await waitFor(() =>
+		expect(view.queryByRole("button", { name: "Task A" })).toBeNull(),
+	);
+	await act(async () => {
+		await queryClient.invalidateQueries({
+			queryKey: listTasksQueryOptions("workspace_1", "open").queryKey,
+			refetchType: "none",
+		});
+	});
+	show("open");
+	await act(async () => {});
+	expect(reads).toEqual([]);
+	expect(view.queryByRole("button", { name: "Task A" })).toBeNull();
+	await settle();
+	await waitFor(() => expect(reads).toContain("open"));
+	expect(view.queryByRole("button", { name: "Task A" })).toBeNull();
+});
 
 function titleInput(view: ReturnType<typeof render>) {
 	const input = view.getByRole("textbox", { name: "Task name" });

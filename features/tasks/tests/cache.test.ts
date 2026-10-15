@@ -51,12 +51,6 @@ function output(completed: boolean): ListTasksOutput {
 	};
 }
 
-test("does not remount-refetch hydrated task lists", () => {
-	const options = listTasksQueryOptions("workspace_1", "open", "mine");
-
-	expect(options.refetchOnMount).toBe(false);
-});
-
 test("task cache updates leave infinite and custom query data untouched", async () => {
 	const queryClient = new QueryClient();
 	const queryKey = listTasksQueryOptions("workspace_1", "all").queryKey;

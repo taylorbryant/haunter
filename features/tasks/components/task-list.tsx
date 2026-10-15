@@ -158,8 +158,8 @@ export function TaskList({
 						}
 					: { taskId: focusedTaskId },
 		),
+		// Refresh stale filters on return, while still deferring during task writes.
 		...refetchOptions,
-		refetchOnMount: false,
 		enabled: deviceTime.ready && requestsEnabled,
 	});
 
