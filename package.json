@@ -124,7 +124,7 @@
 		"@beignet/cli": "0.0.56",
 		"@beignet/web": "0.0.56",
 		"@biomejs/biome": "2.5.15",
-		"@happy-dom/global-registrator": "20.14.6",
+		"@happy-dom/global-registrator": "21.0.1",
 		"@tailwindcss/postcss": "4.3.3",
 		"@testing-library/react": "16.3.3",
 		"@testing-library/user-event": "14.6.7",
