@@ -1,11 +1,13 @@
 import "@beignet/core/server-only";
 import {
 	EmbeddedEditorAuthorizationSchema,
+	EmbeddedAuthorizationResultSchema,
 	EmbeddedWorkspaceAuthorizationSchema,
 } from "@/features/agents/embedded-editor-session";
 import { CanvasReadOutputSchema } from "@/features/canvases/editing";
 import type { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
+import { mcpInvocationMeta } from "./mcp-metadata";
 import {
 	EDITOR_URI,
 	EditorInputSchema,
@@ -43,12 +45,19 @@ export function registerMcpEditor(
 				description:
 					"Bind an approved workspace session to the embedded app's proof challenge. Ordinary UI actions use Haunter's HTTP APIs.",
 				inputSchema: EmbeddedWorkspaceAuthorizationSchema,
+				outputSchema: EmbeddedAuthorizationResultSchema,
 				annotations: {
 					readOnlyHint: true,
 					destructiveHint: false,
 					openWorldHint: false,
 				},
-				_meta: { ui: { visibility: ["app"] } },
+				_meta: {
+					...mcpInvocationMeta(
+						"Authorizing workspace…",
+						"Workspace authorized",
+					),
+					ui: { visibility: ["app"] },
+				},
 			},
 			async (args) => {
 				try {
@@ -72,16 +81,20 @@ export function registerMcpEditor(
 				description:
 					"Bind a short-lived page or canvas session to the embedded editor's proof challenge.",
 				inputSchema: EmbeddedEditorAuthorizationSchema,
+				outputSchema: EmbeddedAuthorizationResultSchema,
 				annotations: {
 					readOnlyHint: true,
 					destructiveHint: false,
 					openWorldHint: false,
 				},
-				_meta: { ui: { visibility: ["app"] } },
+				_meta: {
+					...mcpInvocationMeta("Authorizing editor…", "Editor authorized"),
+					ui: { visibility: ["app"] },
+				},
 			},
 			async (args) => {
 				try {
-					const handoff = await input.authorize?.(args);
+					const handoff = await input.authorize!(args);
 					// This ID is not a credential. Only the iframe holding the verifier can redeem it.
 					return { content: [], structuredContent: handoff };
 				} catch (error) {
@@ -108,6 +121,7 @@ export function registerMcpEditor(
 				openWorldHint: false,
 			},
 			_meta: {
+				...mcpInvocationMeta("Preparing page editor…", "Page ready to open"),
 				ui: { resourceUri: EDITOR_URI, visibility: ["app", "model"] },
 				"openai/outputTemplate": EDITOR_URI,
 			},
@@ -160,6 +174,10 @@ export function registerMcpEditor(
 				openWorldHint: false,
 			},
 			_meta: {
+				...mcpInvocationMeta(
+					"Preparing canvas editor…",
+					"Canvas ready to open",
+				),
 				ui: { resourceUri: EDITOR_URI, visibility: ["app", "model"] },
 				"openai/outputTemplate": EDITOR_URI,
 			},

@@ -7,6 +7,10 @@ import {
 	ReadAttachmentMetadataSchema,
 	ReadAttachmentOutputSchema,
 } from "@/features/pages/attachments";
+import {
+	agentMcpMetadata,
+	haunterMcpIcons,
+} from "@/features/agents/server/mcp-metadata";
 import { registerMcpWorkspace } from "@/features/agents/server/mcp-workspace";
 import {
 	getEmbeddedWorkspaceUseCase,
@@ -17,7 +21,7 @@ import { authorizeEmbeddedWorkspaceUseCase } from "@/features/agents/use-cases/a
 import { appError } from "@/features/shared/errors";
 import { AgentCapabilityError } from "@beignet/core/agent-capabilities";
 import { isAppError } from "@beignet/core/errors";
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { Implementation, McpServer } from "@modelcontextprotocol/server";
 import { APIError } from "better-auth/api";
 import type { JWTPayload } from "jose";
 import { createMcpHandler } from "mcp-handler";
@@ -178,16 +182,21 @@ export function registerRemoteMcpTools(
 	}
 	for (const capability of agentCapabilities) {
 		if (!allowed.has(capability.name)) continue;
+		const metadata = agentMcpMetadata(capability.name);
 		server.registerTool(
 			capability.name,
 			{
+				title: metadata.title,
 				description: capability.description,
 				inputSchema: capability.input as ZodType,
-				...(["attach_file_to_page", "insert_canvas_image"].includes(
-					capability.name,
-				)
-					? { _meta: { "openai/fileParams": ["file"] } }
-					: {}),
+				_meta: {
+					...metadata._meta,
+					...(["attach_file_to_page", "insert_canvas_image"].includes(
+						capability.name,
+					)
+						? { "openai/fileParams": ["file"] }
+						: {}),
+				},
 				outputSchema:
 					capability.name === "read_canvas_image"
 						? CanvasImageMetadataSchema
@@ -385,11 +394,18 @@ export function createRemoteMcpRequestHandler(input: {
 	identity: RemoteMcpIdentity;
 	getServer: () => Promise<AgentCapabilityServer>;
 }) {
+	// mcp-handler forwards this to the SDK, but types only name and version.
+	const serverInfo = {
+		name: "haunter",
+		title: "Haunter",
+		description:
+			"Organize notes, tasks, and canvases with Haunter and your agents.",
+		websiteUrl: new URL(env.APP_URL).origin,
+		icons: haunterMcpIcons,
+		version: "1.0.0",
+	} satisfies Implementation;
 	return createMcpHandler((server) => registerRemoteMcpTools(server, input), {
-		serverInfo: {
-			name: "haunter",
-			version: "1.0.0",
-		},
+		serverInfo,
 		verboseLogs: false,
 	});
 }

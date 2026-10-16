@@ -1,6 +1,9 @@
 import { createTenantScope } from "@beignet/core/ports";
 import { z } from "zod";
-import { EmbeddedEditorAuthorizationSchema } from "../embedded-editor-session";
+import {
+	EmbeddedAuthorizationResultSchema,
+	EmbeddedEditorAuthorizationSchema,
+} from "../embedded-editor-session";
 import { appError } from "@/features/shared/errors";
 import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -14,7 +17,7 @@ export const authorizeEmbeddedEditorUseCase = useCase
 			clientId: z.string().min(1),
 		}),
 	)
-	.output(z.object({ id: z.uuid() }))
+	.output(EmbeddedAuthorizationResultSchema)
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
 		const connection = await ctx.ports.mcpConnections.findActive(

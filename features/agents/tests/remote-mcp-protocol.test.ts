@@ -5,6 +5,7 @@ import {
 	PROTOCOL_VERSION_META_KEY,
 } from "@modelcontextprotocol/server";
 import type { McpConnectionRow } from "@/features/agents/ports";
+import { env } from "@/lib/env";
 import { mcpCorsHeaders } from "@/lib/mcp-http";
 import { createRemoteMcpRequestHandler } from "@/server/remote-mcp";
 
@@ -242,6 +243,19 @@ describe("remote MCP protocol", () => {
 		expect(body.result?._meta).toMatchObject({
 			"io.modelcontextprotocol/serverInfo": {
 				name: "haunter",
+				title: "Haunter",
+				description: expect.stringContaining("notes, tasks, and canvases"),
+				websiteUrl: new URL(env.APP_URL).origin,
+				icons: [
+					expect.objectContaining({
+						theme: "light",
+						src: expect.stringContaining("data:image/svg+xml;base64,"),
+					}),
+					expect.objectContaining({
+						theme: "dark",
+						src: expect.stringContaining("data:image/svg+xml;base64,"),
+					}),
+				],
 				version: "1.0.0",
 			},
 		});
@@ -261,6 +275,123 @@ describe("remote MCP protocol", () => {
 		expect(names).not.toContain("update_page");
 		expect(names).not.toContain("delete_task");
 	});
+
+	test("advertises titles, bounded status labels, and output schemas without losing integration metadata", async () => {
+		const body = await json(
+			await createHandler("full")(modernRequest("tools/list")),
+		);
+		const tools = body.result?.tools as Array<{
+			name: string;
+			title: string;
+			outputSchema: Record<string, unknown>;
+			_meta: Record<string, unknown>;
+		}>;
+		expect(tools.length).toBeGreaterThan(0);
+		for (const tool of tools) {
+			expect(tool.title.length).toBeGreaterThan(0);
+			expect(tool.title).not.toContain("_");
+			expect(tool.outputSchema).toMatchObject({ type: "object" });
+			for (const key of [
+				"openai/toolInvocation/invoking",
+				"openai/toolInvocation/invoked",
+			]) {
+				const label = tool._meta[key];
+				expect(typeof label).toBe("string");
+				expect((label as string).length).toBeGreaterThan(0);
+				expect((label as string).length).toBeLessThanOrEqual(64);
+			}
+		}
+		expect(tools.find((tool) => tool.name === "create_page")).toMatchObject({
+			title: "Create pages",
+			_meta: {
+				"openai/toolInvocation/invoking": "Creating page…",
+				"openai/toolInvocation/invoked": "Page created",
+			},
+		});
+		for (const name of ["attach_file_to_page", "insert_canvas_image"])
+			expect(tools.find((tool) => tool.name === name)?._meta).toMatchObject({
+				"openai/fileParams": ["file"],
+			});
+		for (const name of [
+			"authorize_haunter_editor",
+			"authorize_haunter_workspace",
+		])
+			expect(tools.find((tool) => tool.name === name)).toMatchObject({
+				outputSchema: {
+					type: "object",
+					required: ["id"],
+					properties: { id: { type: "string", format: "uuid" } },
+				},
+				_meta: { ui: { visibility: ["app"] } },
+			});
+		expect(tools.find((tool) => tool.name === "search_mentions")).toMatchObject(
+			{
+				outputSchema: {
+					required: ["items"],
+					properties: {
+						items: {
+							type: "array",
+							maxItems: 20,
+							items: { properties: { type: { const: "resource_link" } } },
+						},
+					},
+				},
+				_meta: {
+					"openai/extensions": { "mentions/search": {} },
+					ui: { visibility: ["app"] },
+				},
+			},
+		);
+	});
+
+	test.each(["authorize_haunter_editor", "authorize_haunter_workspace"])(
+		"%s returns a declared handoff and preserves authorization errors",
+		async (name) => {
+			const { embeddedEditorFixture } = await import(
+				"./embedded-editor-fixture"
+			);
+			const f = await embeddedEditorFixture("view", "view");
+			try {
+				const handler = createRemoteMcpRequestHandler({
+					connection: f.connection,
+					identity: { userId: f.userId, clientId: f.connection.clientId },
+					getServer: async () => ({
+						ports: f.ctx.ports,
+						createServiceContext: async () => f.ctx,
+					}),
+				});
+				const args = {
+					workspaceId: f.workspaceId,
+					challenge: "x".repeat(43),
+					...(name === "authorize_haunter_editor" ? { pageId: f.page.id } : {}),
+				};
+				const authorized = await json(
+					await handler(modernRequest("tools/call", { name, arguments: args })),
+				);
+				expect(authorized.error).toBeUndefined();
+				expect(authorized.result?.isError).not.toBeTrue();
+				expect(authorized.result?.structuredContent).toEqual({
+					id: expect.any(String),
+				});
+				const denied = await json(
+					await handler(
+						modernRequest("tools/call", {
+							name,
+							arguments: { ...args, workspaceId: "foreign" },
+						}),
+					),
+				);
+				expect(denied.error).toBeUndefined();
+				expect(denied.result?.isError).toBeTrue();
+				expect(denied.result?.structuredContent).toBeUndefined();
+				expect(denied.result?.content).toEqual([
+					{ type: "text", text: "Forbidden" },
+				]);
+			} finally {
+				await f.database.close();
+			}
+		},
+	);
 
 	test("workspace controls are app-only and mutations are not labelled read-only", async () => {
 		const body = await json(await createHandler()(modernRequest("tools/list")));
@@ -314,6 +445,22 @@ describe("remote MCP protocol", () => {
 
 		expect(initializeResponse.status).toBe(200);
 		expect(initialized.result?.protocolVersion).toBe("2025-06-18");
+		expect(initialized.result?.serverInfo).toMatchObject({
+			name: "haunter",
+			title: "Haunter",
+			websiteUrl: new URL(env.APP_URL).origin,
+			icons: [
+				expect.objectContaining({ theme: "light" }),
+				expect.objectContaining({ theme: "dark" }),
+			],
+		});
+		expect(tools.find((tool) => tool.name === "read_page")).toMatchObject({
+			title: "Read pages",
+			_meta: {
+				"openai/toolInvocation/invoking": "Reading page…",
+				"openai/toolInvocation/invoked": "Page read",
+			},
+		});
 		expect(tools.map((tool) => tool.name)).toContain("read_page");
 		expect(tools.map((tool) => tool.name)).not.toContain("update_page");
 	});

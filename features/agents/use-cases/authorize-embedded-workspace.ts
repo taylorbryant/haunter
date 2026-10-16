@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { EmbeddedWorkspaceAuthorizationSchema } from "../embedded-editor-session";
+import {
+	EmbeddedAuthorizationResultSchema,
+	EmbeddedWorkspaceAuthorizationSchema,
+} from "../embedded-editor-session";
 import { appError } from "@/features/shared/errors";
 import { requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -13,7 +16,7 @@ export const authorizeEmbeddedWorkspaceUseCase = useCase
 			clientId: z.string().min(1),
 		}),
 	)
-	.output(z.object({ id: z.uuid() }))
+	.output(EmbeddedAuthorizationResultSchema)
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
 		const connection = await ctx.ports.mcpConnections.findActive(

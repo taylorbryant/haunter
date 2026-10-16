@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { type McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { appError } from "@/features/shared/errors";
-import { ghostSvgDataUri } from "@/lib/ghost-mark";
+import { haunterMcpIcons, mcpInvocationMeta } from "./mcp-metadata";
 import { parseMcpUiDomain } from "../mcp-ui-domain.js";
 import {
 	OpenHaunterInputSchema,
@@ -73,6 +73,8 @@ export function registerMcpCompanion(
 							.replaceAll('"', "&quot;"),
 					),
 					_meta: {
+						"openai/widgetDescription":
+							"Haunter workspace with pages, canvases, and tasks. Users can navigate and edit according to their connection permissions; the active view and selection are shared as conversation context when supported.",
 						ui: {
 							...(uiIdentity ? { domain: uiIdentity.domain } : {}),
 							permissions: { clipboardWrite: {} },
@@ -101,26 +103,14 @@ export function registerMcpCompanion(
 		"open_haunter",
 		{
 			title: "Haunter",
-			icons: [
-				{
-					src: ghostSvgDataUri(24),
-					mimeType: "image/svg+xml",
-					sizes: ["any"],
-					theme: "light",
-				},
-				{
-					src: ghostSvgDataUri(24, "#ffffff"),
-					mimeType: "image/svg+xml",
-					sizes: ["any"],
-					theme: "dark",
-				},
-			],
+			icons: haunterMcpIcons,
 			description:
 				"Open Haunter's Home or Tasks screen. Pass view=tasks with optional filter/scope, or workspaceId and taskId to focus a known task (including completed tasks). Find task IDs with list_tasks. This only navigates; editing follows the connection's explicit consent and workspace permissions. Current tasks and selections become conversation context automatically.",
 			inputSchema: OpenHaunterInputSchema,
 			outputSchema: OpenHaunterOutputSchema,
 			annotations: readOnlyAnnotations,
 			_meta: {
+				...mcpInvocationMeta("Preparing Haunter…", "Haunter ready to open"),
 				ui: { resourceUri: COMPANION_URI, visibility: ["app", "model"] },
 				"openai/outputTemplate": COMPANION_URI,
 				"openai/ui": { entrypoints: [{ type: "global" }, { type: "thread" }] },
@@ -192,8 +182,23 @@ export function registerMcpCompanion(
 			title: "Search Haunter page mentions",
 			description: "Find pages in currently authorized Haunter workspaces.",
 			inputSchema: z.object({ query: z.string().max(200) }),
+			outputSchema: z.object({
+				items: z
+					.array(
+						z.object({
+							type: z.literal("resource_link"),
+							uri: z.string(),
+							name: z.string(),
+							title: z.string(),
+							description: z.string(),
+							mimeType: z.literal("text/markdown"),
+						}),
+					)
+					.max(MAX_MENTION_RESULTS),
+			}),
 			annotations: readOnlyAnnotations,
 			_meta: {
+				...mcpInvocationMeta("Finding page mentions…", "Page mentions listed"),
 				"openai/extensions": { "mentions/search": {} },
 				ui: { visibility: ["app"] },
 			},

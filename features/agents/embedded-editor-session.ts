@@ -16,6 +16,8 @@ export const EmbeddedEditorAuthorizationSchema = z
 		(value) => Boolean(value.pageId) !== Boolean(value.canvasId),
 		"Choose exactly one page or canvas.",
 	);
+export const EmbeddedAuthorizationResultSchema = z.object({ id: z.uuid() });
+
 export const EmbeddedEditorExchangeSchema = z.object({
 	id: z.uuid(),
 	proofSecret: z.string().regex(/^[A-Za-z0-9_-]{43}$/),

@@ -1,5 +1,6 @@
 import "@beignet/core/server-only";
 import type { McpServer } from "@modelcontextprotocol/server";
+import { mcpInvocationMeta } from "./mcp-metadata";
 import type { z } from "zod";
 import {
 	EmbeddedWorkspaceInputSchema,
@@ -30,7 +31,10 @@ export function registerMcpWorkspace(
 				idempotentHint: true,
 				openWorldHint: false,
 			},
-			_meta: { ui: { visibility: ["app"] } },
+			_meta: {
+				...mcpInvocationMeta("Loading workspace…", "Workspace loaded"),
+				ui: { visibility: ["app"] },
+			},
 		},
 		async (args) => {
 			try {
@@ -61,7 +65,10 @@ export function registerMcpWorkspace(
 				destructiveHint: true,
 				openWorldHint: false,
 			},
-			_meta: { ui: { visibility: ["app"] } },
+			_meta: {
+				...mcpInvocationMeta("Updating workspace…", "Workspace updated"),
+				ui: { visibility: ["app"] },
+			},
 		},
 		async (args) => {
 			try {
