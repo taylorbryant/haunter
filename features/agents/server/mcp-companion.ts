@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { type McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { appError } from "@/features/shared/errors";
+import { ghostSvgDataUri } from "@/lib/ghost-mark";
 import { parseMcpUiDomain } from "../mcp-ui-domain.js";
 import {
 	OpenHaunterInputSchema,
@@ -100,6 +101,20 @@ export function registerMcpCompanion(
 		"open_haunter",
 		{
 			title: "Haunter",
+			icons: [
+				{
+					src: ghostSvgDataUri(24),
+					mimeType: "image/svg+xml",
+					sizes: ["any"],
+					theme: "light",
+				},
+				{
+					src: ghostSvgDataUri(24, "#ffffff"),
+					mimeType: "image/svg+xml",
+					sizes: ["any"],
+					theme: "dark",
+				},
+			],
 			description:
 				"Open Haunter's Home or Tasks screen. Pass view=tasks with optional filter/scope, or workspaceId and taskId to focus a known task (including completed tasks). Find task IDs with list_tasks. This only navigates; editing follows the connection's explicit consent and workspace permissions. Current tasks and selections become conversation context automatically.",
 			inputSchema: OpenHaunterInputSchema,
