@@ -175,6 +175,9 @@ test("real editor opens an authorized page and only allows Haunter's own iframe 
 		});
 		const resource = await f.rpc("resources/read", { uri: EDITOR_URI });
 		expect(resource.result?.contents?.[0]?._meta).toMatchObject({
+			"openai/widgetDescription": expect.stringContaining(
+				"Haunter workspace with pages, canvases, and tasks",
+			),
 			ui: {
 				permissions: { clipboardWrite: {} },
 				csp: {
@@ -241,7 +244,7 @@ test("companion entrypoints accept empty input and serve a self-contained MCP Ap
 		expect(
 			listed.result?.tools?.find((tool) => tool.name === "search_mentions")
 				?._meta,
-		).toEqual({
+		).toMatchObject({
 			"openai/extensions": { "mentions/search": {} },
 			ui: { visibility: ["app"] },
 		});
@@ -263,6 +266,9 @@ test("companion entrypoints accept empty input and serve a self-contained MCP Ap
 		expect(html).not.toMatch(/<script[^>]+src=/);
 		expect(html).not.toContain("<!-- script -->");
 		expect(resource.result?.contents?.[0]?._meta).toMatchObject({
+			"openai/widgetDescription": expect.stringContaining(
+				"Haunter workspace with pages, canvases, and tasks",
+			),
 			ui: {
 				permissions: { clipboardWrite: {} },
 				csp: {
