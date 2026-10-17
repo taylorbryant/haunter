@@ -25,6 +25,7 @@ import {
 import type { CreatePageOutput, PageMeta } from "@/features/pages/schemas";
 
 const navigate = mock(() => {});
+let workspaceRole = "owner";
 mock.module("next/navigation", () => ({
 	usePathname: () => "/w/a/home",
 	useSearchParams: () => new URLSearchParams(),
@@ -36,7 +37,7 @@ mock.module("@/components/app-session-provider", () => ({
 		name: "Tester",
 		email: "test@example.com",
 	}),
-	useAppSession: () => ({ workspaceRole: "owner" }),
+	useAppSession: () => ({ workspaceRole }),
 }));
 
 let SearchCommand: typeof import("@/components/search-command").SearchCommand;
@@ -46,6 +47,7 @@ let SidebarProvider: typeof import("@/components/ui/sidebar").SidebarProvider;
 let Sidebar: typeof import("@/components/ui/sidebar").Sidebar;
 let SidebarTrigger: typeof import("@/components/ui/sidebar").SidebarTrigger;
 let AppCommands: typeof import("@/components/command-palette/app-commands").AppCommands;
+let KeyboardShortcutsCommand: typeof import("@/components/command-palette/keyboard-shortcuts").KeyboardShortcutsCommand;
 const clients: QueryClient[] = [];
 
 beforeAll(async () => {
@@ -58,12 +60,16 @@ beforeAll(async () => {
 		"@/components/ui/sidebar"
 	));
 	({ AppCommands } = await import("@/components/command-palette/app-commands"));
+	({ KeyboardShortcutsCommand } = await import(
+		"@/components/command-palette/keyboard-shortcuts"
+	));
 });
 afterEach(() => {
 	cleanup();
 	clients.splice(0).forEach((client) => client.clear());
 	mock.restore();
 	navigate.mockReset();
+	workspaceRole = "owner";
 });
 afterAll(uninstallTestDom);
 
@@ -83,6 +89,7 @@ function setup(width = 1024) {
 			<CommandRegistryProvider>
 				<AppCommands />
 				<SidebarProvider>
+					<KeyboardShortcutsCommand />
 					<DeviceTimeProvider
 						initialValue={deviceTimeAt(new Date(), "UTC")}
 						persistCookie={false}
@@ -155,9 +162,7 @@ test("creating a page from the command menu warms the editor before opening with
 				),
 			).toEqual(created);
 		});
-		await user.click(
-			view.getByRole("button", { name: "Create page" }),
-		);
+		await user.click(view.getByRole("button", { name: "Create page" }));
 		await waitFor(() => {
 			expect(view.queryByRole("alert")?.textContent).toBeUndefined();
 			expect(navigate).toHaveBeenCalledWith(`/w/a/p/${created.id}`);
@@ -184,7 +189,74 @@ async function openSearch(
 	return launcher;
 }
 
+test("viewers can open keyboard shortcuts without unavailable creation commands", async () => {
+	workspaceRole = "viewer";
+	const view = setup();
+	const user = userEvent.setup({ document });
+	await openSearch(view, user);
+	await user.type(await view.findByRole("combobox"), ">keyboard shortcuts");
+	await user.keyboard("{Enter}");
+	const dialog = within(
+		await view.findByRole("dialog", { name: "Keyboard shortcuts" }),
+	);
+	expect(dialog.getByRole("heading", { name: "General" })).toBeDefined();
+	expect(dialog.queryByRole("heading", { name: "Create" })).toBeNull();
+	expect(dialog.queryByText("Create page")).toBeNull();
+	expect(dialog.queryByText("Create task")).toBeNull();
+});
+
 for (const width of [1024, 390]) {
+	for (const method of ["keyboard", "pointer"] as const) {
+		test(`keyboard shortcuts opens from search and returns focus (${method}, ${width}px)`, async () => {
+			const view = setup(width);
+			const user = userEvent.setup({ document });
+			const launcher = await openSearch(view, user, width);
+			await user.type(
+				await view.findByRole("combobox"),
+				method === "keyboard" ? ">keyboard shortcuts" : ">hotkeys",
+			);
+			if (method === "keyboard") await user.keyboard("{Enter}");
+			else
+				await user.click(
+					view.getByRole("option", { name: "Keyboard shortcuts" }),
+				);
+			const dialog = await view.findByRole("dialog", {
+				name: "Keyboard shortcuts",
+			});
+			await waitFor(() => {
+				expect(view.queryByRole("combobox")).toBeNull();
+				expect(view.queryByRole("dialog", { name: "Sidebar" })).toBeNull();
+				expect(dialog.contains(document.activeElement)).toBe(true);
+			});
+			const shortcuts = within(dialog);
+			expect(
+				shortcuts.getByText("Use ⌘ on Mac or Ctrl on Windows and Linux."),
+			).toBeDefined();
+			for (const label of [
+				"Create page",
+				"Create task",
+				"Bold",
+				"Draw",
+				"Save and close",
+			]) {
+				expect(shortcuts.getByText(label)).toBeDefined();
+			}
+			await user.tab();
+			expect(dialog.contains(document.activeElement)).toBe(true);
+			if (method === "keyboard") await user.keyboard("{Escape}");
+			else await user.click(shortcuts.getByRole("button", { name: "Done" }));
+			await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+			await waitFor(() =>
+				expect(
+					document.activeElement ===
+						(width < 768
+							? view.getByRole("button", { name: "Toggle Sidebar" })
+							: launcher),
+				).toBe(true),
+			);
+		});
+	}
+
 	for (const method of ["keyboard", "pointer"] as const) {
 		for (const [kind, name] of [
 			["canvas", "Title"],

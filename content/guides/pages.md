@@ -42,7 +42,7 @@ For work you want to track or draw, insert a [task](/guides/tasks#add-a-task-ins
 
 Search includes saved page text, task titles, canvas titles, and text inside drawings. When text in a drawing matches, the result takes you to that shape, even if the drawing is inside a page. A task result opens that task in the Tasks view; choose **Show all tasks** to return to the full list.
 
-Type `>` in Search to find commands instead of content.
+Type `>` in Search to find commands instead of content. Choose **Keyboard shortcuts** to see the shortcuts for navigating Haunter, creating pages and tasks, editing pages, and drawing on canvases.
 
 Search does not read text in images or attached files, and it excludes deleted pages and older versions. To find those, use [Trash or page history](/guides/saving-and-recovery).
 
