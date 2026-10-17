@@ -7,6 +7,7 @@ import {
 	useWorkspacePathname,
 } from "@/client/workspace-navigation";
 import { SearchCommand } from "@/components/search-command";
+import { KeyboardShortcutsCommand } from "@/components/command-palette/keyboard-shortcuts";
 import {
 	Sidebar,
 	SidebarContent,
@@ -53,50 +54,56 @@ export function WorkspaceSidebar({
 	className?: string;
 }) {
 	return (
-		<Sidebar className={className}>
-			<SidebarHeader>
-				<div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-start">
-					<div className="min-w-0 flex-1 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex-none">
-						{workspaceSwitcher}
-					</div>
-					{headerActions ? (
-						<SidebarMenu className="w-fit shrink-0 group-data-[collapsible=icon]:w-full">
-							{headerActions}
-						</SidebarMenu>
-					) : null}
-				</div>
-				<SidebarMenu className="gap-0.5">
-					<SearchCommand preferShiftShortcut={preferShiftShortcut} />
-					<WorkspaceNavItem workspaceId={workspaceId} section="home" />
-					{showTasks ? (
-						<WorkspaceNavItem workspaceId={workspaceId} section="tasks" />
-					) : null}
-					<WorkspaceNavItem workspaceId={workspaceId} section="canvases" />
-				</SidebarMenu>
-			</SidebarHeader>
-			<SidebarContent>
-				{workspaceId ? (
-					<>
-						<FavoriteItems workspaceId={workspaceId} />
-						<PageTree {...pageTreeProps} workspaceId={workspaceId} />
-					</>
-				) : null}
-				{workspaceId || utilityActions ? (
-					<SidebarGroup className="mt-auto">
-						<SidebarGroupContent>
-							<SidebarMenu>
-								{utilityActions}
-								{workspaceId ? (
-									<WorkspaceNavItem workspaceId={workspaceId} section="trash" />
-								) : null}
+		<>
+			<KeyboardShortcutsCommand />
+			<Sidebar className={className}>
+				<SidebarHeader>
+					<div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-start">
+						<div className="min-w-0 flex-1 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex-none">
+							{workspaceSwitcher}
+						</div>
+						{headerActions ? (
+							<SidebarMenu className="w-fit shrink-0 group-data-[collapsible=icon]:w-full">
+								{headerActions}
 							</SidebarMenu>
-						</SidebarGroupContent>
-					</SidebarGroup>
-				) : null}
-			</SidebarContent>
-			<SidebarFooter>{footer}</SidebarFooter>
-			<SidebarRail />
-		</Sidebar>
+						) : null}
+					</div>
+					<SidebarMenu className="gap-0.5">
+						<SearchCommand preferShiftShortcut={preferShiftShortcut} />
+						<WorkspaceNavItem workspaceId={workspaceId} section="home" />
+						{showTasks ? (
+							<WorkspaceNavItem workspaceId={workspaceId} section="tasks" />
+						) : null}
+						<WorkspaceNavItem workspaceId={workspaceId} section="canvases" />
+					</SidebarMenu>
+				</SidebarHeader>
+				<SidebarContent>
+					{workspaceId ? (
+						<>
+							<FavoriteItems workspaceId={workspaceId} />
+							<PageTree {...pageTreeProps} workspaceId={workspaceId} />
+						</>
+					) : null}
+					{workspaceId || utilityActions ? (
+						<SidebarGroup className="mt-auto">
+							<SidebarGroupContent>
+								<SidebarMenu>
+									{utilityActions}
+									{workspaceId ? (
+										<WorkspaceNavItem
+											workspaceId={workspaceId}
+											section="trash"
+										/>
+									) : null}
+								</SidebarMenu>
+							</SidebarGroupContent>
+						</SidebarGroup>
+					) : null}
+				</SidebarContent>
+				<SidebarFooter>{footer}</SidebarFooter>
+				<SidebarRail />
+			</Sidebar>
+		</>
 	);
 }
 
