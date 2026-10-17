@@ -72,8 +72,11 @@ try {
 			.getByRole("menuitem", { name: "Remove from favorites", exact: true })
 			.press("Escape");
 	await workspace
-		.getByRole("combobox", { name: "Haunter theme" })
-		.selectOption("dracula");
+		.getByRole("button", { name: "Appearance", exact: true })
+		.click();
+	await workspace
+		.getByRole("menuitemradio", { name: "Dracula", exact: true })
+		.click();
 	await sidebar("Home");
 	await workspace.getByRole("heading", { name: "Home", exact: true }).waitFor();
 	await workspace

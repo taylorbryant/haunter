@@ -38,6 +38,10 @@ import { embeddedEditorAuthHooks } from "@/server/embedded-editor-auth";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
 import { authorizeEmbeddedWorkspaceUseCase } from "../use-cases/authorize-embedded-workspace";
 import { embeddedEditorFixture } from "./embedded-editor-fixture";
+import { embeddedEditorRoutes } from "../routes";
+import { embeddedAppearanceChanges } from "../channels";
+import { useEmbeddedAppearance } from "../client/embedded-appearance";
+import { updateMcpSettingsUseCase } from "../use-cases/mcp-settings";
 
 // Embedded navigation must take precedence over the unchanged Next route.
 mock.module("next/navigation", () => ({
@@ -92,7 +96,7 @@ async function fixture(access: "view" | "edit" = "edit") {
 		ports: f.ctx.ports,
 		context: appContext,
 		hooks: [embeddedEditorAuthHooks, createIdempotencyHooks<AppContext>()],
-		routes: defineRoutes<AppContext>([taskRoutes]),
+		routes: defineRoutes<AppContext>([taskRoutes, embeddedEditorRoutes]),
 	});
 	const route = createBroadcastRoute({
 		server: app.server,
@@ -287,6 +291,7 @@ test.each(["view", "edit"] as const)(
 			allowed.unsubscribe();
 			await until(() => f.bus.subscriberCount() === 0);
 			for (const [channel, params] of [
+				[embeddedAppearanceChanges, { userId: "other-user" }],
 				[workspaceChanges, { workspaceId: "other-workspace" }],
 				[
 					workspaceFavorites,
@@ -334,3 +339,95 @@ test.each(["view", "edit"] as const)(
 		}
 	},
 );
+
+test("native settings refresh an open embedded panel on the same stream and reconcile after reconnecting", async () => {
+	const f = await fixture("view");
+	const client = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	});
+	const uninstallCredential = installSessionCredential(
+		async () => f.session.token,
+	);
+	const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+		Object.assign(
+			(input: RequestInfo | URL, init?: RequestInit) =>
+				f.fetchRequest(input, init),
+			{ preconnect: fetch.preconnect },
+		),
+	);
+	function Appearance() {
+		const appearance = useEmbeddedAppearance();
+		return <output aria-label="Theme">{appearance.theme}</output>;
+	}
+	try {
+		const view = render(
+			<QueryClientProvider client={client}>
+				<AppSessionProvider
+					value={{
+						user: {
+							id: f.userId,
+							name: "User",
+							email: "user@example.test",
+							image: null,
+						},
+						activeWorkspaceId: f.workspaceId,
+						workspaceRole: "viewer",
+						isAdmin: false,
+					}}
+					embedded
+					verifySession={async () => ({
+						userId: f.userId,
+						workspaceId: f.workspaceId,
+						role: "viewer",
+					})}
+				>
+					<Subscriber workspaceId={f.workspaceId} embeddedAppearance />
+					<Appearance />
+				</AppSessionProvider>
+			</QueryClientProvider>,
+		);
+		await until(() => f.bus.subscriberCount() === 4);
+		await waitFor(() =>
+			expect(view.getByRole("status", { name: "Theme" }).textContent).toBe(
+				"host",
+			),
+		);
+		await act(async () => {
+			await updateMcpSettingsUseCase.run({
+				ctx: f.ctx,
+				input: {
+					userId: f.userId,
+					clientId: f.connection.clientId,
+					appearance: { theme: "dracula" },
+				},
+			});
+			await f.work.flush();
+		});
+		await waitFor(() =>
+			expect(view.getByRole("status", { name: "Theme" }).textContent).toBe(
+				"dracula",
+			),
+		);
+		expect(f.acquired()).toBe(1);
+		// Missed events are recovered on reconnect, including changes made elsewhere.
+		await f.ctx.ports.embeddedAppearance.set(f.userId, { theme: "nord" });
+		await act(async () => f.bus.disconnect());
+		await waitFor(
+			() =>
+				expect(view.getByRole("status", { name: "Theme" }).textContent).toBe(
+					"nord",
+				),
+			{ timeout: 5000 },
+		);
+		view.unmount();
+		await until(
+			() => f.bus.subscriberCount() === 0 && f.released() === f.acquired(),
+		);
+	} finally {
+		cleanup();
+		client.clear();
+		uninstallCredential();
+		fetchSpy.mockRestore();
+		await f.close();
+	}
+}, 10000);

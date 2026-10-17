@@ -16,8 +16,10 @@ const liveUpdatesEnabled = process.env.NEXT_PUBLIC_LIVE_UPDATES === "true";
 export function WorkspaceEventSubscriber({
 	workspaceId,
 	navigation,
+	embeddedAppearance = false,
 }: {
 	workspaceId: string;
+	embeddedAppearance?: boolean;
 	/** Embedded navigation changes without changing the Next.js route params. */
 	navigation?: {
 		pageId: string | undefined;
@@ -48,6 +50,7 @@ export function WorkspaceEventSubscriber({
 			queryClient,
 			userId: currentUserId,
 			workspaceId,
+			embeddedAppearance,
 			getClock: client.getClock,
 			getCurrentPageId: () => viewRef.current.pageId,
 			onPageRemoved(pageId) {
@@ -77,6 +80,12 @@ export function WorkspaceEventSubscriber({
 				client.close();
 			}
 		};
-	}, [requestsEnabled, currentUserId, queryClient, workspaceId]);
+	}, [
+		requestsEnabled,
+		currentUserId,
+		queryClient,
+		workspaceId,
+		embeddedAppearance,
+	]);
 	return null;
 }

@@ -9,6 +9,7 @@ import {
 } from "@beignet/react-query";
 import { matchQuery, type QueryClient } from "@tanstack/react-query";
 import { rq } from "@/client";
+import { subscribeToEmbeddedAppearanceChanges } from "@/features/agents/client/embedded-appearance-broadcasts";
 import {
 	clearPageAgentActivity,
 	receivePageAgentActivity,
@@ -49,6 +50,7 @@ export function subscribeToWorkspaceChanges(options: {
 	onError?(error: unknown): void;
 	onSync?(info: BroadcastConnectionInfo): void;
 	refreshGate?: BroadcastRefreshGate;
+	embeddedAppearance?: boolean;
 }) {
 	const { queryClient, userId, workspaceId } = options;
 	const clearPagePresence = () =>
@@ -94,7 +96,16 @@ export function subscribeToWorkspaceChanges(options: {
 	let subscription: BroadcastClientSubscription | undefined;
 	let canvasSubscription: BroadcastClientSubscription | undefined;
 	let favoritesSubscription: BroadcastClientSubscription | undefined;
+	let appearanceSubscription: BroadcastClientSubscription | undefined;
 	try {
+		if (options.embeddedAppearance) {
+			appearanceSubscription = subscribeToEmbeddedAppearanceChanges({
+				client: options.client,
+				queryClient,
+				userId,
+				onError: options.onError,
+			});
+		}
 		subscription = createBroadcastQuerySubscription({
 			client: options.client,
 			channel: workspaceChanges,
@@ -180,6 +191,7 @@ export function subscribeToWorkspaceChanges(options: {
 		subscription?.unsubscribe();
 		canvasSubscription?.unsubscribe();
 		favoritesSubscription?.unsubscribe();
+		appearanceSubscription?.unsubscribe();
 		throw error;
 	}
 	return () => {
@@ -191,5 +203,6 @@ export function subscribeToWorkspaceChanges(options: {
 		subscription?.unsubscribe();
 		canvasSubscription?.unsubscribe();
 		favoritesSubscription?.unsubscribe();
+		appearanceSubscription?.unsubscribe();
 	};
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useCase } from "@/lib/use-case";
 import { appError } from "@/features/shared/errors";
 import { EmbeddedAppearanceSchema } from "../schemas";
+import { saveEmbeddedAppearance } from "../server/embedded-appearance";
 
 export const getEmbeddedAppearanceUseCase = useCase
 	.query("agents.getEmbeddedAppearance")
@@ -19,6 +20,5 @@ export const updateEmbeddedAppearanceUseCase = useCase
 	.output(EmbeddedAppearanceSchema)
 	.run(async ({ ctx, input }) => {
 		if (ctx.embeddedEditor?.scope !== "workspace") throw appError("Forbidden");
-		await ctx.ports.embeddedAppearance.set(ctx.embeddedEditor.user.id, input);
-		return input;
+		return saveEmbeddedAppearance(ctx, ctx.embeddedEditor.user.id, input);
 	});

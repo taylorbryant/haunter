@@ -8,6 +8,7 @@ import type { McpConnectionRow } from "@/features/agents/ports";
 import { env } from "@/lib/env";
 import { mcpCorsHeaders } from "@/lib/mcp-http";
 import { createRemoteMcpRequestHandler } from "@/server/remote-mcp";
+import { APP_THEMES } from "@/lib/themes";
 
 const connection: McpConnectionRow = {
 	id: "connection_test",
@@ -232,6 +233,150 @@ async function legacyJson(response: Response) {
 }
 
 describe("remote MCP protocol", () => {
+	test("advertises native settings on both protocol versions", async () => {
+		const capability = {
+			readTool: "read_haunter_settings",
+			updateTool: "update_haunter_settings",
+		};
+		const modern = await json(
+			await createHandler()(modernRequest("server/discover")),
+		);
+		expect(modern.result?.capabilities).toMatchObject({
+			extensions: { "openai/settings": capability },
+		});
+		const legacy = await legacyJson(
+			await createHandler()(
+				legacyRequest(1, "initialize", {
+					protocolVersion: "2025-06-18",
+					capabilities: {},
+					clientInfo: { name: "Settings test", version: "1" },
+				}),
+			),
+		);
+		expect(legacy.result?.capabilities).toMatchObject({
+			experimental: { "openai/settings": capability },
+		});
+		const listed = await json(
+			await createHandler()(modernRequest("tools/list")),
+		);
+		const tools = listed.result?.tools as Array<{ name: string }>;
+		for (const name of [capability.readTool, capability.updateTool]) {
+			expect(tools.find((tool) => tool.name === name)).toMatchObject({
+				annotations: {
+					readOnlyHint: name === capability.readTool,
+					destructiveHint: false,
+					idempotentHint: true,
+					openWorldHint: false,
+				},
+				_meta: { ui: { visibility: ["app"] } },
+			});
+		}
+	});
+
+	test.each(["view", "edit"] as const)(
+		"%s connections can save personal settings, but cannot change another user's settings or use a revoked connection",
+		async (access) => {
+			const { embeddedEditorFixture } = await import(
+				"./embedded-editor-fixture"
+			);
+			const f = await embeddedEditorFixture(access, access);
+			try {
+				const handler = createRemoteMcpRequestHandler({
+					connection: f.connection,
+					identity: { userId: f.userId, clientId: f.connection.clientId },
+					getServer: async () => ({
+						ports: f.ctx.ports,
+						createServiceContext: async () => f.ctx,
+					}),
+				});
+				const call = async (name: string, args: Record<string, unknown> = {}) =>
+					json(
+						await handler(
+							modernRequest("tools/call", { name, arguments: args }),
+						),
+					);
+				const read = await call("read_haunter_settings");
+				expect(read.result?.structuredContent).toMatchObject({
+					schema: {
+						properties: {
+							theme: {
+								title: "Theme",
+								type: "string",
+								enum: [
+									"Follow host",
+									...APP_THEMES.map((theme) => theme.label),
+								],
+							},
+						},
+					},
+					values: { theme: "Follow host" },
+					layout: [
+						{
+							kind: "group",
+							title: "Appearance",
+							items: [{ kind: "property", property: "theme" }],
+						},
+					],
+				});
+				await f.ctx.ports.embeddedAppearance.set(f.userId, {
+					theme: "rose-pine",
+				});
+				expect(
+					(await call("read_haunter_settings")).result?.structuredContent,
+				).toMatchObject({ values: { theme: "Rosé Pine" } });
+				for (const theme of [
+					"Follow host",
+					...APP_THEMES.map((theme) => theme.label),
+				]) {
+					const saved = await call("update_haunter_settings", {
+						set: { theme },
+					});
+					expect(saved.result?.isError).not.toBeTrue();
+					expect(saved.result?.structuredContent).toEqual({
+						values: { theme },
+					});
+				}
+				await call("update_haunter_settings", { set: { theme: "Dracula" } });
+				expect(await f.ctx.ports.embeddedAppearance.get(f.userId)).toEqual({
+					theme: "dracula",
+				});
+				for (const args of [
+					{ set: {} },
+					{ set: { theme: "unknown" } },
+					{ set: { theme: "Dark", userId: "another-user" } },
+					{ set: { theme: "Dark" }, userId: "another-user" },
+				]) {
+					const invalid = await call("update_haunter_settings", args);
+					expect(Boolean(invalid.error || invalid.result?.isError)).toBeTrue();
+				}
+				expect(await f.ctx.ports.embeddedAppearance.get(f.userId)).toEqual({
+					theme: "dracula",
+				});
+				expect(
+					await f.ctx.ports.embeddedAppearance.get("another-user"),
+				).toEqual({ theme: "host" });
+				await f.ctx.ports.mcpConnections.disconnectOwned(
+					f.userId,
+					f.connection.id,
+					new Date(),
+				);
+				for (const [name, args] of [
+					["read_haunter_settings", {}],
+					["update_haunter_settings", { set: { theme: "Dark" } }],
+				] as const) {
+					const denied = await call(name, args);
+					expect(denied.result?.isError).toBeTrue();
+					expect(denied.result?.structuredContent).toBeUndefined();
+				}
+				expect(await f.ctx.ports.embeddedAppearance.get(f.userId)).toEqual({
+					theme: "dracula",
+				});
+			} finally {
+				await f.database.close();
+			}
+		},
+	);
+
 	test("serves native MCP v2 discovery", async () => {
 		const response = await createHandler()(modernRequest("server/discover"));
 		const body = await json(response);
