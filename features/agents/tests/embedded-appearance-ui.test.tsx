@@ -8,6 +8,8 @@ import {
 	waitForEmbeddedAppearanceWrites,
 } from "../client/embedded-appearance";
 import type { EmbeddedAppearance } from "../schemas";
+import { rq } from "@/client";
+import { getEmbeddedAppearance } from "../contracts";
 
 beforeEach(installTestDom);
 const cleanups: (() => void)[] = [];
@@ -106,4 +108,28 @@ test("failed saves stay visible and retry; closing waits for the pending save", 
 	await act(async () => finish?.());
 	expect(await closing).toBeTrue();
 	await waitFor(() => expect(panel.result.current.error).toBeNull());
+});
+
+test("a native settings refresh supersedes a failed local theme choice", async () => {
+	let saved: EmbeddedAppearance = { theme: "host" };
+	const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
+		Object.assign(
+			async (_url: RequestInfo | URL, init?: RequestInit) =>
+				init?.method === "PUT"
+					? Response.json({ message: "Unavailable" }, { status: 503 })
+					: Response.json(saved),
+			{ preconnect: fetch.preconnect },
+		),
+	);
+	cleanups.push(() => fetchMock.mockRestore());
+	const panel = openPanel();
+	await waitFor(() => expect(panel.result.current.loading).toBeFalse());
+	act(() => panel.result.current.change("dracula"));
+	await waitFor(() =>
+		expect(panel.result.current.error).toBe("Couldn’t save your theme."),
+	);
+	saved = { theme: "nord" };
+	await act(() => rq(getEmbeddedAppearance).invalidate(panel.client));
+	await waitFor(() => expect(panel.result.current.theme).toBe("nord"));
+	expect(panel.result.current.error).toBeNull();
 });

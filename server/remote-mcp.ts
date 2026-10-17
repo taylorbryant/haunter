@@ -12,6 +12,11 @@ import {
 	haunterMcpIcons,
 } from "@/features/agents/server/mcp-metadata";
 import { registerMcpWorkspace } from "@/features/agents/server/mcp-workspace";
+import { registerMcpSettings } from "@/features/agents/server/mcp-settings";
+import {
+	readMcpSettingsUseCase,
+	updateMcpSettingsUseCase,
+} from "@/features/agents/use-cases/mcp-settings";
 import {
 	getEmbeddedWorkspaceUseCase,
 	actInEmbeddedWorkspaceUseCase,
@@ -102,6 +107,19 @@ export function registerRemoteMcpTools(
 	},
 ) {
 	const allowed = allowedRemoteMcpCapabilities(input.connection);
+	registerMcpSettings(server, {
+		read: async () =>
+			readMcpSettingsUseCase.run({
+				ctx: await (await input.getServer()).createServiceContext(),
+				input: input.identity,
+			}),
+		update: async (appearance) =>
+			updateMcpSettingsUseCase.run({
+				ctx: await (await input.getServer()).createServiceContext(),
+				input: { ...input.identity, appearance },
+			}),
+		errorMessage: safeToolErrorMessage,
+	});
 	if (
 		["list_workspaces", "list_pages", "search_pages", "read_page"].every(
 			(name) => allowed.has(name),

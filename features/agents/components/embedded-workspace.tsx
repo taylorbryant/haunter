@@ -42,7 +42,7 @@ import { TaskViewProvider } from "@/features/tasks/client/task-view-context";
 import type { TaskView, SelectedTask } from "@/features/tasks/current-view";
 import { TrashView } from "@/features/pages/components/trash-view";
 import { EmbeddedEditorContext } from "@/features/pages/components/editor/embedded-editor-context";
-import { EmbeddedAppearancePicker } from "./embedded-appearance-picker";
+import { EmbeddedAppearanceMenu } from "./embedded-appearance-menu";
 import { useEmbeddedAppearance } from "../client/embedded-appearance";
 import { listEmbeddedWorkspaces } from "../contracts";
 import { pageResourceUri } from "../mcp-app/schemas";
@@ -257,6 +257,7 @@ function WorkspaceShell({
 			>
 				<CreateDialogProvider workspaceId={target.workspaceId}>
 					<WorkspaceEventSubscriber
+						embeddedAppearance
 						workspaceId={target.workspaceId}
 						navigation={{
 							pageId: target.pageId,
@@ -264,6 +265,7 @@ function WorkspaceShell({
 						}}
 					/>
 					<WorkspaceSidebar
+						footer={null}
 						workspaceId={target.workspaceId}
 						preferShiftShortcut
 						workspaceSwitcher={
@@ -287,10 +289,10 @@ function WorkspaceShell({
 							onRemoved,
 							beforeRemove,
 						}}
-						footer={<EmbeddedAppearancePicker appearance={appearance} />}
 					/>
 					<SidebarInset className="min-h-0" data-haunter-embedded-workspace>
 						<WorkspaceHeader>
+							<EmbeddedAppearanceMenu appearance={appearance} />
 							{target.canvasId ? (
 								<CanvasParentLink
 									canvasId={target.canvasId}
@@ -303,6 +305,14 @@ function WorkspaceShell({
 								onRemoved={onRemoved}
 							/>
 						</WorkspaceHeader>
+						{appearance.error && (
+							<p role="alert" className="px-3 py-2 text-sm text-destructive">
+								{appearance.error}{" "}
+								<Button variant="link" size="sm" onClick={appearance.retry}>
+									Retry
+								</Button>
+							</p>
+						)}
 						{error && (
 							<p role="alert" className="border-b p-3 text-sm text-destructive">
 								{error}

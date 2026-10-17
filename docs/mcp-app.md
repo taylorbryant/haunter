@@ -27,6 +27,14 @@ Navigation and the host's close handshake wait for pending saves; a failed save
 keeps the editor open. Forced frame destruction can interrupt that handshake.
 
 Embedded appearance is saved per user, separately from the web-app preference.
+The `openai/settings` capability exposes Theme through `read_haunter_settings`
+and `update_haunter_settings`. These app-only tools use the authenticated user's
+existing preference. Hosts render the selector in plugin settings; a compact
+Appearance menu in Haunter's header is available when native settings are absent.
+Changes notify that user's open panels over the existing broadcast stream and
+are reconciled after reconnecting. This requires the
+[live-update configuration](deployment.md#optional-services); the preference
+also refreshes when the window regains focus.
 **Follow host** uses the host's light/dark mode; named themes require an explicit
 selection. Sidebar collapse state uses local storage. With focus inside Haunter,
 Search accepts Cmd/Ctrl+K and Cmd/Ctrl+Shift+K to accommodate host shortcuts.

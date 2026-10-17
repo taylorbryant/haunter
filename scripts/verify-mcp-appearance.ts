@@ -18,9 +18,14 @@ const app = page.frameLocator("#app");
 const editor = app.frameLocator("#real-editor");
 const title = editor.getByRole("textbox", { name: "Page title", exact: true });
 async function selectTheme(value: string) {
-	await editor
-		.getByRole("combobox", { name: "Haunter theme", exact: true })
-		.selectOption(value);
+	const { APP_THEMES } = await import("../lib/themes");
+	const label =
+		value === "host"
+			? "Follow host"
+			: APP_THEMES.find((theme) => theme.id === value)?.label;
+	assert.ok(label);
+	await editor.getByRole("button", { name: "Appearance", exact: true }).click();
+	await editor.getByRole("menuitemradio", { name: label, exact: true }).click();
 }
 async function noOverflow() {
 	for (const locator of [app.locator("html"), editor.locator("html")]) {
@@ -65,7 +70,7 @@ try {
 	);
 	assert.equal(
 		await editor.getByRole("button", { name: /^Open page history/ }).count(),
-		0,
+		1,
 	);
 	await editor
 		.locator("header")

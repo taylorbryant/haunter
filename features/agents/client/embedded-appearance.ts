@@ -38,19 +38,34 @@ export function useEmbeddedAppearance() {
 	const queryClient = useQueryClient();
 	const options = rq(getEmbeddedAppearance).queryOptions({
 		staleTime: Infinity,
+		refetchOnWindowFocus: "always",
 		meta: { errorMode: "inline" },
 	});
 	const query = useQuery(options);
 	const mutation = useMutation({
 		...rq(updateEmbeddedAppearance).mutationOptions({
 			meta: { errorMode: "inline" },
-			onMutate: () => queryClient.cancelQueries({ queryKey: options.queryKey }),
+			onMutate: async () => {
+				await queryClient.cancelQueries({ queryKey: options.queryKey });
+				return {
+					dataUpdatedAt:
+						queryClient.getQueryState(options.queryKey)?.dataUpdatedAt ?? 0,
+				};
+			},
 			onSuccess: (data) => queryClient.setQueryData(options.queryKey, data),
 		}),
 		mutationKey: EMBEDDED_APPEARANCE_WRITE_KEY,
 	});
 	// Apply immediately, but disclose a failed save and retain the choice for retry.
-	const pending = mutation.isPending || mutation.isError;
+	// A later server refresh (for example from native settings) supersedes a
+	// failed local attempt. It must not stay hidden behind its optimistic value.
+	const failed =
+		mutation.isError &&
+		typeof mutation.context === "object" &&
+		mutation.context !== null &&
+		"dataUpdatedAt" in mutation.context &&
+		query.dataUpdatedAt === mutation.context.dataUpdatedAt;
+	const pending = mutation.isPending || failed;
 	const theme =
 		(pending ? mutation.variables?.body.theme : undefined) ??
 		query.data?.theme ??
@@ -59,7 +74,7 @@ export function useEmbeddedAppearance() {
 		theme,
 		loading: query.isPending && !query.isError,
 		saving: mutation.isPending,
-		error: mutation.isError
+		error: failed
 			? "Couldn’t save your theme."
 			: query.isError
 				? "Couldn’t load your theme."
@@ -67,8 +82,7 @@ export function useEmbeddedAppearance() {
 		change: (next: EmbeddedAppearance["theme"]) =>
 			mutation.mutate({ body: { theme: next } }),
 		retry: () => {
-			if (mutation.isError && mutation.variables)
-				mutation.mutate(mutation.variables);
+			if (failed && mutation.variables) mutation.mutate(mutation.variables);
 			else void query.refetch();
 		},
 	};
