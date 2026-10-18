@@ -16,7 +16,7 @@ export default function AppError({
 	}, [error]);
 
 	return (
-		<div className="mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-3xl flex-col items-center justify-center gap-3 px-6 py-24 text-center">
+		<div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center gap-3 px-6 py-24 text-center">
 			<GhostLogo className="size-10 text-muted-foreground" />
 			<div className="flex flex-col gap-1">
 				<h1 className="font-heading font-semibold text-xl">

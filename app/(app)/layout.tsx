@@ -79,10 +79,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 				<ActiveWorkspaceHintProvider value={activeWorkspaceId}>
 					<NotificationTimezoneInitializer />
 					<CommandRegistryProvider>
-						<SidebarProvider defaultOpen={defaultOpen}>
+						<SidebarProvider
+							defaultOpen={defaultOpen}
+							className="relative h-full min-h-0 overflow-hidden"
+						>
 							<WaitlistDialogProvider enabled={isAdmin}>
 								<AppCommands />
 								<AppSidebar
+									className="absolute h-full"
 									user={{
 										name: session.user.name ?? "",
 										email: session.user.email ?? "",
@@ -91,13 +95,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 									changelogReleases={changelogReleases}
 									isAdmin={isAdmin}
 								/>
-								<SidebarInset>
+								<SidebarInset className="min-h-0">
 									<WorkspaceHeader>
 										<HeaderPageAgents />
 										<HeaderPageActions />
 										<HeaderCanvasActions />
 									</WorkspaceHeader>
-									<div className="min-w-0 flex-1">{children}</div>
+									<div
+										data-app-scroll-root=""
+										className="min-h-0 min-w-0 flex-1 overflow-auto"
+									>
+										{children}
+									</div>
 								</SidebarInset>
 							</WaitlistDialogProvider>
 						</SidebarProvider>

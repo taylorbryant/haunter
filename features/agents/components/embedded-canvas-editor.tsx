@@ -96,7 +96,7 @@ export function EmbeddedCanvasEditor({
 							: "opening"
 			}
 		>
-			<div className="flex h-svh min-h-0 flex-col">
+			<div className="flex h-full min-h-0 flex-col">
 				<header className="flex shrink-0 items-center gap-3 border-b bg-background px-4 py-2">
 					<GhostLogo className="size-5" />
 					<span className="min-w-0 flex-1 truncate text-sm font-medium">

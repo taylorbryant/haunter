@@ -253,7 +253,7 @@ function WorkspaceShell({
 						/* optional */
 					}
 				}}
-				className="h-svh min-h-0 overflow-hidden bg-background text-foreground"
+				className="relative h-full min-h-0 overflow-hidden bg-background text-foreground"
 			>
 				<CreateDialogProvider workspaceId={target.workspaceId}>
 					<WorkspaceEventSubscriber
@@ -265,6 +265,7 @@ function WorkspaceShell({
 						}}
 					/>
 					<WorkspaceSidebar
+						className="absolute h-full"
 						footer={null}
 						workspaceId={target.workspaceId}
 						preferShiftShortcut
@@ -618,6 +619,7 @@ function WorkspaceDocument({
 		return (
 			<div
 				className="min-h-0 flex-1 overflow-auto"
+				data-app-scroll-root=""
 				data-haunter-embedded-editor
 			>
 				<EmbeddedEditorContext.Provider value={embedded}>
@@ -638,7 +640,7 @@ function WorkspaceDocument({
 		);
 	if (target.section === "home" || target.section === "tasks")
 		return (
-			<div className="min-h-0 flex-1 overflow-auto">
+			<div className="min-h-0 flex-1 overflow-auto" data-app-scroll-root="">
 				<TaskViewProvider
 					key={path}
 					initialTaskId={target.taskId}
@@ -653,7 +655,7 @@ function WorkspaceDocument({
 			</div>
 		);
 	return (
-		<div className="min-h-0 flex-1 overflow-auto">
+		<div className="min-h-0 flex-1 overflow-auto" data-app-scroll-root="">
 			{target.section === "canvases" ? (
 				<CanvasList
 					workspaceId={workspaceId}
