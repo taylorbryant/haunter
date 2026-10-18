@@ -395,6 +395,8 @@ test("Mermaid views preserve source, undo history, updates, and read-only access
 	});
 	await act(async () => {
 		editor.setTextCursorPosition("intro", "end");
+		editor.focus();
+		expect(container.querySelector("pre")?.hidden).toBe(true);
 		editor.setTextCursorPosition("diagram", "end");
 	});
 	expect(container.querySelector("pre")?.hidden).toBe(false);
@@ -430,4 +432,106 @@ test("invalid Mermaid remains editable and recovers when the source is fixed", a
 			container.querySelector(".haunter-mermaid-diagram svg"),
 		).not.toBeNull(),
 	);
+});
+
+test("Mermaid reveals source when content focus returns to the same block", async () => {
+	const editor = BlockNoteEditor.create({
+		schema: editorSchema,
+		initialContent: [
+			{
+				id: "diagram",
+				type: "codeBlock",
+				props: { language: "mermaid" },
+				content: "flowchart LR\n A --> B",
+			},
+		],
+	});
+	let container!: HTMLElement;
+	await act(async () => {
+		container = mountEditor(editor);
+	});
+	const ui = within(container);
+	const user = userEvent.setup({ document });
+	expect(editor.getTextCursorPosition().block.id).toBe("diagram");
+	expect(container.querySelector("pre")?.hidden).toBe(true);
+	// The page's body-focus action restores the existing selection.
+	await act(async () => {
+		editor.setTextCursorPosition("diagram", "start");
+		editor.focus();
+	});
+	expect(editor.isFocused()).toBe(true);
+	expect(container.querySelector("pre")?.hidden).toBe(false);
+	await user.click(ui.getByRole("button", { name: "Diagram" }));
+	expect(container.querySelector("pre")?.hidden).toBe(true);
+	await user.tab();
+	expect(document.activeElement).toBe(
+		ui.getByRole("button", { name: "Source" }),
+	);
+	expect(container.querySelector("pre")?.hidden).toBe(true);
+	// No selection transaction is needed to resume editing this block.
+	await act(async () => editor.focus());
+	expect(container.querySelector("pre")?.hidden).toBe(false);
+	await act(async () => typeText(editor, "%% Note\n"));
+	expect(editor.getBlock("diagram")?.content).toEqual([
+		{ type: "text", text: "%% Note\nflowchart LR\n A --> B", styles: {} },
+	]);
+	// Some pointer interactions leave content focus in place. A local caret
+	// change within this same block must also reveal its source.
+	await act(async () => ui.getByRole("button", { name: "Diagram" }).click());
+	expect(editor.isFocused()).toBe(true);
+	expect(container.querySelector("pre")?.hidden).toBe(true);
+	await act(async () => editor.setTextCursorPosition("diagram", "end"));
+	expect(container.querySelector("pre")?.hidden).toBe(false);
+});
+
+test("remote Mermaid edits preserve Diagram even when they move the focused cursor", async () => {
+	const sourceEditor = BlockNoteEditor.create({ schema: editorSchema });
+	editors.push(sourceEditor);
+	const source = blocksToYDoc(
+		sourceEditor,
+		[
+			{
+				id: "diagram",
+				type: "codeBlock",
+				props: { language: "mermaid" },
+				content: "flowchart LR\n A --> B",
+			},
+		],
+		PAGE_BODY_FRAGMENT,
+	);
+	docs.push(source);
+	let local!: ReturnType<typeof reopenDocument>;
+	let remote!: ReturnType<typeof reopenDocument>;
+	await act(async () => {
+		local = reopenDocument(source);
+		remote = reopenDocument(source);
+		local.editor.setTextCursorPosition("diagram", "end");
+		local.editor.focus();
+	});
+	await act(async () => {
+		within(local.container).getByRole("button", { name: "Diagram" }).click();
+	});
+	expect(local.editor.isFocused()).toBe(true);
+	expect(local.container.querySelector("pre")?.hidden).toBe(true);
+	const previousPosition = local.editor.prosemirrorView.state.selection.from;
+	await act(async () => {
+		remote.editor.updateBlock("diagram", {
+			content: "flowchart LR\n A[Updated remotely] --> B",
+		});
+		Y.applyUpdate(
+			local.doc,
+			Y.encodeStateAsUpdate(remote.doc, Y.encodeStateVector(local.doc)),
+		);
+	});
+	expect(local.editor.prosemirrorView.state.selection.from).not.toBe(
+		previousPosition,
+	);
+	expect(local.container.querySelector("pre")?.hidden).toBe(true);
+	await waitFor(() =>
+		expect(
+			local.container.querySelector(".haunter-mermaid-diagram")?.textContent,
+		).toContain("Updated remotely"),
+	);
+	await act(async () => local.editor.setTextCursorPosition("diagram", "start"));
+	expect(local.container.querySelector("pre")?.hidden).toBe(false);
 });

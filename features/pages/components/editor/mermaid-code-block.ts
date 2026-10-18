@@ -7,9 +7,16 @@ import {
 
 type DiagramEditor = {
 	readonly isEditable: boolean;
+	isFocused(): boolean;
 	getBlock(id: string): { type: string; content?: unknown } | undefined;
 	onChange(callback: () => void): () => void;
-	onSelectionChange(callback: () => void): () => void;
+	onSelectionChange(
+		callback: () => void,
+		includeSelectionChangedByRemote?: boolean,
+	): () => void;
+	onFocusChange(
+		callback: (editor: DiagramEditor, context: { focused: boolean }) => void,
+	): () => void;
 	getTextCursorPosition(): { block: { id: string } };
 	setTextCursorPosition(id: string, placement: "end"): void;
 	focus(): void;
@@ -80,26 +87,32 @@ export function mountMermaidCodeBlock({
 	);
 	update();
 	const unsubscribe = editor.onChange(update);
-	let cursorBlockId = editor.getTextCursorPosition().block.id;
-	const unsubscribeSelection = editor.onSelectionChange(() => {
-		// Keyboard navigation into the block must never leave an invisible caret.
-		const nextCursorBlockId = editor.getTextCursorPosition().block.id;
-		const entering = cursorBlockId !== nextCursorBlockId;
-		cursorBlockId = nextCursorBlockId;
+	const revealSourceForCursor = () => {
+		// Only content focus counts: header controls must keep Diagram selectable.
+		// Restoring focus can keep the same block and selection entirely unchanged.
 		if (
-			entering &&
 			view === "diagram" &&
 			editor.isEditable &&
-			cursorBlockId === blockId
+			editor.isFocused() &&
+			editor.getTextCursorPosition().block.id === blockId
 		) {
 			view = "source";
 			editorViews.set(blockId, view);
 			update();
 		}
+	};
+	// Remote edits can move the local selection without intending to edit source.
+	const unsubscribeSelection = editor.onSelectionChange(
+		revealSourceForCursor,
+		false,
+	);
+	const unsubscribeFocus = editor.onFocusChange((_editor, { focused }) => {
+		if (focused) revealSourceForCursor();
 	});
 	return () => {
 		unsubscribe();
 		unsubscribeSelection();
+		unsubscribeFocus();
 		controls.removeEventListener("keydown", handleControlsKeyDown);
 		viewControls.destroy();
 		preview.destroy();
