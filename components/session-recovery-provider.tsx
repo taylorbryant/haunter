@@ -237,7 +237,8 @@ export function SessionRecoveryProvider({
 		<RecoveryContext.Provider value={state}>
 			<div
 				ref={frame}
-				className="contents [&_[data-slot=sidebar-container]]:top-(--session-banner-height) [&_[data-slot=sidebar-container]]:h-[calc(100svh-var(--session-banner-height))] [&_[data-slot=sidebar-wrapper]]:min-h-[calc(100svh-var(--session-banner-height))] [&_main>header]:top-(--session-banner-height)"
+				// Keep the server-rendered layout valid before the banner is measured.
+				className="contents [--session-banner-height:0px] [&_[data-slot=sidebar-container]]:top-(--session-banner-height) [&_[data-slot=sidebar-container]]:h-[calc(100svh-var(--session-banner-height))] [&_[data-slot=sidebar-wrapper]]:min-h-[calc(100svh-var(--session-banner-height))] [&_main>header]:top-(--session-banner-height)"
 			>
 				{hidden ? (
 					<style>
