@@ -61,7 +61,7 @@ export function StandaloneCanvas({ canvasId }: { canvasId: string }) {
 
 	if (canvasQuery.isPending) {
 		return (
-			<div className="flex h-full items-center justify-center text-base text-muted-foreground sm:text-sm">
+			<div className="flex h-[calc(100svh-3rem)] items-center justify-center text-base text-muted-foreground sm:text-sm">
 				Loading canvas…
 			</div>
 		);
@@ -69,14 +69,14 @@ export function StandaloneCanvas({ canvasId }: { canvasId: string }) {
 
 	if (!canvasQuery.data) {
 		return (
-			<div className="flex h-full items-center justify-center p-6 text-center text-base text-muted-foreground sm:text-sm">
+			<div className="flex h-[calc(100svh-3rem)] items-center justify-center p-6 text-center text-base text-muted-foreground sm:text-sm">
 				This canvas could not be loaded.
 			</div>
 		);
 	}
 
 	return (
-		<div className="h-full min-h-96 border-t border-border">
+		<div className="h-[calc(100svh-3rem)] min-h-96 border-t border-border">
 			<CanvasSurface
 				canvasId={canvasId}
 				layoutKey="standalone"

@@ -49,7 +49,7 @@ function WorkspaceSyncFallback() {
 	return (
 		<div
 			role="status"
-			className="grid min-h-full place-content-center place-items-center gap-4 px-6 py-12 text-center text-muted-foreground"
+			className="grid min-h-[calc(100svh-3rem-var(--session-banner-height,0px))] place-content-center place-items-center gap-4 px-6 py-12 text-center text-muted-foreground"
 		>
 			<div aria-hidden className="motion-safe:animate-pulse">
 				<GhostLogo className="size-8" />

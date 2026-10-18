@@ -140,7 +140,7 @@ export function EmbeddedEditorFrame({
 	}, [status, pageId, canvasId, userId, setHostTheme, onContextSupport]);
 	return (
 		<main
-			className="isolate h-full overflow-x-clip bg-background text-foreground"
+			className="isolate min-h-svh overflow-x-clip bg-background text-foreground"
 			data-haunter-embedded-editor
 		>
 			{children}

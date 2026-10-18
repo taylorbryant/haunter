@@ -6,6 +6,7 @@ import {
 	type ReactNode,
 	useContext,
 	useEffect,
+	useLayoutEffect,
 	useRef,
 	useState,
 	useSyncExternalStore,
@@ -93,6 +94,8 @@ export function SessionRecoveryProvider({
 	);
 	const registry = useDraftRegistry();
 	const [dialogOpen, setDialogOpen] = useState(false);
+	const frame = useRef<HTMLDivElement>(null);
+	const banner = useRef<HTMLDivElement>(null);
 	const focusBookmark = useRef<{
 		element: HTMLElement | null;
 		range: Range | null;
@@ -197,6 +200,18 @@ export function SessionRecoveryProvider({
 	const syncing = entries.some((entry) => entry.getSnapshot().dirty);
 	const hidden = state.contentAccess === "hidden";
 	const showBanner = state.blocked || storageFailed;
+	useLayoutEffect(() => {
+		const update = () =>
+			frame.current?.style.setProperty(
+				"--session-banner-height",
+				`${banner.current?.getBoundingClientRect().height ?? 0}px`,
+			);
+		update();
+		if (!showBanner || !banner.current) return;
+		const observer = new ResizeObserver(update);
+		observer.observe(banner.current);
+		return () => observer.disconnect();
+	}, [showBanner]);
 	let message = state.message;
 	if (hidden)
 		message =
@@ -221,8 +236,9 @@ export function SessionRecoveryProvider({
 	return (
 		<RecoveryContext.Provider value={state}>
 			<div
-				data-slot="session-layout"
-				className="flex h-svh flex-col overflow-hidden"
+				ref={frame}
+				// Keep the server-rendered layout valid before the banner is measured.
+				className="contents [--session-banner-height:0px] [&_[data-slot=sidebar-container]]:top-(--session-banner-height) [&_[data-slot=sidebar-container]]:h-[calc(100svh-var(--session-banner-height))] [&_[data-slot=sidebar-wrapper]]:min-h-[calc(100svh-var(--session-banner-height))] [&_main>header]:top-(--session-banner-height)"
 			>
 				{hidden ? (
 					<style>
@@ -233,7 +249,8 @@ export function SessionRecoveryProvider({
 				) : null}
 				{showBanner ? (
 					<div
-						className="z-50 flex shrink-0 flex-wrap items-center gap-3 border-b border-amber-500/30 bg-background px-4 py-3 text-sm shadow-sm dark:shadow-none"
+						ref={banner}
+						className="sticky top-0 z-50 flex flex-wrap items-center gap-3 border-b border-amber-500/30 bg-background px-4 py-3 text-sm shadow-sm dark:shadow-none"
 						role="status"
 						aria-live="polite"
 					>
@@ -277,11 +294,9 @@ export function SessionRecoveryProvider({
 					</div>
 				) : null}
 				<div
-					data-slot="session-content"
-					data-app-scroll-root=""
 					hidden={hidden}
 					inert={state.contentAccess !== "available" ? true : undefined}
-					className={hidden ? "hidden" : "min-h-0 flex-1 overflow-auto"}
+					className={hidden ? "hidden" : "contents"}
 				>
 					{children}
 				</div>

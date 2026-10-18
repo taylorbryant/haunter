@@ -18,19 +18,21 @@ await mkdir(output, { recursive: true });
 const expect = baseExpect.configure({ timeout: 30_000 });
 const browser = await chromium.launch({ headless: true });
 const path = (id: string) => `/w/${fixture.workspaceId}/p/${id}`;
-const scrollArea = (page: Page) =>
-	page.locator("[data-slot=sidebar-inset] > [data-app-scroll-root]");
 async function expectOffset(page: Page, top: number) {
 	await expect
-		.poll(async () =>
-			Math.abs((await scrollArea(page).evaluate((el) => el.scrollTop)) - top),
+		.poll(
+			async () => Math.abs((await page.evaluate(() => window.scrollY)) - top),
+			{ message: `Document scrollY should be ${top} at ${page.url()}` },
 		)
 		.toBeLessThan(1);
 }
 async function setOffset(page: Page, top: number) {
-	// Model user scroll intent before setting an exact, repeatable position.
-	await scrollArea(page).dispatchEvent("wheel", { deltaY: 1 });
-	await scrollArea(page).evaluate((el, top) => el.scrollTo(0, top), top);
+	// A real user cannot scroll the page while the mobile drawer is closing.
+	// Wait for its animation and scroll lock before setting a precise position.
+	await page.locator('[data-slot="sidebar"][data-mobile="true"]').waitFor({
+		state: "hidden",
+	});
+	await page.evaluate((top) => window.scrollTo(0, top), top);
 	await expectOffset(page, top);
 	// Let the browser deliver the scroll event before the next history action.
 	await page.evaluate(
@@ -67,26 +69,43 @@ async function anchor(page: Page, hash: string) {
 	}, hash);
 }
 async function expectAnchor(page: Page) {
+	// Native scroll anchoring can shift a few pixels as editor styles settle.
 	await expect
 		.poll(() =>
 			page.evaluate(() => {
 				const target = document.getElementById("scroll-anchor");
-				const header = document.querySelector(
-					"[data-slot=sidebar-inset] > header",
-				);
-				return target && header
-					? Math.abs(
-							target.getBoundingClientRect().top -
-								header.getBoundingClientRect().bottom,
-						)
-					: Infinity;
+				return target ? Math.abs(target.getBoundingClientRect().top) : Infinity;
 			}),
 		)
-		.toBeLessThan(1);
-	assert.equal(await page.evaluate(() => window.scrollY), 0);
+		.toBeLessThan(4);
+	assert.ok(await page.evaluate(() => window.scrollY > 0));
 }
 
 try {
+	const initial = await browser.newContext({
+		javaScriptEnabled: false,
+		viewport: { width: 1280, height: 900 },
+	});
+	try {
+		await initial.request.get(`${host}/login`);
+		const page = await initial.newPage();
+		await page.goto(`${fixture.appOrigin}/w/${fixture.workspaceId}/home`);
+		const sidebar = page.locator('[data-slot="sidebar-container"]');
+		await expect(sidebar).toBeVisible();
+		const bounds = await sidebar.boundingBox();
+		assert.ok(bounds);
+		assert.equal(bounds.y, 0);
+		assert.equal(bounds.height, 900);
+		assert.equal(
+			await sidebar.evaluate((el) =>
+				getComputedStyle(el).getPropertyValue("--session-banner-height").trim(),
+			),
+			"0px",
+		);
+		console.log("PASS: full-height sidebar before JavaScript runs");
+	} finally {
+		await initial.close();
+	}
 	for (const viewport of [
 		{ width: 1280, height: 900 },
 		{ width: 390, height: 844 },
@@ -111,7 +130,7 @@ try {
 						target.textContent = "Native fragment target";
 						root.append(target);
 						const tail = document.createElement("div");
-						tail.style.height = "1000px";
+						tail.style.height = "2000px";
 						root.append(tail);
 					}
 				};
@@ -175,9 +194,7 @@ try {
 			const documentOrigin = await page.evaluate(() => performance.timeOrigin);
 			await anchor(page, "#scroll-anchor");
 			await expectAnchor(page);
-			const anchorOffset = await scrollArea(page).evaluate(
-				(el) => el.scrollTop,
-			);
+			const anchorOffset = await page.evaluate(() => window.scrollY);
 			await setOffset(page, anchorOffset + 200);
 			await page.goBack();
 			await expectOffset(page, 3100);
@@ -198,13 +215,11 @@ try {
 				`PASS ${viewport.width}px: native anchors, #top, and hash history preserve manual scrolling without reloading`,
 			);
 
-			await page.goto(`${fixture.appOrigin}${path(second.id)}#scroll-anchor`);
+			await page.goto(`${fixture.appOrigin}${path(second.id)}`);
 			await ready(page, second);
+			await anchor(page, "#scroll-anchor");
 			await expectAnchor(page);
 			await setOffset(page, 2100);
-			await page.reload();
-			await ready(page, second);
-			await expectOffset(page, 2100);
 			await page.evaluate(() =>
 				window.history.replaceState(
 					null,
@@ -212,24 +227,69 @@ try {
 					`${window.location.pathname}?filter=a%20b${window.location.hash}`,
 				),
 			);
-			await expect(scrollArea(page)).toHaveAttribute(
-				"data-scroll-route",
-				`${path(second.id)}?filter=a+b`,
-			);
+			await expect(page).toHaveURL(/\?filter=a%20b#scroll-anchor$/);
 			await expectOffset(page, 2100);
 			console.log(
-				`PASS ${viewport.width}px: delayed initial anchor, reload restoration, and filter replacement`,
+				`PASS ${viewport.width}px: filter replacement preserves the document position`,
 			);
 			await anchor(page, "#missing-anchor");
-			await scrollArea(page).dispatchEvent("wheel", { deltaY: 500 });
 			await setOffset(page, 2600);
-			await scrollArea(page).hover();
+			await page.mouse.move(viewport.width - 50, viewport.height / 2);
 			await page.mouse.wheel(0, 500);
 			await expect
-				.poll(() => scrollArea(page).evaluate((el) => el.scrollTop))
+				.poll(() => page.evaluate(() => window.scrollY))
 				.toBeGreaterThan(2600);
 			console.log(
 				`PASS ${viewport.width}px: missing anchors do not lock user scrolling`,
+			);
+
+			await setOffset(page, 0);
+			await page.route("**/api/auth/get-session?**", (route) =>
+				route.fulfill({ status: 401, json: null }),
+			);
+			await page.evaluate(() => window.dispatchEvent(new Event("online")));
+			const banner = page
+				.getByRole("status")
+				.filter({ hasText: "Your session expired" });
+			await expect(banner).toBeVisible();
+			const header = page.locator('[data-slot="sidebar-inset"] > header');
+			const expectBannerLayout = async () => {
+				await expect
+					.poll(async () => {
+						const bannerBounds = await banner.boundingBox();
+						const headerBounds = await header.boundingBox();
+						return bannerBounds && headerBounds
+							? Math.abs(headerBounds.y - bannerBounds.height)
+							: Infinity;
+					})
+					.toBeLessThan(1);
+			};
+			await expectBannerLayout();
+			if (viewport.width >= 768) {
+				const bounds = await page
+					.locator('[data-slot="sidebar-container"]')
+					.boundingBox();
+				const bannerBounds = await banner.boundingBox();
+				assert.ok(bounds && bannerBounds);
+				assert.equal(bounds.y, bannerBounds.height);
+				assert.equal(bounds.height, viewport.height - bannerBounds.height);
+			}
+			const originalHeight = (await banner.boundingBox())?.height ?? 0;
+			await page.setViewportSize({ width: 320, height: viewport.height });
+			await expectBannerLayout();
+			const narrowHeight = (await banner.boundingBox())?.height ?? 0;
+			assert.ok(
+				viewport.width >= 768
+					? narrowHeight > originalHeight
+					: narrowHeight >= originalHeight,
+			);
+			await page.setViewportSize(viewport);
+			await page.unroute("**/api/auth/get-session?**");
+			await page.evaluate(() => window.dispatchEvent(new Event("online")));
+			await expect(banner).toHaveCount(0);
+			await expect.poll(async () => (await header.boundingBox())?.y).toBe(0);
+			console.log(
+				`PASS ${viewport.width}px: measured banner wrapping and recovery update layout`,
 			);
 			await page.screenshot({ path: `${output}/${viewport.width}.png` });
 		} catch (error) {

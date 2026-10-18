@@ -8,7 +8,6 @@ import { AppCommands } from "@/components/command-palette/app-commands";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
 import { DeviceTimeProvider } from "@/components/device-time-provider";
 import { WorkspaceHeader } from "@/components/workspace-header";
-import { WorkspaceScrollArea } from "@/components/workspace-scroll-area";
 import { HeaderCanvasActions } from "@/components/header-canvas-actions";
 import { HeaderPageActions } from "@/components/header-page-actions";
 import { HeaderPageAgents } from "@/components/header-page-agents";
@@ -80,14 +79,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 				<ActiveWorkspaceHintProvider value={activeWorkspaceId}>
 					<NotificationTimezoneInitializer />
 					<CommandRegistryProvider>
-						<SidebarProvider
-							defaultOpen={defaultOpen}
-							className="relative h-full min-h-0 overflow-hidden"
-						>
+						<SidebarProvider defaultOpen={defaultOpen}>
 							<WaitlistDialogProvider enabled={isAdmin}>
 								<AppCommands />
 								<AppSidebar
-									className="absolute h-full"
 									user={{
 										name: session.user.name ?? "",
 										email: session.user.email ?? "",
@@ -96,13 +91,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 									changelogReleases={changelogReleases}
 									isAdmin={isAdmin}
 								/>
-								<SidebarInset className="min-h-0">
+								<SidebarInset>
 									<WorkspaceHeader>
 										<HeaderPageAgents />
 										<HeaderPageActions />
 										<HeaderCanvasActions />
 									</WorkspaceHeader>
-									<WorkspaceScrollArea>{children}</WorkspaceScrollArea>
+									<div className="min-w-0 flex-1">{children}</div>
 								</SidebarInset>
 							</WaitlistDialogProvider>
 						</SidebarProvider>
