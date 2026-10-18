@@ -8,6 +8,7 @@ import { AppCommands } from "@/components/command-palette/app-commands";
 import { CommandRegistryProvider } from "@/components/command-palette/registry";
 import { DeviceTimeProvider } from "@/components/device-time-provider";
 import { WorkspaceHeader } from "@/components/workspace-header";
+import { WorkspaceScrollArea } from "@/components/workspace-scroll-area";
 import { HeaderCanvasActions } from "@/components/header-canvas-actions";
 import { HeaderPageActions } from "@/components/header-page-actions";
 import { HeaderPageAgents } from "@/components/header-page-agents";
@@ -101,12 +102,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 										<HeaderPageActions />
 										<HeaderCanvasActions />
 									</WorkspaceHeader>
-									<div
-										data-app-scroll-root=""
-										className="min-h-0 min-w-0 flex-1 overflow-auto"
-									>
-										{children}
-									</div>
+									<WorkspaceScrollArea>{children}</WorkspaceScrollArea>
 								</SidebarInset>
 							</WaitlistDialogProvider>
 						</SidebarProvider>

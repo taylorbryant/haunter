@@ -104,6 +104,11 @@ includes branch commits since the merge base with the existing local
 See [Editor benchmarks](docs/editor-benchmarks.md) for document benchmarks and
 browser checks covering page readiness, typing, and synchronization.
 
+To check workspace anchors and history scroll restoration, start
+`bun run preview:mcp-editor`, then run `bun run verify:workspace-scroll` in a
+second terminal. The browser checks use only the preview's disposable account
+and long-document fixtures, at desktop and mobile widths.
+
 ## Project structure
 
 - `app/` contains Next.js routes and layouts.
