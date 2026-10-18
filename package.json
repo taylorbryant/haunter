@@ -18,6 +18,7 @@
 		"verify:mcp-navigation": "bun scripts/verify-mcp-navigation.ts",
 		"verify:mcp-appearance": "bun scripts/verify-mcp-appearance.ts",
 		"verify:mcp-tasks": "bun scripts/verify-mcp-tasks.ts",
+		"verify:workspace-scroll": "bun scripts/verify-workspace-scroll.ts",
 		"start": "next start",
 		"lint": "biome lint .",
 		"format": "biome format --write .",

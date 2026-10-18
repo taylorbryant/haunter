@@ -294,6 +294,28 @@ const server = Bun.serve({
 				await f.ctx.ports.pages.findById(f.scope, f.page.id),
 			);
 		// Verification controls exist only in this disposable local host.
+		if (url.pathname === "/test/scroll-fixture" && request.method === "POST") {
+			const pages = [];
+			for (const name of ["Scroll proof A", "Scroll proof B"]) {
+				const page = await f.database.repositories.pages.create(f.scope, {
+					userId: f.userId,
+					title: name,
+					parentPageId: null,
+					position: 10 + pages.length,
+				});
+				await seedFixtureBody(
+					{ ...f, page },
+					Array.from({ length: 100 }, (_, index) => ({
+						...paragraph(
+							`${name}, paragraph ${index}. ${"Disposable content for scrolling and navigation checks. ".repeat(4)}`,
+						),
+						id: `scroll-proof-${index}`,
+					})),
+				);
+				pages.push({ id: page.id, title: name });
+			}
+			return Response.json({ pages });
+		}
 		if (url.pathname === "/test/checkpoint" && request.method === "POST") {
 			const { pageId } = (await request.json()) as { pageId: string };
 			const page = await f.ctx.ports.pages.findById(f.scope, pageId);

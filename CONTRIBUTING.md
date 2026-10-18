@@ -104,6 +104,12 @@ includes branch commits since the merge base with the existing local
 See [Editor benchmarks](docs/editor-benchmarks.md) for document benchmarks and
 browser checks covering page readiness, typing, and synchronization.
 
+To check the initial sidebar layout, recovery banner, and document scrolling, start
+`bun run preview:mcp-editor`, then run `bun run verify:workspace-scroll` in a
+second terminal. The browser checks use only the preview's disposable account
+and long-document fixtures to verify anchors and history restoration at desktop
+and mobile widths, plus sidebar sizing with JavaScript disabled.
+
 ## Project structure
 
 - `app/` contains Next.js routes and layouts.
