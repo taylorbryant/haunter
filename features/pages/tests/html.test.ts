@@ -41,6 +41,31 @@ function block(
 }
 
 describe("pageToHtmlDocument", () => {
+	it("exports Mermaid as themed SVG with its source and falls back for invalid diagrams", async () => {
+		const html = await pageToHtmlDocument({
+			title: "Diagrams",
+			theme,
+			content: [
+				block(
+					"codeBlock",
+					{ language: "mermaid" },
+					"flowchart LR\n A[Draft] --> B[Publish]",
+				),
+				block(
+					"codeBlock",
+					{ language: "mermaid" },
+					'<script>alert("invalid")</script>',
+				),
+			],
+		});
+		expect(html).toContain('class="mermaid-preview"><svg');
+		expect(html).toContain("--pele-bg:var(--code-background)");
+		expect(html).toContain("Mermaid source");
+		expect(html).toContain("Could not render diagram.");
+		expect(html).toContain("&lt;script&gt;");
+		expect(html).not.toContain("<script>");
+	});
+
 	it("creates a themed standalone document with the public share layout", async () => {
 		const html = await pageToHtmlDocument({
 			title: "Release plan",

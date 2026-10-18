@@ -76,6 +76,13 @@ View and edit access and do not require the deletion grant.
 Code blocks accept only unstyled text entries; links, mentions, and text styles
 are rejected. Numbered list items support a numeric `start` property.
 
+Mermaid diagrams are code blocks with `props.language: "mermaid"` and unstyled
+text content. Agents can insert or update them with the same operations as other
+code blocks. Markdown creation/replacement accepts fenced `mermaid` blocks, and
+reads/exports preserve their source. Rendering errors do not discard source or
+reject in-progress edits. The client renders diagrams with Pele; rendering is
+not a validation step for document writes.
+
 Use task properties `checked`, `due` (YYYY-MM-DD), `dueTime` (HH:mm), `reminder`
 (a string containing 0, 15, 60, or 1440 minutes), and `assignee` (a workspace
 member's user ID). Empty strings clear optional task properties. Changing a task

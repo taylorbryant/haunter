@@ -4,6 +4,7 @@ import {
 	normalizeCodeBlockLanguage,
 } from "@/features/pages/lib/code-block-language";
 import type { BlockJson } from "@/features/content/schemas";
+import { renderMermaid } from "./mermaid";
 
 type InlineNode = {
 	type?: string;
@@ -348,6 +349,18 @@ function renderMedia(block: BlockJson, context: RenderContext) {
 async function renderCodeBlock(block: BlockJson, context: RenderContext) {
 	const code = plainText(block.content);
 	const language = normalizeCodeBlockLanguage(block.props.language) || "text";
+	if (language === "mermaid") {
+		const source = `<details><summary>Mermaid source</summary><pre><code>${escapeHtml(code)}</code></pre></details>`;
+		try {
+			const { svg } = await renderMermaid(
+				code,
+				`diagram-${crypto.randomUUID()}`,
+			);
+			return `<section class="code-block"><div class="code-header">Mermaid</div><div class="mermaid-preview">${svg}</div>${source}</section>`;
+		} catch {
+			return `<section class="code-block"><div class="code-header">Mermaid</div><p>Could not render diagram.</p><pre><code>${escapeHtml(code)}</code></pre></section>`;
+		}
+	}
 	const label =
 		CODE_BLOCK_LANGUAGES.find((candidate) => candidate.id === language)
 			?.label ?? "Plain Text";
@@ -522,6 +535,7 @@ blockquote{margin:6px 0;border-left:3px solid var(--border);padding:3px 16px;col
 figure{margin:12px 0}figure img,figure video{display:block;max-width:100%;height:auto;border-radius:8px}figure[data-alignment="center"] img,figure[data-alignment="center"] video{margin-inline:auto}figure[data-alignment="right"] img,figure[data-alignment="right"] video{margin-left:auto}figcaption{margin-top:5px;color:var(--muted-foreground);font-size:13px}audio{width:100%}.file{display:flex;flex-direction:column;align-items:flex-start}.file[data-alignment="center"]{align-items:center}.file[data-alignment="right"]{align-items:flex-end}.file span{color:var(--muted-foreground);font-size:13px}
 .table-scroll{overflow-x:auto;margin:10px 0}table{width:auto;max-width:none;border-collapse:collapse}th,td{border:1px solid var(--border);padding:8px 10px;text-align:left}th{background:var(--muted);font-weight:600}
 .canvas-placeholder,.placeholder{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin:10px 0;border:1px solid var(--border);border-radius:8px;background:var(--card);padding:20px;color:var(--muted-foreground)}.canvas-placeholder strong{color:var(--foreground)}
+.mermaid-preview{--pele-bg:var(--code-background);--pele-fg:var(--foreground);--pele-muted:var(--muted-foreground);--pele-line:var(--muted-foreground);--pele-surface:var(--muted);--pele-surface-alt:var(--card);--pele-border:var(--border);--pele-accent:var(--primary);padding:16px}.mermaid-preview>svg{display:block;max-width:100%;margin:auto}.code-block details summary{cursor:pointer;padding:8px 12px;font-size:14px;color:var(--muted-foreground)}
 @media(max-width:640px){main{padding:24px 16px 48px}.page-icon,.page-title,.content{margin-left:0;margin-right:0;padding-left:0;padding-right:0}.page-title{font-size:28px}.task-meta{width:100%;margin-left:24px}}
 @media print{.site-header{display:none}main{max-width:none;padding-top:0}.code-block{break-inside:avoid}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 `;

@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
 import type { BlockNoteEditor as BlockNoteEditorType } from "@blocknote/core";
-import { act, within } from "@testing-library/react/pure";
+import { act, waitFor, within } from "@testing-library/react/pure";
 import userEvent from "@testing-library/user-event";
 import * as Y from "yjs";
 import { PAGE_BODY_FRAGMENT } from "@/features/documents/model";
@@ -167,6 +167,7 @@ test.each([
 	["", "text"],
 	["bash", "shellscript"],
 	["TS", "typescript"],
+	["mermaid", "mermaid"],
 	["bash```", "text"],
 	["unknown-language", "text"],
 ])("code fence %p stays editable with Space and Enter", (label, language) => {
@@ -220,7 +221,7 @@ test("fences wait for a delimiter and stay literal inside code", () => {
 	});
 });
 
-test.each(["", "bash", "bash```", "unknown-language"])(
+test.each(["", "bash", "bash```", "unknown-language", "mermaid"])(
 	"reopens a saved collaborative code block with language %p",
 	(language) => {
 		// Bypass JSON normalization, as an older client can persist these props
@@ -247,14 +248,24 @@ test.each(["", "bash", "bash```", "unknown-language"])(
 			props: { language },
 		});
 		expect(container.querySelector("select")?.value).toBe(
-			language === "bash" ? "shellscript" : "text",
+			language === "bash"
+				? "shellscript"
+				: language === "mermaid"
+					? "mermaid"
+					: "text",
 		);
 		expect(
 			editorSchema.blockSpecs.codeBlock.implementation.meta?.highlight?.({
 				type: "codeBlock",
 				props: { language },
 			}),
-		).toBe(language === "bash" ? "shellscript" : "text");
+		).toBe(
+			language === "bash"
+				? "shellscript"
+				: language === "mermaid"
+					? "mermaid"
+					: "text",
+		);
 		expect(editor.getBlock("saved-code")?.content).toEqual([
 			{
 				type: "text",
@@ -311,4 +322,112 @@ test("an unsupported language arriving over Yjs keeps the open page editable", (
 	expect(editor.getBlock("remote-code")?.content).toEqual([
 		{ type: "text", text: "select 1;", styles: {} },
 	]);
+});
+
+test("Mermaid views preserve source, undo history, updates, and read-only access", async () => {
+	const editor = BlockNoteEditor.create({
+		schema: editorSchema,
+		initialContent: [
+			{ id: "intro", type: "paragraph", content: "Diagrams" },
+			{
+				id: "diagram",
+				type: "codeBlock",
+				props: { language: "mermaid" },
+				content: "flowchart LR\n  A[Start] --> B[Done]",
+			},
+		],
+	});
+	let container!: HTMLElement;
+	await act(async () => {
+		container = mountEditor(editor);
+	});
+	const ui = within(container);
+	const user = userEvent.setup({ document });
+	const before = editor.document;
+	expect(container.querySelector("pre")?.hidden).toBe(true);
+	await waitFor(() =>
+		expect(
+			container.querySelector(".haunter-mermaid-diagram svg"),
+		).not.toBeNull(),
+	);
+	await user.click(ui.getByRole("button", { name: "Source" }));
+	expect(container.querySelector("pre")?.hidden).toBe(false);
+	await user.click(ui.getByRole("button", { name: "Diagram" }));
+	// Header keyboard navigation must not run the editor's Tab/Space shortcuts
+	// against the source while the diagram is visible.
+	await act(async () => {
+		ui.getByRole("button", { name: "Diagram" }).focus();
+	});
+	await user.tab();
+	expect(document.activeElement).toBe(
+		ui.getByRole("button", { name: "Source" }),
+	);
+	await user.tab({ shift: true });
+	expect(document.activeElement).toBe(
+		ui.getByRole("button", { name: "Diagram" }),
+	);
+	await user.keyboard(" ");
+	expect(editor.document).toEqual(before);
+	await act(async () => {
+		editor.undo();
+	});
+	expect(editor.document).toEqual(before);
+	await act(async () => {
+		editor.updateBlock("diagram", {
+			content: "sequenceDiagram\n Alice->>Bob: Updated remotely",
+		});
+	});
+	await waitFor(() =>
+		expect(
+			container.querySelector(".haunter-mermaid-diagram")?.textContent,
+		).toContain("Updated remotely"),
+	);
+	await act(async () => {
+		editor.isEditable = false;
+	});
+	const readOnlyBefore = editor.document;
+	await user.click(ui.getByRole("button", { name: "Source" }));
+	expect(container.querySelector("pre")?.hidden).toBe(false);
+	await user.click(ui.getByRole("button", { name: "Diagram" }));
+	expect(editor.document).toEqual(readOnlyBefore);
+	await act(async () => {
+		editor.isEditable = true;
+	});
+	await act(async () => {
+		editor.setTextCursorPosition("intro", "end");
+		editor.setTextCursorPosition("diagram", "end");
+	});
+	expect(container.querySelector("pre")?.hidden).toBe(false);
+});
+
+test("invalid Mermaid remains editable and recovers when the source is fixed", async () => {
+	const editor = BlockNoteEditor.create({
+		schema: editorSchema,
+		initialContent: [
+			{
+				id: "diagram",
+				type: "codeBlock",
+				props: { language: "mermaid" },
+				content: "not a diagram",
+			},
+		],
+	});
+	let container!: HTMLElement;
+	await act(async () => {
+		container = mountEditor(editor);
+	});
+	await waitFor(() =>
+		expect(container.textContent).toContain("Could not render diagram"),
+	);
+	expect(editor.getBlock("diagram")?.content).toEqual([
+		{ type: "text", text: "not a diagram", styles: {} },
+	]);
+	await act(async () => {
+		editor.updateBlock("diagram", { content: "flowchart LR\n A --> B" });
+	});
+	await waitFor(() =>
+		expect(
+			container.querySelector(".haunter-mermaid-diagram svg"),
+		).not.toBeNull(),
+	);
 });

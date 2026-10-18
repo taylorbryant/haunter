@@ -12,6 +12,7 @@ import {
 	CODE_BLOCK_LANGUAGES,
 	normalizeCodeBlockLanguage,
 } from "@/features/pages/lib/code-block-language";
+import { codeBlockText } from "@/features/pages/lib/mermaid";
 import { calloutBlockSpec } from "./callout-block";
 import { canvasBlockSpec } from "./canvas-block";
 import { OPEN_CODE_BLOCK_DIALOG_EVENT } from "./code-block-dialog-event";
@@ -23,6 +24,7 @@ import { mountCodeBlockMenu } from "./code-block-menu";
 import { getHaunterHighlighter } from "./code-theme";
 import { dividerBlockSpec } from "./divider-block";
 import { mentionSpec } from "./mention";
+import { mountMermaidCodeBlock } from "./mermaid-code-block";
 import { pageLinkBlockSpec } from "./page-link-block";
 import { taskBlockSpec } from "./task-block";
 
@@ -268,7 +270,6 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			expandButton.style.setProperty("flex-shrink", "0");
 			expandButton.style.setProperty("align-items", "center");
 			expandButton.style.setProperty("justify-content", "center");
-			expandButton.style.setProperty("margin-left", "auto");
 			expandButton.style.setProperty("border", "0");
 			expandButton.style.setProperty("background", "transparent");
 			expandButton.style.setProperty(
@@ -306,9 +307,22 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 				rendered.dom.insertBefore(header, pre ?? null);
 			}
 
+			const destroyDiagram =
+				normalizedBlock.props.language === "mermaid" && pre
+					? mountMermaidCodeBlock({
+							header,
+							pre,
+							dom: rendered.dom,
+							editor: args[1],
+							blockId: block.id,
+							source: codeBlockText(block),
+						})
+					: undefined;
+
 			return {
 				...rendered,
 				destroy: () => {
+					destroyDiagram?.();
 					expandButton.removeEventListener("click", handleExpand);
 					destroyMenu?.();
 					rendered.destroy?.();

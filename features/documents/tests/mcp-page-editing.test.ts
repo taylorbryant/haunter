@@ -873,6 +873,49 @@ test("code blocks support text and language edits, insertion, and both replaceme
 	}
 });
 
+test("agents create, edit, and replace Mermaid diagrams without losing their language or source", async () => {
+	const f = await fixture();
+	try {
+		const source = "flowchart LR\n  A[Draft] --> B[Published]";
+		const inserted = await f.edit([
+			{
+				op: "insert",
+				afterBlockId: null,
+				blocks: [
+					{
+						type: "codeBlock",
+						props: { language: "mermaid" },
+						content: text(source),
+					},
+				],
+			},
+		]);
+		const id = inserted.insertedBlockIds[0];
+		expect((await f.read()).blocks[0]).toMatchObject({
+			id,
+			props: { language: "mermaid" },
+			content: text(source),
+		});
+		const nextSource = "sequenceDiagram\n Alice->>Bob: Hello";
+		await f.edit([{ op: "update", blockId: id, content: text(nextSource) }]);
+		expect((await f.read()).blocks[0]).toMatchObject({
+			id,
+			props: { language: "mermaid" },
+			content: text(nextSource),
+		});
+		await f.replace({
+			format: "markdown",
+			markdown: `\`\`\`mermaid\n${source}\n\`\`\``,
+		});
+		expect((await f.read()).blocks[0]).toMatchObject({
+			props: { language: "mermaid" },
+			content: text(source),
+		});
+	} finally {
+		await f.database.close();
+	}
+});
+
 test("code blocks reject rich inline content without dropping formatting or links", async () => {
 	const f = await fixture();
 	try {
