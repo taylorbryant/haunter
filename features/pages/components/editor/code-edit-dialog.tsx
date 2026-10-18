@@ -5,18 +5,14 @@ import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { normalizeCodeBlockLanguage } from "@/features/pages/lib/code-block-language";
+import { codeBlockText } from "@/features/pages/lib/mermaid";
 import { editCodeBlockIndentation } from "./code-block-indent";
 import { useEmbeddedEditor } from "./embedded-editor-context";
 import { CodeEditDialogHeader } from "./code-edit-dialog-header";
 import { getCodeTheme, getHaunterHighlighter } from "./code-theme";
+import { MermaidPreview } from "./mermaid-preview";
+import { MermaidViewControls } from "./mermaid-view-controls";
 import type { editorSchema } from "./schema";
-
-function blockInlineText(block: { content?: unknown }): string {
-	if (!Array.isArray(block.content)) return "";
-	return block.content
-		.map((node) => (typeof node?.text === "string" ? node.text : ""))
-		.join("");
-}
 
 /** A roomier editing surface for code blocks, opened from the block header. */
 export function CodeEditDialog({
@@ -38,7 +34,8 @@ export function CodeEditDialog({
 	const { resolvedTheme, forcedTheme } = useTheme();
 	const activeTheme = forcedTheme ?? resolvedTheme;
 	const block = editor.getBlock(blockId);
-	const [text, setText] = useState(() => (block ? blockInlineText(block) : ""));
+	const [text, setText] = useState(() => (block ? codeBlockText(block) : ""));
+	const [diagramView, setDiagramView] = useState(false);
 	const [language, setLanguage] = useState(() => {
 		const initialLanguage =
 			block?.type === "codeBlock" ? block.props.language : "text";
@@ -48,6 +45,7 @@ export function CodeEditDialog({
 	const overlayRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const theme = getCodeTheme(activeTheme);
+	const showDiagram = language === "mermaid" && diagramView;
 
 	// Re-highlight through the same shiki instance the editor uses. The
 	// trailing newline keeps the overlay's last line aligned with the textarea.
@@ -131,8 +129,23 @@ export function CodeEditDialog({
 							language={language}
 							editable={editable}
 							onLanguageChange={updateLanguage}
-						/>
-						<div className="relative order-2 min-h-0 flex-1">
+						>
+							{language === "mermaid" ? (
+								<MermaidViewControls
+									view={diagramView ? "diagram" : "source"}
+									onViewChange={(view) => setDiagramView(view === "diagram")}
+								/>
+							) : null}
+						</CodeEditDialogHeader>
+						{showDiagram ? (
+							<div className="order-2 min-h-0 flex-1 overflow-auto">
+								<MermaidPreview source={text} />
+							</div>
+						) : null}
+						<div
+							hidden={showDiagram}
+							className="relative order-2 min-h-0 flex-1"
+						>
 							<div
 								ref={overlayRef}
 								aria-hidden

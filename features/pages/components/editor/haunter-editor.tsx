@@ -36,6 +36,7 @@ import {
 	GripVerticalIcon,
 	LightbulbIcon,
 	PenToolIcon,
+	WorkflowIcon,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -73,6 +74,7 @@ import {
 import { uploadPageAttachment } from "@/features/pages/client/upload";
 import { createPage } from "@/features/pages/contracts";
 import { normalizeCodeBlockLanguages } from "@/features/pages/lib/code-block-language";
+import { MERMAID_EXAMPLE } from "@/features/pages/lib/mermaid";
 import { createSubpageLinkBlock } from "@/features/pages/lib/subpage-link-block";
 import type { BlockJson, PageMeta } from "@/features/pages/schemas";
 import { invalidateTasksWhenIdle } from "@/features/tasks/client/queries";
@@ -237,6 +239,22 @@ function getSlashMenuItems(
 		},
 	};
 
+	const mermaidItem = {
+		title: "Mermaid",
+		subtext: "A diagram you can edit as text",
+		aliases: ["mermaid", "diagram", "flowchart", "sequence"],
+		group: "Basic blocks",
+		icon: <WorkflowIcon className="size-4.5" />,
+		onItemClick: () => {
+			const inserted = insertOrUpdateBlockForSlashMenu(editor, {
+				type: "codeBlock",
+				props: { language: "mermaid" },
+				content: MERMAID_EXAMPLE,
+			});
+			focusBlockContentOnNextFrame(editor, inserted.id);
+		},
+	};
+
 	const canvasItem = {
 		title: "Canvas",
 		subtext: "An embedded tldraw drawing canvas",
@@ -324,6 +342,7 @@ function getSlashMenuItems(
 		taskItem,
 		calloutItem,
 		canvasItem,
+		mermaidItem,
 	);
 
 	return Promise.resolve(filterSuggestionItems(items, query));

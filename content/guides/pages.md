@@ -24,6 +24,24 @@ Choose **Image** or **File** from the insert menu and use the block's upload con
 
 For work you want to track or draw, insert a [task](/guides/tasks#add-a-task-inside-a-page) or [canvas](/guides/canvases#draw-inside-a-page).
 
+## Add a Mermaid diagram
+
+Choose **Mermaid** from the `/` menu to start with a small flowchart. You can also choose **Mermaid** as a code block's language or import a Markdown file with a fenced `mermaid` block.
+
+Use **Source** to edit the diagram's text and **Diagram** to see the result. **Expand code** gives you more room for either view. Diagrams use the page's theme and adapt to the available width; zoom controls appear when a diagram needs more room.
+
+For example:
+
+```mermaid
+flowchart LR
+  A[Idea] --> B[Plan]
+  B --> C[Build]
+```
+
+Mermaid supports flowcharts, sequence diagrams, entity relationship diagrams, and other diagram types. If the source has an error, Haunter shows a message and keeps the text available to fix. Links and external images inside diagrams are disabled.
+
+Diagrams appear on shared pages too. Markdown exports retain the Mermaid source; HTML exports include the diagram and its source. You can also ask a connected agent to create or update a Mermaid diagram on a page.
+
 ## Organize and connect pages
 
 - **Create a subpage:** open a page's menu in the sidebar and choose **Add subpage**. You can also type `/` in the editor and choose **Page** to create a subpage with a link in your notes.

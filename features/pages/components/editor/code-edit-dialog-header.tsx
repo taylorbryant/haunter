@@ -1,4 +1,5 @@
 import { XIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { DialogClose } from "@/components/ui/dialog";
 import { CODE_BLOCK_LANGUAGES } from "@/features/pages/lib/code-block-language";
 
@@ -6,10 +7,12 @@ export function CodeEditDialogHeader({
 	language,
 	editable,
 	onLanguageChange,
+	children,
 }: {
 	language: string;
 	editable: boolean;
 	onLanguageChange: (language: string) => void;
+	children?: ReactNode;
 }) {
 	return (
 		<div className="haunter-code-block-header">
@@ -25,6 +28,7 @@ export function CodeEditDialogHeader({
 					</option>
 				))}
 			</select>
+			{children}
 			<DialogClose
 				render={
 					<button

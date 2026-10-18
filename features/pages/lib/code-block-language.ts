@@ -15,6 +15,7 @@ export const CODE_BLOCK_LANGUAGES = [
 	{ id: "json", label: "JSON", aliases: [] },
 	{ id: "yaml", label: "YAML", aliases: ["yml"] },
 	{ id: "markdown", label: "Markdown", aliases: ["md"] },
+	{ id: "mermaid", label: "Mermaid", aliases: [] },
 ] as const;
 
 export const PLAINTEXT_CODE_BLOCK_LANGUAGE = "text";

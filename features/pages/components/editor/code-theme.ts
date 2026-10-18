@@ -54,6 +54,7 @@ const createHaunterHighlighter = createBundledHighlighter({
 		yml: () => import("@shikijs/langs-precompiled/yaml"),
 		markdown: () => import("@shikijs/langs-precompiled/markdown"),
 		md: () => import("@shikijs/langs-precompiled/markdown"),
+		mermaid: () => import("@shikijs/langs-precompiled/mermaid"),
 	},
 	themes: {
 		"github-light": () => import("@shikijs/themes/github-light"),
