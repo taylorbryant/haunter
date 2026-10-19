@@ -1,6 +1,6 @@
 {
 	"name": "haunter",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Pages, notes, and tasks in Haunter from your terminal.",
 	"type": "module",
 	"bin": {
@@ -46,6 +46,7 @@
 		"prepack": "bun run check"
 	},
 	"dependencies": {
+		"@cfworker/json-schema": "4.1.1",
 		"@modelcontextprotocol/sdk": "1.32.1",
 		"zod": "4.6.7"
 	},

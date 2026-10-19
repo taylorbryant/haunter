@@ -5,6 +5,7 @@ import { version } from "../package.json";
 import { HELP, parseArguments } from "./args";
 import { login } from "./auth";
 import { connect, type HaunterClient } from "./client";
+import { isCliTool, readToolInput, toolValidator } from "./tools";
 import {
 	configDirectory,
 	DEFAULT_SERVER,
@@ -35,6 +36,34 @@ const taskRow = z
 	.passthrough();
 const tasksResult = z.object({ tasks: z.array(taskRow), hasMore: z.boolean() });
 const savedPage = z.object({ pageId: z.string(), title: z.string() });
+const canvasesResult = z
+	.object({
+		canvases: z.array(
+			z.object({ canvasId: z.string(), title: z.string() }).passthrough(),
+		),
+	})
+	.passthrough();
+const searchResult = z
+	.object({
+		items: z.array(
+			z
+				.object({
+					kind: z.enum(["page", "task", "canvas"]),
+					id: z.string(),
+					title: z.string(),
+					snippet: z.string(),
+				})
+				.passthrough(),
+		),
+		nextCursor: z.string().nullable(),
+	})
+	.passthrough();
+const taskActions: Record<string, { tool: string; label: string }> = {
+	"tasks add": { tool: "create_task", label: "Created" },
+	"tasks done": { tool: "complete_task", label: "Completed" },
+	"tasks reopen": { tool: "reopen_task", label: "Reopened" },
+	"tasks update": { tool: "update_task", label: "Updated" },
+};
 
 export type CliIO = {
 	stdout: (text: string) => void;
@@ -68,6 +97,8 @@ export async function runCli(
 			write({ help: HELP }, HELP.trimEnd());
 			return 0;
 		}
+		if (["pages rename", "tasks update", "tasks reopen"].includes(command))
+			uuid(operands[0]);
 		const server = serverUrl(
 			values.server ?? io.env.HAUNTER_SERVER ?? DEFAULT_SERVER,
 		);
@@ -119,7 +150,72 @@ export async function runCli(
 			command === "capture"
 				? await captureText(operands[0], values.file, io)
 				: undefined;
+		const toolInput =
+			command === "tools call" ? await readToolInput(values.input, io) : {};
 		client = await dependencies.connect(store, profile, io.signal);
+		if (command.startsWith("tools ")) {
+			const tools = (await client.listTools()).filter(isCliTool);
+			if (command === "tools list") {
+				write(
+					{ tools },
+					tools
+						.map(
+							(tool) =>
+								`${tool.name}\t${oneLine(tool.description ?? tool.title ?? "")}`,
+						)
+						.join("\n") ||
+						"No tools available. Run haunter login to review access.",
+				);
+				return 0;
+			}
+			const tool = tools.find((item) => item.name === operands[0]);
+			if (!tool)
+				throw new Error(
+					`Tool ${operands[0]} is not available to this connection. Run haunter tools list, or haunter login to review access.`,
+				);
+			if (command === "tools describe") {
+				write(tool, JSON.stringify(tool, null, 2));
+				return 0;
+			}
+			if (tool.execution?.taskSupport === "required")
+				throw new Error(
+					`${tool.name} requires MCP task support, which this CLI does not support.`,
+				);
+			if (Object.hasOwn(tool.inputSchema.properties ?? {}, "workspaceId")) {
+				if (Object.hasOwn(toolInput, "workspaceId")) {
+					if (values.workspace && values.workspace !== toolInput.workspaceId)
+						throw new Error(
+							"--workspace conflicts with workspaceId in the JSON input.",
+						);
+				} else {
+					toolInput.workspaceId = await resolveWorkspace(
+						client,
+						values.workspace ?? io.env.HAUNTER_WORKSPACE ?? profile.workspaceId,
+					);
+				}
+			} else if (values.workspace) {
+				throw new Error(`${tool.name} does not accept --workspace.`);
+			}
+			const validation = toolValidator(tool.inputSchema, tool.name)(toolInput);
+			if (!validation.valid)
+				throw new Error(
+					`Invalid arguments for ${tool.name}: ${validation.errorMessage}`,
+				);
+			// Compile before sending a possible mutation, so unsupported schemas fail early.
+			const validateOutput = tool.outputSchema
+				? toolValidator(tool.outputSchema, tool.name)
+				: undefined;
+			const result = await client.callTool(tool.name, toolInput);
+			// Preserve content, structuredContent, and metadata, including error results.
+			write(result, JSON.stringify(result, null, 2));
+			if (result.isError)
+				throw new Error(`${tool.name} failed. See the tool result on stdout.`);
+			if (validateOutput && !validateOutput(result.structuredContent).valid)
+				throw new Error(
+					`${tool.name} returned a result that does not match its output schema. The call was sent; check Haunter before repeating it.`,
+				);
+			return 0;
+		}
 		if (command === "workspaces list" || command === "workspaces use") {
 			const result = workspaceResult.parse(
 				await client.call("list_workspaces", {}),
@@ -144,20 +240,56 @@ export async function runCli(
 			}
 			return 0;
 		}
-		let workspaceId =
-			values.workspace ?? io.env.HAUNTER_WORKSPACE ?? profile.workspaceId;
-		if (!workspaceId) {
-			const result = workspaceResult.parse(
-				await client.call("list_workspaces", {}),
-			);
-			if (result.workspaces.length !== 1)
-				throw new Error(
-					"Select a workspace with haunter workspaces use <id>, or pass --workspace <id>.",
-				);
-			workspaceId = result.workspaces[0].id;
-		}
+		const workspaceId = await resolveWorkspace(
+			client,
+			values.workspace ?? io.env.HAUNTER_WORKSPACE ?? profile.workspaceId,
+		);
 		const workspace = { workspaceId };
-		if (command === "pages list" || command === "pages search") {
+		if (command === "search") {
+			const result = searchResult.parse(
+				await client.call("search_workspace", {
+					...workspace,
+					query: operands[0].trim(),
+					kind: values.kind ?? "all",
+					limit: values.limit ? Number(values.limit) : 20,
+					...(values.cursor ? { cursor: values.cursor } : {}),
+				}),
+			);
+			write(
+				result,
+				result.items
+					.map(
+						(item) =>
+							`${item.kind}\t${item.id}\t${oneLine(item.title || "Untitled")}${item.snippet ? `\n  ${oneLine(item.snippet)}` : ""}`,
+					)
+					.join("\n") || "No results found.",
+			);
+			if (result.nextCursor && !json)
+				io.stderr(
+					`More results available. Repeat the same query and --kind with --cursor.\nNext cursor: ${oneLine(result.nextCursor)}\n`,
+				);
+		} else if (command === "canvases list") {
+			const result = canvasesResult.parse(
+				await client.call("list_canvases", workspace),
+			);
+			write(
+				result,
+				result.canvases
+					.map(
+						(canvas) =>
+							`${canvas.canvasId}\t${oneLine(canvas.title || "Untitled")}`,
+					)
+					.join("\n") || "No standalone canvases found.",
+			);
+		} else if (command === "pages rename") {
+			const result = await client.call("update_page", {
+				...workspace,
+				pageId: operands[0],
+				title: operands[1].trim(),
+			});
+			const page = savedPage.parse(result);
+			write(result, `Renamed to ${oneLine(page.title)}\n${page.pageId}`);
+		} else if (command === "pages list" || command === "pages search") {
 			const result = pagesResult.parse(
 				await client.call(
 					command === "pages list" ? "list_pages" : "search_pages",
@@ -232,23 +364,29 @@ export async function runCli(
 					"More tasks are available. Narrow the filters or increase --limit (maximum 200).\n",
 				);
 		} else {
-			const result = await client.call(
-				command === "tasks add" ? "create_task" : "complete_task",
-				{
-					...workspace,
-					...(command === "tasks add"
-						? {
-								title: operands[0],
-								...(values.due ? { dueDate: values.due } : {}),
-							}
-						: { taskId: uuid(operands[0]) }),
-				},
-			);
+			const action = taskActions[command];
+			if (!action)
+				throw new Error(`Unsupported command: ${command}. Run haunter --help.`);
+			const result = await client.call(action.tool, {
+				...workspace,
+				...(command === "tasks add"
+					? {
+							title: operands[0],
+							...(values.due ? { dueDate: values.due } : {}),
+						}
+					: { taskId: uuid(operands[0]) }),
+				...(command === "tasks update"
+					? {
+							...(values.title !== undefined
+								? { title: values.title.trim() }
+								: {}),
+							...(values.due !== undefined ? { dueDate: values.due } : {}),
+							...(values["clear-due"] ? { dueDate: null } : {}),
+						}
+					: {}),
+			});
 			const task = taskRow.parse(result);
-			write(
-				result,
-				`${command === "tasks add" ? "Created" : "Completed"} ${oneLine(task.title)}\n${task.taskId}`,
-			);
+			write(result, `${action.label} ${oneLine(task.title)}\n${task.taskId}`);
 		}
 		return 0;
 	} catch (error) {
@@ -277,6 +415,21 @@ export async function runCli(
 			);
 		});
 	}
+}
+
+async function resolveWorkspace(
+	client: HaunterClient,
+	selected: string | undefined,
+) {
+	if (selected) return selected;
+	const result = workspaceResult.parse(
+		await client.call("list_workspaces", {}),
+	);
+	if (result.workspaces.length !== 1)
+		throw new Error(
+			"Select a workspace with haunter workspaces use <id>, or pass --workspace <id>.",
+		);
+	return result.workspaces[0].id;
 }
 
 function uuid(value: string) {

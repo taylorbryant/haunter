@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { version } from "../package.json";
-import { fixture, PAGE_ID } from "../tests/helpers";
+import { fixture, PAGE_ID, TASK_ID, CANVAS_ID } from "../tests/helpers";
 
 // Exercise the packed, installed binary under Node, with no Bun runtime dependency.
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -84,8 +84,73 @@ try {
 	);
 	assert.equal(page.pageId, PAGE_ID);
 	assert.equal(f.calls.at(-1)?.arguments.markdown, "Hello from stdin.");
+	assert.equal(
+		JSON.parse(await run(["node", bin, "search", "meeting", "--json"])).items[0]
+			.id,
+		PAGE_ID,
+	);
+	assert.equal(
+		JSON.parse(await run(["node", bin, "canvases", "list", "--json"]))
+			.canvases[0].canvasId,
+		CANVAS_ID,
+	);
+	assert.equal(
+		JSON.parse(
+			await run(["node", bin, "pages", "rename", PAGE_ID, "Renamed", "--json"]),
+		).title,
+		"Renamed",
+	);
+	assert.equal(
+		JSON.parse(
+			await run([
+				"node",
+				bin,
+				"tasks",
+				"update",
+				TASK_ID,
+				"--due",
+				"2026-12-12",
+				"--json",
+			]),
+		).dueDate,
+		"2026-12-12",
+	);
+	assert.equal(
+		JSON.parse(await run(["node", bin, "tasks", "reopen", TASK_ID, "--json"]))
+			.completed,
+		false,
+	);
+	f.setToolPages([
+		{
+			tools: [
+				{
+					name: "package_tool",
+					inputSchema: {
+						type: "object",
+						properties: { count: { type: "integer" } },
+						required: ["count"],
+					},
+				},
+			],
+		},
+	]);
+	f.setToolResult("package_tool", {
+		content: [{ type: "text", text: "OK" }],
+		structuredContent: { ok: true },
+	});
+	const tools = JSON.parse(await run(["node", bin, "tools", "list", "--json"]));
+	assert.equal(tools.tools[0].name, "package_tool");
+	const called = JSON.parse(
+		await run(
+			["node", bin, "tools", "call", "package_tool", "--input", "-", "--json"],
+			directory,
+			'{"count":1}',
+		),
+	);
+	assert.deepEqual(called.structuredContent, { ok: true });
+	assert.deepEqual(f.calls.at(-1)?.arguments, { count: 1 });
 	console.log(
-		`Verified haunter@${version}: npm tarball, Node binary, token refresh, page listing, and piped capture.`,
+		`Verified haunter@${version}: npm tarball, Node binary, token refresh, page listing, piped capture, search, canvases, page/task updates, and dynamic tools.`,
 	);
 } finally {
 	await f.close();
