@@ -6,8 +6,8 @@ export default function GuidesPage() {
 	return (
 		<div className="flex flex-col gap-10 sm:gap-14">
 			<PublicPageIntro eyebrow="Haunter Guides" title="Your guide to Haunter">
-				Learn your way around pages, tasks, and canvases, or bring an AI
-				assistant into your workspace.
+				Learn your way around pages, tasks, and canvases, or bring an AI agent
+				into your workspace.
 			</PublicPageIntro>
 			<div className="grid gap-x-10 sm:grid-cols-2">
 				{HELP_GUIDES.map((guide, index) => (
