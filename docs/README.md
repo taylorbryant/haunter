@@ -14,6 +14,7 @@ directory is an authoring reference for maintainers and is not published.
 | Topic | Reference |
 | --- | --- |
 | Operating hosted Haunter | [Production operations](deployment.md) |
+| npm CLI | [Development, package verification, and releases](cli.md) |
 | Collaborative editing | [Worker operation, persistence, and recovery](collaboration.md) |
 | Workspace access | [Membership authorization](membership-authorization.md) |
 | MCP tools | [Pages](mcp-page-editing.md), [canvases](mcp-canvas-editing.md), [files](mcp-files.md), [content management](mcp-content-management.md), [search](workspace-search.md) |

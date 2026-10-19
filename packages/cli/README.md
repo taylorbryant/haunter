@@ -1,0 +1,135 @@
+# Haunter CLI
+
+Capture notes, find pages, and manage tasks in [Haunter](https://www.haunter.app)
+from your terminal. Requires Node.js 22 or later and a Haunter account.
+
+## Get started
+
+Install the CLI and sign in:
+
+```bash
+npm install -g haunter
+haunter login
+haunter workspaces list
+haunter workspaces use WORKSPACE_ID
+```
+
+Your browser opens Haunter's sign-in and consent screen. Choose the workspaces
+and permissions the CLI can use. Replace `WORKSPACE_ID` with an ID from the list.
+If you approve exactly one workspace, commands use it automatically.
+
+You can also run commands without a global install using `npx haunter --help`.
+
+## Capture notes
+
+Create a page from quoted text, a Markdown file, or piped input:
+
+```bash
+haunter capture "An idea for later"
+haunter capture --file meeting.md --title "Meeting notes"
+cat meeting.md | haunter capture --title "Meeting notes"
+```
+
+Without `--title`, the first nonempty line becomes the title, up to 120
+characters. Each command prints the page title and ID. Input is limited to
+100,000 characters.
+
+To add content to an existing page, use `--page`. To create a child page, use
+`--parent`. Replace `PAGE_ID` with the page's ID:
+
+```bash
+haunter capture "Another thought" --page PAGE_ID
+haunter capture --file notes.md --parent PAGE_ID --title "Follow-up"
+```
+
+Appending preserves existing content. `--page` cannot be combined with `--title`
+or `--parent`.
+
+## Find and read pages
+
+```bash
+haunter pages list
+haunter pages search "meeting notes"
+haunter pages read PAGE_ID
+```
+
+Lists show page IDs and titles. Reading a page prints its Markdown. Quote search
+phrases and task titles containing spaces.
+
+## Manage tasks
+
+```bash
+haunter tasks list
+haunter tasks list --due today
+haunter tasks add "Review proposal" --due 2026-12-12
+haunter tasks done TASK_ID
+```
+
+Task lists default to your open tasks, with a limit of 50. Use
+`--filter open|completed|all`, `--scope mine|everyone`,
+`--due today|overdue|upcoming`, and `--limit 1..200` to change the selection.
+Creating and completing tasks prints the task ID.
+
+## Use the CLI in scripts
+
+Add `--json` to get one JSON value on stdout:
+
+```bash
+haunter pages search "meeting" --json
+haunter tasks list --filter all --json
+haunter capture "An idea for later" --json
+```
+
+Errors go to stderr as `{"error":"…"}` in JSON mode. Successful commands exit
+with code 0, errors with 1, and cancellation with 130. Sign-in instructions go to
+stderr, including when `login --json` is used.
+
+Commands use saved credentials and refresh them when needed. Only `login` opens
+a browser. If a write times out, check Haunter before repeating it: the change
+may have been saved.
+
+## Choose a workspace or server
+
+Pass `--workspace WORKSPACE_ID` (or `-w WORKSPACE_ID`) to a page, capture, or task
+command to override the saved workspace.
+
+| Setting | Flag | Environment variable | Default |
+| --- | --- | --- | --- |
+| Workspace | `--workspace` | `HAUNTER_WORKSPACE` | Saved selection, or the only approved workspace |
+| Server | `--server` | `HAUNTER_SERVER` | `https://www.haunter.app/mcp` |
+| Configuration directory | — | `HAUNTER_CONFIG_DIR` | `$XDG_CONFIG_HOME/haunter` or `~/.config/haunter`; `%APPDATA%\haunter` on Windows |
+
+Flags take precedence over environment variables. Credentials and workspace
+selections are separate for each server. A bare server origin gets `/mcp`
+appended. HTTPS is required except for local development:
+
+```bash
+haunter login --server http://localhost:3000
+haunter pages list --server http://localhost:3000
+```
+
+## Sign-in and troubleshooting
+
+- Run `haunter status` to see whether credentials are saved and which workspace
+  is selected. This checks local settings, not whether the session is still valid.
+- Run `haunter login` again if a session is revoked or you need different access.
+  Choose permissions that allow creating pages or managing tasks to use those commands.
+- Use `haunter login --no-browser` to open the printed URL yourself. Complete
+  sign-in in a browser on the same computer as the CLI; the callback uses
+  `127.0.0.1`. Sign-in times out after five minutes.
+- If the callback port is busy, use `haunter login --port 43822`. The default is
+  43821; a chosen port is remembered for that server.
+- Commands for the same server run one at a time to protect token refresh.
+  If a process is forcibly terminated, verify that it has stopped before removing
+  the `.lock` file named in the error.
+
+Credentials are stored locally in a file with owner-only permissions on Unix.
+Treat the configuration directory as sensitive. `haunter logout` removes local
+tokens. To revoke access on the server, disconnect **Haunter CLI** in
+**Haunter → Settings → Agents**.
+
+Run `haunter --help` for the complete command list.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

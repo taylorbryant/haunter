@@ -1,0 +1,63 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { version } from "../package.json";
+import { AuthProvider, boundedFetch, LOGIN_REQUIRED } from "./auth";
+import type { Profile, ProfileStore } from "./config";
+
+export interface HaunterClient {
+	call(name: string, args: Record<string, unknown>): Promise<unknown>;
+	close(): Promise<void>;
+}
+
+export async function connect(
+	store: ProfileStore,
+	profile: Profile,
+	signal?: AbortSignal,
+): Promise<HaunterClient> {
+	if (!profile.tokens) throw new Error(LOGIN_REQUIRED);
+	const client = new Client(
+		{ name: "haunter-cli", version },
+		{ capabilities: {} },
+	);
+	const transport = new StreamableHTTPClientTransport(new URL(store.server), {
+		authProvider: new AuthProvider(store, profile),
+		fetch: boundedFetch(signal),
+		reconnectionOptions: {
+			maxRetries: 0,
+			initialReconnectionDelay: 1000,
+			maxReconnectionDelay: 1000,
+			reconnectionDelayGrowFactor: 1,
+		},
+	});
+	try {
+		await client.connect(transport, { timeout: 30_000, signal });
+	} catch (error) {
+		await client.close();
+		throw error;
+	}
+	return {
+		async call(name, args) {
+			// Do not retry mutations: a timed-out request may already have committed.
+			const result = await client.callTool(
+				{ name, arguments: args },
+				undefined,
+				{ timeout: 30_000, signal },
+			);
+			const text = Array.isArray(result.content)
+				? result.content
+						.filter((item) => item.type === "text")
+						.map((item) => item.text)
+						.join("\n")
+				: "";
+			if (result.isError)
+				throw new Error(text || `Haunter could not complete ${name}.`);
+			if (result.structuredContent) return result.structuredContent;
+			try {
+				return JSON.parse(text);
+			} catch {
+				throw new Error(`Haunter returned an unexpected response for ${name}.`);
+			}
+		},
+		close: () => client.close(),
+	};
+}
