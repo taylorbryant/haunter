@@ -188,7 +188,7 @@ async function checkGeneration(
 				eq(schema.collaborativeDocuments.workspaceId, grant.workspaceId),
 			),
 		);
-	if (!document) throw new Error("Page body has not been migrated");
+	if (!document) throw new Error("Page body is missing from storage.");
 	if (document.generation !== grant.generation)
 		throw new DocumentRestoredError(document.generation);
 }

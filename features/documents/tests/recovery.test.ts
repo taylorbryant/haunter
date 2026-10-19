@@ -1,4 +1,8 @@
-import { normalizeCanvasSnapshot } from "@/features/canvases/lib/document";
+import { DOCUMENT_META, DOCUMENT_SCHEMA_VERSION } from "../model";
+import {
+	normalizeCanvasSnapshot,
+	projectCanvasRoom,
+} from "@/features/canvases/lib/document";
 import { encodeRecoveryUpdate } from "../update-encoding";
 import { expect, test } from "bun:test";
 import * as Y from "yjs";
@@ -272,6 +276,54 @@ test("a late persistence failure rolls back recovered pages and canvases togethe
 			await f.database.repositories.canvases.listStandalone(f.scope),
 		).toHaveLength(0);
 	} finally {
+		await f.database.close();
+	}
+});
+
+test("legacy Yjs canvas recovery imports into a separate native room", async () => {
+	const f = await documentFixture();
+	const binary = new Y.Doc();
+	try {
+		const original = await f.database.repositories.canvases.create(f.scope, {
+			userId: f.userId,
+			pageId: null,
+			title: "Original canvas",
+		});
+		const snapshot = normalizeCanvasSnapshot(original.snapshot);
+		const meta = binary.getMap(DOCUMENT_META);
+		meta.set("schemaVersion", DOCUMENT_SCHEMA_VERSION);
+		meta.set("kind", "canvas");
+		meta.set("tldrawSchema", snapshot.schema);
+		const records = binary.getMap<Y.Map<unknown>>("records");
+		for (const [id, record] of Object.entries(snapshot.store))
+			records.set(id, new Y.Map(Object.entries(record)));
+		const result = await importRecoveryUseCase.run({
+			ctx: f.ctx,
+			input: {
+				workspaceId: f.workspaceId,
+				filename: "legacy-canvas.json",
+				file: JSON.stringify({
+					format: "haunter-draft-recovery",
+					version: 1,
+					pages: [],
+					canvases: [{ id: original.id, collaborativeState: encode(binary) }],
+				}),
+			},
+		});
+		expect(result.canvasIds).toHaveLength(1);
+		expect(result.canvasIds[0]).not.toBe(original.id);
+		const recovered = await f.database.repositories.canvases.findSyncRoom(
+			f.scope,
+			result.canvasIds[0]!,
+		);
+		expect(projectCanvasRoom(JSON.parse(recovered!.roomJson))).toEqual(
+			snapshot,
+		);
+		expect(
+			await f.database.repositories.canvases.findById(f.scope, original.id),
+		).toEqual(original);
+	} finally {
+		binary.destroy();
 		await f.database.close();
 	}
 });

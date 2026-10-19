@@ -48,7 +48,6 @@ export const appPorts = definePorts<AppPorts>()({
 	},
 	deferred: [
 		"workspaceSearch",
-		"documentMaintenance",
 		"documents",
 		"adminUsers",
 		"agents",

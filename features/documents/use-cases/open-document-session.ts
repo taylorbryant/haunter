@@ -28,7 +28,7 @@ export const openDocumentSessionUseCase = useCase
 		if (generation === null)
 			throw appError("InvalidPageContent", {
 				message:
-					"This page has not been migrated. Contact the workspace administrator.",
+					"This page is missing its collaborative data. Contact the workspace administrator.",
 			});
 		return {
 			...ctx.ports.documentSessions.issue({

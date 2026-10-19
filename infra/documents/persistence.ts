@@ -24,10 +24,7 @@ export async function loadPageBody(
 ) {
 	const scope = createTenantScope({ id: workspaceId });
 	const stored = await ctx.ports.documents.find(scope, pageId);
-	if (!stored)
-		throw new Error(
-			"Page body is not migrated. Run the document migration before starting the app.",
-		);
+	if (!stored) throw new Error("Page body is missing from storage.");
 	return stored;
 }
 

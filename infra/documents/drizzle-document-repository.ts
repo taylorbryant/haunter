@@ -50,10 +50,7 @@ export function createDrizzleDocumentRepository(
 			reason = "restore",
 		) {
 			const stored = await repository.find(scope, pageId);
-			if (!stored)
-				throw new Error(
-					"Page body is not migrated. Run the document migration before starting the app.",
-				);
+			if (!stored) throw new Error("Page body is missing from storage.");
 			const { seedPageBody, projectPageBody } = await import("./codec");
 			assertDocumentRevision(stored, expectedRevision);
 			if (expectedRevision !== undefined) {
@@ -268,10 +265,7 @@ export function createDrizzleDocumentRepository(
 			);
 		if (!page) throw appError("PageNotFound");
 		const stored = await repository.find(scope, pageId);
-		if (!stored)
-			throw new Error(
-				"Page body is not migrated. Run the document migration before starting the app.",
-			);
+		if (!stored) throw new Error("Page body is missing from storage.");
 		assertDocumentRevision(stored, expectedRevision);
 		const doc = new Y.Doc();
 		try {
