@@ -14,6 +14,7 @@ import { ProfileStore } from "../src/config";
 
 export const PAGE_ID = "23ea928a-0f1c-4f38-a00d-2169e04c9e28";
 export const TASK_ID = "1101d030-24f6-49a5-a617-b2cd19e30f96";
+export const CANVAS_ID = "1dd903ae-215f-470c-afb6-0c4b0d942c98";
 export async function fixture() {
 	const directory = await mkdtemp(join(tmpdir(), "haunter-cli-"));
 	const calls: { name: string; arguments: Record<string, unknown> }[] = [];
@@ -145,6 +146,27 @@ export async function fixture() {
 			};
 			const results: Record<string, unknown> = {
 				list_workspaces: { workspaces },
+				list_canvases: {
+					canvases: [
+						{
+							canvasId: CANVAS_ID,
+							title: "Drawing\u001b[31m",
+							workspaceId: args.workspaceId,
+						},
+					],
+				},
+				search_workspace: {
+					items: [
+						{
+							kind: "page",
+							id: PAGE_ID,
+							title: "Meeting",
+							snippet: "Meeting notes",
+							path: `/pages/${PAGE_ID}`,
+						},
+					],
+					nextCursor: null,
+				},
 				list_pages: { pages: [{ pageId: PAGE_ID, title: "Notes\u001b[31m" }] },
 				search_pages: { pages: [{ pageId: PAGE_ID, title: "Meeting" }] },
 				read_page: {
@@ -153,6 +175,11 @@ export async function fixture() {
 					markdown: "# Hello\n\nA page body.",
 				},
 				create_page: { pageId: PAGE_ID, title: args.title },
+				update_page: {
+					pageId: args.pageId,
+					title: args.title,
+					parentPageId: null,
+				},
 				append_to_page: {
 					pageId: args.pageId,
 					title: "Notes",
@@ -161,6 +188,8 @@ export async function fixture() {
 				list_tasks: { tasks: [task], hasMore: false },
 				create_task: task,
 				complete_task: task,
+				reopen_task: task,
+				update_task: task,
 			};
 			const result = results[name];
 			return reply({

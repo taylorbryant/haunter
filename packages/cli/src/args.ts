@@ -12,6 +12,9 @@ const options = {
 	file: { type: "string" },
 	input: { type: "string" },
 	due: { type: "string" },
+	"clear-due": { type: "boolean" },
+	kind: { type: "string" },
+	cursor: { type: "string" },
 	filter: { type: "string" },
 	scope: { type: "string" },
 	limit: { type: "string" },
@@ -23,6 +26,8 @@ const commands: Record<string, { args: number; flags: string[] }> = {
 	login: { args: 0, flags: ["port", "no-browser"] },
 	logout: { args: 0, flags: [] },
 	status: { args: 0, flags: [] },
+	search: { args: 1, flags: ["workspace", "kind", "limit", "cursor"] },
+	"canvases list": { args: 0, flags: ["workspace"] },
 	"tools list": { args: 0, flags: [] },
 	"tools describe": { args: 1, flags: [] },
 	"tools call": { args: 1, flags: ["input", "workspace"] },
@@ -31,6 +36,7 @@ const commands: Record<string, { args: number; flags: string[] }> = {
 	"pages list": { args: 0, flags: ["workspace"] },
 	"pages search": { args: 1, flags: ["workspace"] },
 	"pages read": { args: 1, flags: ["workspace"] },
+	"pages rename": { args: 2, flags: ["workspace"] },
 	capture: { args: 1, flags: ["workspace", "title", "page", "parent", "file"] },
 	"tasks list": {
 		args: 0,
@@ -38,6 +44,11 @@ const commands: Record<string, { args: number; flags: string[] }> = {
 	},
 	"tasks add": { args: 1, flags: ["workspace", "due"] },
 	"tasks done": { args: 1, flags: ["workspace"] },
+	"tasks reopen": { args: 1, flags: ["workspace"] },
+	"tasks update": {
+		args: 1,
+		flags: ["workspace", "title", "due", "clear-due"],
+	},
 };
 
 export function parseArguments(args: string[]) {
@@ -50,7 +61,13 @@ export function parseArguments(args: string[]) {
 	});
 	const { values, positionals, tokens } = parsed;
 	const group = positionals[0];
-	const grouped = ["pages", "tasks", "workspaces", "tools"].includes(group);
+	const grouped = [
+		"pages",
+		"tasks",
+		"workspaces",
+		"tools",
+		"canvases",
+	].includes(group);
 	const command = grouped ? `${group} ${positionals[1] ?? ""}`.trim() : group;
 	const operands = positionals.slice(grouped ? 2 : 1);
 	if (values.help || values.version || !group)
@@ -63,7 +80,7 @@ export function parseArguments(args: string[]) {
 		(command !== "capture" && operands.length !== spec.args)
 	) {
 		throw new Error(
-			`${command} expects ${spec.args ? "one argument (quote text containing spaces)" : "no arguments"}. Run haunter --help.`,
+			`${command} expects ${spec.args === 0 ? "no arguments" : `${spec.args === 1 ? "one argument" : `${spec.args} arguments`} (quote text containing spaces)`}. Run haunter --help.`,
 		);
 	}
 	const seen = new Set<string>();
@@ -88,7 +105,30 @@ export function parseArguments(args: string[]) {
 			throw new Error("Pass capture text or --file, not both.");
 	}
 	if (values.port) integer(values.port, "port", 1, 65535);
-	if (values.limit) integer(values.limit, "limit", 1, 200);
+	if (values.limit)
+		integer(values.limit, "limit", 1, command === "search" ? 50 : 200);
+	if (command === "search") {
+		if (operands[0].trim().length < 2 || operands[0].trim().length > 200)
+			throw new Error("Search queries must be between 2 and 200 characters.");
+		if (values.kind && !["all", "page", "task", "canvas"].includes(values.kind))
+			throw new Error("--kind must be all, page, task, or canvas.");
+		if (values.cursor && values.cursor.length > 4096)
+			throw new Error(
+				"--cursor must be a cursor returned by search (at most 4,096 characters).",
+			);
+	}
+	if (command === "pages rename" && operands[1].trim().length > 300)
+		throw new Error("Page titles must be 300 characters or fewer.");
+	if (command === "tasks update") {
+		if (!values.title && !values.due && !values["clear-due"])
+			throw new Error(
+				"Provide --title, --due, or --clear-due to update a task.",
+			);
+		if (values.due && values["clear-due"])
+			throw new Error("Use --due or --clear-due, not both.");
+		if (values.title && values.title.trim().length > 1000)
+			throw new Error("Task titles must be 1,000 characters or fewer.");
+	}
 	if (values.filter && !["open", "completed", "all"].includes(values.filter))
 		throw new Error("--filter must be open, completed, or all.");
 	if (values.scope && !["mine", "everyone"].includes(values.scope))
@@ -105,7 +145,7 @@ export function parseArguments(args: string[]) {
 			new Date(values.due).toISOString().slice(0, 10) !== values.due
 		) {
 			throw new Error(
-				"--due must be a valid date in YYYY-MM-DD format for tasks add.",
+				"--due must be a valid date in YYYY-MM-DD format for tasks add or update.",
 			);
 		}
 	}
@@ -128,9 +168,15 @@ Usage: haunter <command> [options]
   status                        Show local sign-in and workspace settings
   workspaces list               List workspaces you approved
   workspaces use <id>            Save the default workspace for this server
+  search <query>                Search pages, tasks, and canvases
+    --kind <all|page|task|canvas> Filter the result type (default: all)
+    --limit <1-50>               Results per request (default: 20)
+    --cursor <cursor>            Continue the same search from its next cursor
+  canvases list                 List standalone canvases
   pages list                    List pages
   pages search <query>           Search pages (quote phrases)
   pages read <id>                Print a page as Markdown
+  pages rename <id> <title>      Rename a page (quote titles containing spaces)
   capture [text]                Create a page from text, a file, or stdin
     --title <title>              New page title (default: first nonempty line)
     --file <path>               Read Markdown from a file; use - for stdin
@@ -143,6 +189,11 @@ Usage: haunter <command> [options]
     --limit <1-200>              Maximum tasks (default: 50)
   tasks add <title>              Create a task; optional --due YYYY-MM-DD
   tasks done <id>                Complete a task
+  tasks reopen <id>              Reopen a completed task
+  tasks update <id>              Update a task's title or due date
+    --title <title>              New title for a standalone task
+    --due <YYYY-MM-DD>           Set the due date
+    --clear-due                  Clear the date, time, and reminder
   tools list                    Discover tools available to your connection
   tools describe <name>         Show a tool's description and JSON schemas
   tools call <name>             Call a discovered tool with JSON arguments

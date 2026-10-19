@@ -3,8 +3,10 @@
 Capture notes, find pages, and manage tasks in [Haunter](https://www.haunter.app)
 from your terminal. Requires Node.js 22 or later and a Haunter account.
 
-This README includes the upcoming 0.2.0 release. The `tools` commands require
-0.2.0; the published 0.1.0 release supports the page, capture, and task commands.
+This README includes the upcoming 0.2.0 release. Workspace search, canvas
+listing, page renaming, task updating/reopening, and the `tools` commands require
+0.2.0. The published 0.1.0 release supports the original page, capture, and task
+commands.
 
 ## Get started
 
@@ -59,6 +61,35 @@ haunter pages read PAGE_ID
 Lists show page IDs and titles. Reading a page prints its Markdown. Quote search
 phrases and task titles containing spaces.
 
+Rename a page without changing its content or location:
+
+```bash
+haunter pages rename PAGE_ID "Updated meeting notes"
+```
+
+Page titles can contain up to 300 characters.
+
+## Search your workspace and list canvases
+
+Search across pages, tasks, and canvases in your selected workspace:
+
+```bash
+haunter search "meeting notes"
+haunter search "meeting" --kind task
+haunter canvases list
+```
+
+Search queries must contain 2–200 characters. Search returns up to 20 matches
+per request; use `--limit 1..50` to change that or `--kind all|page|task|canvas`
+to filter the type. Each result shows its type, ID, title, and matching excerpt.
+
+When more results are available, the CLI prints a next cursor on stderr.
+Repeat the same query and `--kind` with `--cursor NEXT_CURSOR` to continue.
+With `--json`, the cursor is in the `nextCursor` field of the result.
+
+`canvases list` shows IDs and titles of standalone canvases. Canvases embedded
+inside pages are not included.
+
 ## Manage tasks
 
 ```bash
@@ -66,12 +97,21 @@ haunter tasks list
 haunter tasks list --due today
 haunter tasks add "Review proposal" --due 2026-12-12
 haunter tasks done TASK_ID
+haunter tasks reopen TASK_ID
+haunter tasks update TASK_ID --title "Review revised proposal" --due 2026-12-13
+haunter tasks update TASK_ID --clear-due
 ```
 
 Task lists default to your open tasks, with a limit of 50. Use
 `--filter open|completed|all`, `--scope mine|everyone`,
 `--due today|overdue|upcoming`, and `--limit 1..200` to change the selection.
 Creating and completing tasks prints the task ID.
+
+`tasks reopen` marks a completed task as open. `tasks update` changes only the
+fields you supply. Use `--title` to rename a standalone task, `--due YYYY-MM-DD`
+to set its due date, or `--clear-due` to remove its date, time, and reminder.
+`--due` and `--clear-due` cannot be combined. To rename a task inside a page,
+edit its title in that page. Task titles can contain up to 1,000 characters.
 
 ## Discover and call more tools
 
@@ -137,8 +177,9 @@ may have been saved.
 
 ## Choose a workspace or server
 
-Pass `--workspace WORKSPACE_ID` (or `-w WORKSPACE_ID`) to a page, capture, task,
-or workspace-scoped `tools call` command to override the saved workspace.
+Pass `--workspace WORKSPACE_ID` (or `-w WORKSPACE_ID`) to a search, canvas, page,
+capture, task, or workspace-scoped `tools call` command to override the saved
+workspace.
 
 | Setting | Flag | Environment variable | Default |
 | --- | --- | --- | --- |

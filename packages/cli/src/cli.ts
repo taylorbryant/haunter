@@ -36,6 +36,34 @@ const taskRow = z
 	.passthrough();
 const tasksResult = z.object({ tasks: z.array(taskRow), hasMore: z.boolean() });
 const savedPage = z.object({ pageId: z.string(), title: z.string() });
+const canvasesResult = z
+	.object({
+		canvases: z.array(
+			z.object({ canvasId: z.string(), title: z.string() }).passthrough(),
+		),
+	})
+	.passthrough();
+const searchResult = z
+	.object({
+		items: z.array(
+			z
+				.object({
+					kind: z.enum(["page", "task", "canvas"]),
+					id: z.string(),
+					title: z.string(),
+					snippet: z.string(),
+				})
+				.passthrough(),
+		),
+		nextCursor: z.string().nullable(),
+	})
+	.passthrough();
+const taskActions: Record<string, { tool: string; label: string }> = {
+	"tasks add": { tool: "create_task", label: "Created" },
+	"tasks done": { tool: "complete_task", label: "Completed" },
+	"tasks reopen": { tool: "reopen_task", label: "Reopened" },
+	"tasks update": { tool: "update_task", label: "Updated" },
+};
 
 export type CliIO = {
 	stdout: (text: string) => void;
@@ -69,6 +97,8 @@ export async function runCli(
 			write({ help: HELP }, HELP.trimEnd());
 			return 0;
 		}
+		if (["pages rename", "tasks update", "tasks reopen"].includes(command))
+			uuid(operands[0]);
 		const server = serverUrl(
 			values.server ?? io.env.HAUNTER_SERVER ?? DEFAULT_SERVER,
 		);
@@ -215,7 +245,51 @@ export async function runCli(
 			values.workspace ?? io.env.HAUNTER_WORKSPACE ?? profile.workspaceId,
 		);
 		const workspace = { workspaceId };
-		if (command === "pages list" || command === "pages search") {
+		if (command === "search") {
+			const result = searchResult.parse(
+				await client.call("search_workspace", {
+					...workspace,
+					query: operands[0].trim(),
+					kind: values.kind ?? "all",
+					limit: values.limit ? Number(values.limit) : 20,
+					...(values.cursor ? { cursor: values.cursor } : {}),
+				}),
+			);
+			write(
+				result,
+				result.items
+					.map(
+						(item) =>
+							`${item.kind}\t${item.id}\t${oneLine(item.title || "Untitled")}${item.snippet ? `\n  ${oneLine(item.snippet)}` : ""}`,
+					)
+					.join("\n") || "No results found.",
+			);
+			if (result.nextCursor && !json)
+				io.stderr(
+					`More results available. Repeat the same query and --kind with --cursor.\nNext cursor: ${oneLine(result.nextCursor)}\n`,
+				);
+		} else if (command === "canvases list") {
+			const result = canvasesResult.parse(
+				await client.call("list_canvases", workspace),
+			);
+			write(
+				result,
+				result.canvases
+					.map(
+						(canvas) =>
+							`${canvas.canvasId}\t${oneLine(canvas.title || "Untitled")}`,
+					)
+					.join("\n") || "No standalone canvases found.",
+			);
+		} else if (command === "pages rename") {
+			const result = await client.call("update_page", {
+				...workspace,
+				pageId: operands[0],
+				title: operands[1].trim(),
+			});
+			const page = savedPage.parse(result);
+			write(result, `Renamed to ${oneLine(page.title)}\n${page.pageId}`);
+		} else if (command === "pages list" || command === "pages search") {
 			const result = pagesResult.parse(
 				await client.call(
 					command === "pages list" ? "list_pages" : "search_pages",
@@ -290,23 +364,29 @@ export async function runCli(
 					"More tasks are available. Narrow the filters or increase --limit (maximum 200).\n",
 				);
 		} else {
-			const result = await client.call(
-				command === "tasks add" ? "create_task" : "complete_task",
-				{
-					...workspace,
-					...(command === "tasks add"
-						? {
-								title: operands[0],
-								...(values.due ? { dueDate: values.due } : {}),
-							}
-						: { taskId: uuid(operands[0]) }),
-				},
-			);
+			const action = taskActions[command];
+			if (!action)
+				throw new Error(`Unsupported command: ${command}. Run haunter --help.`);
+			const result = await client.call(action.tool, {
+				...workspace,
+				...(command === "tasks add"
+					? {
+							title: operands[0],
+							...(values.due ? { dueDate: values.due } : {}),
+						}
+					: { taskId: uuid(operands[0]) }),
+				...(command === "tasks update"
+					? {
+							...(values.title !== undefined
+								? { title: values.title.trim() }
+								: {}),
+							...(values.due !== undefined ? { dueDate: values.due } : {}),
+							...(values["clear-due"] ? { dueDate: null } : {}),
+						}
+					: {}),
+			});
 			const task = taskRow.parse(result);
-			write(
-				result,
-				`${command === "tasks add" ? "Created" : "Completed"} ${oneLine(task.title)}\n${task.taskId}`,
-			);
+			write(result, `${action.label} ${oneLine(task.title)}\n${task.taskId}`);
 		}
 		return 0;
 	} catch (error) {

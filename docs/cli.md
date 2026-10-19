@@ -42,6 +42,8 @@ Two checks guard those contracts:
   newly required input, weakened output guarantees, and changes to constraints
   or defaults fail for review. This is a conservative schema check, not a proof
   that every possible old request remains compatible.
+  Current-CLI tests also cover workspace search pagination, standalone canvas
+  listing, page renaming, task updates/reopening, and view-only permissions.
 - `bun run verify:cli-compatibility` downloads the exact published `haunter@0.1.0`
   tarball, verifies its pinned SHA-512 integrity, installs it in a temporary
   directory, and runs its Node executable against the current MCP handler.
