@@ -24,7 +24,10 @@ does not access a real Haunter account. CI runs it on Node 22 and 24.
 
 Run `bun beignet check` and the changed app maps from the repository root before
 handoff. Install dependencies in `packages/cli` first so the root type check and
-test discovery can resolve the package's dependencies.
+test discovery can resolve the package's dependencies. The root suite includes
+`features/agents/tests/cli-oauth-registration.test.ts`, which verifies the CLI's
+native loopback registration through Haunter's request guard and the installed
+Better Auth OAuth provider.
 
 ## Preserve released CLI compatibility
 

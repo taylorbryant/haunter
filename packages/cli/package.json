@@ -1,6 +1,6 @@
 {
 	"name": "haunter",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "Pages, notes, and tasks in Haunter from your terminal.",
 	"type": "module",
 	"bin": {

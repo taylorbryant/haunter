@@ -26,6 +26,8 @@ export class AuthProvider implements OAuthClientProvider {
 	}
 	get clientMetadata() {
 		return {
+			// Native OAuth clients may use an HTTP loopback callback.
+			application_type: "native",
 			client_name: "Haunter CLI",
 			client_uri: "https://www.haunter.app",
 			redirect_uris: [this.redirectUrl],
