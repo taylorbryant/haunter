@@ -1,0 +1,57 @@
+{
+	"name": "haunter",
+	"version": "0.1.0",
+	"description": "Pages, notes, and tasks in Haunter from your terminal.",
+	"type": "module",
+	"bin": {
+		"haunter": "dist/index.js"
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"engines": {
+		"node": ">=22"
+	},
+	"packageManager": "bun@1.4.2",
+	"license": "MIT",
+	"author": "Haunter contributors",
+	"homepage": "https://www.haunter.app",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/taylorbryant/haunter.git",
+		"directory": "packages/cli"
+	},
+	"bugs": {
+		"url": "https://github.com/taylorbryant/haunter/issues"
+	},
+	"keywords": [
+		"haunter",
+		"cli",
+		"notes",
+		"tasks",
+		"markdown"
+	],
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	},
+	"scripts": {
+		"build": "bun scripts/build.ts",
+		"typecheck": "tsc --noEmit",
+		"test": "bun test tests",
+		"check": "bun run typecheck && bun run test && bun run build",
+		"verify:package": "bun scripts/verify-package.ts",
+		"prepack": "bun run check"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "1.32.1",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@types/bun": "1.4.3",
+		"@types/node": "26.6.5",
+		"typescript": "7.0.2"
+	}
+}

@@ -90,6 +90,10 @@ earlier check fails. Use `bun run format` to apply Biome formatting.
 CI runs the same command, alongside production canvas-renderer and packaged-Yjs
 verification.
 
+For CLI changes, also install and validate the standalone `packages/cli` package.
+See [CLI development and releases](docs/cli.md) for the commands and npm package
+verification.
+
 Before opening a pull request, inspect the affected features and registrations:
 
 ```bash
