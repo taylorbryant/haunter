@@ -66,17 +66,16 @@ semantic changes; expand the real-handler flow when a new command adds behavior.
 
 ## Publish a release
 
-`haunter@0.1.0` is published. This branch prepares 0.2.0; merging does not
-publish it. Releases must increment `packages/cli/package.json#version`.
-
-From `packages/cli`, after validation:
+Increment `packages/cli/package.json#version` for each release, then validate
+the package. From `packages/cli`, publish and verify that exact version:
 
 ```bash
+HAUNTER_RELEASE_VERSION=$(node -p "require('./package.json').version")
 npm whoami --registry=https://registry.npmjs.org
 npm pack --dry-run
 npm publish --access public --registry=https://registry.npmjs.org
-npm view haunter version
-npx --yes haunter@0.2.0 --version
+npm view "haunter@$HAUNTER_RELEASE_VERSION" version --registry=https://registry.npmjs.org
+npx --yes "haunter@$HAUNTER_RELEASE_VERSION" --version
 ```
 
 Sign in with `npm login` if needed and complete any npm two-factor prompt.
