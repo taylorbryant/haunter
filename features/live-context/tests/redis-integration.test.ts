@@ -84,7 +84,7 @@ function fixture() {
 	const prefix = `test:${crypto.randomUUID()}`;
 	const port = createRedisLiveContext({ redis: new Redis(requester), prefix });
 	const scope = createTenantScope({ id: "workspace" });
-	const key = `${prefix}:live-context:user`;
+	const key = `${prefix}:live-context:v2:user`;
 	const input: PublishContextInput = {
 		workspaceId: "workspace",
 		expectedUserId: "user",
@@ -106,6 +106,7 @@ function fixture() {
 	};
 	return {
 		port,
+		prefix,
 		redis,
 		scope,
 		key,
@@ -256,32 +257,22 @@ test("preserves adjacent sequence numbers across the full supported integer rang
 	);
 });
 
-test("preserves ordering state from an older preview deployment", async () => {
+test("obsolete cache records cannot interfere with current context or ordering", async () => {
 	const f = fixture();
-	const now = Date.now();
-	const sequence = Number.MAX_SAFE_INTEGER - 1;
-	const {
-		expectedUserId: _,
-		reportedAt: _reportedAt,
-		contextAgeMs,
-		...value
-	} = f.input;
-	await f.redis.hset(
-		f.key,
-		f.input.sessionId,
-		JSON.stringify({
-			...value,
-			sequence,
-			capturedAt: now - contextAgeMs,
-			lastSeenAt: now,
-			expiresAt: now + LIVE_CONTEXT_TTL_MS,
-		}),
-	);
-	expect((await f.list())[0].view).toEqual(f.input.view);
-	await f.expireView();
-	expect(await f.publish({ sequence: sequence - 1 })).toBe(false);
+	const obsoleteKey = `${f.prefix}:live-context:user`;
+	await f.redis.hset(obsoleteKey, f.input.sessionId, "obsolete format");
 	expect(await f.list()).toEqual([]);
-	expect(await f.publish({ sequence: sequence + 1 })).toBe(true);
+	expect(await f.publish({ sequence: 3 })).toBe(true);
+	// A stale deployment can still write its own key without replacing our state.
+	await f.redis.hset(obsoleteKey, f.input.sessionId, "another obsolete record");
+	expect(await f.publish({ sequence: 2 })).toBe(false);
+	expect((await f.list())[0]).toMatchObject({
+		sequence: 3,
+		view: f.input.view,
+	});
+	expect(await f.redis.hget(obsoleteKey, f.input.sessionId)).toBe(
+		"another obsolete record",
+	);
 });
 
 test("round-trips text through Redis and accepts older tabs without retaining stale text", async () => {

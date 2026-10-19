@@ -30,15 +30,14 @@ local count = 0
 local result = {}
 for i = 1, #entries, 2 do
   local entry = cjson.decode(entries[i + 1])
-  -- Older preview deployments stored the context directly, without an envelope.
-  local retainUntil = entry.retainUntil or (entry.expiresAt + ${LIVE_CONTEXT_SEQUENCE_TTL_MS - LIVE_CONTEXT_TTL_MS})
+  local retainUntil = entry.retainUntil
   if retainUntil <= now then
     redis.call('HDEL', KEYS[1], entries[i])
   else
     count = count + 1
     if entry.expiresAt > now then
       table.insert(result, entries[i + 1])
-    elseif entry.payload or not entry.retainUntil then
+    elseif entry.payload then
       redis.call('HSET', KEYS[1], entries[i], cjson.encode({
         sequence = string.format('%.0f', tonumber(entry.sequence)),
         expiresAt = entry.expiresAt,
@@ -91,8 +90,9 @@ export function createRedisLiveContext({
 	redis: ContextRedis | null;
 	prefix: string;
 }): LiveContextPort {
+	// Isolate the envelope format from obsolete deployments sharing this Redis.
 	const key = (userId: string) =>
-		`${prefix}:live-context:${encodeURIComponent(userId)}`;
+		`${prefix}:live-context:v2:${encodeURIComponent(userId)}`;
 	return {
 		isConfigured: () => redis !== null,
 		async publish(scope, userId, input) {
@@ -129,14 +129,7 @@ export function createRedisLiveContext({
 				// Upstash recursively deserializes JSON strings in EVAL arrays by
 				// default. Also accept raw strings for other Redis transports.
 				const envelope = EnvelopeSchema.safeParse(decode(value));
-				if (!envelope.success) {
-					// Let reports from an older preview deployment expire normally.
-					const legacy = StoredContextSchema.safeParse(decode(value));
-					return legacy.success &&
-						legacy.data.workspaceId === tenantScopeId(scope)
-						? [legacy.data]
-						: [];
-				}
+				if (!envelope.success) return [];
 				const { payload, ...timestamps } = envelope.data;
 				const decoded = decode(payload);
 				if (!decoded || typeof decoded !== "object") return [];

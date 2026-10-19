@@ -32,7 +32,8 @@ export async function writePageDocument(
 			const document = await tx.documents.find(scope, page.id);
 			if (!document)
 				throw appError("InvalidPageContent", {
-					message: "The page body has not been migrated.",
+					message:
+						"This page is missing its collaborative data. Contact the workspace administrator.",
 				});
 			assertDocumentRevision(document, input.expectedRevision);
 			const history = await tx.pageVersions.create(scope, {

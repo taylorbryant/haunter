@@ -7,6 +7,7 @@ import { PageDocumentSession } from "../client/session";
 import {
 	advanceDocumentGeneration,
 	listDocumentRecoveryCopies,
+	dismissDocumentRecoveryCopies,
 	documentCacheKey,
 	loadDocumentHead,
 	LocalDocumentStore,
@@ -139,10 +140,13 @@ test("active and offline browser sessions switch generations, keep recoverable e
 		);
 		expect(firstText(right.doc).toString()).toBe("Restored body");
 		expect(right.getSnapshot().resetReason).toBe("restore");
-		expect(right.getSnapshot().recoveryNoticeDismissed).toBe(false);
+		const copies = await listDocumentRecoveryCopies(right.identity.key);
+		expect(copies[0]!.dismissed).toBe(false);
 		const recoveryFile = await right.recoveryDownload();
-		await right.dismissRecoveryNotice();
-		expect(right.getSnapshot().recoveryNoticeDismissed).toBe(true);
+		await dismissDocumentRecoveryCopies(right.identity.key, copies);
+		expect(
+			(await listDocumentRecoveryCopies(right.identity.key))[0]!.dismissed,
+		).toBe(true);
 		expect(await right.recoveryDownload()).toBe(recoveryFile);
 		const bundle = parseRecoveryFile(recoveryFile);
 		const oldDoc = new Y.Doc();
@@ -191,7 +195,9 @@ test("active and offline browser sessions switch generations, keep recoverable e
 		await until(() => reloaded.getSnapshot().saved);
 		expect(reloaded.getSnapshot().generation).toBe(1);
 		expect(reloaded.getSnapshot().recoveries).toEqual([0]);
-		expect(reloaded.getSnapshot().recoveryNoticeDismissed).toBe(true);
+		expect(
+			(await listDocumentRecoveryCopies(reloaded.identity.key))[0]!.dismissed,
+		).toBe(true);
 		expect(reloaded.getSnapshot().resetReason).toBe("restore");
 		expect(firstText(reloaded.doc).toString()).toBe("New typing Restored body");
 		const current = await f.database.repositories.documents.find(
@@ -212,7 +218,11 @@ test("active and offline browser sessions switch generations, keep recoverable e
 				reloaded.getSnapshot().generation === 2 && reloaded.getSnapshot().saved,
 		);
 		expect(reloaded.getSnapshot().resetReason).toBe("replacement");
-		expect(reloaded.getSnapshot().recoveryNoticeDismissed).toBe(false);
+		expect(
+			(await listDocumentRecoveryCopies(reloaded.identity.key)).map(
+				(copy) => copy.dismissed,
+			),
+		).toEqual([false, true]);
 		expect(reloaded.getSnapshot().recoveries).toEqual([1, 0]);
 		expect(
 			(await listDocumentRecoveryCopies(reloaded.identity.key))[0]!.syncStatus,

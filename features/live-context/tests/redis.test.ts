@@ -40,7 +40,7 @@ test("the actual Upstash SDK can roundtrip EVAL results with its default JSON de
 	const args = requests[0];
 	expect(args[0]).toBe("eval");
 	expect(args[2]).toBe(1);
-	expect(args[3]).toBe("test:live-context:user");
+	expect(args[3]).toBe("test:live-context:v2:user");
 	expect(args.slice(6)).toEqual([
 		LIVE_CONTEXT_MAX_SESSIONS,
 		LIVE_CONTEXT_TTL_MS,
@@ -68,7 +68,7 @@ test("the actual Upstash SDK can roundtrip EVAL results with its default JSON de
 		{ ...stored, ...timestamps },
 	]);
 	await port.list(scope, "another-user");
-	expect(requests.at(-1)?.[3]).toBe("test:live-context:another-user");
+	expect(requests.at(-1)?.[3]).toBe("test:live-context:v2:another-user");
 });
 
 test("raw Redis results are validated and unavailable configuration is explicit", async () => {
