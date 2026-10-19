@@ -3,11 +3,6 @@
 Capture notes, find pages, and manage tasks in [Haunter](https://www.haunter.app)
 from your terminal. Requires Node.js 22 or later and a Haunter account.
 
-This README includes the upcoming 0.2.0 release. Workspace search, canvas
-listing, page renaming, task updating/reopening, and the `tools` commands require
-0.2.0. The published 0.1.0 release supports the original page, capture, and task
-commands.
-
 ## Get started
 
 Install the CLI and sign in:
@@ -115,7 +110,7 @@ edit its title in that page. Task titles can contain up to 1,000 characters.
 
 ## Discover and call more tools
 
-In 0.2.0, discover tools available to your signed-in connection, including new
+Discover tools available to your signed-in connection, including new
 tools that don't have a dedicated CLI command:
 
 ```bash

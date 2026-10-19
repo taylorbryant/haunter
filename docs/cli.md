@@ -68,7 +68,6 @@ semantic changes; expand the real-handler flow when a new command adds behavior.
 
 `haunter@0.1.0` is published. This branch prepares 0.2.0; merging does not
 publish it. Releases must increment `packages/cli/package.json#version`.
-Before publishing 0.2.0, remove the upcoming-release notice in its README.
 
 From `packages/cli`, after validation:
 
