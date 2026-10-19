@@ -27,7 +27,6 @@ type DocumentHead = {
 	key: string;
 	generation: number;
 	recoveries: number[];
-	dismissedRecoveryThrough?: number;
 	// Optional fields preserve existing IndexedDB records without a schema upgrade.
 	archivedAt?: Record<number, string>;
 	receipts?: Record<number, SavedReceipt>;
@@ -86,25 +85,6 @@ export async function advanceDocumentGeneration(
 			recoveries: [
 				...new Set([...head.recoveries, ...(state ? [from] : [])]),
 			].sort((a, b) => b - a),
-		};
-		await db.heads.put(next);
-		return next;
-	});
-}
-
-export async function dismissDocumentRecoveryNotice(
-	key: string,
-	generation: number,
-) {
-	const db = getDatabase();
-	return db.transaction("rw", db.heads, async () => {
-		const head = await loadDocumentHead(key);
-		const next = {
-			...head,
-			dismissedRecoveryThrough: Math.max(
-				head.dismissedRecoveryThrough ?? -1,
-				generation,
-			),
 		};
 		await db.heads.put(next);
 		return next;
@@ -221,14 +201,6 @@ export async function dismissDocumentRecoveryCopies(
 			},
 		});
 	});
-}
-
-export function isRecoveryNoticeDismissed(
-	head: Pick<DocumentHead, "recoveries" | "dismissedRecoveryThrough">,
-) {
-	return head.recoveries.every(
-		(generation) => generation <= (head.dismissedRecoveryThrough ?? -1),
-	);
 }
 
 export async function readDocumentRecovery(key: string, generation: number) {

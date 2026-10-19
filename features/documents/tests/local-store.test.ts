@@ -8,8 +8,6 @@ import {
 	dismissDocumentRecoveryCopies,
 	saveDocumentReceipt,
 	advanceDocumentGeneration,
-	dismissDocumentRecoveryNotice,
-	isRecoveryNoticeDismissed,
 	loadDocumentHead,
 	readDocumentRecovery,
 } from "../client/local-store";
@@ -33,15 +31,18 @@ describe("local collaborative persistence", () => {
 		try {
 			await advanceDocumentGeneration(key, 0, 1, Y.encodeStateAsUpdate(doc));
 			const before = await readDocumentRecovery(key, 0);
-			await dismissDocumentRecoveryNotice(key, 0);
-			expect(isRecoveryNoticeDismissed(await loadDocumentHead(key))).toBe(true);
+			const copies = await listDocumentRecoveryCopies(key);
+			await dismissDocumentRecoveryCopies(key, copies);
+			expect((await listDocumentRecoveryCopies(key))[0]!.dismissed).toBe(true);
 			expect(await readDocumentRecovery(key, 0)).toEqual(before);
 			await advanceDocumentGeneration(key, 1, 2, Y.encodeStateAsUpdate(doc));
-			await dismissDocumentRecoveryNotice(key, 0);
+			await dismissDocumentRecoveryCopies(key, copies);
 			const head = await loadDocumentHead(key);
 			expect(head.generation).toBe(2);
 			expect(head.recoveries).toEqual([1, 0]);
-			expect(isRecoveryNoticeDismissed(head)).toBe(false);
+			expect(
+				(await listDocumentRecoveryCopies(key)).map((copy) => copy.dismissed),
+			).toEqual([false, true]);
 		} finally {
 			doc.destroy();
 		}

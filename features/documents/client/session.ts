@@ -21,8 +21,6 @@ import {
 	loadDocumentHead,
 	documentCacheKey,
 	advanceDocumentGeneration,
-	dismissDocumentRecoveryNotice,
-	isRecoveryNoticeDismissed,
 	saveDocumentReceipt,
 } from "./local-store";
 
@@ -31,7 +29,6 @@ export type DocumentSnapshot = {
 	restoring: boolean;
 	recoveries: number[];
 	resetReason: DocumentResetReason | null;
-	recoveryNoticeDismissed: boolean;
 	ready: boolean;
 	/** Initial synchronization with no known local edits awaiting a save. */
 	initializing: boolean;
@@ -57,7 +54,6 @@ export class PageDocumentSession {
 		restoring: false,
 		recoveries: [],
 		resetReason: null,
-		recoveryNoticeDismissed: false,
 		ready: false,
 		initializing: true,
 		connected: false,
@@ -181,7 +177,6 @@ export class PageDocumentSession {
 			this.publish({
 				generation: head.generation,
 				recoveries: head.recoveries,
-				recoveryNoticeDismissed: isRecoveryNoticeDismissed(head),
 			});
 			await this.local.load();
 			if (this.disposed) return;
@@ -416,7 +411,6 @@ export class PageDocumentSession {
 					generation,
 					recoveries: head.recoveries,
 					resetReason: null,
-					recoveryNoticeDismissed: isRecoveryNoticeDismissed(head),
 					ready: false,
 					initializing: true,
 					readySource: null,
@@ -444,18 +438,6 @@ export class PageDocumentSession {
 			this.generationFlight = null;
 		});
 		return this.generationFlight;
-	}
-	async dismissRecoveryNotice() {
-		const latest = this.snapshot.recoveries[0];
-		if (latest === undefined) return;
-		const head = await dismissDocumentRecoveryNotice(this.identity.key, latest);
-		// A newer reset may have arrived while the dismissal was being saved.
-		this.publish({
-			recoveryNoticeDismissed: isRecoveryNoticeDismissed({
-				...head,
-				recoveries: this.snapshot.recoveries,
-			}),
-		});
 	}
 	async recoveryDownload(generation = this.snapshot.recoveries[0]) {
 		if (

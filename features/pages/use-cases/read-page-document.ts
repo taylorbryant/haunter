@@ -21,7 +21,8 @@ export const readPageDocumentUseCase = useCase
 			const document = await tx.documents.find(scope, page.id);
 			if (!document)
 				throw appError("InvalidPageContent", {
-					message: "The page body has not been migrated.",
+					message:
+						"This page is missing its collaborative data. Contact the workspace administrator.",
 				});
 			return {
 				pageId: page.id,

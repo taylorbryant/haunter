@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { readPageDocumentUseCase } from "@/features/pages/use-cases/read-page-document";
+import { replacePageContentUseCase } from "@/features/pages/use-cases/replace-page-content";
 import * as schema from "@/infra/db/schema";
 import { checkDocumentAccess } from "@/infra/documents/access";
 import { loadPageBody } from "@/infra/documents/persistence";
@@ -12,6 +14,10 @@ for (const problem of ["missing", "unsupported schema"] as const) {
 	test(`page reads and writes reject ${problem} collaborative state without recreating it`, async () => {
 		const f = await documentFixture();
 		try {
+			const { revision } = await readPageDocumentUseCase.run({
+				ctx: f.ctx,
+				input: { id: f.page.id },
+			});
 			const before = await f.database.repositories.pages.findById(
 				f.scope,
 				f.page.id,
@@ -49,6 +55,22 @@ for (const problem of ["missing", "unsupported schema"] as const) {
 				]),
 			).rejects.toThrow(error);
 			if (problem === "missing") {
+				await expect(
+					readPageDocumentUseCase.run({ ctx: f.ctx, input: { id: f.page.id } }),
+				).rejects.toMatchObject({ code: "INVALID_PAGE_CONTENT" });
+				await expect(
+					replacePageContentUseCase.run({
+						ctx: f.ctx,
+						input: {
+							id: f.page.id,
+							expectedRevision: revision,
+							content: {
+								format: "blocks",
+								blocks: [paragraph("Must not replace the body")],
+							},
+						},
+					}),
+				).rejects.toMatchObject({ code: "INVALID_PAGE_CONTENT" });
 				await expect(
 					checkDocumentAccess(f.grant, f.database.db),
 				).rejects.toThrow(error);
