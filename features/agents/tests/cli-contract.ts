@@ -75,6 +75,26 @@ export function contractChanges(
 			if (key === "items")
 				compare(old[key], next[key], direction, `${path}.items`);
 			else if (
+				key === "$defs" &&
+				(old[key] === undefined || record(old[key])) &&
+				(next[key] === undefined || record(next[key]))
+			) {
+				const oldDefinitions = old[key] ?? {};
+				const nextDefinitions = next[key] ?? {};
+				// Compare definitions without following $ref, which may be recursive.
+				for (const [name, definition] of Object.entries(oldDefinitions)) {
+					const definitionPath = `${path}.$defs.${name}`;
+					if (!Object.hasOwn(nextDefinitions, name))
+						changes.push(`${definitionPath}: removed definition`);
+					else
+						compare(
+							definition,
+							nextDefinitions[name],
+							direction,
+							definitionPath,
+						);
+				}
+			} else if (
 				["anyOf", "oneOf", "allOf"].includes(key) &&
 				Array.isArray(old[key]) &&
 				Array.isArray(next[key]) &&
