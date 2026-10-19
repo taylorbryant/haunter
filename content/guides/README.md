@@ -7,9 +7,12 @@ Use plain-text `##` headings for the table of contents and root-relative `/guide
 links between guides. The page layout supplies the title, so do not add an H1.
 
 Keep instructions tied to released UI labels and behavior. These guides cover
-the web app, AI connections, and the embedded workspace in supported AI clients.
+the web app, AI connections, and the embedded workspace in supported AI apps.
 Write in terms of actions and outcomes for the person using Haunter. Keep API
 contracts, implementation details, and production operations in [`docs/`](../../docs/).
+
+Use “AI agent” on first mention, then “agent.” Use “AI app” for the application
+someone connects, and “MCP client” when explaining the protocol.
 
 Markdown is rendered on the server with raw HTML disabled. Content tests check
 the published files, section anchors, and internal guide links. Run the normal

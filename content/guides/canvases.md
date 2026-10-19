@@ -45,12 +45,12 @@ To recover an earlier drawing, use [canvas history](/guides/saving-and-recovery#
 
 Deleting a standalone canvas from the Canvases list is permanent. It does not move to Trash, and you cannot recover it through canvas history.
 
-## Draw with an assistant
+## Draw with an AI agent
 
-With a [connected AI assistant](/guides/ai), name the canvas and describe the changes you want. Include the workspace name when needed, and identify shapes by their labels. For example:
+With a [connected AI agent](/guides/ai), name the canvas and describe the changes you want. Include the workspace name when needed, and identify shapes by their labels. For example:
 
 - “In the Project plan canvas, align the Research, Design, and Build cards and space them evenly.”
 - “In the Checkout flow canvas, put the Cart, Payment, and Confirmation steps in a frame called Checkout.”
 - “Add a settings screen wireframe template to the App ideas canvas.”
 
-The assistant can inspect and edit drawing elements, including groups, frames, and images, when its connection has the required access. Open the canvas in the web app to review the changes and continue drawing.
+The agent can inspect and edit drawing elements, including groups, frames, and images, when its connection has the required access. Open the canvas in the web app to review the changes and continue drawing.

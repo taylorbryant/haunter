@@ -13,7 +13,7 @@ export const viewport = publicPageViewport;
 export const metadata: Metadata = {
 	title: { default: "Guides · Haunter", template: "%s · Haunter Guides" },
 	description:
-		"Learn to write, organize tasks, draw, and work with an AI assistant in Haunter.",
+		"Learn to write, organize tasks, draw, and work with an AI agent in Haunter.",
 };
 
 // Guide pages never read session or workspace data, including through the layout.

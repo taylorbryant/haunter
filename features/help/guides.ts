@@ -27,7 +27,7 @@ export const HELP_GUIDES = [
 		slug: "ai",
 		title: "Using Haunter with AI",
 		description:
-			"Connect an assistant, choose its access, and work together in Haunter.",
+			"Connect an AI agent, choose its access, and work together in Haunter.",
 	},
 	{
 		slug: "sharing-and-exporting",

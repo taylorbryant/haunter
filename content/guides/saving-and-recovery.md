@@ -38,7 +38,7 @@ Open **Trash** in the sidebar, find the page, and choose **Restore**. When you m
 
 ## Recover a canvas version
 
-Use a [connected AI assistant](/guides/ai) to review saved canvas versions. Ask, for example: “Show the saved versions of the checkout canvas before restoring anything.” Once you have chosen a version, ask the assistant to restore it. Restoring requires **Full access**.
+Use a [connected AI agent](/guides/ai) to review saved canvas versions. Ask, for example: “Show the saved versions of the checkout canvas before restoring anything.” Once you have chosen a version, ask the agent to restore it. Restoring requires **Full access**.
 
 There is no canvas history picker in the web app. Restoring a canvas version replaces the drawing and keeps a recovery version of the drawing it replaced. Page history can restore where a canvas appears in a page, but cannot restore an older drawing.
 

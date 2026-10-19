@@ -40,7 +40,7 @@ flowchart LR
 
 Mermaid supports flowcharts, sequence diagrams, entity relationship diagrams, and other diagram types. If the source has an error, Haunter shows a message and keeps the text available to fix. Links and external images inside diagrams are disabled.
 
-Diagrams appear on shared pages too. Markdown exports retain the Mermaid source; HTML exports include the diagram and its source. You can also ask a connected agent to create or update a Mermaid diagram on a page.
+Diagrams appear on shared pages too. Markdown exports retain the Mermaid source; HTML exports include the diagram and its source. You can also ask a connected AI agent to create or update a Mermaid diagram on a page.
 
 ## Organize and connect pages
 
