@@ -36,31 +36,36 @@ argument/output mappings and require compatibility with installed releases.
 Two checks guard those contracts:
 
 - `features/agents/tests/cli-compatibility.test.ts` compares the real MCP
-  `tools/list` response with the checked-in `cli-contract-0.1.0.json` baseline
-  and exercises the current CLI against the production handler with disposable
-  SQLite data. Additive tools and properties are allowed. Removed tools/fields,
+  `tools/list` response with the immutable `cli-contract-0.1.0.json` and
+  `cli-contract-0.2.0.json` baselines and exercises the current CLI against the
+  production handler with disposable SQLite data. Additive tools and properties are allowed. Removed tools/fields,
   newly required input, weakened output guarantees, and changes to constraints
   or defaults fail for review. This is a conservative schema check, not a proof
   that every possible old request remains compatible.
   Current-CLI tests also cover workspace search pagination, standalone canvas
   listing, page renaming, task updates/reopening, and view-only permissions.
 - `bun run verify:cli-compatibility` downloads the exact published `haunter@0.1.0`
-  tarball, verifies its pinned SHA-512 integrity, installs it in a temporary
-  directory, and runs its Node executable against the current MCP handler.
-  CI runs this on Node 22 and 24. The flow covers all nine tools used by 0.1.0,
-  including page append, child pages, task completion, and workspace denial.
+  and `haunter@0.2.0` tarballs, verifies each pinned SHA-512 integrity, and installs
+  each release in its own temporary directory. It runs the Node executables
+  against the current MCP handler with fresh disposable data for each flow.
+  CI runs both releases on Node 22 and 24. Both exercise the original page, task,
+  and workspace commands; 0.2.0 also exercises workspace search and pagination,
+  canvas listing, page renaming, task updates/reopening, tool discovery and
+  validation, and view-only permissions.
   It requires npm access and uses no production account. OAuth is covered by
   separate CLI tests; this fixture supplies authentication at the handler boundary.
 
-Keep released contract fixtures immutable. The initial fixture records the
-server schemas at merged commit `739d72007bce57a3fe7d66b49e97b37ae5c499c1` and
+Keep released contract fixtures immutable. Each fixture records the original
+merged source commit, the schemas used by that release’s friendly commands, and
 the published package integrity. A failing check should lead to preserving the
 old contract (for example, through an adapter or a separate tool name), not
 regenerating the baseline from the changed server. Any intentional retirement
 needs an explicit support/migration decision.
 
 When publishing another supported release, retain existing baselines and add
-its pinned tarball and contract coverage to the compatibility suite. Do not
+its original contract fixture to `cliBaselines` in
+`features/agents/tests/cli-baselines.ts`, then extend the published-package flow
+in `scripts/verify-cli-compatibility.ts` for any new commands. Do not
 replace the pinned version with `latest`. Schema checks alone cannot detect
 semantic changes; expand the real-handler flow when a new command adds behavior.
 
