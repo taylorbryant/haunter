@@ -60,6 +60,15 @@ export async function fixture() {
 			const body = Buffer.concat(chunks).toString();
 			if (url.pathname === "/register") {
 				const metadata = JSON.parse(body);
+				if (metadata.application_type !== "native")
+					return respond(
+						{
+							error: "invalid_client_metadata",
+							error_description:
+								"The CLI must register as a native application.",
+						},
+						400,
+					);
 				redirect = metadata.redirect_uris[0];
 				return respond({ ...metadata, client_id: "haunter-cli-test" }, 201);
 			}
