@@ -1,10 +1,8 @@
 # Production operations
 
-This is the release and configuration reference for maintainers of the hosted
-Haunter application and its preview environments. For contributor setup, follow
-[Local development](../CONTRIBUTING.md#local-development).
-Use [`.env.example`](../.env.example) as the complete configuration reference.
-Configure the production environment before building and starting the app:
+Before building and starting the hosted Haunter app or a preview deployment,
+configure its environment using [`.env.example`](../.env.example). For local setup,
+see [Local development](../CONTRIBUTING.md#local-development).
 
 - Set `APP_URL` to the canonical public origin and set `BETTER_AUTH_SECRET` to
   a unique secret of at least 32 characters.

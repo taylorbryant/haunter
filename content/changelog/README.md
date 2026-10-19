@@ -1,10 +1,6 @@
 # Changelog authoring
 
-This README is for maintainers writing release notes; it is not published.
-The versioned files describe changes for people using Haunter and are published
-at `/changelog`. Review them with the code they describe.
-
-To publish a release:
+Release notes appear at `/changelog`. To publish a release:
 
 1. Add a Markdown file named after the version, using the same frontmatter and
    `##` sections shown in `0.1.0.md`.

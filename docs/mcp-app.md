@@ -2,9 +2,8 @@
 
 Haunter's MCP App opens a React workspace inside a supporting host. It shares
 the web app's navigation, Home and Tasks views, BlockNote page editor, and tldraw
-canvas editor. This document covers maintaining that integration; tool usage is
-documented in the [page](mcp-page-editing.md) and [canvas](mcp-canvas-editing.md)
-references.
+canvas editor. For tool usage, see the [page](mcp-page-editing.md) and
+[canvas](mcp-canvas-editing.md) references.
 
 ## Host integration
 

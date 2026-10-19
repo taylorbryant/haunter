@@ -1,9 +1,8 @@
 # Guide authoring
 
-This README is for maintainers writing user guides; it is not published.
-The guides explain how to use hosted Haunter and are published at `/guides`
-without a session. Add or update Markdown files here and register their title and
-description in [`features/help/guides.ts`](../../features/help/guides.ts).
+Guides appear at `/guides` and can be read without signing in. To add or update a
+guide, edit its Markdown file here and register its title and description in
+[`features/help/guides.ts`](../../features/help/guides.ts).
 Use plain-text `##` headings for the table of contents and root-relative `/guides/...`
 links between guides. The page layout supplies the title, so do not add an H1.
 
