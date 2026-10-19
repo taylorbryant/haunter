@@ -1,15 +1,10 @@
 # Maintainer documentation
 
-These references cover developing, operating, and debugging Haunter. MCP
-references document the contracts and client behavior to preserve when changing
-the tools. Start with [Contributing to Haunter](../CONTRIBUTING.md) for local setup
+Start with [Contributing to Haunter](../CONTRIBUTING.md) for local setup
 and validation, and [AGENTS.md](../AGENTS.md) for coding-agent conventions.
 
-User guides are published at [haunter.app/guides](https://www.haunter.app/guides).
-Their source lives in [content/guides](../content/guides/README.md); keep instructions
-for using the hosted app there. Published release notes live in
-[content/changelog](../content/changelog/README.md). The README in each content
-directory is an authoring reference for maintainers and is not published.
+Read the [user guides](https://www.haunter.app/guides) for help using Haunter and
+the [changelog](https://www.haunter.app/changelog) for release notes.
 
 | Topic | Reference |
 | --- | --- |
