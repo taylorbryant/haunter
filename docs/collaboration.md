@@ -259,12 +259,10 @@ download the available copy before navigating away.
   requires an active lease, working lease renewal, and no failed document saves.
   Investigate database connectivity, storage errors, and competing workers before
   restarting repeatedly. A failed save is not acknowledged as durable.
-- **Worker reports `Run documents.migrate before starting collaboration`:** Its
-  read-only startup check found missing collaborative state or mismatched
-  projections. Confirm the target database and inspect the read-only report with
-  `bun beignet task run documents.migrate --json`. Any repair requires a backup
-  and paused writers; follow the [legacy document conversion procedure](deployment.md#legacy-document-conversion).
-  Normal worker startup does not convert data automatically.
+- **Page or canvas reports missing collaborative data:** Confirm that the web app
+  and worker use the intended database. Restore missing state from a complete
+  database backup using the [restore procedure](#backups-and-database-restore),
+  or import an available recovery file as a separate copy.
 - **Page or canvas cannot connect:** Check the worker URL embedded in the app
   build, TLS, browser origin allowlist, and matching database/auth secret. Check
   access to the resource and complete the in-app sign-in recovery flow if the

@@ -171,7 +171,10 @@ export function createCanvasSyncServer(options: {
 					createTenantScope({ id: grant.workspaceId }),
 					grant.pageId,
 				);
-				if (!stored) throw new Error("Canvas not migrated or deleted");
+				if (!stored)
+					throw new Error(
+						"Canvas sync room is missing or the canvas was deleted.",
+					);
 				const snapshot: RoomSnapshot = JSON.parse(stored.roomJson);
 				const fingerprint = await canvasFingerprint(
 					projectCanvasRoom(snapshot),

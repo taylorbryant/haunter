@@ -1,8 +1,4 @@
 import { expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
-import { readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { TLSyncClient } from "@tldraw/sync-core";
 import {
 	atom,
@@ -23,7 +19,6 @@ import {
 	stopDocumentServer,
 } from "@/infra/documents/bun-transport";
 import { createDocumentSessionTokens } from "@/infra/documents/session-token";
-import { createDocumentMaintenance } from "@/infra/documents/migration";
 import * as schema from "@/infra/db/schema";
 import { projectCanvasRoom, canvasFingerprint } from "../lib/document";
 import {
@@ -396,62 +391,6 @@ test("canvas grants are resource-bound and revoke access for trashed parents, ex
 		await f.database.db.delete(schema.member);
 		await expect(checkDocumentAccess(grant, f.database.db)).rejects.toThrow();
 	} finally {
-		await f.database.close();
-	}
-});
-
-test("canvas cutover backs up snapshots and preserves native room clocks on rerun", async () => {
-	const f = await documentFixture();
-	const backupPath = join(
-		tmpdir(),
-		`haunter-canvas-migration-${crypto.randomUUID()}.json`,
-	);
-	try {
-		const canvas = await f.database.repositories.canvases.create(f.scope, {
-			userId: f.userId,
-			pageId: null,
-			title: "Old drawing",
-		});
-		await f.database.db.delete(schema.canvasSyncRooms);
-		const before = (await f.database.repositories.canvases.findById(
-			f.scope,
-			canvas.id,
-		))!.snapshot;
-		const maintenance = createDocumentMaintenance(
-			f.database.db,
-			`file:${f.database.path}`,
-		);
-		expect(await maintenance.migrate({ dryRun: true })).toMatchObject({
-			canvases: 1,
-			canvasesConverted: 1,
-		});
-		await maintenance.migrate({
-			dryRun: false,
-			expectedDatabase: `file:${f.database.path}`,
-			backupPath,
-		});
-		expect(
-			JSON.parse(await readFile(backupPath, "utf8")).canvases[0].snapshot,
-		).toBe(JSON.stringify(before));
-		const first = await f.database.repositories.canvases.findSyncRoom(
-			f.scope,
-			canvas.id,
-		);
-		expect(await maintenance.migrate({ dryRun: true })).toMatchObject({
-			canvasesConverted: 0,
-		});
-		expect(
-			await f.database.repositories.canvases.findSyncRoom(f.scope, canvas.id),
-		).toEqual(first);
-		await f.database.db
-			.update(schema.canvases)
-			.set({ snapshot: '{"bad":true}' })
-			.where(eq(schema.canvases.id, canvas.id));
-		await expect(maintenance.migrate({ dryRun: true })).rejects.toThrow(
-			"preflight failed",
-		);
-	} finally {
-		await rm(backupPath, { force: true });
 		await f.database.close();
 	}
 });

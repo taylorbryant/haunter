@@ -27,7 +27,8 @@ export const openCanvasSessionUseCase = useCase
 		if (!sessionId) throw appError("Unauthorized");
 		if (!(await ctx.ports.canvases.findSyncRoom(scope, canvas.id)))
 			throw appError("InvalidPageContent", {
-				message: "This canvas has not been migrated.",
+				message:
+					"This canvas is missing its collaborative data. Contact the workspace administrator.",
 			});
 		return {
 			...ctx.ports.documentSessions.issue({

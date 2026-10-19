@@ -22,15 +22,6 @@ if (!env.NEXT_PUBLIC_COLLABORATION_URL)
 		"Set NEXT_PUBLIC_COLLABORATION_URL before starting collaboration.",
 	);
 const app = await getServer();
-const preflight = await (
-	await app.createServiceContext()
-).ports.documentMaintenance.migrate({ dryRun: true });
-if (
-	preflight.converted > 0 ||
-	preflight.projectionsUpdated > 0 ||
-	preflight.canvasesConverted > 0
-)
-	throw new Error("Run documents.migrate before starting collaboration.");
 const lease = createWorkerLease(drizzle(databaseClient, { schema }));
 await lease.acquire();
 const failedDocuments = new Set<string>();

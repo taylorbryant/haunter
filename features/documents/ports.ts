@@ -36,7 +36,7 @@ export interface DocumentRepository {
 		scope: TenantScope,
 		known: { pageId: string; revision: number }[],
 	): Promise<StoredDocument[]>;
-	/** Transactional targeted writes; missing binary state is a migration error. */
+	/** Transactional targeted writes; missing binary state is a storage error. */
 	appendBlocks(
 		scope: TenantScope,
 		pageId: string,
@@ -51,7 +51,7 @@ export interface DocumentRepository {
 			props: Record<string, string | boolean | number>;
 		},
 	): Promise<DocumentWriteResult>;
-	/** Called within the page creation or one-time migration transaction. */
+	/** Called within the page creation transaction. */
 	insert(scope: TenantScope, pageId: string, state: Uint8Array): Promise<void>;
 	/** Atomically replace binary state and its SQL content projection. */
 	commit(
@@ -100,26 +100,4 @@ export interface DocumentRecoveryPort {
 	decodeCanvas(update: number[]): Promise<Record<string, unknown>>;
 	decode(update: number[]): Promise<BlockJson[]>;
 	normalize(content: BlockJson[]): Promise<BlockJson[]>;
-}
-
-export type DocumentMigrationReport = {
-	database: string;
-	pages: number;
-	canvases: number;
-	canvasesConverted: number;
-	converted: number;
-	projectionsUpdated: number;
-	existing: number;
-	trashed: number;
-	dryRun: boolean;
-	backupPath?: string;
-};
-
-/** Offline operational task; never used to initialize a document during reads. */
-export interface DocumentMaintenancePort {
-	migrate(input: {
-		dryRun: boolean;
-		expectedDatabase?: string;
-		backupPath?: string;
-	}): Promise<DocumentMigrationReport>;
 }

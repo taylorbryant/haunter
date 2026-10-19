@@ -35,10 +35,7 @@ to flush saves and keep exactly one worker per database.
 bun beignet db migrate
 ```
 
-Confirm the database target printed by the migration command. Existing data
-from before collaborative editing also requires the
-[legacy document conversion](#legacy-document-conversion) before starting either
-service; SQL migrations alone do not create its Yjs documents or native canvas rooms.
+Confirm the database target printed by the migration command.
 
 After migrations and the worker rollout, build and start the web app:
 
@@ -46,34 +43,6 @@ After migrations and the worker rollout, build and start the web app:
 bun run build
 bun run start
 ```
-
-## Legacy document conversion
-
-For a database with legacy page or canvas storage, inspect the conversion report:
-
-```bash
-bun beignet task run documents.migrate --json
-```
-
-The task defaults to a dry run. If `converted`, `projectionsUpdated`, or
-`canvasesConverted` is nonzero, the worker refuses startup until conversion is
-applied. A failed preflight requires investigating the reported resource IDs
-before proceeding.
-
-Stop all app and worker writers, preserve a full database backup, and rerun the
-dry run against the intended database. To apply, use the report's exact
-`database` value for `expectedDatabase` and an absolute path to a new backup file:
-
-```bash
-bun beignet task run documents.migrate --input '{"dryRun":false,"expectedDatabase":"DATABASE_FROM_REPORT","backupPath":"/absolute/path/to/new-document-cutover.json"}' --json
-```
-
-The task creates the cutover backup exclusively and refuses an existing path.
-That file contains document conversion data; keep the full database backup for
-account, task, history, and other application state. Rerun the dry run and verify
-all three conversion counts are zero before restarting writers. See
-[Backups and database restore](collaboration.md#backups-and-database-restore)
-for recovery requirements.
 
 ## Optional services
 

@@ -33,7 +33,6 @@ import type {
 import type { ChangelogStateRepository } from "@/features/changelog/ports";
 import type { WorkspaceEventStreamLeasePort } from "@/features/collab/ports";
 import type {
-	DocumentMaintenancePort,
 	DocumentRecoveryPort,
 	DocumentRepository,
 	DocumentSessionPort,
@@ -99,7 +98,6 @@ export type AppPorts = {
 	workspaceSearch: WorkspaceSearchRepository;
 	agentFiles: AgentFilesPort;
 	canvasEditing: CanvasEditingPort;
-	documentMaintenance: DocumentMaintenancePort;
 	documentRecovery: DocumentRecoveryPort;
 	documents: DocumentRepository;
 	documentSessions: DocumentSessionPort;
