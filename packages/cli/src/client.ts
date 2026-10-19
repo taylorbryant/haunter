@@ -1,11 +1,22 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import {
+	CallToolResultSchema,
+	ListToolsResultSchema,
+	type CallToolResult,
+	type Tool,
+} from "@modelcontextprotocol/sdk/types.js";
 import { version } from "../package.json";
 import { AuthProvider, boundedFetch, LOGIN_REQUIRED } from "./auth";
 import type { Profile, ProfileStore } from "./config";
 
 export interface HaunterClient {
 	call(name: string, args: Record<string, unknown>): Promise<unknown>;
+	listTools(): Promise<Tool[]>;
+	callTool(
+		name: string,
+		args: Record<string, unknown>,
+	): Promise<CallToolResult>;
 	close(): Promise<void>;
 }
 
@@ -36,6 +47,42 @@ export async function connect(
 		throw error;
 	}
 	return {
+		async listTools() {
+			const tools: Tool[] = [];
+			const names = new Set<string>();
+			const cursors = new Set<string>();
+			let cursor: string | undefined;
+			for (let page = 0; page < 100; page++) {
+				// Fetch every page without the SDK's per-page output-validator cache.
+				// Generic calls validate only the selected tool's advertised schemas.
+				const result = await client.request(
+					{
+						method: "tools/list",
+						params: cursor === undefined ? {} : { cursor },
+					},
+					ListToolsResultSchema,
+					{ timeout: 30_000, signal },
+				);
+				for (const tool of result.tools) {
+					if (names.has(tool.name))
+						throw new Error(`Haunter listed duplicate tool ${tool.name}.`);
+					names.add(tool.name);
+					tools.push(tool);
+				}
+				cursor = result.nextCursor;
+				if (cursor === undefined) return tools;
+				if (cursors.has(cursor))
+					throw new Error("Haunter repeated a tool-list cursor.");
+				cursors.add(cursor);
+			}
+			throw new Error("Haunter's tool list exceeded 100 pages.");
+		},
+		callTool: (name, args) =>
+			client.request(
+				{ method: "tools/call", params: { name, arguments: args } },
+				CallToolResultSchema,
+				{ timeout: 30_000, signal },
+			),
 		async call(name, args) {
 			// Do not retry mutations: a timed-out request may already have committed.
 			const result = await client.callTool(

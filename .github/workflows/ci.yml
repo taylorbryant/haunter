@@ -119,3 +119,9 @@ jobs:
         run: bun run check
       - name: Verify the npm package under Node
         run: bun run verify:package
+      - name: Install app dependencies for released CLI compatibility
+        working-directory: .
+        run: bun ci
+      - name: Verify published CLI compatibility with the current server
+        working-directory: .
+        run: bun run verify:cli-compatibility

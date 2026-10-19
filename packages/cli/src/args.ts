@@ -10,6 +10,7 @@ const options = {
 	page: { type: "string" },
 	parent: { type: "string" },
 	file: { type: "string" },
+	input: { type: "string" },
 	due: { type: "string" },
 	filter: { type: "string" },
 	scope: { type: "string" },
@@ -22,6 +23,9 @@ const commands: Record<string, { args: number; flags: string[] }> = {
 	login: { args: 0, flags: ["port", "no-browser"] },
 	logout: { args: 0, flags: [] },
 	status: { args: 0, flags: [] },
+	"tools list": { args: 0, flags: [] },
+	"tools describe": { args: 1, flags: [] },
+	"tools call": { args: 1, flags: ["input", "workspace"] },
 	"workspaces list": { args: 0, flags: [] },
 	"workspaces use": { args: 1, flags: [] },
 	"pages list": { args: 0, flags: ["workspace"] },
@@ -46,7 +50,7 @@ export function parseArguments(args: string[]) {
 	});
 	const { values, positionals, tokens } = parsed;
 	const group = positionals[0];
-	const grouped = ["pages", "tasks", "workspaces"].includes(group);
+	const grouped = ["pages", "tasks", "workspaces", "tools"].includes(group);
 	const command = grouped ? `${group} ${positionals[1] ?? ""}`.trim() : group;
 	const operands = positionals.slice(grouped ? 2 : 1);
 	if (values.help || values.version || !group)
@@ -139,6 +143,10 @@ Usage: haunter <command> [options]
     --limit <1-200>              Maximum tasks (default: 50)
   tasks add <title>              Create a task; optional --due YYYY-MM-DD
   tasks done <id>                Complete a task
+  tools list                    Discover tools available to your connection
+  tools describe <name>         Show a tool's description and JSON schemas
+  tools call <name>             Call a discovered tool with JSON arguments
+    --input <path|->            Read a JSON object from a file or stdin
 
 Options:
   -w, --workspace <id>           Override the saved workspace for a command

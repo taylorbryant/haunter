@@ -4,6 +4,10 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type {
+	CallToolResult,
+	ListToolsResult,
+} from "@modelcontextprotocol/sdk/types.js";
 import { login } from "../src/auth";
 import { runCli } from "../src/cli";
 import { ProfileStore } from "../src/config";
@@ -21,6 +25,9 @@ export async function fixture() {
 	let currentRefresh = "refresh-1";
 	let rejectTokens = false;
 	let toolError = false;
+	let toolPages: ListToolsResult[] = [{ tools: [] }];
+	const listCursors: (string | undefined)[] = [];
+	const toolResults = new Map<string, CallToolResult>();
 	let workspaces = [{ id: "workspace-1", name: "Personal", role: "owner" }];
 	const server = createServer(async (req, res) => {
 		const respond = (data: unknown, status = 200) => {
@@ -110,7 +117,15 @@ export async function fixture() {
 					capabilities: { tools: {} },
 					serverInfo: { name: "haunter-test", version: "1" },
 				});
-			if (message.method === "tools/list") return reply({ tools: [] });
+			if (message.method === "tools/list") {
+				const cursor = message.params?.cursor;
+				listCursors.push(cursor);
+				const index =
+					cursor === undefined
+						? 0
+						: toolPages.findIndex((page) => page.nextCursor === cursor) + 1;
+				return reply(toolPages[index] ?? { tools: [] });
+			}
 			if (message.method !== "tools/call") return reply({});
 			const { name, arguments: args } = message.params;
 			calls.push({ name, arguments: args });
@@ -121,6 +136,7 @@ export async function fixture() {
 						{ type: "text", text: "You do not have access to this workspace." },
 					],
 				});
+			if (toolResults.has(name)) return reply(toolResults.get(name));
 			const task = {
 				taskId: TASK_ID,
 				title: args.title ?? "Test task",
@@ -162,6 +178,13 @@ export async function fixture() {
 		store,
 		directory,
 		calls,
+		listCursors,
+		setToolPages(value: ListToolsResult[]) {
+			toolPages = value;
+		},
+		setToolResult(name: string, result: CallToolResult) {
+			toolResults.set(name, result);
+		},
 		get refreshes() {
 			return refreshes;
 		},

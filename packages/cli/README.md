@@ -3,6 +3,9 @@
 Capture notes, find pages, and manage tasks in [Haunter](https://www.haunter.app)
 from your terminal. Requires Node.js 22 or later and a Haunter account.
 
+This README includes the upcoming 0.2.0 release. The `tools` commands require
+0.2.0; the published 0.1.0 release supports the page, capture, and task commands.
+
 ## Get started
 
 Install the CLI and sign in:
@@ -70,6 +73,50 @@ Task lists default to your open tasks, with a limit of 50. Use
 `--due today|overdue|upcoming`, and `--limit 1..200` to change the selection.
 Creating and completing tasks prints the task ID.
 
+## Discover and call more tools
+
+In 0.2.0, discover tools available to your signed-in connection, including new
+tools that don't have a dedicated CLI command:
+
+```bash
+haunter tools list
+haunter tools describe search_workspace
+haunter tools call search_workspace --input search.json --json
+```
+
+Create `search.json` with the arguments shown by `tools describe`:
+
+```json
+{"query":"meeting notes"}
+```
+
+The CLI checks the current tool list and argument schema each time you call a
+tool. New tools become available as the server adds them, within your approved
+permissions. Run `haunter login` again if you need different access. Tools
+reserved for embedded app interfaces are omitted. Tools requiring background
+MCP tasks are not supported.
+
+`--input` accepts a JSON file, or `-` for piped input. It must contain one JSON
+object, up to 1,000,000 bytes. Without `--input`, arguments start as `{}`:
+
+```bash
+printf '%s' '{"query":"meeting notes"}' | haunter tools call search_workspace --input - --json
+haunter tools call list_workspaces --json
+```
+
+For tools with a `workspaceId` argument, the CLI fills it from `--workspace`,
+`HAUNTER_WORKSPACE`, the saved selection, or the only approved workspace.
+A `workspaceId` supplied in JSON takes precedence over saved or environment
+defaults; a conflicting `--workspace` is an error. Tools without that argument
+don't use a default workspace and reject `--workspace`.
+
+`tools describe` and `tools call` print JSON, formatted for reading unless
+`--json` is set. Calls preserve the complete MCP result: `content`,
+`structuredContent`, and any metadata. Image data and resource links stay in
+the JSON; the CLI does not render or download them. A tool error also preserves
+the result on stdout, reports an error on stderr, and exits with code 1. Check
+the exit code before treating a result as successful.
+
 ## Use the CLI in scripts
 
 Add `--json` to get one JSON value on stdout:
@@ -90,8 +137,8 @@ may have been saved.
 
 ## Choose a workspace or server
 
-Pass `--workspace WORKSPACE_ID` (or `-w WORKSPACE_ID`) to a page, capture, or task
-command to override the saved workspace.
+Pass `--workspace WORKSPACE_ID` (or `-w WORKSPACE_ID`) to a page, capture, task,
+or workspace-scoped `tools call` command to override the saved workspace.
 
 | Setting | Flag | Environment variable | Default |
 | --- | --- | --- | --- |
