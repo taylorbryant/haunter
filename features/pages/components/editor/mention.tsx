@@ -2,6 +2,7 @@
 
 import { createReactInlineContentSpec } from "@blocknote/react";
 import { useQuery } from "@tanstack/react-query";
+import { FileTextIcon } from "lucide-react";
 import Link from "next/link";
 import {
 	useEmbeddedEditor,
@@ -41,10 +42,21 @@ function MentionChip({
 	return (
 		<Link
 			href={`/w/${workspaceId}/p/${pageId}`}
-			className="rounded px-0.5 font-medium underline decoration-muted-foreground/50 underline-offset-4 hover:bg-muted"
+			className="haunter-page-link inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
 		>
-			{page.icon ? `${page.icon} ` : ""}
-			{page.title || "Untitled"}
+			{page.icon ? (
+				<span
+					className="flex size-4 shrink-0 items-center justify-center"
+					aria-hidden="true"
+				>
+					{page.icon}
+				</span>
+			) : (
+				<FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+			)}
+			<span className="min-w-0 truncate font-medium text-foreground underline decoration-muted-foreground/40 underline-offset-4">
+				{page.title || "Untitled"}
+			</span>
 		</Link>
 	);
 }
