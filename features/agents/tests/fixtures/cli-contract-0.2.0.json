@@ -1,0 +1,1107 @@
+{
+	"release": {
+		"version": "0.2.0",
+		"sourceCommit": "727e5cffb87e0599ca47afad3acb16c8fb602633",
+		"integrity": "sha512-wgVSTtxWzjxmLfHxprmWftWgXAMHMhawPZbwKlS/Sj4DuVbSydY/3frpRLy/OHFEMeK6en3iMi1mnDsGJfDk5Q=="
+	},
+	"tools": [
+		{
+			"name": "append_to_page",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"pageId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"markdown": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 100000
+					}
+				},
+				"required": ["workspaceId", "pageId", "markdown"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"pageId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string"
+					},
+					"appendedBlocks": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 9007199254740991
+					},
+					"updatedAt": {
+						"type": "string"
+					}
+				},
+				"required": ["pageId", "title", "appendedBlocks", "updatedAt"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "complete_task",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"taskId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					}
+				},
+				"required": ["workspaceId", "taskId"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"taskId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string"
+					},
+					"completed": {
+						"type": "boolean",
+						"const": true
+					},
+					"completedAt": {
+						"type": ["string", "null"]
+					},
+					"updatedAt": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"taskId",
+					"title",
+					"completed",
+					"completedAt",
+					"updatedAt"
+				],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "create_page",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"title": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 300,
+						"description": "The page title, displayed separately above the page body."
+					},
+					"parentPageId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"markdown": {
+						"description": "The page body in Markdown. Do not repeat the page title as the first heading.",
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 100000
+					}
+				},
+				"required": ["workspaceId", "title"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"pageId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string"
+					},
+					"parentPageId": {
+						"anyOf": [
+							{
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"updatedAt": {
+						"type": "string"
+					}
+				},
+				"required": ["pageId", "title", "parentPageId", "updatedAt"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "create_task",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"title": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 1000
+					},
+					"dueDate": {
+						"type": "string",
+						"pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+					},
+					"dueTime": {
+						"type": "string",
+						"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+					},
+					"reminderOffsetMinutes": {
+						"type": "number",
+						"enum": [0, 15, 60, 1440]
+					},
+					"assigneeId": {
+						"type": ["string", "null"]
+					}
+				},
+				"required": ["workspaceId", "title"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"taskId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string"
+					},
+					"completed": {
+						"type": "boolean"
+					},
+					"dueDate": {
+						"anyOf": [
+							{
+								"type": "string",
+								"pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"dueTime": {
+						"anyOf": [
+							{
+								"type": "string",
+								"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"reminderOffsetMinutes": {
+						"anyOf": [
+							{
+								"type": "number",
+								"enum": [0, 15, 60, 1440]
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"assigneeId": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string"
+					},
+					"updatedAt": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"taskId",
+					"title",
+					"completed",
+					"dueDate",
+					"dueTime",
+					"reminderOffsetMinutes",
+					"assigneeId",
+					"createdAt",
+					"updatedAt"
+				],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "list_canvases",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					}
+				},
+				"required": ["workspaceId"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"canvases": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"workspaceId": {
+									"type": "string",
+									"minLength": 1
+								},
+								"pageId": {
+									"anyOf": [
+										{
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"title": {
+									"type": ["string", "null"]
+								},
+								"createdAt": {
+									"type": "string",
+									"format": "date-time",
+									"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+								},
+								"updatedAt": {
+									"type": "string",
+									"format": "date-time",
+									"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+								},
+								"canvasId": {
+									"type": "string",
+									"format": "uuid",
+									"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+								}
+							},
+							"required": [
+								"workspaceId",
+								"pageId",
+								"title",
+								"createdAt",
+								"updatedAt",
+								"canvasId"
+							],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": ["canvases"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "list_pages",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					}
+				},
+				"required": ["workspaceId"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"pages": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"pageId": {
+									"type": "string",
+									"format": "uuid",
+									"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+								},
+								"title": {
+									"type": "string"
+								},
+								"icon": {
+									"type": ["string", "null"]
+								},
+								"parentPageId": {
+									"anyOf": [
+										{
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"updatedAt": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"pageId",
+								"title",
+								"icon",
+								"parentPageId",
+								"updatedAt"
+							],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": ["pages"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "list_tasks",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"taskId": {
+						"description": "Read one known task within this workspace, including tasks outside the first page of results. Use filter=all and scope=everyone when reading a selected task.",
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"filter": {
+						"default": "open",
+						"type": "string",
+						"enum": ["open", "completed", "all"]
+					},
+					"scope": {
+						"default": "mine",
+						"type": "string",
+						"enum": ["mine", "everyone"]
+					},
+					"dueOnOrAfter": {
+						"type": "string",
+						"pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+					},
+					"dueOnOrBefore": {
+						"type": "string",
+						"pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+					},
+					"due": {
+						"type": "string",
+						"enum": ["overdue", "today", "upcoming"]
+					},
+					"limit": {
+						"default": 50,
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 200
+					}
+				},
+				"required": ["workspaceId"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"tasks": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"taskId": {
+									"type": "string",
+									"format": "uuid",
+									"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+								},
+								"title": {
+									"type": "string"
+								},
+								"completed": {
+									"type": "boolean"
+								},
+								"dueDate": {
+									"anyOf": [
+										{
+											"type": "string",
+											"pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"dueTime": {
+									"anyOf": [
+										{
+											"type": "string",
+											"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"reminderOffsetMinutes": {
+									"anyOf": [
+										{
+											"type": "number",
+											"enum": [0, 15, 60, 1440]
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"assigneeId": {
+									"type": ["string", "null"]
+								},
+								"assigneeName": {
+									"type": ["string", "null"]
+								},
+								"pageId": {
+									"anyOf": [
+										{
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"pageTitle": {
+									"type": ["string", "null"]
+								},
+								"completedAt": {
+									"type": ["string", "null"]
+								},
+								"updatedAt": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"taskId",
+								"title",
+								"completed",
+								"dueDate",
+								"dueTime",
+								"reminderOffsetMinutes",
+								"assigneeId",
+								"assigneeName",
+								"pageId",
+								"pageTitle",
+								"completedAt",
+								"updatedAt"
+							],
+							"additionalProperties": false
+						}
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				},
+				"required": ["tasks", "hasMore"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "list_workspaces",
+			"inputSchema": {
+				"type": "object",
+				"properties": {},
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaces": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"role": {
+									"type": "string"
+								}
+							},
+							"required": ["id", "name", "role"],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": ["workspaces"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "read_page",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"pageId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"format": {
+						"type": "string",
+						"enum": ["markdown", "blocks", "both"]
+					}
+				},
+				"required": ["workspaceId", "pageId"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"pageId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string"
+					},
+					"updatedAt": {
+						"type": "string"
+					},
+					"revision": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 200
+					},
+					"markdown": {
+						"type": "string"
+					},
+					"blocks": {
+						"type": "array",
+						"items": {
+							"$ref": "#/$defs/__schema0"
+						}
+					}
+				},
+				"required": ["pageId", "title", "updatedAt", "revision"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false,
+				"$defs": {
+					"__schema0": {
+						"type": "object",
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"type": {
+								"type": "string"
+							},
+							"props": {
+								"default": {},
+								"type": "object",
+								"propertyNames": {
+									"type": "string"
+								},
+								"additionalProperties": {}
+							},
+							"content": {},
+							"children": {
+								"default": [],
+								"type": "array",
+								"items": {
+									"$ref": "#/$defs/__schema0"
+								}
+							}
+						},
+						"required": ["id", "type", "props", "children"],
+						"additionalProperties": false
+					}
+				}
+			}
+		},
+		{
+			"name": "reopen_task",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"taskId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					}
+				},
+				"required": ["workspaceId", "taskId"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"taskId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string"
+					},
+					"completed": {
+						"type": "boolean",
+						"const": false
+					},
+					"completedAt": {
+						"type": ["string", "null"]
+					},
+					"updatedAt": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"taskId",
+					"title",
+					"completed",
+					"completedAt",
+					"updatedAt"
+				],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "search_pages",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"query": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 200
+					}
+				},
+				"required": ["workspaceId", "query"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"pages": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"pageId": {
+									"type": "string",
+									"format": "uuid",
+									"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+								},
+								"title": {
+									"type": "string"
+								}
+							},
+							"required": ["pageId", "title"],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": ["pages"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "search_workspace",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"query": {
+						"type": "string",
+						"minLength": 2,
+						"maxLength": 200
+					},
+					"kind": {
+						"default": "all",
+						"type": "string",
+						"enum": ["all", "page", "task", "canvas"]
+					},
+					"limit": {
+						"default": 20,
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 50
+					},
+					"cursor": {
+						"type": "string",
+						"maxLength": 4096
+					},
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					}
+				},
+				"required": ["query", "workspaceId"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"kind": {
+									"type": "string",
+									"enum": ["page", "task", "canvas"]
+								},
+								"id": {
+									"type": "string",
+									"format": "uuid",
+									"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+								},
+								"workspaceId": {
+									"type": "string"
+								},
+								"title": {
+									"type": "string"
+								},
+								"icon": {
+									"type": ["string", "null"]
+								},
+								"snippet": {
+									"type": "string"
+								},
+								"pageId": {
+									"anyOf": [
+										{
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"pageTitle": {
+									"type": ["string", "null"]
+								},
+								"shapeId": {
+									"type": ["string", "null"]
+								},
+								"completed": {
+									"type": ["boolean", "null"]
+								},
+								"updatedAt": {
+									"type": "string"
+								},
+								"path": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"kind",
+								"id",
+								"workspaceId",
+								"title",
+								"icon",
+								"snippet",
+								"pageId",
+								"pageTitle",
+								"shapeId",
+								"completed",
+								"updatedAt",
+								"path"
+							],
+							"additionalProperties": false
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					}
+				},
+				"required": ["items", "nextCursor"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "update_page",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"pageId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 300
+					},
+					"icon": {
+						"anyOf": [
+							{
+								"type": "string",
+								"maxLength": 16
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"parentPageId": {
+						"anyOf": [
+							{
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				},
+				"required": ["workspaceId", "pageId"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"pageId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string"
+					},
+					"icon": {
+						"type": ["string", "null"]
+					},
+					"parentPageId": {
+						"anyOf": [
+							{
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"updatedAt": {
+						"type": "string"
+					}
+				},
+				"required": ["pageId", "title", "icon", "parentPageId", "updatedAt"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		},
+		{
+			"name": "update_task",
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"workspaceId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"taskId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 1000
+					},
+					"dueDate": {
+						"anyOf": [
+							{
+								"type": "string",
+								"pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"dueTime": {
+						"anyOf": [
+							{
+								"type": "string",
+								"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"reminderOffsetMinutes": {
+						"anyOf": [
+							{
+								"type": "number",
+								"enum": [0, 15, 60, 1440]
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"assigneeId": {
+						"type": ["string", "null"]
+					}
+				},
+				"required": ["workspaceId", "taskId"],
+				"$schema": "https://json-schema.org/draft/2020-12/schema"
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"taskId": {
+						"type": "string",
+						"format": "uuid",
+						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+					},
+					"title": {
+						"type": "string"
+					},
+					"completed": {
+						"type": "boolean"
+					},
+					"dueDate": {
+						"anyOf": [
+							{
+								"type": "string",
+								"pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"dueTime": {
+						"anyOf": [
+							{
+								"type": "string",
+								"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"reminderOffsetMinutes": {
+						"anyOf": [
+							{
+								"type": "number",
+								"enum": [0, 15, 60, 1440]
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"assigneeId": {
+						"type": ["string", "null"]
+					},
+					"updatedAt": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"taskId",
+					"title",
+					"completed",
+					"dueDate",
+					"dueTime",
+					"reminderOffsetMinutes",
+					"assigneeId",
+					"updatedAt"
+				],
+				"$schema": "https://json-schema.org/draft/2020-12/schema",
+				"additionalProperties": false
+			}
+		}
+	]
+}

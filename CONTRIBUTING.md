@@ -14,8 +14,12 @@ terminal, so you can sign in without configuring an email provider.
 git clone https://github.com/taylorbryant/haunter.git
 cd haunter
 bun install
+bun install --cwd packages/cli
 cp .env.example .env.local
 ```
+
+Install both sets of dependencies: the root type check and tests also load the
+standalone CLI package.
 
 ### 2. Choose your local administrator
 
@@ -90,9 +94,8 @@ earlier check fails. Use `bun run format` to apply Biome formatting.
 CI runs the same command, alongside production canvas-renderer and packaged-Yjs
 verification.
 
-For CLI changes, also install and validate the standalone `packages/cli` package.
-See [CLI development and releases](docs/cli.md) for the commands and npm package
-verification.
+For CLI changes, also run the standalone package checks and npm package
+verification described in [CLI development and releases](docs/cli.md).
 
 Before opening a pull request, inspect the affected features and registrations:
 
