@@ -13,9 +13,17 @@ import type { AppContext } from "@/app-context";
 import type { CanvasRepository } from "@/features/canvases/ports";
 import { createTestCanvasRepository } from "@/features/canvases/tests/helpers";
 import type { BlockJson } from "@/features/content/schemas";
+import {
+	documentFixture,
+	paragraph,
+	seedFixtureBody,
+} from "@/features/documents/tests/helpers";
 import { extractPageSearchText } from "@/features/pages/lib/extract-page-text";
 import type { PageRepository } from "@/features/pages/ports";
 import { createTestPageRepository } from "@/features/pages/tests/helpers";
+import { editPageBlocksUseCase } from "@/features/pages/use-cases/edit-page-blocks";
+import { readPageDocumentUseCase } from "@/features/pages/use-cases/read-page-document";
+import { restorePageVersionUseCase } from "@/features/pages/use-cases/restore-page-version";
 import { contentReferencesFileKey } from "@/features/shares/lib/file-keys";
 import {
 	enforceSharedFileRateLimit,
@@ -369,6 +377,14 @@ describe("page shares", () => {
 			pageId: otherPage.id,
 			title: null,
 		});
+		// Ownership alone is not a public grant. Both IDs are referenced here,
+		// but only the canvas belonging to this page may be served.
+		await pages.saveContent(
+			scope,
+			page.id,
+			JSON.stringify([canvasBlock(onSharedPage.id), canvasBlock(elsewhere.id)]),
+			"",
+		);
 
 		const share = await tester.run(
 			createPageShareUseCase,
@@ -393,6 +409,224 @@ describe("page shares", () => {
 		).rejects.toThrow(/no longer available/);
 	});
 
+	it("requires a real canvas block and keeps nested duplicate references until the last is removed", async () => {
+		const f = await createFixture();
+		const canvas = await f.canvases.create(f.scope, {
+			userId: "user_test",
+			pageId: f.page.id,
+			title: null,
+		});
+		const share = await f.tester.run(
+			createPageShareUseCase,
+			{ pageId: f.page.id },
+			{ ctx: f.ctx },
+		);
+		const read = () =>
+			f.anonymous.run(
+				getSharedCanvasUseCase,
+				{ token: share.token, id: canvas.id },
+				{ ctx: f.anonymousCtx },
+			);
+		const save = (content: BlockJson[]) =>
+			f.pages.saveContent(f.scope, f.page.id, JSON.stringify(content), "");
+		const nested: BlockJson = {
+			id: "parent",
+			type: "paragraph",
+			props: {},
+			children: [canvasBlock(canvas.id, "nested")],
+		};
+		await save([canvasBlock(canvas.id, "first"), nested]);
+		expect(await read()).toEqual({ snapshot: {} });
+		await save([nested]);
+		expect(await read()).toEqual({ snapshot: {} });
+		await save([]);
+		await expect(read()).rejects.toMatchObject({ code: "SHARE_NOT_FOUND" });
+		expect(await f.canvases.findById(f.scope, canvas.id)).not.toBeNull();
+		for (const content of [
+			[
+				{
+					id: canvas.id,
+					type: "paragraph",
+					props: { canvasId: canvas.id },
+					children: [],
+				},
+			],
+			[
+				{
+					id: "text",
+					type: "paragraph",
+					props: { embedded: canvasBlock(canvas.id) },
+					content: [canvasBlock(canvas.id)],
+					children: [],
+				},
+			],
+			[canvasBlock(`${canvas.id}-different`)],
+		] satisfies BlockJson[][]) {
+			await save(content);
+			await expect(read()).rejects.toMatchObject({ code: "SHARE_NOT_FOUND" });
+		}
+	});
+
+	it("does not grant access to standalone or foreign-workspace canvases even when referenced", async () => {
+		const f = await createFixture();
+		const standalone = await f.canvases.create(f.scope, {
+			userId: "user_test",
+			pageId: null,
+			title: "Private",
+		});
+		const foreign = await f.canvases.create(
+			createTenantScope(createTestTenant("other-workspace")),
+			{ userId: "other-user", pageId: f.page.id, title: null },
+		);
+		const missingId = crypto.randomUUID();
+		await f.pages.saveContent(
+			f.scope,
+			f.page.id,
+			JSON.stringify([
+				canvasBlock(standalone.id),
+				canvasBlock(foreign.id),
+				canvasBlock(missingId),
+			]),
+			"",
+		);
+		const share = await f.tester.run(
+			createPageShareUseCase,
+			{ pageId: f.page.id },
+			{ ctx: f.ctx },
+		);
+		for (const id of [standalone.id, foreign.id, missingId]) {
+			await expect(
+				f.anonymous.run(
+					getSharedCanvasUseCase,
+					{ token: share.token, id },
+					{ ctx: f.anonymousCtx },
+				),
+			).rejects.toMatchObject({ code: "SHARE_NOT_FOUND" });
+		}
+	});
+
+	it.each(["unknown-token", "revoked", "trashed", "missing-page"] as const)(
+		"refuses referenced canvases for %s shares",
+		async (state) => {
+			const f = await createFixture();
+			const canvas = await f.canvases.create(f.scope, {
+				userId: "user_test",
+				pageId: f.page.id,
+				title: null,
+			});
+			await f.pages.saveContent(
+				f.scope,
+				f.page.id,
+				JSON.stringify([canvasBlock(canvas.id)]),
+				"",
+			);
+			const share = await f.tester.run(
+				createPageShareUseCase,
+				{ pageId: f.page.id },
+				{ ctx: f.ctx },
+			);
+			if (state === "revoked")
+				await f.tester.run(
+					revokePageShareUseCase,
+					{ pageId: f.page.id },
+					{ ctx: f.ctx },
+				);
+			if (state === "trashed")
+				await f.pages.setDeletedByIds(
+					f.scope,
+					[f.page.id],
+					new Date().toISOString(),
+				);
+			if (state === "missing-page") f.pages.findById = async () => null;
+			await expect(
+				f.anonymous.run(
+					getSharedCanvasUseCase,
+					{
+						token: state === "unknown-token" ? "unknown-token" : share.token,
+						id: canvas.id,
+					},
+					{ ctx: f.anonymousCtx },
+				),
+			).rejects.toMatchObject({ code: "SHARE_NOT_FOUND" });
+		},
+	);
+
+	it("revokes public reads after a persisted block deletion and restores them through page history", async () => {
+		const f = await documentFixture();
+		try {
+			const canvas = await f.database.repositories.canvases.create(f.scope, {
+				userId: f.userId,
+				pageId: f.page.id,
+				title: null,
+			});
+			const content = [
+				paragraph("Keep this text", "intro"),
+				canvasBlock(canvas.id, "canvas-block"),
+			];
+			await seedFixtureBody(f, content);
+			const version = await f.database.repositories.pageVersions.create(
+				f.scope,
+				{
+					pageId: f.page.id,
+					title: f.page.title,
+					icon: f.page.icon,
+					contentJson: JSON.stringify(content),
+					cause: "checkpoint",
+					createdBy: f.userId,
+				},
+			);
+			const share = await createPageShareUseCase.run({
+				ctx: f.ctx,
+				input: { pageId: f.page.id },
+			});
+			const anonymousCtx: AppContext = {
+				...f.ctx,
+				auth: null,
+				tenant: undefined,
+				membership: undefined,
+				actor: createTestAnonymousActor(),
+			};
+			const read = () =>
+				getSharedCanvasUseCase.run({
+					ctx: anonymousCtx,
+					input: { token: share.token, id: canvas.id },
+				});
+			const before = await read();
+			const revision = (
+				await readPageDocumentUseCase.run({
+					ctx: f.ctx,
+					input: { id: f.page.id },
+				})
+			).revision;
+			await editPageBlocksUseCase.run({
+				ctx: f.ctx,
+				input: {
+					id: f.page.id,
+					expectedRevision: revision,
+					operations: [{ op: "delete", blockId: "canvas-block" }],
+				},
+			});
+			const shared = await getSharedPageUseCase.run({
+				ctx: anonymousCtx,
+				input: { token: share.token },
+			});
+			expect(shared.content.map((block) => block.type)).toEqual(["paragraph"]);
+			await expect(read()).rejects.toMatchObject({ code: "SHARE_NOT_FOUND" });
+			const retained = await f.database.repositories.canvases.findById(
+				f.scope,
+				canvas.id,
+			);
+			expect(retained?.snapshot).toEqual(before.snapshot);
+			await restorePageVersionUseCase.run({
+				ctx: f.ctx,
+				input: { id: f.page.id, versionId: version.id },
+			});
+			expect(await read()).toEqual(before);
+		} finally {
+			await f.database.close();
+		}
+	});
+
 	it("treats another workspace's page as not found", async () => {
 		const { pages, shares, page } = await createFixture();
 
@@ -413,6 +647,10 @@ describe("page shares", () => {
 		).rejects.toThrow("Page not found");
 	});
 });
+
+function canvasBlock(canvasId: string, id = crypto.randomUUID()): BlockJson {
+	return { id, type: "canvas", props: { canvasId }, children: [] };
+}
 
 describe("shared file route helpers", () => {
 	it("finds only file keys still referenced by the page content", () => {

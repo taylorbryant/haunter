@@ -8,6 +8,7 @@ import {
 } from "@beignet/core/server";
 import { createNextServer, createNextServerLoader } from "@beignet/next";
 import type { AppContext } from "@/app-context";
+import { sharedCanvasResponseHooks } from "@/features/shares/routes";
 import { closeDatabaseClient } from "@/infra/db/client";
 import { appPorts } from "@/infra/port-wiring";
 import { env } from "@/lib/env";
@@ -28,6 +29,7 @@ export const getServer = createNextServerLoader(async () => {
 		providers,
 		hooks: [
 			createSecurityHeadersHooks<AppContext>(),
+			sharedCanvasResponseHooks,
 			embeddedEditorAuthHooks,
 			createCsrfHooks<AppContext>({
 				// The public app origin can differ from Next's internal request URL.

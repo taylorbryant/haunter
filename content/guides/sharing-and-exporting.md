@@ -19,6 +19,8 @@ An invitation gives access to the workspace. If someone only needs to read one p
 
 Anyone with the public link can view the saved page without a Haunter account, including supported drawings inside it. They cannot edit the page. Later saved edits appear at the same link, and sharing one page does not grant access to the rest of the workspace.
 
+A drawing is available through the public link only while its canvas block remains on the page. Removing its last block and saving stops new public reads of that drawing. Restoring the block makes the drawing available again while the link is active.
+
 To stop sharing, return to **Share**, choose **Revoke link**, and confirm. You can publish a new link later.
 
 ## Export a page
