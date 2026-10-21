@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
 import { createTenant, createTenantScope } from "@beignet/core/ports";
 import { z } from "zod";
+import { visitBlocks } from "@/features/content/block-tree";
 import { appError } from "@/features/shared/errors";
 import { requireActiveWorkspaceScope, requireUser } from "@/lib/auth";
 import { useCase } from "@/lib/use-case";
@@ -128,8 +129,8 @@ export const getSharedPageUseCase = useCase
 
 /**
  * Public read of a canvas embedded in a shared page. The share token is the
- * authorization, and it only reaches canvases that live on the shared page
- * itself — a token never unlocks the rest of the workspace.
+ * authorization, and it only reaches canvases still embedded in the shared
+ * page's saved content. Retained rows for undo/history are not public grants.
  */
 export const getSharedCanvasUseCase = useCase
 	.query("shares.getSharedCanvas")
@@ -145,7 +146,7 @@ export const getSharedCanvasUseCase = useCase
 		const scope = createTenantScope(createTenant(share.workspaceId));
 		// Both lookups depend only on the share row, so run them together.
 		const [page, canvas] = await Promise.all([
-			ctx.ports.pages.findMetaById(scope, share.pageId),
+			ctx.ports.pages.findById(scope, share.pageId),
 			ctx.ports.canvases.findById(scope, input.id),
 		]);
 		if (!page || page.deletedAt !== null) {
@@ -155,6 +156,14 @@ export const getSharedCanvasUseCase = useCase
 		if (!canvas || canvas.pageId !== share.pageId) {
 			throw appError("ShareNotFound");
 		}
+
+		let referenced = false;
+		visitBlocks(page.content, (block) => {
+			if (block.type === "canvas" && block.props.canvasId === canvas.id) {
+				referenced = true;
+			}
+		});
+		if (!referenced) throw appError("ShareNotFound");
 
 		return { snapshot: canvas.snapshot };
 	});
