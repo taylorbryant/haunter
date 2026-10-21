@@ -128,3 +128,11 @@ WEB_PUSH_SUBJECT=mailto:notifications@example.com
 ```
 
 Users enable push separately for each device in Settings.
+
+Push endpoints must use HTTPS on port 443 without URL credentials or fragments.
+On every delivery, Haunter rejects nonpublic IP addresses (including private or
+loopback DNS answers), pins the connection to a checked address, and applies a
+10-second deadline across DNS resolution and delivery. Redirects are not followed.
+This also protects subscriptions saved before these restrictions were introduced;
+they do not need a database migration. Expired subscriptions (HTTP 404/410) are
+still removed automatically.

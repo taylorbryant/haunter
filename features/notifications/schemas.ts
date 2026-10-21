@@ -156,7 +156,25 @@ export const InitializeNotificationTimezoneSchema = z.object({
 });
 
 export const PushSubscriptionSchema = z.object({
-	endpoint: z.string().url().max(2048),
+	endpoint: z
+		.string()
+		.max(2048)
+		.refine((value) => {
+			try {
+				const url = new URL(value);
+				return (
+					url.protocol === "https:" &&
+					!url.username &&
+					!url.password &&
+					!url.port &&
+					!value.includes("#") &&
+					value.trim() === value &&
+					!/[\r\n\t\\]/.test(value)
+				);
+			} catch {
+				return false;
+			}
+		}, "Push endpoints must use HTTPS on port 443 without credentials or fragments."),
 	expirationTime: z.number().nullable().optional(),
 	keys: z.object({
 		p256dh: z.string().min(1).max(512),
@@ -170,6 +188,7 @@ export const PushSubscriptionOutputSchema = z.object({
 });
 
 export const PushSubscriptionEndpointSchema = z.object({
+	// Keep stored endpoints addressable so old invalid subscriptions can be removed.
 	endpoint: z.string().url().max(2048),
 });
 
