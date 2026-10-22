@@ -70,7 +70,7 @@
 		"@blocknote/code-block": "0.55.0",
 		"@blocknote/core": "0.55.0",
 		"@blocknote/react": "0.55.0",
-		"@blocknote/shadcn": "0.55.0",
+		"@blocknote/shadcn": "0.56.0",
 		"@hocuspocus/provider": "4.7.1",
 		"@hocuspocus/server": "4.7.1",
 		"@hookform/resolvers": "5.9.1",
