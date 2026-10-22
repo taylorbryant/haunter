@@ -2,7 +2,7 @@
 	"name": "haunter",
 	"version": "0.1.0",
 	"private": true,
-	"packageManager": "bun@1.4.3",
+	"packageManager": "bun@1.4.4",
 	"type": "module",
 	"scripts": {
 		"beignet": "beignet",
@@ -91,6 +91,7 @@
 		"@upstash/redis": "1.39.0",
 		"@vercel/blob": "2.8.2",
 		"better-auth": "1.7.12",
+		"better-call": "1.4.4",
 		"chrono-node": "2.10.3",
 		"class-variance-authority": "0.7.1",
 		"cmdk": "1.1.1",
