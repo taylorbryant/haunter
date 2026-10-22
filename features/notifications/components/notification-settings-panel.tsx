@@ -147,7 +147,7 @@ export function NotificationSettingsPanel() {
 		);
 	}
 
-	async function useCurrentTimezone() {
+	async function applyCurrentTimezone() {
 		if (!browserTimezone) return;
 		setMessage(null);
 		setError(null);
@@ -340,7 +340,7 @@ export function NotificationSettingsPanel() {
 						(Boolean(value?.timezoneConfigured) &&
 							browserTimezone === value?.timezone)
 					}
-					onClick={useCurrentTimezone}
+					onClick={applyCurrentTimezone}
 				>
 					Use current timezone
 				</Button>
