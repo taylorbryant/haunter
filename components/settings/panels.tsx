@@ -1,11 +1,11 @@
 "use client";
 
 import { rootFormError } from "@beignet/react-hook-form";
-import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { authClient } from "@/client/auth-client";
 import { authErrorMessage } from "@/client/error-feedback";
+import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { ThemeSettings } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -126,7 +126,7 @@ export function ProfilePanel() {
 		}
 	}
 
-	async function useGravatar() {
+	async function applyGravatar() {
 		if (!user?.email) return;
 		try {
 			await setAvatar(await gravatarUrl(user.email));
@@ -157,7 +157,7 @@ export function ProfilePanel() {
 							type="button"
 							variant="outline"
 							size="sm"
-							onClick={useGravatar}
+							onClick={applyGravatar}
 						>
 							Use Gravatar
 						</Button>

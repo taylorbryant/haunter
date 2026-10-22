@@ -4,7 +4,7 @@ Use this guide to develop and validate changes to Haunter locally.
 
 ## Local development
 
-Install Bun 1.4.2, the version declared in `package.json`. The default setup stores
+Install Bun 1.4.3, the version declared in `package.json`. The default setup stores
 data in a local libSQL database and prints passwordless sign-in codes in the
 terminal, so you can sign in without configuring an email provider.
 

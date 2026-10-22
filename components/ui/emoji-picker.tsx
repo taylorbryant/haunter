@@ -1,6 +1,9 @@
 "use client";
 
-import { EmojiPicker as EmojiPickerPrimitive } from "frimousse";
+import {
+	type EmojiPickerListComponents,
+	EmojiPicker as EmojiPickerPrimitive,
+} from "frimousse";
 import { LoaderIcon, SearchIcon } from "lucide-react";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
@@ -43,6 +46,31 @@ function EmojiPickerSearch({
 	);
 }
 
+const emojiPickerListComponents = {
+	CategoryHeader: ({ category, ...props }) => (
+		<div
+			className="bg-popover px-3 pt-3.5 pb-1.5 font-medium text-muted-foreground text-xs"
+			{...props}
+		>
+			{category.label}
+		</div>
+	),
+	Row: ({ children, ...props }) => (
+		<div className="scroll-my-1 px-1" {...props}>
+			{children}
+		</div>
+	),
+	Emoji: ({ emoji, ...props }) => (
+		<button
+			type="button"
+			className="flex size-7 items-center justify-center rounded-md text-base data-[active]:bg-accent"
+			{...props}
+		>
+			{emoji.emoji}
+		</button>
+	),
+} satisfies EmojiPickerListComponents;
+
 function EmojiPickerContent({
 	className,
 	...props
@@ -61,30 +89,7 @@ function EmojiPickerContent({
 			</EmojiPickerPrimitive.Empty>
 			<EmojiPickerPrimitive.List
 				className="select-none pb-1"
-				components={{
-					CategoryHeader: ({ category, ...props }) => (
-						<div
-							className="bg-popover px-3 pt-3.5 pb-1.5 font-medium text-muted-foreground text-xs"
-							{...props}
-						>
-							{category.label}
-						</div>
-					),
-					Row: ({ children, ...props }) => (
-						<div className="scroll-my-1 px-1" {...props}>
-							{children}
-						</div>
-					),
-					Emoji: ({ emoji, ...props }) => (
-						<button
-							type="button"
-							className="flex size-7 items-center justify-center rounded-md text-base data-[active]:bg-accent"
-							{...props}
-						>
-							{emoji.emoji}
-						</button>
-					),
-				}}
+				components={emojiPickerListComponents}
 			/>
 		</EmojiPickerPrimitive.Viewport>
 	);
