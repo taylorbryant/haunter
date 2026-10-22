@@ -6,7 +6,7 @@ environment variables. User instructions live in the [CLI README](../packages/cl
 
 ## Validate a change
 
-Use Bun 1.4.3 for development and Node.js 22 or later to verify the distributed
+Use Bun 1.4.4 for development and Node.js 22 or later to verify the distributed
 executable. The CLI has its own manifest and lockfile; the root app stays private.
 
 ```bash

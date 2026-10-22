@@ -4,7 +4,7 @@ Use this guide to develop and validate changes to Haunter locally.
 
 ## Local development
 
-Install Bun 1.4.3, the version declared in `package.json`. The default setup stores
+Install Bun 1.4.4, the version declared in `package.json`. The default setup stores
 data in a local libSQL database and prints passwordless sign-in codes in the
 terminal, so you can sign in without configuring an email provider.
 
@@ -20,6 +20,10 @@ cp .env.example .env.local
 
 Install both sets of dependencies: the root type check and tests also load the
 standalone CLI package.
+
+Keep the root `better-call` pin aligned with the version required by `better-auth`.
+It satisfies `@better-auth/core`'s peer dependency so Bun installs one shared core
+instance and Better Auth's plugin types stay compatible.
 
 ### 2. Choose your local administrator
 
