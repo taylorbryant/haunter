@@ -64,7 +64,7 @@
 		"@beignet/react-hook-form": "0.0.58",
 		"@beignet/react-query": "0.0.58",
 		"@better-auth/agent-auth": "0.6.2",
-		"@better-auth/core": "1.7.12",
+		"@better-auth/core": "1.7.13",
 		"@better-auth/mcp": "1.7.12",
 		"@better-auth/oauth-provider": "1.7.12",
 		"@blocknote/code-block": "0.55.0",
