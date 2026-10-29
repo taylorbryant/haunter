@@ -25,6 +25,11 @@ Keep the root `better-call` pin aligned with the version required by `better-aut
 It satisfies `@better-auth/core`'s peer dependency so Bun installs one shared core
 instance and Better Auth's plugin types stay compatible.
 
+The pinned `@beignet/cli` has a Bun patch limiting its account issuer check to
+Better Auth 1.7.0–1.7.2. [Better Auth 1.7.3 removed that requirement](https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-keeps-the-provider-key).
+Remove the patch when upgrading to a CLI release with the corrected version
+check; the regression tests cover both sides of that boundary.
+
 ### 2. Choose your local administrator
 
 Add `BOOTSTRAP_ADMIN_EMAIL` to `.env.local` with the email address you will use
