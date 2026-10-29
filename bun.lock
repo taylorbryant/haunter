@@ -105,6 +105,7 @@
   },
   "patchedDependencies": {
     "@blocknote/core@0.55.0": "patches/@blocknote%2Fcore@0.55.0.patch",
+    "@beignet/cli@0.0.58": "patches/@beignet%2Fcli@0.0.58.patch",
   },
   "overrides": {
     "@hono/node-server": "2.1.5",

@@ -1,0 +1,69 @@
+diff --git a/dist/inspect.js b/dist/inspect.js
+index 95ab5898f1f6cb3b3881900a6d7570a6c8ad8baf..5e99250373db6f11c26f157189bace1fbc4dcf43 100644
+--- a/dist/inspect.js
++++ b/dist/inspect.js
+@@ -2171,7 +2171,7 @@ async function inspectProductionReadiness(targetDir, files, config, convention)
+                 severity: "warning",
+                 code: "BEIGNET_BETTER_AUTH_ISSUER_SCHEMA_MISSING",
+                 file: schemaDir,
+-                message: "This app uses Better Auth 1.7 or a version range that can install it with the Drizzle adapter, but its account schema does not include the required issuer field and unique (issuer, accountId) index. Complete the provider-specific account identity backfill, run bunx auth generate, and apply the reviewed migration before deploying Better Auth 1.7.",
++                message: "This app uses Better Auth 1.7.0–1.7.2 or a version range that can install it with the Drizzle adapter, but its account schema does not include the required issuer field and unique (issuer, accountId) index. Complete the provider-specific account identity backfill, run bunx auth generate, and apply the reviewed migration before deploying Better Auth 1.7.0–1.7.2.",
+             });
+         }
+     }
+@@ -2619,17 +2619,17 @@ function declaredBetterAuthMayRequireIssuerSchema(packageJson) {
+     const candidate = npmAlias?.[1] ?? workspaceRange;
+     const range = semver.validRange(candidate);
+     // Tags, catalogs, local paths, and other non-semver declarations can resolve
+-    // to 1.7. Prefer a migration warning until an installed version is readable.
++    // to 1.7.0–1.7.2. Prefer a warning until an installed version is readable.
+     if (!range)
+         return true;
+-    return semver.intersects(range, ">=1.7.0");
++    return semver.intersects(range, ">=1.7.0 <1.7.3");
+ }
+ async function betterAuthRequiresIssuerSchema(targetDir, packageJson) {
+     const installed = await readInstalledBetterAuthPackageJson(targetDir);
+     if (installed?.version) {
+         const version = semver.valid(installed.version.trim());
+         if (version)
+-            return semver.gte(version, "1.7.0");
++            return semver.satisfies(version, ">=1.7.0 <1.7.3");
+     }
+     return declaredBetterAuthMayRequireIssuerSchema(packageJson);
+ }
+diff --git a/src/inspect.ts b/src/inspect.ts
+index 929cd04fe316a05c59e0c79e280d77698341928b..16cabab4141da6cab8e8ad9e22b3505a32a9df25 100644
+--- a/src/inspect.ts
++++ b/src/inspect.ts
+@@ -3606,7 +3606,7 @@ async function inspectProductionReadiness(
+         code: "BEIGNET_BETTER_AUTH_ISSUER_SCHEMA_MISSING",
+         file: schemaDir,
+         message:
+-          "This app uses Better Auth 1.7 or a version range that can install it with the Drizzle adapter, but its account schema does not include the required issuer field and unique (issuer, accountId) index. Complete the provider-specific account identity backfill, run bunx auth generate, and apply the reviewed migration before deploying Better Auth 1.7.",
++          "This app uses Better Auth 1.7.0–1.7.2 or a version range that can install it with the Drizzle adapter, but its account schema does not include the required issuer field and unique (issuer, accountId) index. Complete the provider-specific account identity backfill, run bunx auth generate, and apply the reviewed migration before deploying Better Auth 1.7.0–1.7.2.",
+       });
+     }
+   }
+@@ -4310,10 +4310,10 @@ function declaredBetterAuthMayRequireIssuerSchema(
+   const range = semver.validRange(candidate);
+ 
+   // Tags, catalogs, local paths, and other non-semver declarations can resolve
+-  // to 1.7. Prefer a migration warning until an installed version is readable.
++  // to 1.7.0–1.7.2. Prefer a warning until an installed version is readable.
+   if (!range) return true;
+ 
+-  return semver.intersects(range, ">=1.7.0");
++  return semver.intersects(range, ">=1.7.0 <1.7.3");
+ }
+ 
+ async function betterAuthRequiresIssuerSchema(
+@@ -4323,7 +4323,7 @@ async function betterAuthRequiresIssuerSchema(
+   const installed = await readInstalledBetterAuthPackageJson(targetDir);
+   if (installed?.version) {
+     const version = semver.valid(installed.version.trim());
+-    if (version) return semver.gte(version, "1.7.0");
++    if (version) return semver.satisfies(version, ">=1.7.0 <1.7.3");
+   }
+ 
+   return declaredBetterAuthMayRequireIssuerSchema(packageJson);

@@ -351,6 +351,13 @@
       "when": 1791428721437,
       "tag": "0049_cool_kate_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1793240536550,
+      "tag": "0050_crazy_iron_monger",
+      "breakpoints": true
     }
   ]
 }
