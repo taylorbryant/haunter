@@ -69,7 +69,7 @@
 		"@better-auth/oauth-provider": "1.7.14",
 		"@blocknote/code-block": "0.55.0",
 		"@blocknote/core": "0.55.0",
-		"@blocknote/react": "0.55.0",
+		"@blocknote/react": "0.56.0",
 		"@blocknote/shadcn": "0.55.0",
 		"@hocuspocus/provider": "4.8.0",
 		"@hocuspocus/server": "4.8.0",
