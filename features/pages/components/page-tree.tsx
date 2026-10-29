@@ -78,8 +78,6 @@ import {
 } from "@/features/pages/client/new-page-focus";
 import {
 	buildPageTreeIndex,
-	canDropPage,
-	getPageDropPlacement,
 	getPageDropZone,
 	type PageDropZone,
 	type PageTreeNode,
@@ -89,22 +87,12 @@ import {
 	createPageMutationOptions,
 	reconcileCreatedPage,
 	getPageNavigationQueryOptions,
-	invalidatePage,
-	invalidatePageNavigation,
-	invalidatePages,
 	listPagesQueryOptions,
-	optimisticallySetPagePlacement,
-	optimisticallySetPageTitle,
-	restorePagePlacementInCache,
-	restorePageTitleInCache,
-	setPageTitleInCache,
-	updatePageMutationOptions,
 } from "@/features/pages/client/queries";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
-import {
-	PAGE_TITLE_MAX_LENGTH,
-	PAGE_TITLE_TOO_LONG_MESSAGE,
-} from "@/features/pages/schemas";
+import { PAGE_TITLE_MAX_LENGTH } from "@/features/pages/schemas";
+import { usePageTreeRename } from "@/features/pages/client/use-page-tree-rename";
+import { usePageTreeMove } from "@/features/pages/client/use-page-tree-move";
 import { usePageFavorite } from "@/features/pages/client/use-page-favorite";
 import {
 	pageTrashDestination,
@@ -216,39 +204,18 @@ export function PageTree({
 		...createPageMutationOptions(),
 		meta: { errorMode: "inline" },
 	});
-	const updateMutation = useMutation({
-		...updatePageMutationOptions(),
-		meta: { errorMode: "silent" },
-	});
-	const renameMutation = useMutation({
-		...updatePageMutationOptions(),
-		meta: { errorMode: "inline" },
-	});
 	const trash = usePageTrash();
 	const favorite = usePageFavorite(workspaceId);
 
 	const { expanded, toggle } = useExpandedState(workspaceId);
 	const renameFocus = useInlineEditFocus();
-	const [renamingId, setRenamingId] = useState<string | null>(null);
-	const [renameValue, setRenameValue] = useState("");
 	const [actionError, setActionError] = useState<string | null>(null);
-	const [renameError, setRenameError] = useState<{
-		pageId: string;
-		message: string;
-	} | null>(null);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [iconPageId, setIconPageId] = useState<string | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [recoveryOpen, setRecoveryOpen] = useState(false);
 	const [pageToTrash, setPageToTrash] = useState<PageTreeNode | null>(null);
-	const [dragId, setDragId] = useState<string | null>(null);
-	const [dropTarget, setDropTarget] = useState<{
-		id: string;
-		zone: PageDropZone;
-	} | null>(null);
 	const menuFocusTransferPageId = useRef<string | null>(null);
-	const pendingMovePageIds = useRef(new Set<string>());
-	const pendingRenamePageIds = useRef(new Set<string>());
 	const creatingPage = useRef(false);
 	const [isCreatingPage, startCreatingPage] = useTransition();
 
@@ -281,10 +248,15 @@ export function PageTree({
 	);
 
 	const pages = pagesQuery.data?.items ?? [];
-	const { tree, nodesById, subtreeIdsById } = useMemo(
-		() => buildPageTreeIndex(pages),
-		[pages],
-	);
+	const index = useMemo(() => buildPageTreeIndex(pages), [pages]);
+	const { tree, nodesById } = index;
+	const rename = usePageTreeRename({ workspaceId, nodesById });
+	const move = usePageTreeMove({
+		index,
+		expanded,
+		onExpand: toggle,
+		onError: setActionError,
+	});
 	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
 
 	function createPage(parentPageId: string | null) {
@@ -329,93 +301,12 @@ export function PageTree({
 		});
 	}
 
-	async function commitRename(pageId: string) {
-		if (renameMutation.isPending || pendingRenamePageIds.current.has(pageId)) {
-			return;
-		}
-		const node = nodesById.get(pageId);
-		if (!node) return;
-		const title = renameValue.trim();
-		if (!title) {
-			setRenamingId((current) => (current === pageId ? null : current));
-			setRenameError(null);
-			return;
-		}
-		if (title.length > PAGE_TITLE_MAX_LENGTH) {
-			setRenameError({ pageId, message: PAGE_TITLE_TOO_LONG_MESSAGE });
-			return;
-		}
-		pendingRenamePageIds.current.add(pageId);
-		setRenameError(null);
-		let snapshot: Awaited<
-			ReturnType<typeof optimisticallySetPageTitle>
-		> | null = null;
-		try {
-			if (!(await flushPendingPageSave(pageId))) {
-				setRenameError({
-					pageId,
-					message: "Save the current page before renaming it.",
-				});
-				return;
-			}
-			snapshot = await optimisticallySetPageTitle(
-				queryClient,
-				workspaceId,
-				pageId,
-				title,
-				{
-					previousTitle: node.title,
-					previousUpdatedAt: node.updatedAt,
-				},
-			);
-			setRenamingId((current) => (current === pageId ? null : current));
-			const page = await renameMutation.mutateAsync({
-				path: { id: pageId },
-				body: { title },
-			});
-			setRenameError((current) =>
-				current?.pageId === pageId ? null : current,
-			);
-			setPageTitleInCache(queryClient, page.id, page.title, page.updatedAt);
-		} catch (error) {
-			if (snapshot) {
-				restorePageTitleInCache(
-					queryClient,
-					pageId,
-					title,
-					snapshot.previousTitle,
-					snapshot.previousUpdatedAt,
-				);
-			}
-			setRenamingId(pageId);
-			setRenameError({
-				pageId,
-				message: userErrorMessage(
-					error,
-					snapshot
-						? "The page could not be renamed."
-						: "The current page could not be saved before renaming.",
-				),
-			});
-		} finally {
-			pendingRenamePageIds.current.delete(pageId);
-			if (snapshot) void invalidatePages(queryClient);
-		}
-	}
-
-	function startRename(node: PageTreeNode) {
-		if (renameMutation.isPending) return;
-		setRenameError(null);
-		setRenamingId(node.id);
-		setRenameValue(node.title);
-	}
-
 	function startDesktopRename(node: PageTreeNode) {
 		// The menu normally restores focus to its trigger after an item is
 		// selected. Renaming replaces the row with an autofocus input, so that
 		// restoration would immediately blur the input and end the rename.
 		menuFocusTransferPageId.current = node.id;
-		startRename(node);
+		rename.start(node);
 	}
 
 	function startTrash(node: PageTreeNode) {
@@ -469,64 +360,6 @@ export function PageTree({
 		[activePageId, router, workspaceId],
 	);
 
-	function canDropOn(targetId: string): boolean {
-		return canDropPage({ tree, nodesById, subtreeIdsById }, dragId, targetId);
-	}
-
-	async function performDrop(
-		draggedId: string,
-		targetId: string,
-		zone: PageDropZone,
-	) {
-		if (pendingMovePageIds.current.has(draggedId)) return;
-		const dragged = nodesById.get(draggedId);
-		const target = nodesById.get(targetId);
-		if (!dragged || !target || !canDropOn(targetId)) return;
-
-		const placement = getPageDropPlacement({
-			index: { tree, nodesById, subtreeIdsById },
-			draggedId,
-			targetId,
-			zone,
-		});
-		if (!placement) return;
-		const { parentPageId, position } = placement;
-
-		if (
-			parentPageId === dragged.parentPageId &&
-			position === dragged.position
-		) {
-			return;
-		}
-
-		if (zone === "inside" && !expanded[target.id]) toggle(target.id);
-		setActionError(null);
-		pendingMovePageIds.current.add(draggedId);
-		let snapshot: Awaited<
-			ReturnType<typeof optimisticallySetPagePlacement>
-		> | null = null;
-		try {
-			snapshot = await optimisticallySetPagePlacement(
-				queryClient,
-				draggedId,
-				parentPageId,
-				position,
-			);
-			await updateMutation.mutateAsync({
-				path: { id: draggedId },
-				body: { parentPageId, position },
-			});
-		} catch (error) {
-			if (snapshot) {
-				restorePagePlacementInCache(queryClient, draggedId, snapshot);
-			}
-			setActionError(userErrorMessage(error, "The page could not be moved."));
-		} finally {
-			pendingMovePageIds.current.delete(draggedId);
-			void invalidatePages(queryClient);
-		}
-	}
-
 	function zoneFromPointer(
 		event: React.DragEvent<HTMLLIElement>,
 	): PageDropZone {
@@ -538,7 +371,7 @@ export function PageTree({
 		const isExpanded = Boolean(expanded[node.id]);
 		const isActive = node.id === activePageId;
 		// Mobile renames happen in the drawer below, not inline in the row.
-		const isRenaming = node.id === renamingId && !isMobile;
+		const isRenaming = node.id === rename.pageId && !isMobile;
 		const hasChildren = node.children.length > 0;
 		const isFavorite = navigationQuery.data?.favorites.some(
 			(page) => page.id === node.id,
@@ -552,54 +385,46 @@ export function PageTree({
 				<SidebarMenuItem
 					draggable={canEdit && !isRenaming}
 					className={cn(
-						dragId === node.id && "opacity-50",
-						dropTarget?.id === node.id &&
-							dropTarget.zone === "inside" &&
+						move.dragId === node.id && "opacity-50",
+						move.dropTarget?.id === node.id &&
+							move.dropTarget.zone === "inside" &&
 							"rounded-md ring-2 ring-primary/60",
-						dropTarget?.id === node.id &&
-							dropTarget.zone === "before" &&
+						move.dropTarget?.id === node.id &&
+							move.dropTarget.zone === "before" &&
 							"shadow-[0_-2px_0_0_var(--primary)]",
-						dropTarget?.id === node.id &&
-							dropTarget.zone === "after" &&
+						move.dropTarget?.id === node.id &&
+							move.dropTarget.zone === "after" &&
 							"shadow-[0_2px_0_0_var(--primary)]",
 					)}
 					onDragStart={(event) => {
 						event.stopPropagation();
 						event.dataTransfer.setData("text/plain", node.id);
 						event.dataTransfer.effectAllowed = "move";
-						setDragId(node.id);
+						move.startDrag(node.id);
 					}}
 					onDragEnd={() => {
-						setDragId(null);
-						setDropTarget(null);
+						move.endDrag();
 					}}
 					onDragOver={(event) => {
-						if (!canDropOn(node.id)) return;
+						if (!move.canDropOn(node.id)) return;
 						event.preventDefault();
 						event.stopPropagation();
 						event.dataTransfer.dropEffect = "move";
 						const zone = zoneFromPointer(event);
-						setDropTarget((current) =>
-							current?.id === node.id && current.zone === zone
-								? current
-								: { id: node.id, zone },
-						);
+						move.hover(node.id, zone);
 					}}
 					onDragLeave={() => {
-						setDropTarget((current) =>
-							current?.id === node.id ? null : current,
-						);
+						move.leave(node.id);
 					}}
 					onDrop={(event) => {
 						event.preventDefault();
 						event.stopPropagation();
 						const draggedId =
-							event.dataTransfer.getData("text/plain") || dragId;
+							event.dataTransfer.getData("text/plain") || move.dragId;
 						if (draggedId) {
-							void performDrop(draggedId, node.id, zoneFromPointer(event));
+							void move.commit(draggedId, node.id, zoneFromPointer(event));
 						}
-						setDragId(null);
-						setDropTarget(null);
+						move.endDrag();
 					}}
 				>
 					{isRenaming ? (
@@ -607,22 +432,21 @@ export function PageTree({
 							aria-label="Page name"
 							autoFocus
 							className="h-8"
-							value={renameValue}
+							value={rename.value}
 							maxLength={PAGE_TITLE_MAX_LENGTH}
-							aria-invalid={renameError?.pageId === node.id ? true : undefined}
+							aria-invalid={rename.error?.pageId === node.id ? true : undefined}
 							onChange={(event) => {
-								setRenameValue(event.target.value);
-								setRenameError(null);
+								rename.change(event.target.value);
 							}}
 							onKeyDown={(event) => {
 								if (event.key === "Enter" || event.key === "Escape") {
 									event.preventDefault();
 									renameFocus.requestReturn(event.currentTarget);
 								}
-								if (event.key === "Enter") void commitRename(node.id);
-								if (event.key === "Escape") setRenamingId(null);
+								if (event.key === "Enter") void rename.commit(node.id);
+								if (event.key === "Escape") rename.cancel();
 							}}
-							onBlur={() => void commitRename(node.id)}
+							onBlur={() => void rename.commit(node.id)}
 						/>
 					) : (
 						<SidebarMenuButton
@@ -743,7 +567,7 @@ export function PageTree({
 													<Button
 														variant="ghost"
 														className="h-11 justify-start"
-														onClick={() => startRename(node)}
+														onClick={() => rename.start(node)}
 													/>
 												}
 											>
@@ -964,20 +788,19 @@ export function PageTree({
 					{actionError}
 				</p>
 			) : null}
-			{!isMobile && renameError?.pageId === renamingId ? (
+			{!isMobile && rename.error?.pageId === rename.pageId ? (
 				<p role="alert" className="px-2 text-destructive text-xs">
-					{renameError.message}
+					{rename.error.message}
 				</p>
 			) : null}
 			{/* On desktop renaming is inline in the row; on mobile the row is
 			    inside the sidebar sheet, so it gets a proper drawer instead. */}
 			{isMobile ? (
 				<ResponsiveDialog
-					open={renamingId !== null}
+					open={rename.pageId !== null}
 					onOpenChange={(open) => {
 						if (!open) {
-							setRenamingId(null);
-							setRenameError(null);
+							rename.cancel();
 						}
 					}}
 					title="Rename page"
@@ -987,31 +810,30 @@ export function PageTree({
 						className="flex flex-col gap-4"
 						onSubmit={(event) => {
 							event.preventDefault();
-							if (renamingId) void commitRename(renamingId);
+							if (rename.pageId) void rename.commit(rename.pageId);
 						}}
 					>
 						<Input
 							autoFocus
-							value={renameValue}
+							value={rename.value}
 							aria-label="Page title"
 							aria-invalid={
-								renameError?.pageId === renamingId ? true : undefined
+								rename.error?.pageId === rename.pageId ? true : undefined
 							}
 							maxLength={PAGE_TITLE_MAX_LENGTH}
 							onChange={(event) => {
-								setRenameValue(event.target.value);
-								setRenameError(null);
+								rename.change(event.target.value);
 							}}
 						/>
-						{renameError?.pageId === renamingId ? (
+						{rename.error?.pageId === rename.pageId ? (
 							<p role="alert" className="text-destructive text-sm">
-								{renameError.message}
+								{rename.error.message}
 							</p>
 						) : null}
 						<ResponsiveDialogFooter>
 							<Button
 								type="submit"
-								disabled={!renameValue.trim() || renameMutation.isPending}
+								disabled={!rename.value.trim() || rename.isPending}
 							>
 								Rename
 							</Button>
