@@ -90,7 +90,7 @@
 		"@tldraw/utils": "5.5.2",
 		"@upstash/redis": "1.39.0",
 		"@vercel/blob": "2.8.2",
-		"better-auth": "1.7.12",
+		"better-auth": "1.7.13",
 		"better-call": "1.4.4",
 		"chrono-node": "2.10.3",
 		"class-variance-authority": "0.7.1",
