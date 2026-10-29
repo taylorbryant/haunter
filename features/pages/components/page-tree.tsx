@@ -2,19 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-	ChevronRightIcon,
-	FileTextIcon,
 	FileUpIcon,
 	LoaderCircleIcon,
 	MoreHorizontalIcon,
-	PencilIcon,
 	PlusIcon,
-	SmilePlusIcon,
-	StarIcon,
-	Trash2Icon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { WorkspaceLink as Link } from "@/client/workspace-navigation";
 import { useWorkspacePathname as usePathname } from "@/client/workspace-navigation";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import {
@@ -28,48 +21,29 @@ import {
 } from "react";
 import { userErrorMessage } from "@/client/error-feedback";
 import { useCommand } from "@/components/command-palette/registry";
-import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
-import {
-	ResponsiveDialog,
-	ResponsiveDialogFooter,
-} from "@/components/responsive-dialog";
 import { Button } from "@/components/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
-import {
-	Drawer,
-	DrawerClose,
-	DrawerContent,
-	DrawerDescription,
-	DrawerHeader,
-	DrawerTitle,
-	DrawerTrigger,
-} from "@/components/ui/drawer";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
 	SidebarGroup,
 	SidebarGroupAction,
 	SidebarGroupContent,
 	SidebarGroupLabel,
-	SidebarInput,
 	SidebarMenu,
-	SidebarMenuAction,
-	SidebarMenuButton,
-	SidebarMenuItem,
 	SidebarMenuSkeleton,
 	SidebarMenuSub,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import { PageTreeRow } from "./page-tree-row";
+import {
+	PageIconDialog,
+	PageRenameDialog,
+	PageTrashDialog,
+} from "./page-tree-dialogs";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import {
 	focusTitleOnArrival,
@@ -78,8 +52,6 @@ import {
 } from "@/features/pages/client/new-page-focus";
 import {
 	buildPageTreeIndex,
-	getPageDropZone,
-	type PageDropZone,
 	type PageTreeNode,
 } from "@/features/pages/client/page-tree-controller";
 import { preloadHaunterEditor } from "@/features/pages/client/preload-editor";
@@ -90,7 +62,6 @@ import {
 	listPagesQueryOptions,
 } from "@/features/pages/client/queries";
 import { flushPendingPageSave } from "@/features/pages/client/save-state";
-import { PAGE_TITLE_MAX_LENGTH } from "@/features/pages/schemas";
 import { usePageTreeRename } from "@/features/pages/client/use-page-tree-rename";
 import { usePageTreeMove } from "@/features/pages/client/use-page-tree-move";
 import { usePageFavorite } from "@/features/pages/client/use-page-favorite";
@@ -100,19 +71,6 @@ import {
 	usePageTrash,
 } from "@/features/pages/client/use-page-trash";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
-import { useInlineEditFocus } from "@/hooks/use-inline-edit-focus";
-import { cn } from "@/lib/utils";
-
-const PageIconPanel = dynamic(
-	() =>
-		import("./page-icon-panel").then((mod) => ({
-			default: mod.PageIconPanel,
-		})),
-	{
-		ssr: false,
-		loading: () => <div className="h-[300px] w-[288px]" aria-hidden />,
-	},
-);
 
 const RecoveryImportDialog = dynamic(
 	() =>
@@ -208,14 +166,12 @@ export function PageTree({
 	const favorite = usePageFavorite(workspaceId);
 
 	const { expanded, toggle } = useExpandedState(workspaceId);
-	const renameFocus = useInlineEditFocus();
 	const [actionError, setActionError] = useState<string | null>(null);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [iconPageId, setIconPageId] = useState<string | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [recoveryOpen, setRecoveryOpen] = useState(false);
 	const [pageToTrash, setPageToTrash] = useState<PageTreeNode | null>(null);
-	const menuFocusTransferPageId = useRef<string | null>(null);
 	const creatingPage = useRef(false);
 	const [isCreatingPage, startCreatingPage] = useTransition();
 
@@ -301,14 +257,6 @@ export function PageTree({
 		});
 	}
 
-	function startDesktopRename(node: PageTreeNode) {
-		// The menu normally restores focus to its trigger after an item is
-		// selected. Renaming replaces the row with an autofocus input, so that
-		// restoration would immediately blur the input and end the rename.
-		menuFocusTransferPageId.current = node.id;
-		rename.start(node);
-	}
-
 	function startTrash(node: PageTreeNode) {
 		setDeleteError(null);
 		setPageToTrash(node);
@@ -360,330 +308,58 @@ export function PageTree({
 		[activePageId, router, workspaceId],
 	);
 
-	function zoneFromPointer(
-		event: React.DragEvent<HTMLLIElement>,
-	): PageDropZone {
-		const rect = event.currentTarget.getBoundingClientRect();
-		return getPageDropZone(event.clientY, rect.top, rect.height);
-	}
-
 	function renderNode(node: PageTreeNode) {
 		const isExpanded = Boolean(expanded[node.id]);
-		const isActive = node.id === activePageId;
-		// Mobile renames happen in the drawer below, not inline in the row.
-		const isRenaming = node.id === rename.pageId && !isMobile;
-		const hasChildren = node.children.length > 0;
-		const isFavorite = navigationQuery.data?.favorites.some(
-			(page) => page.id === node.id,
-		);
-
 		return (
-			// The children live in a SIBLING <li>, not inside the row's
-			// SidebarMenuItem: showOnHover keys off group-hover/menu-item, and
-			// nesting would reveal the parent's actions while hovering any child.
+			// Keep children in a sibling <li> so child actions do not reveal the parent's hover actions.
 			<Fragment key={node.id}>
-				<SidebarMenuItem
-					draggable={canEdit && !isRenaming}
-					className={cn(
-						move.dragId === node.id && "opacity-50",
-						move.dropTarget?.id === node.id &&
-							move.dropTarget.zone === "inside" &&
-							"rounded-md ring-2 ring-primary/60",
-						move.dropTarget?.id === node.id &&
-							move.dropTarget.zone === "before" &&
-							"shadow-[0_-2px_0_0_var(--primary)]",
-						move.dropTarget?.id === node.id &&
-							move.dropTarget.zone === "after" &&
-							"shadow-[0_2px_0_0_var(--primary)]",
-					)}
-					onDragStart={(event) => {
-						event.stopPropagation();
-						event.dataTransfer.setData("text/plain", node.id);
-						event.dataTransfer.effectAllowed = "move";
-						move.startDrag(node.id);
+				<PageTreeRow
+					page={node}
+					workspaceId={workspaceId}
+					active={node.id === activePageId}
+					expanded={isExpanded}
+					hasChildren={node.children.length > 0}
+					canEdit={canEdit}
+					isCreatingPage={isCreatingPage}
+					dialogOpen={iconPageId === node.id || pageToTrash?.id === node.id}
+					favorite={{
+						selected:
+							navigationQuery.data?.favorites.some(
+								(page) => page.id === node.id,
+							) ?? false,
+						disabled:
+							!allowFavorites || !navigationQuery.data || favorite.isPending,
+						onToggle: () => toggleFavorite(node),
 					}}
-					onDragEnd={() => {
-						move.endDrag();
+					rename={{
+						active: rename.pageId === node.id,
+						value: rename.value,
+						invalid: rename.error?.pageId === node.id,
+						onStart: () => rename.start(node),
+						onChange: rename.change,
+						onCommit: () => void rename.commit(node.id),
+						onCancel: rename.cancel,
 					}}
-					onDragOver={(event) => {
-						if (!move.canDropOn(node.id)) return;
-						event.preventDefault();
-						event.stopPropagation();
-						event.dataTransfer.dropEffect = "move";
-						const zone = zoneFromPointer(event);
-						move.hover(node.id, zone);
+					drag={{
+						active: move.dragId === node.id,
+						targetZone:
+							move.dropTarget?.id === node.id ? move.dropTarget.zone : null,
+						canDrop: move.canDropOn(node.id),
+						draggedId: move.dragId,
+						onStart: () => move.startDrag(node.id),
+						onEnd: move.endDrag,
+						onHover: (zone) => move.hover(node.id, zone),
+						onLeave: () => move.leave(node.id),
+						onDrop: (draggedId, zone) =>
+							void move.commit(draggedId, node.id, zone),
 					}}
-					onDragLeave={() => {
-						move.leave(node.id);
-					}}
-					onDrop={(event) => {
-						event.preventDefault();
-						event.stopPropagation();
-						const draggedId =
-							event.dataTransfer.getData("text/plain") || move.dragId;
-						if (draggedId) {
-							void move.commit(draggedId, node.id, zoneFromPointer(event));
-						}
-						move.endDrag();
-					}}
-				>
-					{isRenaming ? (
-						<SidebarInput
-							aria-label="Page name"
-							autoFocus
-							className="h-8"
-							value={rename.value}
-							maxLength={PAGE_TITLE_MAX_LENGTH}
-							aria-invalid={rename.error?.pageId === node.id ? true : undefined}
-							onChange={(event) => {
-								rename.change(event.target.value);
-							}}
-							onKeyDown={(event) => {
-								if (event.key === "Enter" || event.key === "Escape") {
-									event.preventDefault();
-									renameFocus.requestReturn(event.currentTarget);
-								}
-								if (event.key === "Enter") void rename.commit(node.id);
-								if (event.key === "Escape") rename.cancel();
-							}}
-							onBlur={() => void rename.commit(node.id)}
-						/>
-					) : (
-						<SidebarMenuButton
-							render={
-								<Link
-									ref={renameFocus.returnTargetRef}
-									href={`/w/${workspaceId}/p/${node.id}`}
-									onFocus={() => prefetchPage(node.id)}
-									onPointerDown={() => prefetchPage(node.id)}
-									onPointerEnter={() => prefetchPage(node.id)}
-									// On mobile, tapping a page navigates and closes the
-									// sidebar sheet so the page is visible immediately.
-									onClick={() => {
-										if (isMobile) setOpenMobile(false);
-									}}
-								/>
-							}
-							isActive={isActive}
-							title={node.title}
-							// Two hover actions sit on the right (••• at right-6, + at
-							// right-1); the default pr-8 clearance lets text run under
-							// them, so widen it.
-							className="group-has-data-[sidebar=menu-action]/menu-item:pr-13"
-						>
-							{/* On mobile the expand chevron is always shown (no hover)
-							    and sits over this icon slot; keep the slot but hide the
-							    glyph so the chevron doesn't overlap the emoji. */}
-							{node.icon ? (
-								<span className={cn(isMobile && hasChildren && "invisible")}>
-									{node.icon}
-								</span>
-							) : (
-								<FileTextIcon
-									className={cn(
-										"text-sidebar-foreground/60",
-										isMobile && hasChildren && "invisible",
-									)}
-								/>
-							)}
-							<span>{node.title || "Untitled"}</span>
-						</SidebarMenuButton>
-					)}
-					{hasChildren && !isRenaming ? (
-						// On hover the chevron sits over the page icon, sidebar-10 style.
-						<SidebarMenuAction
-							showOnHover
-							className={cn(
-								"left-1 bg-sidebar-accent text-sidebar-accent-foreground transition-transform",
-								isExpanded && "rotate-90",
-							)}
-							aria-label={isExpanded ? "Collapse" : "Expand"}
-							onClick={() => toggle(node.id)}
-						>
-							<ChevronRightIcon />
-						</SidebarMenuAction>
-					) : null}
-					{isRenaming ? null : isMobile ? (
-						// Mobile: one action button that opens a bottom drawer — bigger
-						// tap targets, and no "+" crowding the row.
-						<Drawer showSwipeHandle>
-							<DrawerTrigger
-								render={
-									<SidebarMenuAction
-										className="right-1 aria-expanded:bg-muted"
-										aria-label="Page actions"
-									/>
-								}
-							>
-								<MoreHorizontalIcon />
-							</DrawerTrigger>
-							<DrawerContent>
-								<DrawerHeader>
-									<DrawerTitle className="truncate">
-										{node.icon ? `${node.icon} ` : ""}
-										{node.title || "Untitled"}
-									</DrawerTitle>
-									<DrawerDescription className="sr-only">
-										Page actions
-									</DrawerDescription>
-								</DrawerHeader>
-								<div className="flex flex-col p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-									<DrawerClose
-										render={
-											<Button
-												variant="ghost"
-												className="h-11 justify-start"
-												disabled={
-													!allowFavorites ||
-													!navigationQuery.data ||
-													favorite.isPending
-												}
-												onClick={() => toggleFavorite(node)}
-											/>
-										}
-									>
-										<StarIcon
-											className={isFavorite ? "fill-current" : undefined}
-										/>
-										{isFavorite ? "Remove from favorites" : "Add to favorites"}
-									</DrawerClose>
-									{canEdit ? (
-										<>
-											<DrawerClose
-												render={
-													<Button
-														variant="ghost"
-														className="h-11 justify-start"
-														onClick={() => createPage(node.id)}
-														disabled={isCreatingPage}
-													/>
-												}
-											>
-												<PlusIcon />
-												Add subpage
-											</DrawerClose>
-											<DrawerClose
-												render={
-													<Button
-														variant="ghost"
-														className="h-11 justify-start"
-														onClick={() => rename.start(node)}
-													/>
-												}
-											>
-												<PencilIcon />
-												Rename
-											</DrawerClose>
-											<DrawerClose
-												render={
-													<Button
-														variant="ghost"
-														className="h-11 justify-start"
-														onClick={() => setIconPageId(node.id)}
-													/>
-												}
-											>
-												<SmilePlusIcon />
-												Change icon
-											</DrawerClose>
-											<DrawerClose
-												render={
-													<Button
-														variant="ghost"
-														className="h-11 justify-start text-destructive hover:text-destructive"
-														onClick={() => startTrash(node)}
-													/>
-												}
-											>
-												<Trash2Icon />
-												Move to trash
-											</DrawerClose>
-										</>
-									) : null}
-								</div>
-							</DrawerContent>
-						</Drawer>
-					) : (
-						<>
-							<DropdownMenu>
-								<DropdownMenuTrigger
-									render={
-										<SidebarMenuAction
-											showOnHover
-											className={cn(
-												canEdit ? "right-6" : "right-1",
-												"aria-expanded:bg-muted",
-											)}
-											aria-label="Page actions"
-										/>
-									}
-								>
-									<MoreHorizontalIcon />
-								</DropdownMenuTrigger>
-								<DropdownMenuContent
-									className="w-48 rounded-lg"
-									side="right"
-									align="start"
-									finalFocus={() => {
-										// These dialogs take focus before the menu's exit animation
-										// finishes; returning to the row would steal it back.
-										if (iconPageId === node.id || pageToTrash?.id === node.id) {
-											return false;
-										}
-										if (menuFocusTransferPageId.current !== node.id) {
-											return true;
-										}
-										menuFocusTransferPageId.current = null;
-										return false;
-									}}
-								>
-									<DropdownMenuItem
-										disabled={
-											!allowFavorites ||
-											!navigationQuery.data ||
-											favorite.isPending
-										}
-										onClick={() => toggleFavorite(node)}
-									>
-										<StarIcon
-											className={isFavorite ? "fill-current" : undefined}
-										/>
-										{isFavorite ? "Remove from favorites" : "Add to favorites"}
-									</DropdownMenuItem>
-									{canEdit ? (
-										<>
-											<DropdownMenuItem
-												onClick={() => startDesktopRename(node)}
-											>
-												Rename
-											</DropdownMenuItem>
-											<DropdownMenuItem onClick={() => setIconPageId(node.id)}>
-												Change icon
-											</DropdownMenuItem>
-											<DropdownMenuItem
-												className="text-destructive focus:text-destructive"
-												onClick={() => startTrash(node)}
-											>
-												Move to trash
-											</DropdownMenuItem>
-										</>
-									) : null}
-								</DropdownMenuContent>
-							</DropdownMenu>
-							{canEdit ? (
-								<SidebarMenuAction
-									showOnHover
-									aria-label="Add subpage"
-									onClick={() => createPage(node.id)}
-									disabled={isCreatingPage}
-								>
-									<PlusIcon />
-								</SidebarMenuAction>
-							) : null}
-						</>
-					)}
-				</SidebarMenuItem>
-				{isExpanded && hasChildren ? (
+					onExpand={() => toggle(node.id)}
+					onCreate={() => createPage(node.id)}
+					onIcon={() => setIconPageId(node.id)}
+					onTrash={() => startTrash(node)}
+					onPrefetch={() => prefetchPage(node.id)}
+				/>
+				{isExpanded && node.children.length > 0 ? (
 					<li>
 						<SidebarMenuSub className="mr-0 pr-0">
 							{node.children.map((child) => renderNode(child))}
@@ -796,50 +472,19 @@ export function PageTree({
 			{/* On desktop renaming is inline in the row; on mobile the row is
 			    inside the sidebar sheet, so it gets a proper drawer instead. */}
 			{isMobile ? (
-				<ResponsiveDialog
+				<PageRenameDialog
 					open={rename.pageId !== null}
-					onOpenChange={(open) => {
-						if (!open) {
-							rename.cancel();
-						}
+					value={rename.value}
+					error={
+						rename.error?.pageId === rename.pageId ? rename.error.message : null
+					}
+					pending={rename.isPending}
+					onChange={rename.change}
+					onCancel={rename.cancel}
+					onSubmit={() => {
+						if (rename.pageId) void rename.commit(rename.pageId);
 					}}
-					title="Rename page"
-					description="Choose a new name for this page."
-				>
-					<form
-						className="flex flex-col gap-4"
-						onSubmit={(event) => {
-							event.preventDefault();
-							if (rename.pageId) void rename.commit(rename.pageId);
-						}}
-					>
-						<Input
-							autoFocus
-							value={rename.value}
-							aria-label="Page title"
-							aria-invalid={
-								rename.error?.pageId === rename.pageId ? true : undefined
-							}
-							maxLength={PAGE_TITLE_MAX_LENGTH}
-							onChange={(event) => {
-								rename.change(event.target.value);
-							}}
-						/>
-						{rename.error?.pageId === rename.pageId ? (
-							<p role="alert" className="text-destructive text-sm">
-								{rename.error.message}
-							</p>
-						) : null}
-						<ResponsiveDialogFooter>
-							<Button
-								type="submit"
-								disabled={!rename.value.trim() || rename.isPending}
-							>
-								Rename
-							</Button>
-						</ResponsiveDialogFooter>
-					</form>
-				</ResponsiveDialog>
+				/>
 			) : null}
 			{recoveryOpen ? (
 				<RecoveryImportDialog
@@ -853,50 +498,23 @@ export function PageTree({
 					onOpenChange={setImportOpen}
 				/>
 			) : null}
-			<DestructiveConfirmationDialog
-				open={pageToTrash !== null}
-				onOpenChange={(open) => {
-					if (trash.isPending) return;
-					if (!open) {
-						setPageToTrash(null);
-						setDeleteError(null);
-					}
-				}}
-				title="Move to trash?"
-				description={
-					<span className="break-words">
-						Move {pageToTrash?.title || "Untitled"}{" "}
-						{pageToTrash && pageToTrash.children.length > 0
-							? "and its subpages "
-							: ""}
-						to trash? You can restore it later from Trash.
-					</span>
-				}
-				actionLabel="Move to trash"
-				pendingLabel="Moving…"
+			<PageTrashDialog
+				page={pageToTrash}
 				pending={trash.isPending}
 				error={deleteError}
+				onCancel={() => {
+					setPageToTrash(null);
+					setDeleteError(null);
+				}}
 				onConfirm={() => {
 					if (pageToTrash) void deletePage(pageToTrash);
 				}}
 			/>
-			<Dialog
-				open={iconPageId !== null}
-				onOpenChange={(open) => !open && setIconPageId(null)}
-			>
-				<DialogContent className="w-auto p-0">
-					<DialogHeader className="sr-only">
-						<DialogTitle>Change page icon</DialogTitle>
-					</DialogHeader>
-					{iconPageId ? (
-						<PageIconPanel
-							pageId={iconPageId}
-							hasIcon={nodesById.get(iconPageId)?.icon != null}
-							onDone={() => setIconPageId(null)}
-						/>
-					) : null}
-				</DialogContent>
-			</Dialog>
+			<PageIconDialog
+				pageId={iconPageId}
+				hasIcon={iconPageId ? nodesById.get(iconPageId)?.icon != null : false}
+				onClose={() => setIconPageId(null)}
+			/>
 		</SidebarGroup>
 	);
 }

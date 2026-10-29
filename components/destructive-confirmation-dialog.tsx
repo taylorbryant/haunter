@@ -6,6 +6,7 @@ import {
 	ResponsiveDialogFooter,
 } from "@/components/responsive-dialog";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function DestructiveConfirmationDialog({
 	open,
@@ -17,6 +18,7 @@ export function DestructiveConfirmationDialog({
 	pending = false,
 	error,
 	onConfirm,
+	className,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -27,6 +29,7 @@ export function DestructiveConfirmationDialog({
 	pending?: boolean;
 	error?: string | null;
 	onConfirm: () => void;
+	className?: string;
 }) {
 	return (
 		<ResponsiveDialog
@@ -34,7 +37,7 @@ export function DestructiveConfirmationDialog({
 			onOpenChange={onOpenChange}
 			title={title}
 			description={description}
-			className="sm:max-w-sm"
+			className={cn("sm:max-w-sm", className)}
 		>
 			{error ? (
 				<p role="alert" className="text-destructive text-sm">
