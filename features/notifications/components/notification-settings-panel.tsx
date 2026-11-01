@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { isContractError } from "@beignet/core/client";
 import { userErrorMessage } from "@/client/error-feedback";
 import { Panel, PanelHeader } from "@/components/settings/panels";
 import { Button } from "@/components/ui/button";
@@ -17,14 +18,16 @@ import {
 	invalidateNotificationSettings,
 	notificationSettingsQueryOptions,
 	optimisticallyUpdateNotificationSettings,
+	pushSubscriptionStatusMutationOptions,
 	subscribePushMutationOptions,
 	testPushMutationOptions,
 	unsubscribePushMutationOptions,
 	updateNotificationSettingsMutationOptions,
 } from "@/features/notifications/client/queries";
 import { getBrowserTimezone } from "@/features/notifications/client/timezone";
+import type { PushSubscriptionStatus } from "@/features/notifications/schemas";
 
-type PushState = "checking" | "enabled" | "disabled" | "unavailable";
+type PushState = "checking" | PushSubscriptionStatus;
 
 export function NotificationSettingsPanel() {
 	const queryClient = useQueryClient();
@@ -60,11 +63,20 @@ export function NotificationSettingsPanel() {
 		...testPushMutationOptions(),
 		meta: { errorMode: "inline" },
 	});
+	const { mutateAsync: checkPushSubscription } = useMutation({
+		...pushSubscriptionStatusMutationOptions(),
+		meta: { errorMode: "inline" },
+	});
 	const [pushState, setPushState] = useState<PushState>("checking");
+	const [updatingPush, setUpdatingPush] = useState(false);
 	const [browserTimezone, setBrowserTimezone] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const pending = subscribe.isPending || unsubscribe.isPending;
+	const pending =
+		updatingPush ||
+		subscribe.isPending ||
+		unsubscribe.isPending ||
+		testPush.isPending;
 
 	useEffect(() => {
 		setBrowserTimezone(getBrowserTimezone());
@@ -76,25 +88,35 @@ export function NotificationSettingsPanel() {
 			setPushState("unavailable");
 			return;
 		}
-		void currentPushSubscription().then(
-			(subscription) => {
-				if (active) setPushState(subscription ? "enabled" : "disabled");
-			},
-			(subscriptionError) => {
-				if (!active) return;
-				setPushState("unavailable");
-				setError(
-					userErrorMessage(
-						subscriptionError,
-						"Push notification status could not be checked.",
-					),
-				);
-			},
-		);
+		void currentPushSubscription()
+			.then(async (subscription) => {
+				return subscription
+					? (
+							await checkPushSubscription({
+								body: { endpoint: subscription.endpoint },
+							})
+						).status
+					: ("disabled" as const);
+			})
+			.then(
+				(status) => {
+					if (active) setPushState(status);
+				},
+				(subscriptionError) => {
+					if (!active) return;
+					setPushState("unavailable");
+					setError(
+						userErrorMessage(
+							subscriptionError,
+							"Push notification status could not be checked.",
+						),
+					);
+				},
+			);
 		return () => {
 			active = false;
 		};
-	}, []);
+	}, [checkPushSubscription]);
 
 	function updateOverdueTasks(checked: boolean) {
 		setMessage(null);
@@ -162,6 +184,7 @@ export function NotificationSettingsPanel() {
 	}
 
 	async function updatePush(checked: boolean) {
+		setUpdatingPush(true);
 		setMessage(null);
 		setError(null);
 		try {
@@ -190,8 +213,26 @@ export function NotificationSettingsPanel() {
 			setPushState("disabled");
 			setMessage("Push notifications disabled on this device.");
 		} catch (error) {
-			setError(userErrorMessage(error, "Push could not be updated."));
+			showPushError(error, "Push could not be updated.");
+		} finally {
+			setUpdatingPush(false);
 		}
+	}
+
+	function showPushError(error: unknown, fallback: string) {
+		if (isContractError(error)) {
+			if (error.code === "UNSUPPORTED_PUSH_SERVICE") {
+				setPushState("unsupported-service");
+				setError(null);
+				return;
+			}
+			if (error.code === "INVALID_PUSH_SUBSCRIPTION") {
+				setPushState("invalid-subscription");
+				setError(null);
+				return;
+			}
+		}
+		setError(userErrorMessage(error, fallback));
 	}
 
 	async function sendTest() {
@@ -210,10 +251,14 @@ export function NotificationSettingsPanel() {
 			if (result.sent) {
 				setMessage("Test notification sent.");
 			} else {
+				const { status } = await checkPushSubscription({
+					body: { endpoint: browserSubscription.endpoint },
+				});
+				setPushState(status);
 				setError("Test notification could not be sent.");
 			}
 		} catch (error) {
-			setError(userErrorMessage(error, "Test notification could not be sent."));
+			showPushError(error, "Test notification could not be sent.");
 		}
 	}
 
@@ -257,6 +302,12 @@ export function NotificationSettingsPanel() {
 	const value = settings.data;
 	const pushSupported =
 		Boolean(value?.pushSupported) && pushState !== "unavailable";
+	const pushIssue =
+		pushState === "unsupported-service"
+			? "This browser's push service is not supported. Try another browser or use in-app notifications."
+			: pushState === "invalid-subscription"
+				? "This device's push subscription is invalid. Remove it and enable push again."
+				: null;
 
 	return (
 		<Panel>
@@ -354,25 +405,44 @@ export function NotificationSettingsPanel() {
 						Push on this device
 					</label>
 					<p className="text-muted-foreground text-sm">
-						{pushSupported
-							? "Receive task reminders, assignments, and overdue alerts when Haunter is closed."
-							: "Push is unavailable in this browser or installation."}
+						{pushIssue ??
+							(pushSupported
+								? "Receive task reminders, assignments, and overdue alerts when Haunter is closed."
+								: "Push is unavailable in this browser or installation.")}
 					</p>
 				</div>
 				<Switch
 					id="device-push-notifications"
 					checked={pushState === "enabled"}
-					disabled={!pushSupported || pushState === "checking" || pending}
+					disabled={
+						!pushSupported ||
+						Boolean(pushIssue) ||
+						pushState === "checking" ||
+						pending
+					}
 					onCheckedChange={updatePush}
 				/>
 			</div>
+			{pushIssue ? (
+				<div>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={pending}
+						onClick={() => updatePush(false)}
+					>
+						Remove device subscription
+					</Button>
+				</div>
+			) : null}
 			{pushState === "enabled" ? (
 				<div>
 					<Button
 						type="button"
 						variant="outline"
 						size="sm"
-						disabled={testPush.isPending}
+						disabled={pending}
 						onClick={sendTest}
 					>
 						Send test notification

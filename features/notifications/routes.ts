@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
 import {
 	getNotificationSettings,
+	getPushSubscriptionStatus,
 	initializeNotificationTimezone,
 	listNotifications,
 	markAllNotificationsRead,
@@ -12,6 +13,7 @@ import {
 } from "@/features/notifications/contracts";
 import {
 	getNotificationSettingsUseCase,
+	getPushSubscriptionStatusUseCase,
 	initializeNotificationTimezoneUseCase,
 	listNotificationsUseCase,
 	markAllNotificationsReadUseCase,
@@ -47,6 +49,10 @@ export const notificationRoutes = defineRouteGroup({
 			useCase: initializeNotificationTimezoneUseCase,
 		},
 		{ contract: subscribePush, useCase: subscribePushUseCase },
+		{
+			contract: getPushSubscriptionStatus,
+			useCase: getPushSubscriptionStatusUseCase,
+		},
 		{ contract: unsubscribePush, useCase: unsubscribePushUseCase },
 		{ contract: testPush, useCase: testPushUseCase },
 	],

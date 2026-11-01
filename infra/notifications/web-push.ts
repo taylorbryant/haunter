@@ -132,6 +132,17 @@ export function createWebPushPort(
 	return {
 		isConfigured: () => transport !== null,
 		publicKey: () => vapidDetails?.publicKey ?? null,
+		validateSubscription(subscription) {
+			const parsed = PushSubscriptionSchema.safeParse(subscription);
+			if (!parsed.success)
+				return { valid: false, reason: "invalid-subscription" };
+			return (
+				transport?.validateSubscription(parsed.data) ?? {
+					valid: false,
+					reason: "unsupported-service",
+				}
+			);
+		},
 		async send(subscription, message) {
 			if (!transport)
 				return { status: "failed", reason: "Web Push is not configured." };

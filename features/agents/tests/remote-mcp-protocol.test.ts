@@ -577,9 +577,11 @@ describe("remote MCP protocol", () => {
 				),
 			);
 			expect(invalid.result?.isError).toBeTrue();
-			expect(invalid.result?.content).toEqual([
-				{ type: "text", text: "The tool arguments are invalid." },
-			]);
+			const validationText = JSON.stringify(invalid.result?.content);
+			expect(validationText).toContain(
+				"workspaceId: type string; minimum length 1",
+			);
+			expect(validationText).toContain("pageId: type string; format uuid");
 			expect(contexts).toBe(0);
 			const failed = await json(
 				await handler(

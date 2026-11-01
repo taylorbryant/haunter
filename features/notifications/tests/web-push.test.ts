@@ -11,6 +11,7 @@ import { createWebPushPort } from "@/infra/notifications/web-push";
 import type { StoredPushSubscription, WebPushMessage } from "../ports";
 import { PushSubscriptionSchema } from "../schemas";
 import {
+	getPushSubscriptionStatusUseCase,
 	subscribePushUseCase,
 	testPushUseCase,
 	unsubscribePushUseCase,
@@ -432,9 +433,13 @@ test("test-push blocks persisted unsafe subscriptions and still allows removing 
 				f.userId,
 				subscription(endpoint),
 			);
-			expect(
-				await testPushUseCase.run({ ctx: f.ctx, input: { endpoint } }),
-			).toEqual({ sent: false });
+			await expect(
+				testPushUseCase.run({ ctx: f.ctx, input: { endpoint } }),
+			).rejects.toMatchObject({
+				code: endpoint.includes("127.0.0.1")
+					? "INVALID_PUSH_SUBSCRIPTION"
+					: "UNSUPPORTED_PUSH_SERVICE",
+			});
 			expect(
 				await unsubscribePushUseCase.run({ ctx: f.ctx, input: { endpoint } }),
 			).toEqual({ subscribed: false });
@@ -539,6 +544,127 @@ test.each([201, 410])(
 		});
 		expect(f.calls).toHaveLength(1);
 		expect(f.responses[0]!.destroyed).toBe(true);
+	},
+);
+
+test("registration rejects unsupported services and malformed keys before storage or delivery", async () => {
+	const f = await documentFixture();
+	const transport = transportFixture();
+	f.ctx.ports.webPush = transport.port;
+	try {
+		for (const [input, code] of [
+			[
+				subscription("https://push.example.test/send"),
+				"UNSUPPORTED_PUSH_SERVICE",
+			],
+			[
+				{ ...subscription(), keys: { ...keys, auth: "bad" } },
+				"INVALID_PUSH_SUBSCRIPTION",
+			],
+			[
+				{
+					...subscription("https://push.example.test/send"),
+					keys: { ...keys, auth: "bad" },
+				},
+				"INVALID_PUSH_SUBSCRIPTION",
+			],
+		] as const) {
+			await expect(
+				subscribePushUseCase.run({ ctx: f.ctx, input }),
+			).rejects.toMatchObject({ code });
+			expect(
+				await f.database.repositories.notificationInbox.findPushSubscription(
+					f.userId,
+					input.endpoint,
+				),
+			).toBeNull();
+		}
+		expect(transport.lookups).toHaveLength(0);
+		expect(transport.calls).toHaveLength(0);
+	} finally {
+		await f.database.close();
+	}
+});
+
+test("saved device status validates the current user's subscription without sending", async () => {
+	const f = await documentFixture();
+	const transport = transportFixture();
+	f.ctx.ports.webPush = transport.port;
+	try {
+		const input = subscription(
+			"https://wns2-db5p.notify.windows.com/w/?token=test",
+		);
+		const status = () =>
+			getPushSubscriptionStatusUseCase.run({
+				ctx: f.ctx,
+				input: { endpoint: input.endpoint },
+			});
+		expect(await status()).toEqual({ status: "disabled" });
+		await subscribePushUseCase.run({ ctx: f.ctx, input });
+		expect(await status()).toEqual({ status: "enabled" });
+		expect(
+			await getPushSubscriptionStatusUseCase.run({
+				ctx: {
+					...f.ctx,
+					auth: {
+						...f.ctx.auth!,
+						user: { ...f.ctx.auth!.user, id: "another-user" },
+					},
+				},
+				input: { endpoint: input.endpoint },
+			}),
+		).toEqual({ status: "disabled" });
+		await expect(
+			getPushSubscriptionStatusUseCase.run({
+				ctx: { ...f.ctx, auth: null },
+				input: { endpoint: input.endpoint },
+			}),
+		).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+		f.ctx.ports.webPush = createWebPushPort(undefined);
+		expect(await status()).toEqual({ status: "unavailable" });
+		expect(transport.lookups).toHaveLength(0);
+		expect(transport.calls).toHaveLength(0);
+	} finally {
+		await f.database.close();
+	}
+});
+
+test.each([
+	["https://push.example.test/send", keys, "unsupported-service"],
+	[
+		"https://fcm.googleapis.com/fcm/send/test-token",
+		{ ...keys, auth: "bad" },
+		"invalid-subscription",
+	],
+] as const)(
+	"existing unusable subscriptions have an actionable status and remain removable: %s",
+	async (endpoint, storedKeys, expected) => {
+		const f = await documentFixture();
+		const transport = transportFixture();
+		f.ctx.ports.webPush = transport.port;
+		try {
+			await f.database.repositories.notificationInbox.upsertPushSubscription(
+				f.userId,
+				{ ...subscription(endpoint), keys: storedKeys },
+			);
+			expect(
+				await getPushSubscriptionStatusUseCase.run({
+					ctx: f.ctx,
+					input: { endpoint },
+				}),
+			).toEqual({ status: expected });
+			await unsubscribePushUseCase.run({ ctx: f.ctx, input: { endpoint } });
+			expect(
+				await getPushSubscriptionStatusUseCase.run({
+					ctx: f.ctx,
+					input: { endpoint },
+				}),
+			).toEqual({ status: "disabled" });
+			expect(transport.lookups).toHaveLength(0);
+			expect(transport.calls).toHaveLength(0);
+		} finally {
+			await f.database.close();
+		}
 	},
 );
 

@@ -1,3 +1,4 @@
+import type { WebPushSubscriptionValidationResult } from "@beignet/core/web-push";
 import type {
 	Notification,
 	NotificationActionState,
@@ -160,6 +161,9 @@ export type WebPushResult =
 export interface WebPushPort {
 	isConfigured(): boolean;
 	publicKey(): string | null;
+	validateSubscription(
+		subscription: unknown,
+	): WebPushSubscriptionValidationResult;
 	send(
 		subscription: StoredPushSubscription,
 		message: WebPushMessage,

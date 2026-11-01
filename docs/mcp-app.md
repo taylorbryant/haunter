@@ -10,6 +10,9 @@ existing capability registry and executor. Each invocation reloads the active
 connection, permission profile, and workspace grants before constructing an
 authoritative service context. Haunter still owns OAuth, HTTP limits, embedded
 UI resources, rich image/attachment results, and revision-conflict messages.
+Invalid tool arguments include bounded field paths and constraints from the tool's
+input schema. Submitted values, dynamic record keys, and unexpected execution
+errors are not echoed back to the client.
 
 ## Host integration
 

@@ -134,6 +134,12 @@ optional configuration and the inbox's delivery/retry workflow. Keep the existin
 VAPID key pair: configured keys are validated at startup, and changing the public
 key requires devices to subscribe again. No new environment variables are needed.
 
+Registration validates subscriptions against the configured provider before
+storing them. Settings also checks saved subscriptions without sending a push:
+unsupported services and invalid subscriptions appear disabled with an explanation
+and a **Remove device subscription** action. Valid subscriptions remain subject to
+delivery-time checks; local validation does not prove the device is reachable.
+
 Push endpoints must use HTTPS on port 443 without URL credentials or fragments,
 and belong to `fcm.googleapis.com`, `updates.push.services.mozilla.com`,
 `web.push.apple.com`, or Microsoft WNS subdomains under `notify.windows.com`

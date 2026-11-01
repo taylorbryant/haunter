@@ -34,6 +34,7 @@ import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permiss
 import type { McpConnectionRow } from "@/features/agents/ports";
 import { registerMcpCompanion } from "@/features/agents/server/mcp-companion";
 import { registerMcpEditor } from "@/features/agents/server/mcp-editor";
+import { formatMcpValidationError } from "@/server/mcp-validation-errors";
 import { env } from "@/lib/env";
 import {
 	agentCapabilities,
@@ -92,7 +93,10 @@ function safeToolErrorMessage(error: unknown) {
 	if (isAppError(error) || error instanceof APIError) return error.message;
 	if (error instanceof AgentCapabilityError) {
 		if (error.code === "invalid_input") {
-			return "The tool arguments are invalid.";
+			return formatMcpValidationError(
+				error,
+				agentCapabilityRegistry.get(error.capabilityName)?.input,
+			);
 		}
 		if (error.code === "unknown_capability") {
 			return "This tool is not available.";
