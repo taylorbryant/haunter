@@ -129,10 +129,29 @@ WEB_PUSH_SUBJECT=mailto:notifications@example.com
 
 Users enable push separately for each device in Settings.
 
-Push endpoints must use HTTPS on port 443 without URL credentials or fragments.
-On every delivery, Haunter rejects nonpublic IP addresses (including private or
-loopback DNS answers), pins the connection to a checked address, and applies a
-10-second deadline across DNS resolution and delivery. Redirects are not followed.
+Haunter uses `@beignet/provider-push-web` through an app adapter that preserves
+optional configuration and the inbox's delivery/retry workflow. Keep the existing
+VAPID key pair: configured keys are validated at startup, and changing the public
+key requires devices to subscribe again. No new environment variables are needed.
+
+Registration validates subscriptions against the configured provider before
+storing them. Settings also checks saved subscriptions without sending a push:
+unsupported services and invalid subscriptions appear disabled with an explanation
+and a **Remove device subscription** action. Valid subscriptions remain subject to
+delivery-time checks; local validation does not prove the device is reachable.
+
+Push endpoints must use HTTPS on port 443 without URL credentials or fragments,
+and belong to `fcm.googleapis.com`, `updates.push.services.mozilla.com`,
+`web.push.apple.com`, or Microsoft WNS subdomains under `notify.windows.com`
+(used by Edge on Windows). Other origins are rejected before DNS lookup. The
+transport also validates subscription keys and limits JSON payloads to 3,993
+UTF-8 bytes.
+On every delivery, Beignet's built-in Web Push client rejects nonpublic IP addresses
+(including private or loopback DNS answers), pins the connection to checked addresses,
+and applies a 10-second deadline across DNS resolution and response completion.
+Haunter uses this client directly. Redirects are not followed.
 This also protects subscriptions saved before these restrictions were introduced;
 they do not need a database migration. Expired subscriptions (HTTP 404/410) are
-still removed automatically.
+still removed automatically. Interrupted responses are treated as retryable
+failures, including when headers have already arrived; the inbox owns retries.
+The service worker, user preferences, and subscription storage remain app-owned.

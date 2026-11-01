@@ -6,6 +6,7 @@ import {
 	PushSubscriptionEndpointSchema,
 	PushSubscriptionOutputSchema,
 	PushSubscriptionSchema,
+	PushSubscriptionStatusSchema,
 	TestPushOutputSchema,
 } from "../schemas";
 
@@ -16,8 +17,34 @@ export const subscribePushUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
 		if (!ctx.ports.webPush.isConfigured()) throw appError("PushUnavailable");
+		const validation = ctx.ports.webPush.validateSubscription(input);
+		if (!validation.valid)
+			throw appError(
+				validation.reason === "unsupported-service"
+					? "UnsupportedPushService"
+					: "InvalidPushSubscription",
+			);
 		await ctx.ports.notificationInbox.upsertPushSubscription(user.id, input);
 		return { subscribed: true };
+	});
+
+export const getPushSubscriptionStatusUseCase = useCase
+	.query("notifications.getPushSubscriptionStatus")
+	.input(PushSubscriptionEndpointSchema)
+	.output(PushSubscriptionStatusSchema)
+	.run(async ({ ctx, input }) => {
+		const user = requireUser(ctx);
+		if (!ctx.ports.webPush.isConfigured())
+			return { status: "unavailable" as const };
+		const subscription = await ctx.ports.notificationInbox.findPushSubscription(
+			user.id,
+			input.endpoint,
+		);
+		if (!subscription) return { status: "disabled" as const };
+		const validation = ctx.ports.webPush.validateSubscription(subscription);
+		return {
+			status: validation.valid ? ("enabled" as const) : validation.reason,
+		};
 	});
 
 export const unsubscribePushUseCase = useCase
@@ -45,6 +72,13 @@ export const testPushUseCase = useCase
 			input.endpoint,
 		);
 		if (!subscription) return { sent: false };
+		const validation = ctx.ports.webPush.validateSubscription(subscription);
+		if (!validation.valid)
+			throw appError(
+				validation.reason === "unsupported-service"
+					? "UnsupportedPushService"
+					: "InvalidPushSubscription",
+			);
 
 		const result = await ctx.ports.webPush.send(subscription, {
 			title: "Haunter notifications are on",

@@ -5,6 +5,16 @@ the web app's navigation, Home and Tasks views, BlockNote page editor, and tldra
 canvas editor. For tool usage, see the [page](mcp-page-editing.md) and
 [canvas](mcp-canvas-editing.md) references.
 
+Capability tools in `server/remote-mcp.ts` use `@beignet/mcp` with Haunter's
+existing capability registry and executor. Each invocation reloads the active
+connection, permission profile, and workspace grants before constructing an
+authoritative service context. Haunter still owns OAuth, HTTP limits, embedded
+UI resources, rich image/attachment results, and revision-conflict messages.
+Beignet formats invalid tool arguments with bounded field paths and constraints
+from the advertised input schema. Haunter's error override defers to that default
+for validation failures. Submitted values, dynamic record keys, and unexpected
+execution errors are not echoed back to the client.
+
 ## Host integration
 
 The host connects to the [hosted MCP endpoint](deployment.md#hosted-mcp) with a

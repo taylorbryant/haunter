@@ -196,6 +196,19 @@ export const TestPushOutputSchema = z.object({
 	sent: z.boolean(),
 });
 
+export const PushSubscriptionStatusSchema = z.object({
+	status: z.enum([
+		"enabled",
+		"disabled",
+		"unavailable",
+		"unsupported-service",
+		"invalid-subscription",
+	]),
+});
+export type PushSubscriptionStatus = z.infer<
+	typeof PushSubscriptionStatusSchema
+>["status"];
+
 export const MarkNotificationsReadOutputSchema = z.object({
 	unreadCount: z.number().int().min(0),
 });

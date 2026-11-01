@@ -1,3 +1,4 @@
+import type { WebPushSubscriptionValidationResult } from "@beignet/core/web-push";
 import type {
 	Notification,
 	NotificationActionState,
@@ -148,11 +149,21 @@ export type WebPushMessage = {
 export type WebPushResult =
 	| { status: "sent" }
 	| { status: "gone" }
-	| { status: "failed"; reason: string };
+	| {
+			status: "failed";
+			reason: string;
+			/** Transport hints; the inbox continues to own retry scheduling. */
+			retryable?: boolean;
+			statusCode?: number;
+			retryAfterSeconds?: number;
+	  };
 
 export interface WebPushPort {
 	isConfigured(): boolean;
 	publicKey(): string | null;
+	validateSubscription(
+		subscription: unknown,
+	): WebPushSubscriptionValidationResult;
 	send(
 		subscription: StoredPushSubscription,
 		message: WebPushMessage,

@@ -4,6 +4,7 @@ export {
 	updateNotificationSettingsUseCase,
 } from "./manage-notification-settings";
 export {
+	getPushSubscriptionStatusUseCase,
 	subscribePushUseCase,
 	testPushUseCase,
 	unsubscribePushUseCase,

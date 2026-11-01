@@ -14,6 +14,7 @@ import {
 	PushSubscriptionEndpointSchema,
 	PushSubscriptionOutputSchema,
 	PushSubscriptionSchema,
+	PushSubscriptionStatusSchema,
 	TestPushOutputSchema,
 	UpdateNotificationPreferencesSchema,
 } from "@/features/notifications/schemas";
@@ -67,7 +68,11 @@ export const initializeNotificationTimezone = notifications
 export const subscribePush = notifications
 	.post("/api/push-subscriptions")
 	.body(PushSubscriptionSchema)
-	.errors({ PushUnavailable: errors.PushUnavailable })
+	.errors({
+		PushUnavailable: errors.PushUnavailable,
+		UnsupportedPushService: errors.UnsupportedPushService,
+		InvalidPushSubscription: errors.InvalidPushSubscription,
+	})
 	.responses({ 200: PushSubscriptionOutputSchema });
 
 export const unsubscribePush = notifications
@@ -75,8 +80,18 @@ export const unsubscribePush = notifications
 	.body(PushSubscriptionEndpointSchema)
 	.responses({ 200: PushSubscriptionOutputSchema });
 
+// Keep opaque endpoint tokens out of URLs and access logs.
+export const getPushSubscriptionStatus = notifications
+	.post("/api/push-subscriptions/status")
+	.body(PushSubscriptionEndpointSchema)
+	.responses({ 200: PushSubscriptionStatusSchema });
+
 export const testPush = notifications
 	.post("/api/push-subscriptions/test")
 	.body(PushSubscriptionEndpointSchema)
-	.errors({ PushUnavailable: errors.PushUnavailable })
+	.errors({
+		PushUnavailable: errors.PushUnavailable,
+		UnsupportedPushService: errors.UnsupportedPushService,
+		InvalidPushSubscription: errors.InvalidPushSubscription,
+	})
 	.responses({ 200: TestPushOutputSchema });

@@ -1,12 +1,6 @@
-import {
-	CanvasImageOutputSchema,
-	CanvasImageMetadataSchema,
-} from "@/features/canvases/editing";
+import { CanvasImageMetadataSchema } from "@/features/canvases/editing";
 import "@beignet/core/server-only";
-import {
-	ReadAttachmentMetadataSchema,
-	ReadAttachmentOutputSchema,
-} from "@/features/pages/attachments";
+import { ReadAttachmentMetadataSchema } from "@/features/pages/attachments";
 import {
 	agentMcpMetadata,
 	haunterMcpIcons,
@@ -26,27 +20,36 @@ import { authorizeEmbeddedWorkspaceUseCase } from "@/features/agents/use-cases/a
 import { appError } from "@/features/shared/errors";
 import { AgentCapabilityError } from "@beignet/core/agent-capabilities";
 import { isAppError } from "@beignet/core/errors";
+import { createZodSchemaConverter } from "@beignet/core/openapi";
 import type { Implementation, McpServer } from "@modelcontextprotocol/server";
 import { APIError } from "better-auth/api";
 import type { JWTPayload } from "jose";
 import { createMcpHandler } from "mcp-handler";
-import type { ZodType } from "zod";
 import {
-	CanvasPreviewMetadataSchema,
-	CanvasPreviewOutputSchema,
-} from "@/features/canvases/editing";
+	createMcpAgentCapabilityAdapter,
+	type McpAgentCapabilityTools,
+} from "@beignet/mcp";
+import { CanvasPreviewMetadataSchema } from "@/features/canvases/editing";
 import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
 import type { McpConnectionRow } from "@/features/agents/ports";
 import { registerMcpCompanion } from "@/features/agents/server/mcp-companion";
 import { registerMcpEditor } from "@/features/agents/server/mcp-editor";
 import { env } from "@/lib/env";
-import { agentCapabilities } from "@/lib/agent-capability-registry";
+import {
+	agentCapabilities,
+	agentCapabilityRegistry,
+} from "@/lib/agent-capability-registry";
 import {
 	type AgentCapabilityServer,
+	createHaunterAgentCapabilityExecutor,
+	resolveRemoteMcpPrincipal,
+	authorizeRemoteMcpCapability,
 	executeRemoteMcpCapability,
 } from "@/server/agent-capabilities";
 
 export const REMOTE_MCP_SCOPES = ["offline_access", "haunter:mcp"] as const;
+
+const schemaConverter = createZodSchemaConverter();
 
 export type RemoteMcpIdentity = {
 	userId: string;
@@ -96,6 +99,188 @@ function safeToolErrorMessage(error: unknown) {
 		}
 	}
 	return "Haunter could not complete this action.";
+}
+
+function remoteMcpToolMetadata(
+	name: (typeof agentCapabilities)[number]["name"],
+) {
+	const metadata = agentMcpMetadata(name);
+	return {
+		title: metadata.title,
+		_meta: {
+			...metadata._meta,
+			...(["attach_file_to_page", "insert_canvas_image"].includes(name)
+				? { "openai/fileParams": ["file"] }
+				: {}),
+		},
+		annotations: {
+			openWorldHint: ["attach_file_to_page", "insert_canvas_image"].includes(
+				name,
+			),
+			readOnlyHint: [
+				"list_canvases",
+				"list_canvas_favorites",
+				"list_page_favorites",
+				"list_backlinks",
+				"list_trash",
+				"list_page_versions",
+				"read_page_version",
+				"list_active_sessions",
+				"get_active_context",
+				"preview_canvas",
+				"search_canvas_library",
+				"read_canvas",
+				"read_canvas_image",
+				"list_workspaces",
+				"list_workspace_members",
+				"list_pages",
+				"search_pages",
+				"search_workspace",
+				"read_page",
+				"list_page_attachments",
+				"read_page_attachment",
+				"list_tasks",
+			].includes(name),
+			destructiveHint: [
+				"delete_canvas",
+				"restore_page_version",
+				"restore_canvas_version",
+				"edit_canvas",
+				"delete_canvas_shapes",
+				"delete_task",
+				"edit_page_blocks",
+				"replace_page_content",
+			].includes(name),
+			idempotentHint: [
+				"list_canvases",
+				"list_canvas_favorites",
+				"list_page_favorites",
+				"list_backlinks",
+				"list_trash",
+				"list_page_versions",
+				"read_page_version",
+				"update_canvas",
+				"set_canvas_favorite",
+				"set_page_favorite",
+				"list_active_sessions",
+				"get_active_context",
+				"preview_canvas",
+				"search_canvas_library",
+				"read_canvas",
+				"read_canvas_image",
+				"list_workspaces",
+				"list_workspace_members",
+				"list_pages",
+				"search_pages",
+				"search_workspace",
+				"read_page",
+				"list_page_attachments",
+				"read_page_attachment",
+				"list_tasks",
+			].includes(name),
+		},
+	};
+}
+
+const remoteMcpTools = {
+	...Object.fromEntries(
+		agentCapabilities.map(({ name }) => [name, remoteMcpToolMetadata(name)]),
+	),
+	read_canvas_image: {
+		...remoteMcpToolMetadata("read_canvas_image"),
+		outputSchema: CanvasImageMetadataSchema,
+		render({ data, ...metadata }) {
+			return {
+				content: [
+					{ type: "text", text: JSON.stringify(metadata) },
+					{ type: "image", mimeType: metadata.mimeType, data },
+				],
+				structuredContent: metadata,
+			};
+		},
+	},
+	preview_canvas: {
+		...remoteMcpToolMetadata("preview_canvas"),
+		outputSchema: CanvasPreviewMetadataSchema,
+		render({ image, ...metadata }) {
+			return {
+				content: [
+					{ type: "text", text: JSON.stringify(metadata) },
+					{ type: "image", ...image },
+				],
+				structuredContent: metadata,
+			};
+		},
+	},
+	read_page_attachment: {
+		...remoteMcpToolMetadata("read_page_attachment"),
+		outputSchema: ReadAttachmentMetadataSchema,
+		render({ text, data, ...metadata }) {
+			const uri = `haunter://pages/${metadata.pageId}/attachments/${encodeURIComponent(metadata.blockId)}`;
+			const contents =
+				text !== undefined
+					? [
+							{
+								type: "resource" as const,
+								resource: {
+									uri,
+									mimeType: metadata.mimeType ?? "text/plain",
+									text,
+								},
+							},
+						]
+					: data && metadata.mimeType?.startsWith("image/")
+						? [
+								{
+									type: "image" as const,
+									mimeType: metadata.mimeType,
+									data,
+								},
+							]
+						: data
+							? [
+									{
+										type: "resource" as const,
+										resource: {
+											uri,
+											mimeType: metadata.mimeType ?? "application/octet-stream",
+											blob: data,
+										},
+									},
+								]
+							: [];
+			return {
+				content: [
+					{ type: "text" as const, text: JSON.stringify(metadata) },
+					...contents,
+				],
+				structuredContent: metadata,
+			};
+		},
+	},
+} satisfies McpAgentCapabilityTools<typeof agentCapabilities>;
+
+function remoteMcpErrorMessage(error: unknown) {
+	// Let Beignet describe invalid arguments from the advertised input schema.
+	if (error instanceof AgentCapabilityError && error.code === "invalid_input")
+		return undefined;
+	const cause =
+		error instanceof AgentCapabilityError &&
+		error.code === "execution_failed" &&
+		error.cause
+			? error.cause
+			: error;
+	if (
+		isAppError(cause) &&
+		["REVISION_CONFLICT", "CANVAS_REVISION_CONFLICT"].includes(cause.code)
+	) {
+		return JSON.stringify({
+			code: cause.code,
+			message: cause.message,
+			currentRevision: resultRecord(cause.details)?.currentRevision,
+		});
+	}
+	return safeToolErrorMessage(cause);
 }
 
 export function registerRemoteMcpTools(
@@ -198,213 +383,33 @@ export function registerRemoteMcpTools(
 			errorMessage: safeToolErrorMessage,
 		});
 	}
-	for (const capability of agentCapabilities) {
-		if (!allowed.has(capability.name)) continue;
-		const metadata = agentMcpMetadata(capability.name);
-		server.registerTool(
-			capability.name,
-			{
-				title: metadata.title,
-				description: capability.description,
-				inputSchema: capability.input as ZodType,
-				_meta: {
-					...metadata._meta,
-					...(["attach_file_to_page", "insert_canvas_image"].includes(
-						capability.name,
-					)
-						? { "openai/fileParams": ["file"] }
-						: {}),
-				},
-				outputSchema:
-					capability.name === "read_canvas_image"
-						? CanvasImageMetadataSchema
-						: capability.name === "preview_canvas"
-							? CanvasPreviewMetadataSchema
-							: capability.name === "read_page_attachment"
-								? ReadAttachmentMetadataSchema
-								: (capability.output as ZodType),
-				annotations: {
-					openWorldHint: [
-						"attach_file_to_page",
-						"insert_canvas_image",
-					].includes(capability.name),
-					readOnlyHint: [
-						"list_canvases",
-						"list_canvas_favorites",
-						"list_page_favorites",
-						"list_backlinks",
-						"list_trash",
-						"list_page_versions",
-						"read_page_version",
-						"list_active_sessions",
-						"get_active_context",
-						"preview_canvas",
-						"search_canvas_library",
-						"read_canvas",
-						"read_canvas_image",
-						"list_workspaces",
-						"list_workspace_members",
-						"list_pages",
-						"search_pages",
-						"search_workspace",
-						"read_page",
-						"list_page_attachments",
-						"read_page_attachment",
-						"list_tasks",
-					].includes(capability.name),
-					destructiveHint: [
-						"delete_canvas",
-						"restore_page_version",
-						"restore_canvas_version",
-						"edit_canvas",
-						"delete_canvas_shapes",
-						"delete_task",
-						"edit_page_blocks",
-						"replace_page_content",
-					].includes(capability.name),
-					idempotentHint: [
-						"list_canvases",
-						"list_canvas_favorites",
-						"list_page_favorites",
-						"list_backlinks",
-						"list_trash",
-						"list_page_versions",
-						"read_page_version",
-						"update_canvas",
-						"set_canvas_favorite",
-						"set_page_favorite",
-						"list_active_sessions",
-						"get_active_context",
-						"preview_canvas",
-						"search_canvas_library",
-						"read_canvas",
-						"read_canvas_image",
-						"list_workspaces",
-						"list_workspace_members",
-						"list_pages",
-						"search_pages",
-						"search_workspace",
-						"read_page",
-						"list_page_attachments",
-						"read_page_attachment",
-						"list_tasks",
-					].includes(capability.name),
-				},
+	createMcpAgentCapabilityAdapter({
+		registry: agentCapabilityRegistry,
+		schemaConverter: {
+			...schemaConverter,
+			toJSONSchema(schema, options) {
+				// Preserve the dialect advertised to released CLI clients; the
+				// shared converter omits it for embedding schemas in OpenAPI.
+				return {
+					...schemaConverter.toJSONSchema(schema, options),
+					$schema: "https://json-schema.org/draft/2020-12/schema",
+				};
 			},
-			async (args: unknown) => {
-				try {
-					const argumentsRecord = resultRecord(args) ?? {};
-					const result = await executeRemoteMcpCapability(
-						{
-							capability: capability.name,
-							arguments: argumentsRecord,
-							userId: input.identity.userId,
-							clientId: input.identity.clientId,
-						},
-						{ getServer: input.getServer },
-					);
-					if (capability.name === "read_canvas_image") {
-						const { data, ...metadata } = CanvasImageOutputSchema.parse(result);
-						return {
-							content: [
-								{ type: "text" as const, text: JSON.stringify(metadata) },
-								{ type: "image" as const, mimeType: metadata.mimeType, data },
-							],
-							structuredContent: metadata,
-						};
-					}
-					if (capability.name === "read_page_attachment") {
-						const { text, data, ...metadata } =
-							ReadAttachmentOutputSchema.parse(result);
-						const uri = `haunter://pages/${metadata.pageId}/attachments/${encodeURIComponent(metadata.blockId)}`;
-						const contents =
-							text !== undefined
-								? [
-										{
-											type: "resource" as const,
-											resource: {
-												uri,
-												mimeType: metadata.mimeType ?? "text/plain",
-												text,
-											},
-										},
-									]
-								: data && metadata.mimeType?.startsWith("image/")
-									? [
-											{
-												type: "image" as const,
-												mimeType: metadata.mimeType,
-												data,
-											},
-										]
-									: data
-										? [
-												{
-													type: "resource" as const,
-													resource: {
-														uri,
-														mimeType:
-															metadata.mimeType ?? "application/octet-stream",
-														blob: data,
-													},
-												},
-											]
-										: [];
-						return {
-							content: [
-								{ type: "text" as const, text: JSON.stringify(metadata) },
-								...contents,
-							],
-							structuredContent: metadata,
-						};
-					}
-					if (capability.name === "preview_canvas") {
-						const { image, ...metadata } =
-							CanvasPreviewOutputSchema.parse(result);
-						return {
-							content: [
-								{ type: "text" as const, text: JSON.stringify(metadata) },
-								{ type: "image" as const, ...image },
-							],
-							structuredContent: metadata,
-						};
-					}
-					return {
-						content: [
-							{
-								type: "text",
-								text: JSON.stringify(result, null, 2),
-							},
-						],
-						...(resultRecord(result)
-							? { structuredContent: resultRecord(result) }
-							: {}),
-					};
-				} catch (error) {
-					return {
-						isError: true,
-						content: [
-							{
-								type: "text",
-								text:
-									isAppError(error) &&
-									["REVISION_CONFLICT", "CANVAS_REVISION_CONFLICT"].includes(
-										error.code,
-									)
-										? JSON.stringify({
-												code: error.code,
-												message: error.message,
-												currentRevision: resultRecord(error.details)
-													?.currentRevision,
-											})
-										: safeToolErrorMessage(error),
-							},
-						],
-					};
-				}
-			},
-		);
-	}
+		},
+		executor: () =>
+			createHaunterAgentCapabilityExecutor({ getServer: input.getServer }),
+		// Resolve current grants for every invocation, including on reused SDK servers.
+		principal: () =>
+			resolveRemoteMcpPrincipal(input.identity, { getServer: input.getServer }),
+		authorize: authorizeRemoteMcpCapability,
+		tools: remoteMcpTools,
+		errorMessage: ({ error }) => remoteMcpErrorMessage(error),
+	}).register({
+		server,
+		capabilities: agentCapabilities
+			.filter(({ name }) => allowed.has(name))
+			.map(({ name }) => name),
+	});
 }
 
 export function createRemoteMcpRequestHandler(input: {

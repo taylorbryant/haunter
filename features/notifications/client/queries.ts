@@ -4,6 +4,7 @@ import { rq } from "@/client";
 import { protectedRefetchInterval } from "@/client/session-recovery";
 import {
 	getNotificationSettings,
+	getPushSubscriptionStatus,
 	initializeNotificationTimezone,
 	listNotifications,
 	markAllNotificationsRead,
@@ -88,6 +89,8 @@ export const initializeNotificationTimezoneMutationOptions = () =>
 	});
 export const subscribePushMutationOptions = () =>
 	rq(subscribePush).mutationOptions();
+export const pushSubscriptionStatusMutationOptions = () =>
+	rq(getPushSubscriptionStatus).mutationOptions();
 export const unsubscribePushMutationOptions = () =>
 	rq(unsubscribePush).mutationOptions();
 export const testPushMutationOptions = () => rq(testPush).mutationOptions();

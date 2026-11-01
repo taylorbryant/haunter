@@ -9,6 +9,8 @@ export type AgentPrincipal = {
 	remoteConnectionId?: string;
 	remoteClientId?: string;
 	remoteClientName?: string | null;
+	/** Current capability grants loaded by the authenticated MCP transport. */
+	remoteCapabilities?: readonly string[];
 	authorizedWorkspaceIds?: readonly string[];
 	/** Derived only by a verified transport from current scoped grants. */
 	pageBlockDeletionAllowed?: boolean;

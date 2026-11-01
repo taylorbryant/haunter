@@ -167,15 +167,10 @@ export async function getRemoteMcpConnection(
 	return server.ports.mcpConnections.findActive(input.userId, input.clientId);
 }
 
-export async function executeRemoteMcpCapability(
-	input: {
-		capability: string;
-		arguments?: Record<string, unknown>;
-		userId: string;
-		clientId: string;
-	},
-	dependencies: AgentCapabilityDependencies,
-): Promise<unknown> {
+export async function resolveRemoteMcpPrincipal(
+	input: { userId: string; clientId: string },
+	dependencies: Pick<AgentCapabilityDependencies, "getServer">,
+): Promise<AgentPrincipal> {
 	const server = await dependencies.getServer();
 	const connection = await server.ports.mcpConnections.findActive(
 		input.userId,
@@ -186,43 +181,65 @@ export async function executeRemoteMcpCapability(
 			message: "This MCP connection is not active.",
 		});
 	}
-	const allowedCapabilities = new Set<string>(
-		capabilitiesForAgentPermissionProfile(connection.permissionProfile),
-	);
-	const authorizedWorkspaceIds = new Set(connection.workspaceIds);
+	return {
+		agentId: `mcp:${connection.id}`,
+		userId: input.userId,
+		transport: "remote-mcp",
+		remoteConnectionId: connection.id,
+		remoteClientId: input.clientId,
+		remoteClientName: connection.clientName,
+		remoteCapabilities: capabilitiesForAgentPermissionProfile(
+			connection.permissionProfile,
+		),
+		authorizedWorkspaceIds: connection.workspaceIds,
+		pageBlockDeletionAllowed: connection.permissionProfile === "full",
+	};
+}
+
+export function authorizeRemoteMcpCapability({
+	name,
+	input,
+	principal,
+}: {
+	name: string;
+	input: unknown;
+	principal: AgentPrincipal;
+}) {
+	if (!principal.remoteCapabilities?.includes(name)) {
+		throw new APIError("FORBIDDEN", {
+			message: "This MCP connection does not allow that action.",
+		});
+	}
+	const workspaceId = inputRecord(input)?.workspaceId;
+	if (
+		typeof workspaceId === "string" &&
+		!principal.authorizedWorkspaceIds?.includes(workspaceId)
+	) {
+		throw new APIError("FORBIDDEN", {
+			message: "This MCP connection cannot access that workspace.",
+		});
+	}
+}
+
+export async function executeRemoteMcpCapability(
+	input: {
+		capability: string;
+		arguments?: Record<string, unknown>;
+		userId: string;
+		clientId: string;
+	},
+	dependencies: AgentCapabilityDependencies,
+): Promise<unknown> {
+	const principal = await resolveRemoteMcpPrincipal(input, dependencies);
 
 	try {
 		return await (
 			await createHaunterAgentCapabilityExecutor(dependencies)
 		).executeDynamic({
 			name: input.capability,
-			principal: {
-				agentId: `mcp:${connection.id}`,
-				userId: input.userId,
-				transport: "remote-mcp",
-				remoteConnectionId: connection.id,
-				remoteClientId: input.clientId,
-				remoteClientName: connection.clientName,
-				authorizedWorkspaceIds: connection.workspaceIds,
-				pageBlockDeletionAllowed: connection.permissionProfile === "full",
-			},
+			principal,
 			input: input.arguments ?? {},
-			authorize({ name, input: parsedInput }) {
-				if (!allowedCapabilities.has(name)) {
-					throw new APIError("FORBIDDEN", {
-						message: "This MCP connection does not allow that action.",
-					});
-				}
-				const workspaceId = inputRecord(parsedInput)?.workspaceId;
-				if (
-					typeof workspaceId === "string" &&
-					!authorizedWorkspaceIds.has(workspaceId)
-				) {
-					throw new APIError("FORBIDDEN", {
-						message: "This MCP connection cannot access that workspace.",
-					});
-				}
-			},
+			authorize: authorizeRemoteMcpCapability,
 		});
 	} catch (error) {
 		throw executionError(error);

@@ -124,6 +124,18 @@ export const errors = defineErrors({
 		status: 422,
 		message: "Push notifications are not available",
 	},
+	UnsupportedPushService: {
+		code: "UNSUPPORTED_PUSH_SERVICE",
+		status: 422,
+		message:
+			"This browser's push service is not supported. Try another browser or use in-app notifications.",
+	},
+	InvalidPushSubscription: {
+		code: "INVALID_PUSH_SUBSCRIPTION",
+		status: 422,
+		message:
+			"This device's push subscription is invalid. Remove it and enable push again.",
+	},
 	InvalidTimezone: {
 		code: "INVALID_TIMEZONE",
 		status: 422,
