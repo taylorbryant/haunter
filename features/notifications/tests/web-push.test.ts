@@ -1,9 +1,9 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, mock, spyOn, test } from "bun:test";
 import { createECDH, randomBytes } from "node:crypto";
-import type { lookup } from "node:dns/promises";
+import dns, { type lookup } from "node:dns/promises";
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
-import type { request, RequestOptions } from "node:https";
+import https, { type request, type RequestOptions } from "node:https";
 import { Readable } from "node:stream";
 import webPush from "web-push";
 import { documentFixture } from "@/features/documents/tests/helpers";
@@ -49,6 +49,8 @@ function subscription(
 }
 
 type Address = { address: string; family: number };
+afterEach(() => mock.restore());
+
 function transportFixture(
 	options: {
 		addresses?: Address[];
@@ -124,11 +126,11 @@ function transportFixture(
 		};
 		return req;
 	}) as unknown as typeof request;
-	const dependencies = {
-		lookup: options.lookup ?? resolve,
-		request: connect,
-		timeoutMs: options.timeoutMs,
-	};
+	// Exercise Beignet's built-in client through Haunter's port. Mock only I/O;
+	// production no longer supplies its own transport or network-policy hooks.
+	spyOn(dns, "lookup").mockImplementation(options.lookup ?? resolve);
+	spyOn(https, "request").mockImplementation(connect);
+	const dependencies = { timeoutMs: options.timeoutMs };
 	return {
 		port: createWebPushPort(vapidDetails, dependencies),
 		dependencies,
@@ -296,10 +298,8 @@ test("pinned DNS defers connection errors until HTTPS installs its handlers", as
 		requestReturned = true;
 		return req;
 	}) as unknown as typeof request;
-	const port = createWebPushPort(vapidDetails, {
-		...f.dependencies,
-		request: connect,
-	});
+	spyOn(https, "request").mockImplementation(connect);
+	const port = createWebPushPort(vapidDetails, f.dependencies);
 	expect(await port.send(subscription(), message)).toEqual({
 		status: "failed",
 		reason: "unavailable",

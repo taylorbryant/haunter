@@ -573,15 +573,20 @@ describe("remote MCP protocol", () => {
 			});
 			const invalid = await json(
 				await handler(
-					modernRequest("tools/call", { name: "read_page", arguments: {} }),
+					modernRequest("tools/call", {
+						name: "read_page",
+						arguments: { pageId: "private-tool-argument" },
+					}),
 				),
 			);
 			expect(invalid.result?.isError).toBeTrue();
 			const validationText = JSON.stringify(invalid.result?.content);
 			expect(validationText).toContain(
-				"workspaceId: type string; minimum length 1",
+				"workspaceId: expected string; minimum length 1",
 			);
-			expect(validationText).toContain("pageId: type string; format uuid");
+			expect(validationText).toContain("pageId: expected string; format uuid");
+			expect(validationText).not.toContain("private-tool-argument");
+			expect(validationText.length).toBeLessThan(2_100);
 			expect(contexts).toBe(0);
 			const failed = await json(
 				await handler(
