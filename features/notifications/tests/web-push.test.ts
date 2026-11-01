@@ -229,6 +229,8 @@ test.each([
 	"https://FCM.GOOGLEAPIS.COM:443/fcm/send/a%2Fb?token=x%2By",
 	"https://updates.push.services.mozilla.com/wpush/v2/test-token",
 	"https://web.push.apple.com/test-token",
+	"https://wns2-db5p.notify.windows.com/w/?token=a%2Fb%2Bc",
+	"https://WNS2-AM3P.NOTIFY.WINDOWS.COM:443/w/?token=test",
 ])(
 	"public push keeps encrypted payload, VAPID and opaque endpoint tokens: %s",
 	async (endpoint) => {
@@ -449,40 +451,52 @@ test("test-push blocks persisted unsafe subscriptions and still allows removing 
 	}
 });
 
-test("registration and test-push still send valid subscriptions and remove expired ones", async () => {
-	const f = await documentFixture();
-	const input = subscription();
-	try {
-		for (const status of [201, 404, 410]) {
-			const transport = transportFixture({ status });
-			f.ctx.ports.webPush = transport.port;
-			expect(await subscribePushUseCase.run({ ctx: f.ctx, input })).toEqual({
-				subscribed: true,
-			});
-			expect(
-				await testPushUseCase.run({
-					ctx: f.ctx,
-					input: { endpoint: input.endpoint },
-				}),
-			).toEqual({ sent: status === 201 });
-			const stored =
-				await f.database.repositories.notificationInbox.findPushSubscription(
-					f.userId,
-					input.endpoint,
-				);
-			expect(Boolean(stored)).toBe(status === 201);
-			expect(transport.calls).toHaveLength(1);
+test.each([
+	"https://fcm.googleapis.com/fcm/send/test-token",
+	"https://wns2-db5p.notify.windows.com/w/?token=test",
+])(
+	"registration and test-push deliver and remove expired subscriptions: %s",
+	async (endpoint) => {
+		const f = await documentFixture();
+		const input = subscription(endpoint);
+		try {
+			for (const status of [201, 404, 410]) {
+				const transport = transportFixture({ status });
+				f.ctx.ports.webPush = transport.port;
+				expect(await subscribePushUseCase.run({ ctx: f.ctx, input })).toEqual({
+					subscribed: true,
+				});
+				expect(
+					await testPushUseCase.run({
+						ctx: f.ctx,
+						input: { endpoint: input.endpoint },
+					}),
+				).toEqual({ sent: status === 201 });
+				const stored =
+					await f.database.repositories.notificationInbox.findPushSubscription(
+						f.userId,
+						input.endpoint,
+					);
+				expect(Boolean(stored)).toBe(status === 201);
+				expect(transport.calls).toHaveLength(1);
+			}
+		} finally {
+			await f.database.close();
 		}
-	} finally {
-		await f.database.close();
-	}
-});
+	},
+);
 
 test("push rejects untrusted service origins and oversized payloads before DNS", async () => {
 	const f = transportFixture();
 	for (const [device, payload] of [
 		[subscription("https://push.example/send"), message],
 		[subscription("https://fcm.googleapis.com.evil.example/send"), message],
+		[subscription("https://evilnotify.windows.com/w/?token=test"), message],
+		[
+			subscription("https://notify.windows.com.attacker.test/w/?token=test"),
+			message,
+		],
+		[subscription("https://notify.windows.com/w/?token=test"), message],
 		[subscription(), { ...message, body: "a".repeat(4_000) }],
 	] as const) {
 		expect(await f.port.send(device, payload)).toEqual({
@@ -492,6 +506,25 @@ test("push rejects untrusted service origins and oversized payloads before DNS",
 		});
 	}
 	expect(f.lookups).toHaveLength(0);
+	expect(f.calls).toHaveLength(0);
+});
+
+test("WNS delivery still rejects mixed public and private DNS answers", async () => {
+	const f = transportFixture({
+		addresses: [
+			{ address: "1.1.1.1", family: 4 },
+			{ address: "127.0.0.1", family: 4 },
+		],
+	});
+	expect(
+		(
+			await f.port.send(
+				subscription("https://wns2-db5p.notify.windows.com/w/?token=test"),
+				message,
+			)
+		).status,
+	).toBe("failed");
+	expect(f.lookups).toEqual(["wns2-db5p.notify.windows.com"]);
 	expect(f.calls).toHaveLength(0);
 });
 

@@ -135,9 +135,11 @@ VAPID key pair: configured keys are validated at startup, and changing the publi
 key requires devices to subscribe again. No new environment variables are needed.
 
 Push endpoints must use HTTPS on port 443 without URL credentials or fragments,
-and belong to `fcm.googleapis.com`, `updates.push.services.mozilla.com`, or
-`web.push.apple.com`. Other origins are rejected before DNS lookup. The transport
-also validates subscription keys and limits JSON payloads to 3,993 UTF-8 bytes.
+and belong to `fcm.googleapis.com`, `updates.push.services.mozilla.com`,
+`web.push.apple.com`, or Microsoft WNS subdomains under `notify.windows.com`
+(used by Edge on Windows). Other origins are rejected before DNS lookup. The
+transport also validates subscription keys and limits JSON payloads to 3,993
+UTF-8 bytes.
 On every delivery, Haunter rejects nonpublic IP addresses (including private or
 loopback DNS answers), pins the connection to a checked address, and applies a
 10-second deadline across DNS resolution and delivery. Redirects are not followed.
