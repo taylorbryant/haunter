@@ -55,6 +55,7 @@ function transportFixture(
 		status?: number;
 		stall?: boolean;
 		error?: Error;
+		interrupted?: boolean;
 		timeoutMs?: number;
 	} = {},
 ) {
@@ -109,10 +110,12 @@ function transportFixture(
 				if (options.stall) return;
 				const response = new Readable({
 					read() {
-						throw new Error("Push response bodies must not be consumed");
+						if (options.interrupted) this.destroy();
+						else this.push(null);
 					},
 				}) as IncomingMessage;
 				response.statusCode = options.status ?? 201;
+				response.complete = !options.interrupted;
 				response.headers = { location: "https://127.0.0.1/private" };
 				responses.push(response);
 				callback(response);
@@ -217,10 +220,7 @@ test.each(
 	"push fails closed for empty, private, or mixed DNS answers: %j",
 	async ({ addresses }) => {
 		const f = transportFixture({ addresses });
-		expect(
-			(await f.port.send(subscription("https://private.example/push"), message))
-				.status,
-		).toBe("failed");
+		expect((await f.port.send(subscription(), message)).status).toBe("failed");
 		expect(f.calls).toHaveLength(0);
 	},
 );
@@ -299,11 +299,12 @@ test("pinned DNS defers connection errors until HTTPS installs its handlers", as
 	});
 	expect(await port.send(subscription(), message)).toEqual({
 		status: "failed",
-		reason: "Network unreachable",
+		reason: "unavailable",
+		retryable: true,
 	});
 });
 
-test("public IPv6 DNS and literal addresses work, and each delivery rechecks DNS", async () => {
+test("public IPv6 DNS works, each delivery rechecks DNS, and literal origins are rejected", async () => {
 	const addresses = [{ address: "2606:4700:4700::1111", family: 6 }];
 	const f = transportFixture({ addresses });
 	expect(await f.port.send(subscription(), message)).toEqual({
@@ -320,14 +321,17 @@ test("public IPv6 DNS and literal addresses work, and each delivery rechecks DNS
 	]) {
 		const literal = transportFixture();
 		expect(await literal.port.send(subscription(endpoint), message)).toEqual({
-			status: "sent",
+			status: "failed",
+			reason: "invalid-request",
+			retryable: false,
 		});
+		expect(literal.calls).toHaveLength(0);
 		expect(literal.lookups).toHaveLength(0);
 	}
 });
 
 test.each([200, 201, 204, 301, 302, 307, 308, 400, 404, 410, 429, 500])(
-	"push preserves HTTP %i semantics without reading bodies or following redirects",
+	"push preserves HTTP %i semantics without buffering bodies or following redirects",
 	async (status) => {
 		const f = transportFixture({ status });
 		const expected =
@@ -353,7 +357,8 @@ test("push deadline covers stalled DNS and prevents a request after late resolut
 	});
 	expect(await f.port.send(subscription(), message)).toEqual({
 		status: "failed",
-		reason: "Web Push delivery timed out.",
+		reason: "unavailable",
+		retryable: true,
 	});
 	finish([{ address: "1.1.1.1", family: 4 }]);
 	await Promise.resolve();
@@ -365,7 +370,8 @@ test("push deadline aborts an active stalled request", async () => {
 	const f = transportFixture({ stall: true, timeoutMs: 20 });
 	expect(await f.port.send(subscription(), message)).toEqual({
 		status: "failed",
-		reason: "Web Push delivery timed out.",
+		reason: "unavailable",
+		retryable: true,
 	});
 	expect(f.aborts).toBe(1);
 	expect(f.calls[0]!.options.signal!.aborted).toBe(true);
@@ -379,13 +385,15 @@ test("DNS, TLS/network, bad key and unconfigured failures remain failed", async 
 	});
 	expect(await dns.port.send(subscription(), message)).toEqual({
 		status: "failed",
-		reason: "DNS failure",
+		reason: "unavailable",
+		retryable: true,
 	});
 	expect(dns.calls).toHaveLength(0);
 	const network = transportFixture({ error: new Error("TLS failure") });
 	expect(await network.port.send(subscription(), message)).toEqual({
 		status: "failed",
-		reason: "TLS failure",
+		reason: "unavailable",
+		retryable: true,
 	});
 	const badKeys = transportFixture();
 	expect(
@@ -468,4 +476,44 @@ test("registration and test-push still send valid subscriptions and remove expir
 	} finally {
 		await f.database.close();
 	}
+});
+
+test("push rejects untrusted service origins and oversized payloads before DNS", async () => {
+	const f = transportFixture();
+	for (const [device, payload] of [
+		[subscription("https://push.example/send"), message],
+		[subscription("https://fcm.googleapis.com.evil.example/send"), message],
+		[subscription(), { ...message, body: "a".repeat(4_000) }],
+	] as const) {
+		expect(await f.port.send(device, payload)).toEqual({
+			status: "failed",
+			reason: "invalid-request",
+			retryable: false,
+		});
+	}
+	expect(f.lookups).toHaveLength(0);
+	expect(f.calls).toHaveLength(0);
+});
+
+test.each([201, 410])(
+	"interrupted HTTP %i responses remain retryable instead of accepting or deleting a device",
+	async (status) => {
+		const f = transportFixture({ status, interrupted: true });
+		expect(await f.port.send(subscription(), message)).toEqual({
+			status: "failed",
+			reason: "unavailable",
+			retryable: true,
+		});
+		expect(f.calls).toHaveLength(1);
+		expect(f.responses[0]!.destroyed).toBe(true);
+	},
+);
+
+test("mismatched VAPID keys fail before sending", () => {
+	expect(() =>
+		createWebPushPort({
+			...vapidDetails,
+			publicKey: webPush.generateVAPIDKeys().publicKey,
+		}),
+	).toThrow("matching P-256 key pair");
 });

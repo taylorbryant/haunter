@@ -555,23 +555,48 @@ describe("remote MCP protocol", () => {
 		).toMatchObject({ readOnlyHint: false, destructiveHint: true });
 	});
 
-	test("validates registered tool input through the native MCP v2 call path", async () => {
-		const response = await createHandler()(
-			modernRequest("tools/call", {
-				name: "read_page",
-				arguments: {},
-			}),
-		);
-		const body = await json(response);
-		const content = body.result?.content as Array<{
-			type: string;
-			text: string;
-		}>;
-
-		expect(response.status).toBe(200);
-		expect(body.result?.isError).toBeTrue();
-		expect(content[0]?.text).toContain("Input validation error");
-		expect(content[0]?.text).toContain("workspaceId");
+	test("validates capability input before context creation and redacts unexpected failures", async () => {
+		const { embeddedEditorFixture } = await import("./embedded-editor-fixture");
+		const f = await embeddedEditorFixture("view", "view");
+		let contexts = 0;
+		try {
+			const handler = createRemoteMcpRequestHandler({
+				connection: f.connection,
+				identity: { userId: f.userId, clientId: f.connection.clientId },
+				getServer: async () => ({
+					ports: f.ctx.ports,
+					createServiceContext: async () => {
+						contexts++;
+						throw new Error("private database credentials");
+					},
+				}),
+			});
+			const invalid = await json(
+				await handler(
+					modernRequest("tools/call", { name: "read_page", arguments: {} }),
+				),
+			);
+			expect(invalid.result?.isError).toBeTrue();
+			expect(invalid.result?.content).toEqual([
+				{ type: "text", text: "The tool arguments are invalid." },
+			]);
+			expect(contexts).toBe(0);
+			const failed = await json(
+				await handler(
+					modernRequest("tools/call", {
+						name: "read_page",
+						arguments: { workspaceId: f.workspaceId, pageId: f.page.id },
+					}),
+				),
+			);
+			expect(failed.result?.isError).toBeTrue();
+			expect(failed.result?.content).toEqual([
+				{ type: "text", text: "Haunter could not complete this action." },
+			]);
+			expect(contexts).toBe(1);
+		} finally {
+			await f.database.close();
+		}
 	});
 
 	test("keeps the stateless 2025 protocol fallback working", async () => {
@@ -661,4 +686,82 @@ test("MCP advertises library search as read-only and insertion only for editors"
 			"y",
 		]),
 	);
+});
+
+test("capability calls reload profile, workspace grants, and connection revocation after discovery", async () => {
+	const { embeddedEditorFixture } = await import("./embedded-editor-fixture");
+	const f = await embeddedEditorFixture("edit", "edit");
+	f.ctx.ports.workspaceEventStreamLeases = {
+		isConfigured: () => false,
+		acquire: async () => null,
+	};
+	try {
+		const handler = createRemoteMcpRequestHandler({
+			connection: f.connection,
+			identity: { userId: f.userId, clientId: f.connection.clientId },
+			getServer: async () => ({
+				ports: f.ctx.ports,
+				createServiceContext: async () => f.ctx,
+			}),
+		});
+		const call = (name: string, args: Record<string, unknown>) =>
+			handler(
+				modernRequest("tools/call", {
+					name,
+					arguments: { workspaceId: f.workspaceId, ...args },
+				}),
+			).then(json);
+		expect(
+			(
+				await call("update_page", {
+					pageId: f.page.id,
+					title: "Before downgrade",
+				})
+			).result?.isError,
+		).not.toBeTrue();
+		const authorize = (workspaceIds: string[]) =>
+			f.ctx.ports.mcpConnections.authorize({
+				id: f.connection.id,
+				userId: f.userId,
+				clientId: f.connection.clientId,
+				permissionProfile: "view",
+				workspaceIds,
+				now: new Date(),
+			});
+		await authorize([f.workspaceId]);
+		const deniedWrite = await call("update_page", {
+			pageId: f.page.id,
+			title: "Denied",
+		});
+		expect(deniedWrite.result?.isError).toBeTrue();
+		expect(deniedWrite.result?.content).toEqual([
+			{ type: "text", text: "This MCP connection does not allow that action." },
+		]);
+		const read = await call("read_page", { pageId: f.page.id });
+		expect(read.result?.isError).not.toBeTrue();
+		expect(read.result?.structuredContent).toMatchObject({
+			title: "Before downgrade",
+		});
+		await authorize([]);
+		const deniedWorkspace = await call("read_page", { pageId: f.page.id });
+		expect(deniedWorkspace.result?.isError).toBeTrue();
+		expect(deniedWorkspace.result?.content).toEqual([
+			{
+				type: "text",
+				text: "This MCP connection cannot access that workspace.",
+			},
+		]);
+		await f.ctx.ports.mcpConnections.disconnectOwned(
+			f.userId,
+			f.connection.id,
+			new Date(),
+		);
+		const revoked = await call("list_workspaces", {});
+		expect(revoked.result?.isError).toBeTrue();
+		expect(revoked.result?.content).toEqual([
+			{ type: "text", text: "This MCP connection is not active." },
+		]);
+	} finally {
+		await f.database.close();
+	}
 });

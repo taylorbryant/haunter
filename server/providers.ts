@@ -15,7 +15,7 @@ import { workspaceBroadcastProvider } from "@/infra/collab/broadcast-provider";
 import { databaseClient } from "@/infra/db/client";
 import { appDatabaseProvider } from "@/infra/db/provider";
 import * as schema from "@/infra/db/schema";
-import { webPushProvider } from "@/infra/notifications/web-push-provider";
+import { createWebPushPort } from "@/infra/notifications/web-push";
 import { memoryRateLimitProvider } from "@/infra/rate-limit/memory-rate-limit-provider";
 import { taskAssignmentDeliveryProvider } from "@/infra/tasks/task-assignment-delivery-provider";
 import { auth } from "@/lib/better-auth";
@@ -39,6 +39,31 @@ const bestEffortWorkProvider = createProvider<Pick<AppPorts, "logger">>()({
 					onError: (error) =>
 						ports.logger.warn("Best-effort work failed", { error }),
 				}),
+			},
+		};
+	},
+});
+
+const webPushProvider = createProvider({
+	name: "haunter-web-push",
+	setup({ ports }) {
+		const configured = Boolean(
+			env.WEB_PUSH_PUBLIC_KEY &&
+				env.WEB_PUSH_PRIVATE_KEY &&
+				env.WEB_PUSH_SUBJECT,
+		);
+		return {
+			ports: {
+				webPush: createWebPushPort(
+					configured
+						? {
+								subject: env.WEB_PUSH_SUBJECT,
+								publicKey: env.WEB_PUSH_PUBLIC_KEY as string,
+								privateKey: env.WEB_PUSH_PRIVATE_KEY as string,
+							}
+						: undefined,
+					{ instrumentation: ports },
+				),
 			},
 		};
 	},
