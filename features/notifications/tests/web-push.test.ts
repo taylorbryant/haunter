@@ -232,6 +232,7 @@ test.each([
 	"https://FCM.GOOGLEAPIS.COM:443/fcm/send/a%2Fb?token=x%2By",
 	"https://updates.push.services.mozilla.com/wpush/v2/test-token",
 	"https://web.push.apple.com/test-token",
+	"https://region.push.apple.com/test-token",
 	"https://wns2-db5p.notify.windows.com/w/?token=a%2Fb%2Bc",
 	"https://WNS2-AM3P.NOTIFY.WINDOWS.COM:443/w/?token=test",
 ])(
@@ -458,6 +459,7 @@ test("test-push blocks persisted unsafe subscriptions and still allows removing 
 
 test.each([
 	"https://fcm.googleapis.com/fcm/send/test-token",
+	"https://region.push.apple.com/test-token",
 	"https://wns2-db5p.notify.windows.com/w/?token=test",
 ])(
 	"registration and test-push deliver and remove expired subscriptions: %s",
@@ -496,6 +498,8 @@ test("push rejects untrusted service origins and oversized payloads before DNS",
 	for (const [device, payload] of [
 		[subscription("https://push.example/send"), message],
 		[subscription("https://fcm.googleapis.com.evil.example/send"), message],
+		[subscription("https://evilpush.apple.com/test-token"), message],
+		[subscription("https://push.apple.com.attacker.test/test-token"), message],
 		[subscription("https://evilnotify.windows.com/w/?token=test"), message],
 		[
 			subscription("https://notify.windows.com.attacker.test/w/?token=test"),
@@ -555,6 +559,14 @@ test("registration rejects unsupported services and malformed keys before storag
 		for (const [input, code] of [
 			[
 				subscription("https://push.example.test/send"),
+				"UNSUPPORTED_PUSH_SERVICE",
+			],
+			[
+				subscription("https://evilpush.apple.com/test-token"),
+				"UNSUPPORTED_PUSH_SERVICE",
+			],
+			[
+				subscription("https://push.apple.com.attacker.test/test-token"),
 				"UNSUPPORTED_PUSH_SERVICE",
 			],
 			[
