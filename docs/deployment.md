@@ -141,11 +141,11 @@ and a **Remove device subscription** action. Valid subscriptions remain subject 
 delivery-time checks; local validation does not prove the device is reachable.
 
 Push endpoints must use HTTPS on port 443 without URL credentials or fragments,
-and belong to `fcm.googleapis.com`, `updates.push.services.mozilla.com`,
-`web.push.apple.com`, or Microsoft WNS subdomains under `notify.windows.com`
-(used by Edge on Windows). Other origins are rejected before DNS lookup. The
-transport also validates subscription keys and limits JSON payloads to 3,993
-UTF-8 bytes.
+and belong to `fcm.googleapis.com`, `updates.push.services.mozilla.com`, Apple
+subdomains under `push.apple.com` (including `web.push.apple.com`), or Microsoft
+WNS subdomains under `notify.windows.com` (used by Edge on Windows).
+Other origins are rejected before DNS lookup. The transport also validates
+subscription keys and limits JSON payloads to 3,993 UTF-8 bytes.
 On every delivery, Beignet's built-in Web Push client rejects nonpublic IP addresses
 (including private or loopback DNS answers), pins the connection to checked addresses,
 and applies a 10-second deadline across DNS resolution and response completion.
