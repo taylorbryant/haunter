@@ -41,9 +41,10 @@ There is one result per canvas, with its first matching shape. Existing
 
 ## Indexing and limits
 
-The canvas text projection in `canvases.search_content` is maintained by database
-triggers when snapshots are saved. It is created and backfilled by the checked-in
-migrations; no separate indexing service is needed.
+The canvas text projection in `canvases.search_content` is written by the canvas
+repository together with every snapshot save, derived from the same JSON the row
+stores (`features/canvases/lib/search-content.ts`). The column was created and
+backfilled by the checked-in migrations; no separate indexing service is needed.
 
 Search queries read the text projection; they do not launch Chromium or fetch
 images. The projection contains only visible drawing text and shape IDs,

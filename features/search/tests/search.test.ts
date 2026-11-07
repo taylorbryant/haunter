@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { readFile } from "node:fs/promises";
 import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestContextFactory,
@@ -197,7 +196,7 @@ describe("workspace search", () => {
 		expect(result.nextCursor).toBeNull();
 	});
 
-	it("indexes existing drawings and keeps text fresh even for raw snapshot writes", async () => {
+	it("indexes drawing text from repository snapshot writes without database triggers", async () => {
 		const f = await fixture();
 		const canvas = await f.canvas("Board");
 		const store = {
@@ -269,37 +268,28 @@ describe("workspace search", () => {
 			]);
 		for (const query of ["secret-url", "hidden", "shape:note"])
 			expect((await f.search(query)).items).toEqual([]);
-		// Reapply the migration to a populated, pre-column database to test backfill.
-		await f.client.execute("DROP TRIGGER canvases_search_insert");
-		await f.client.execute("DROP TRIGGER canvases_search_update");
-		await f.client.execute("ALTER TABLE canvases DROP COLUMN search_content");
-		const migration = await readFile(
-			"drizzle/0049_cool_kate_bishop.sql",
-			"utf8",
-		);
-		for (const statement of migration.split("--> statement-breakpoint"))
-			await f.client.execute(statement);
-		expect((await f.search("Shipping tomorrow")).items[0]?.id).toBe(canvas.id);
+		// The projection is written by the repository with each snapshot; no
+		// database trigger remains to do it.
+		expect(
+			(
+				await f.client.execute(
+					"SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'canvases'",
+				)
+			).rows,
+		).toEqual([]);
 		expect(await f.repositories.canvases.findById(f.scope, canvas.id)).toEqual(
 			saved,
 		);
-		// Older workers don't know search_content; the trigger still updates it.
-		await f.db
-			.update(schema.canvases)
-			.set({
-				snapshot: JSON.stringify({
-					store: { "shape:changed": textShape("shape:changed", "New words") },
-				}),
-			})
-			.where(eq(schema.canvases.id, canvas.id));
+		await f.save(
+			canvas.id,
+			{ "shape:changed": textShape("shape:changed", "New words") },
+			1,
+		);
 		expect((await f.search("Planning")).items).toEqual([]);
 		expect((await f.search("New words")).items[0]?.shapeId).toBe(
 			"shape:changed",
 		);
-		await f.db
-			.update(schema.canvases)
-			.set({ snapshot: "{}" })
-			.where(eq(schema.canvases.id, canvas.id));
+		await f.save(canvas.id, {}, 2);
 		expect((await f.search("New words")).items).toEqual([]);
 	});
 
