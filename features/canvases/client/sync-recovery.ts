@@ -26,6 +26,7 @@ export class CanvasSyncRecovery {
 	private version = 0;
 	private saved = true;
 	private uncaptured = false;
+	private documentChanged = false;
 	private locallySaved = true;
 	private error: unknown = null;
 	private paused = false;
@@ -62,7 +63,13 @@ export class CanvasSyncRecovery {
 		// final keystroke at once; the serialized copy itself is captured after a
 		// quiet period (or the max wait) rather than on every store event.
 		const mark = (source: "user" | "remote") => {
-			if (source !== "user" || this.uncaptured) return;
+			this.documentChanged = true;
+			if (source !== "user") return;
+			// A pre-edit receipt cannot prove that an edit followed by undo was
+			// saved. Invalidate it at the edit, so a later receipt stays valid even
+			// when it arrives before the debounced capture.
+			this.acknowledged = null;
+			if (this.uncaptured) return;
 			this.uncaptured = true;
 			this.publish();
 		};
@@ -130,6 +137,8 @@ export class CanvasSyncRecovery {
 			clearTimeout(this.captureTimer);
 			this.captureTimer = null;
 		}
+		if (!this.documentChanged) return;
+		this.documentChanged = false;
 		const next = this.store.getStoreSnapshot();
 		const encoded = canonicalCanvas(next);
 		const wasUncaptured = this.uncaptured;
@@ -139,12 +148,12 @@ export class CanvasSyncRecovery {
 				// Edits that cancelled out before this capture (create, then undo)
 				// may still have reached the server as intermediate pushes, so the
 				// copy stays unsaved until a receipt matches the current state.
-				if (this.saved) {
-					this.version++;
-					this.saved = false;
-					this.locallySaved = false;
-					this.queueSave();
-				}
+				// Advance even if an earlier acknowledgement is still deleting its
+				// copy asynchronously; it must not mark these newer edits saved.
+				this.version++;
+				this.saved = false;
+				this.locallySaved = false;
+				this.queueSave();
 				this.publish();
 			}
 			return;
@@ -197,9 +206,18 @@ export class CanvasSyncRecovery {
 		void this.pending.catch(() => {});
 	}
 	acknowledge = (fingerprint: string) => {
+		if (
+			fingerprint === this.acknowledged &&
+			!this.documentChanged &&
+			!this.error
+		)
+			return;
 		this.acknowledged = fingerprint;
+		const version = this.version;
 		this.capture();
-		if (!this.saved) this.queueSave();
+		// A changed capture already queued its save with this receipt. Recheck
+		// an existing copy only when the capture did not queue a new version.
+		if (!this.saved && this.version === version) this.queueSave();
 	};
 	pause = () => {
 		this.paused = true;

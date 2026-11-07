@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import {
 	createTLStore,
 	defaultShapeUtils,
@@ -142,6 +142,7 @@ test("edits that cancel out inside the capture window stay unsaved until a recei
 	try {
 		const original = f.store.get(pageId)!;
 		const fingerprint = await canvasFingerprint(f.store.getStoreSnapshot());
+		f.recovery.acknowledge(fingerprint);
 		f.store.put([{ ...original, name: "Created" }]);
 		f.store.put([original]);
 		await f.recovery.flushLocal();
@@ -157,6 +158,101 @@ test("edits that cancel out inside the capture window stay unsaved until a recei
 		expect(f.rows.size).toBe(0);
 		expect(f.recovery.getSnapshot().dirty).toBe(false);
 	} finally {
+		f.recovery.dispose();
+	}
+});
+
+test("duplicate save receipts capture and discard a changed document only once", async () => {
+	const f = fixture();
+	let reads: ReturnType<typeof spyOn> | undefined;
+	let discards: ReturnType<typeof spyOn> | undefined;
+	try {
+		f.recovery.acknowledge(await canvasFingerprint(f.store.getStoreSnapshot()));
+		f.store.put([{ ...f.store.get(pageId)!, name: "A durable edit" }]);
+		const fingerprint = await canvasFingerprint(f.store.getStoreSnapshot());
+		reads = spyOn(f.store, "getStoreSnapshot");
+		discards = spyOn(f.storage, "discard");
+		for (let i = 0; i < 100; i++) f.recovery.acknowledge(fingerprint);
+		await f.recovery.flushLocal();
+		expect(reads).toHaveBeenCalledTimes(1);
+		expect(discards).toHaveBeenCalledTimes(1);
+		expect(f.recovery.getSnapshot().dirty).toBe(false);
+		expect(f.rows.size).toBe(0);
+	} finally {
+		reads?.mockRestore();
+		discards?.mockRestore();
+		f.recovery.dispose();
+	}
+});
+
+test("an unchanged receipt still captures remote document changes", async () => {
+	const f = fixture();
+	try {
+		const fingerprint = await canvasFingerprint(f.store.getStoreSnapshot());
+		f.recovery.acknowledge(fingerprint);
+		f.store.mergeRemoteChanges(() =>
+			f.store.put([{ ...f.store.get(pageId)!, name: "Remote edit" }]),
+		);
+		f.recovery.acknowledge(fingerprint);
+		await f.recovery.flushLocal();
+		expect(
+			f.rows.get(f.recovery.identity.key)?.payload.store[pageId],
+		).toMatchObject({ name: "Remote edit" });
+		f.recovery.acknowledge(await canvasFingerprint(f.store.getStoreSnapshot()));
+		await f.recovery.flushLocal();
+		expect(f.recovery.getSnapshot().dirty).toBe(false);
+		expect(f.rows.size).toBe(0);
+	} finally {
+		f.recovery.dispose();
+	}
+});
+
+test("a fresh matching receipt before the capture timer clears the recovery copy", async () => {
+	const f = fixture();
+	try {
+		f.recovery.acknowledge(await canvasFingerprint(f.store.getStoreSnapshot()));
+		f.store.put([{ ...f.store.get(pageId)!, name: "Freshly saved" }]);
+		const fingerprint = await canvasFingerprint(f.store.getStoreSnapshot());
+		f.recovery.acknowledge(fingerprint);
+		await f.recovery.flushLocal();
+		expect(f.recovery.getSnapshot().dirty).toBe(false);
+		expect(f.rows.size).toBe(0);
+	} finally {
+		f.recovery.dispose();
+	}
+});
+
+test("an in-flight acknowledgement cannot discard a newer edit followed by undo", async () => {
+	const f = fixture();
+	const entered = Promise.withResolvers<void>();
+	const released = Promise.withResolvers<void>();
+	const discard = f.storage.discard;
+	f.storage.discard = async (key) => {
+		entered.resolve();
+		await released.promise;
+		await discard(key);
+	};
+	try {
+		f.store.put([{ ...f.store.get(pageId)!, name: "Committed" }]);
+		const fingerprint = await canvasFingerprint(f.store.getStoreSnapshot());
+		f.recovery.acknowledge(fingerprint);
+		await entered.promise;
+		const original = f.store.get(pageId)!;
+		f.store.put([{ ...original, name: "Intermediate edit" }]);
+		f.store.put([original]);
+		const flushed = f.recovery.flushLocal();
+		released.resolve();
+		await flushed;
+		expect(f.recovery.getSnapshot().dirty).toBe(true);
+		expect(
+			f.rows.get(f.recovery.identity.key)?.payload.store[pageId],
+		).toMatchObject({ name: "Committed" });
+		f.recovery.acknowledge(fingerprint);
+		await f.recovery.flushLocal();
+		expect(f.recovery.getSnapshot().dirty).toBe(false);
+		expect(f.rows.size).toBe(0);
+	} finally {
+		released.resolve();
 		f.recovery.dispose();
 	}
 });
