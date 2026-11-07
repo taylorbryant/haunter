@@ -16,20 +16,18 @@ afterEach(async () => {
 	for (const cleanup of cleanups.splice(0)) await cleanup();
 });
 
-async function legacyDatabase() {
-	const directory = await mkdtemp(join(tmpdir(), "haunter-account-schema-"));
-	const client = createClient({ url: `file:${directory}/test.db` });
-	cleanups.push(async () => {
-		client.close();
-		await rm(directory, { recursive: true, force: true });
-	});
+// The account migration under test. Later migrations are excluded on both
+// sides so unrelated schema changes cannot fail these assertions.
+const ACCOUNT_MIGRATION_IDX = 50;
+
+async function migrationsThrough(directory: string, lastIdx: number) {
 	const journal = JSON.parse(
 		await readFile("drizzle/meta/_journal.json", "utf8"),
 	);
 	journal.entries = journal.entries.filter(
-		(entry: { idx: number }) => entry.idx < 50,
+		(entry: { idx: number }) => entry.idx <= lastIdx,
 	);
-	const migrationsFolder = join(directory, "drizzle");
+	const migrationsFolder = join(directory, `drizzle-${lastIdx}`);
 	await mkdir(join(migrationsFolder, "meta"), { recursive: true });
 	await writeFile(
 		join(migrationsFolder, "meta/_journal.json"),
@@ -41,8 +39,27 @@ async function legacyDatabase() {
 			join(migrationsFolder, `${entry.tag}.sql`),
 		);
 	}
+	return migrationsFolder;
+}
+
+async function legacyDatabase() {
+	const directory = await mkdtemp(join(tmpdir(), "haunter-account-schema-"));
+	const client = createClient({ url: `file:${directory}/test.db` });
+	cleanups.push(async () => {
+		client.close();
+		await rm(directory, { recursive: true, force: true });
+	});
 	const db = drizzle(client, { schema });
-	await migrate(db, { migrationsFolder });
+	await migrate(db, {
+		migrationsFolder: await migrationsThrough(
+			directory,
+			ACCOUNT_MIGRATION_IDX - 1,
+		),
+	});
+	const migrationsFolder = await migrationsThrough(
+		directory,
+		ACCOUNT_MIGRATION_IDX,
+	);
 	await client.execute("PRAGMA foreign_keys = ON");
 	await db.insert(schema.user).values({
 		id: "existing-user",
@@ -52,7 +69,7 @@ async function legacyDatabase() {
 		createdAt: new Date(1700000000000),
 		updatedAt: new Date(1700000000000),
 	});
-	return { client, db };
+	return { client, db, migrationsFolder };
 }
 
 async function seedAccount(
@@ -81,7 +98,7 @@ function authFor(db: ReturnType<typeof drizzle<typeof schema>>) {
 }
 
 test("account migration preserves legacy data and supports real Better Auth account writes", async () => {
-	const { client, db } = await legacyDatabase();
+	const { client, db, migrationsFolder } = await legacyDatabase();
 	await seedAccount(client, "legacy-account", "local:credential");
 	const before = (await client.execute("SELECT * FROM account")).rows;
 	const unrelatedBefore = (
@@ -89,7 +106,7 @@ test("account migration preserves legacy data and supports real Better Auth acco
 			"SELECT type, name, sql FROM sqlite_master WHERE tbl_name != 'account' AND name NOT LIKE 'sqlite_%' ORDER BY type, name",
 		)
 	).rows;
-	await migrate(db, { migrationsFolder: "drizzle" });
+	await migrate(db, { migrationsFolder });
 	expect((await client.execute("SELECT * FROM account")).rows).toEqual(before);
 	expect(
 		(
@@ -150,14 +167,14 @@ test("account migration preserves legacy data and supports real Better Auth acco
 });
 
 test("ambiguous provider keys abort the migration without losing accounts or recording success", async () => {
-	const { client, db } = await legacyDatabase();
+	const { client, db, migrationsFolder } = await legacyDatabase();
 	await seedAccount(client, "one", "issuer-one");
 	await seedAccount(client, "two", "issuer-two");
 	const before = (await client.execute("SELECT * FROM account ORDER BY id"))
 		.rows;
 	const history = (await client.execute("SELECT * FROM __drizzle_migrations"))
 		.rows;
-	await expect(migrate(db, { migrationsFolder: "drizzle" })).rejects.toThrow();
+	await expect(migrate(db, { migrationsFolder })).rejects.toThrow();
 	expect(
 		(await client.execute("SELECT * FROM account ORDER BY id")).rows,
 	).toEqual(before);

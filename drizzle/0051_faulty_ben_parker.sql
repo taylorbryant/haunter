@@ -1,0 +1,1 @@
+CREATE INDEX `notifications_entity_idx` ON `notifications` (`entity_id`,`kind`);

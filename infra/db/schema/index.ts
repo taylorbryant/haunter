@@ -963,6 +963,10 @@ export const notifications = sqliteTable(
 			table.actionState,
 			table.snoozedUntil,
 		),
+		// Task writes resolve and dismiss notifications by entity alone
+		// (resolveTaskNotifications, dismissScheduledForTasks); without this the
+		// lookup scans the table inside the task/page write transaction.
+		entityIdx: index("notifications_entity_idx").on(table.entityId, table.kind),
 	}),
 );
 

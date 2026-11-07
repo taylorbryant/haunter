@@ -27,6 +27,14 @@ export function ensureDatabaseReady(client: Client): Promise<void> {
 async function prepare(client: Client): Promise<void> {
 	if (isLocalFile) {
 		await client.execute("PRAGMA busy_timeout = 5000");
+		// Two processes share the file (the Next app and the collaboration
+		// worker). WAL lets readers and the writer proceed concurrently instead
+		// of blocking each other on every commit; NORMAL sync skips the per-commit
+		// fsync, which is durable against application crashes in WAL mode. Turso
+		// already runs WAL server-side and rejects these PRAGMAs over the remote
+		// protocol, so they stay local-only like busy_timeout.
+		await client.execute("PRAGMA journal_mode = WAL");
+		await client.execute("PRAGMA synchronous = NORMAL");
 	}
 	await client.execute("PRAGMA foreign_keys = ON");
 
