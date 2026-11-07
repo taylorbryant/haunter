@@ -163,12 +163,49 @@ afterEach(async () => {
 
 afterAll(uninstallTestDom);
 
+test("keeps the title element, focus and selection while draft storage loads", async () => {
+	const load = storage.load;
+	const pending = Promise.withResolvers<LocalDraft<string> | null>();
+	storage.load = () => pending.promise;
+	try {
+		const view = renderPageEditor();
+		const input = view.getByRole("textbox", {
+			name: "Page title",
+		}) as HTMLTextAreaElement;
+		input.focus();
+		input.setSelectionRange(2, 6);
+		expect(document.activeElement === input).toBe(true);
+		await act(async () => pending.resolve(null));
+		await waitFor(() =>
+			expect(
+				(
+					view.getByRole("textbox", {
+						name: "Page title",
+					}) as HTMLTextAreaElement
+				).readOnly,
+			).toBe(false),
+		);
+		expect(view.getByRole("textbox", { name: "Page title" }) === input).toBe(
+			true,
+		);
+		expect(document.activeElement === input).toBe(true);
+		expect([input.selectionStart, input.selectionEnd]).toEqual([2, 6]);
+	} finally {
+		pending.resolve(null);
+		storage.load = load;
+	}
+});
+
 test("stores each title locally before its debounced server save", async () => {
 	const user = userEvent.setup({ document });
 	const view = renderPageEditor();
-	const titleInput = view.getByRole("textbox", { name: "Page title" });
-	await waitFor(() => {
-		expect((titleInput as HTMLTextAreaElement).readOnly).toBe(false);
+	// Editing waits for local draft recovery to finish.
+	const titleInput = await waitFor(() => {
+		const input = view.getByRole("textbox", {
+			name: "Page title",
+		}) as HTMLTextAreaElement;
+		expect(input.readOnly).toBe(false);
+		return input;
 	});
 	await user.clear(titleInput);
 	await user.type(titleInput, "A sentence worth keeping");
@@ -191,9 +228,13 @@ test("stores each title locally before its debounced server save", async () => {
 test("flushes a title safely when the editor unmounts before the debounce", async () => {
 	const user = userEvent.setup({ document });
 	const first = renderPageEditor();
-	const input = first.getByRole("textbox", { name: "Page title" });
-	await waitFor(() => {
-		expect((input as HTMLTextAreaElement).readOnly).toBe(false);
+	// Editing waits for local draft recovery to finish.
+	const input = await waitFor(() => {
+		const input = first.getByRole("textbox", {
+			name: "Page title",
+		}) as HTMLTextAreaElement;
+		expect(input.readOnly).toBe(false);
+		return input;
 	});
 	await user.clear(input);
 	await user.type(input, "Survives navigation");

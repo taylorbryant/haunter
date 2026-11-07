@@ -14,6 +14,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { reportUserError } from "@/client/error-feedback";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { useCommand } from "@/components/command-palette/registry";
@@ -40,13 +41,24 @@ import type { BlockJson } from "@/features/pages/schemas";
 import { PAGE_TITLE_MAX_LENGTH } from "@/features/pages/schemas";
 import { invalidateTasks } from "@/features/tasks/client/queries";
 import { useTaskMutations } from "@/features/tasks/client/use-task-mutations";
-import {
-	TaskComposer,
-	type TaskSubmissionResult,
-} from "@/features/tasks/components/task-composer";
+import type { TaskSubmissionResult } from "@/features/tasks/components/task-composer";
 import type { TaskReminderOffsetMinutes } from "@/features/tasks/lib/reminder-options";
 
 const PAGE_DETAILS_MAX_LENGTH = 20_000;
+
+type TaskComposerComponent =
+	typeof import("@/features/tasks/components/task-composer").TaskComposer;
+let loadedTaskComposer: TaskComposerComponent | null = null;
+/**
+ * The composer carries chrono-node and the calendar picker, which every
+ * workspace route would otherwise download before any task UI is opened.
+ */
+function loadTaskComposer(): Promise<TaskComposerComponent> {
+	return import("@/features/tasks/components/task-composer").then((module) => {
+		loadedTaskComposer = module.TaskComposer;
+		return module.TaskComposer;
+	});
+}
 
 type CreateDialogContextValue = {
 	openCreateCanvas: () => void;
@@ -240,6 +252,38 @@ function CreateTaskDialog({
 	const currentUser = useCurrentUser();
 	const [pending, setPending] = useState(false);
 	const mutations = useTaskMutations(workspaceId);
+	const [TaskComposer, setTaskComposer] = useState(() => loadedTaskComposer);
+	const focusAfterLoad = useRef(false);
+
+	useEffect(() => {
+		if (!open || TaskComposer) return;
+		let active = true;
+		// The dialog placed its initial focus before the composer existed, so
+		// hand focus to the input once the composer mounts.
+		focusAfterLoad.current = true;
+		void loadTaskComposer().then(
+			(component) => {
+				if (active) setTaskComposer(() => component);
+			},
+			(error: unknown) => {
+				if (!active) return;
+				reportUserError(
+					error,
+					"The task form could not be loaded. Check your connection and try again.",
+				);
+				onOpenChange(false);
+			},
+		);
+		return () => {
+			active = false;
+		};
+	}, [open, TaskComposer, onOpenChange]);
+
+	useEffect(() => {
+		if (!open || !TaskComposer || !focusAfterLoad.current) return;
+		focusAfterLoad.current = false;
+		inputRef.current?.focus();
+	}, [open, TaskComposer]);
 
 	function changePending(nextPending: boolean) {
 		setPending(nextPending);
@@ -279,15 +323,19 @@ function CreateTaskDialog({
 			className="sm:max-w-md"
 		>
 			{open ? (
-				<TaskComposer
-					inputRef={inputRef}
-					currentUserId={currentUser?.id ?? null}
-					mode="dialog"
-					onSubmit={createTask}
-					onPendingChange={changePending}
-					onSuccess={() => onOpenChange(false)}
-					onCancel={() => onOpenChange(false)}
-				/>
+				TaskComposer ? (
+					<TaskComposer
+						inputRef={inputRef}
+						currentUserId={currentUser?.id ?? null}
+						mode="dialog"
+						onSubmit={createTask}
+						onPendingChange={changePending}
+						onSuccess={() => onOpenChange(false)}
+						onCancel={() => onOpenChange(false)}
+					/>
+				) : (
+					<p className="text-muted-foreground text-sm">Loading…</p>
+				)
 			) : null}
 		</ResponsiveDialog>
 	);

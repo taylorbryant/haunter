@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { readFile } from "node:fs/promises";
 import { createTenantScope } from "@beignet/core/ports";
 import {
 	createTestContextFactory,
@@ -197,7 +196,7 @@ describe("workspace search", () => {
 		expect(result.nextCursor).toBeNull();
 	});
 
-	it("indexes existing drawings and keeps text fresh even for raw snapshot writes", async () => {
+	it("indexes drawing text from repository snapshot writes", async () => {
 		const f = await fixture();
 		const canvas = await f.canvas("Board");
 		const store = {
@@ -269,38 +268,95 @@ describe("workspace search", () => {
 			]);
 		for (const query of ["secret-url", "hidden", "shape:note"])
 			expect((await f.search(query)).items).toEqual([]);
-		// Reapply the migration to a populated, pre-column database to test backfill.
-		await f.client.execute("DROP TRIGGER canvases_search_insert");
-		await f.client.execute("DROP TRIGGER canvases_search_update");
-		await f.client.execute("ALTER TABLE canvases DROP COLUMN search_content");
-		const migration = await readFile(
-			"drizzle/0049_cool_kate_bishop.sql",
-			"utf8",
-		);
-		for (const statement of migration.split("--> statement-breakpoint"))
-			await f.client.execute(statement);
-		expect((await f.search("Shipping tomorrow")).items[0]?.id).toBe(canvas.id);
 		expect(await f.repositories.canvases.findById(f.scope, canvas.id)).toEqual(
 			saved,
 		);
-		// Older workers don't know search_content; the trigger still updates it.
-		await f.db
-			.update(schema.canvases)
-			.set({
-				snapshot: JSON.stringify({
-					store: { "shape:changed": textShape("shape:changed", "New words") },
-				}),
-			})
-			.where(eq(schema.canvases.id, canvas.id));
+		await f.save(
+			canvas.id,
+			{ "shape:changed": textShape("shape:changed", "New words") },
+			1,
+		);
 		expect((await f.search("Planning")).items).toEqual([]);
 		expect((await f.search("New words")).items[0]?.shapeId).toBe(
 			"shape:changed",
 		);
+		await f.save(canvas.id, {}, 2);
+		expect((await f.search("New words")).items).toEqual([]);
+	});
+
+	it("keeps older-worker writes indexed while new writes skip trigger projection", async () => {
+		const f = await fixture();
+		// Observe extra projection writes from the compatibility triggers. The new
+		// repository must skip them even when only geometry changes, not the text.
+		await f.client.execute("CREATE TABLE projection_writes (canvas_id TEXT)");
+		await f.client.execute(`CREATE TRIGGER observe_projection AFTER UPDATE OF search_content ON canvases
+   WHEN NEW.search_projection_version = OLD.search_projection_version
+   BEGIN INSERT INTO projection_writes VALUES (NEW.id); END`);
+		const canvas = await f.canvas("Drawing");
+		const store = { "shape:note": textShape("shape:note", "Before rollout") };
+		await f.save(canvas.id, store);
+		await f.save(
+			canvas.id,
+			{ "shape:note": { ...store["shape:note"], x: 25 } },
+			1,
+		);
+		expect(
+			(await f.client.execute("SELECT * FROM projection_writes")).rows,
+		).toHaveLength(0);
+
+		// An old worker writes only snapshot; its search text must still change.
 		await f.db
 			.update(schema.canvases)
-			.set({ snapshot: "{}" })
+			.set({
+				snapshot: JSON.stringify({
+					store: {
+						"shape:note": textShape("shape:note", "During rollout"),
+					},
+				}),
+			})
 			.where(eq(schema.canvases.id, canvas.id));
-		expect((await f.search("New words")).items).toEqual([]);
+		expect((await f.search("Before rollout")).items).toHaveLength(0);
+		expect(
+			(await f.search("During rollout")).items.map((item) => item.id),
+		).toEqual([canvas.id]);
+		expect(
+			(await f.client.execute("SELECT * FROM projection_writes")).rows,
+		).toHaveLength(1);
+
+		// Replacing the worker resumes the application projection safely.
+		await f.save(
+			canvas.id,
+			{ "shape:note": textShape("shape:note", "After rollout") },
+			2,
+		);
+		expect((await f.search("During rollout")).items).toHaveLength(0);
+		expect(
+			(await f.search("After rollout")).items.map((item) => item.id),
+		).toEqual([canvas.id]);
+		expect(
+			(await f.client.execute("SELECT * FROM projection_writes")).rows,
+		).toHaveLength(1);
+
+		// Older inserts rely on the default projection version too.
+		const oldId = crypto.randomUUID();
+		const now = new Date().toISOString();
+		await f.db
+			.insert(schema.canvases)
+			.values({
+				id: oldId,
+				userId: "reader",
+				workspaceId: "a",
+				title: "Old worker drawing",
+				snapshot: JSON.stringify({
+					store: { "shape:old": textShape("shape:old", "Legacy insert") },
+				}),
+				snapshotUpdatedAt: now,
+				createdAt: now,
+				updatedAt: now,
+			});
+		expect(
+			(await f.search("Legacy insert")).items.map((item) => item.id),
+		).toEqual([oldId]);
 	});
 
 	it("searches legacy page body text without exposing URLs or block metadata", async () => {

@@ -6,6 +6,15 @@ import type {
 } from "@/client/durable-drafts";
 import { canvasFingerprint, canonicalCanvas } from "../lib/document";
 
+/**
+ * Quiet time after the last document change before the recovery copy is
+ * serialized, and the longest a continuous edit stream (a drag) can defer it.
+ * Serializing canonicalizes the whole store, so doing it per store event made
+ * large canvases drop frames; the navigation guard still sees edits at once.
+ */
+export const CANVAS_RECOVERY_CAPTURE_DEBOUNCE_MS = 250;
+export const CANVAS_RECOVERY_CAPTURE_MAX_WAIT_MS = 1000;
+
 /** A recovery copy only. Live merging and undo remain entirely inside tldraw sync. */
 export class CanvasSyncRecovery {
 	readonly identity: DurableDraftIdentity;
@@ -17,16 +26,26 @@ export class CanvasSyncRecovery {
 	private version = 0;
 	private saved = true;
 	private uncaptured = false;
+	private documentChanged = false;
 	private locallySaved = true;
 	private error: unknown = null;
 	private paused = false;
 	private unregister: () => void;
+	private captureTimer: ReturnType<typeof setTimeout> | null = null;
+	private captureDeadline = 0;
+	private readonly captureDebounceMs: number;
+	private readonly captureMaxWaitMs: number;
 	constructor(
 		readonly store: TLStore,
 		identity: Omit<DurableDraftIdentity, "key" | "resourceType">,
 		private storage: DurableDraftStorage<TLStoreSnapshot>,
 		private reconnect: () => void,
+		options: { captureDebounceMs?: number; captureMaxWaitMs?: number } = {},
 	) {
+		this.captureDebounceMs =
+			options.captureDebounceMs ?? CANVAS_RECOVERY_CAPTURE_DEBOUNCE_MS;
+		this.captureMaxWaitMs =
+			options.captureMaxWaitMs ?? CANVAS_RECOVERY_CAPTURE_MAX_WAIT_MS;
 		this.identity = {
 			...identity,
 			resourceType: "canvas",
@@ -40,10 +59,17 @@ export class CanvasSyncRecovery {
 		};
 		this.value = store.getStoreSnapshot();
 		this.encoded = canonicalCanvas(this.value);
-		// Mark edits before the frame-batched listener, so navigation guards and
-		// downloads see the final keystroke without serializing on every event.
+		// Mark edits synchronously, so navigation guards and downloads see the
+		// final keystroke at once; the serialized copy itself is captured after a
+		// quiet period (or the max wait) rather than on every store event.
 		const mark = (source: "user" | "remote") => {
-			if (source !== "user" || this.uncaptured) return;
+			this.documentChanged = true;
+			if (source !== "user") return;
+			// A pre-edit receipt cannot prove that an edit followed by undo was
+			// saved. Invalidate it at the edit, so a later receipt stays valid even
+			// when it arrives before the debounced capture.
+			this.acknowledged = null;
+			if (this.uncaptured) return;
 			this.uncaptured = true;
 			this.publish();
 		};
@@ -59,7 +85,9 @@ export class CanvasSyncRecovery {
 				mark(source),
 			),
 		]);
-		stops.push(store.listen(() => this.capture(), { scope: "document" }));
+		stops.push(
+			store.listen(() => this.scheduleCapture(), { scope: "document" }),
+		);
 		this.unregister = () => {
 			for (const stop of stops) stop();
 		};
@@ -94,13 +122,40 @@ export class CanvasSyncRecovery {
 							? "pending"
 							: "saving-local",
 	});
+	private scheduleCapture() {
+		const now = Date.now();
+		if (this.captureTimer === null)
+			this.captureDeadline = now + this.captureMaxWaitMs;
+		else clearTimeout(this.captureTimer);
+		this.captureTimer = setTimeout(
+			this.capture,
+			Math.max(0, Math.min(this.captureDebounceMs, this.captureDeadline - now)),
+		);
+	}
 	private capture = () => {
+		if (this.captureTimer !== null) {
+			clearTimeout(this.captureTimer);
+			this.captureTimer = null;
+		}
+		if (!this.documentChanged) return;
+		this.documentChanged = false;
 		const next = this.store.getStoreSnapshot();
 		const encoded = canonicalCanvas(next);
 		const wasUncaptured = this.uncaptured;
 		this.uncaptured = false;
 		if (encoded === this.encoded) {
-			if (wasUncaptured) this.publish();
+			if (wasUncaptured) {
+				// Edits that cancelled out before this capture (create, then undo)
+				// may still have reached the server as intermediate pushes, so the
+				// copy stays unsaved until a receipt matches the current state.
+				// Advance even if an earlier acknowledgement is still deleting its
+				// copy asynchronously; it must not mark these newer edits saved.
+				this.version++;
+				this.saved = false;
+				this.locallySaved = false;
+				this.queueSave();
+				this.publish();
+			}
 			return;
 		}
 		this.value = next;
@@ -151,9 +206,18 @@ export class CanvasSyncRecovery {
 		void this.pending.catch(() => {});
 	}
 	acknowledge = (fingerprint: string) => {
+		if (
+			fingerprint === this.acknowledged &&
+			!this.documentChanged &&
+			!this.error
+		)
+			return;
 		this.acknowledged = fingerprint;
+		const version = this.version;
 		this.capture();
-		if (!this.saved) this.queueSave();
+		// A changed capture already queued its save with this receipt. Recheck
+		// an existing copy only when the capture did not queue a new version.
+		if (!this.saved && this.version === version) this.queueSave();
 	};
 	pause = () => {
 		this.paused = true;

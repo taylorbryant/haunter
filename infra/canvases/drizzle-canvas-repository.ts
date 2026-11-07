@@ -2,6 +2,7 @@ import {
 	createCanvasRoom,
 	projectCanvasRoom,
 } from "@/features/canvases/lib/document";
+import { canvasSearchContent } from "@/features/canvases/lib/search-content";
 import "@beignet/core/server-only";
 import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
@@ -25,6 +26,11 @@ function toCanvas(row: CanvasRow): Canvas {
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
 	};
+}
+
+/** `search_content` is derived from the same JSON the row stores, so the two never drift. */
+function searchContentFor(snapshot: unknown): string {
+	return JSON.stringify(canvasSearchContent(snapshot));
 }
 
 export function createDrizzleCanvasRepository(
@@ -137,6 +143,8 @@ export function createDrizzleCanvasRepository(
 				.update(schema.canvases)
 				.set({
 					snapshot: input.snapshotJson,
+					searchContent: searchContentFor(JSON.parse(input.snapshotJson)),
+					searchProjectionVersion: sql`${schema.canvases.searchProjectionVersion} + 1`,
 					updatedAt: sql`max(updated_at, ${now})`,
 					snapshotUpdatedAt: now,
 				})
@@ -223,13 +231,17 @@ export function createDrizzleCanvasRepository(
 				pageId: input.pageId,
 				title: input.title,
 				snapshot: "{}",
+				searchContent: "[]",
+				searchProjectionVersion: 1,
 				snapshotUpdatedAt: now,
 				createdAt: now,
 				updatedAt: now,
 			};
 			const room = createCanvasRoom({});
 			{
-				canvas.snapshot = JSON.stringify(projectCanvasRoom(room));
+				const projected = projectCanvasRoom(room);
+				canvas.snapshot = JSON.stringify(projected);
+				canvas.searchContent = searchContentFor(projected);
 				return await db.transaction(async (tx) => {
 					const [row] = await tx
 						.insert(schema.canvases)

@@ -86,6 +86,16 @@ const nextConfig = {
 		"@tldraw/utils",
 		"@tldraw/validate",
 	],
+	// Deployed functions run on glibc. Bun installs both libc builds of the
+	// native libraries, and the musl copies were ~27MB of dead weight in every
+	// traced function.
+	outputFileTracingExcludes: {
+		"/*": [
+			"./node_modules/@img/sharp-libvips-linuxmusl-x64/**",
+			"./node_modules/@img/sharp-linuxmusl-x64/**",
+			"./node_modules/@libsql/linux-x64-musl/**",
+		],
+	},
 	outputFileTracingIncludes: {
 		"/*": [`${yjsLib0Directory}/**/*.{js,mjs,cjs,json}`],
 		"/changelog": ["./content/changelog/*.md"],

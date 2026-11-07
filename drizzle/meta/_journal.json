@@ -358,6 +358,27 @@
       "when": 1793240536550,
       "tag": "0050_crazy_iron_monger",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "6",
+      "when": 1794022820422,
+      "tag": "0051_faulty_ben_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "6",
+      "when": 1794023638190,
+      "tag": "0052_drop_canvas_search_triggers",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1794027970528,
+      "tag": "0053_brown_omega_red",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import {
 	type AgentFilesPort,
 	hasOneFileSource,
@@ -51,6 +50,9 @@ export async function normalizeAgentImage(bytes: Uint8Array) {
 		)
 	)
 		return invalid("Use a PNG, JPEG, GIF or WebP image.");
+	// sharp loads libvips natively. Import it on first use so the API, auth and
+	// page functions that never decode images do not pay for it at cold start.
+	const { default: sharp } = await import("sharp");
 	try {
 		const { data, info } = await sharp(b, {
 			limitInputPixels: 16_000_000,

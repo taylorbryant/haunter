@@ -10,13 +10,13 @@ import {
 	SparklesIcon,
 	SunIcon,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { rq } from "@/client";
 import { draftRegistry } from "@/client/draft-registry";
 import { authClient } from "@/client/auth-client";
 import { authErrorMessage, reportUserError } from "@/client/error-feedback";
 import { useCommand } from "@/components/command-palette/registry";
-import { SettingsDialog } from "@/components/settings-dialog";
 import { useThemePreferences } from "@/components/theme-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -46,12 +46,28 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import { ChangelogDialog } from "@/features/changelog/components/changelog-dialog";
 import { getChangelogStatus } from "@/features/changelog/contracts";
 import type { ChangelogRelease } from "@/features/changelog/releases";
 import { useAfterFirstPaint } from "@/hooks/use-after-first-paint";
 import { isThemeMode, type ThemeMode } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+
+// Both dialogs are rarely opened and carry their own panels, forms and
+// clients. Load them on first open instead of with every authenticated route.
+const SettingsDialog = dynamic(
+	() =>
+		import("@/components/settings-dialog").then(
+			(module) => module.SettingsDialog,
+		),
+	{ ssr: false },
+);
+const ChangelogDialog = dynamic(
+	() =>
+		import("@/features/changelog/components/changelog-dialog").then(
+			(module) => module.ChangelogDialog,
+		),
+	{ ssr: false },
+);
 
 const THEME_MODES = [
 	{ id: "system", label: "System", icon: MonitorIcon },
@@ -118,6 +134,18 @@ export function NavUser({
 	const { isMobile } = useSidebar();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [changelogOpen, setChangelogOpen] = useState(false);
+	// Mount each dialog on its first open and keep it mounted afterwards so the
+	// close transition still runs.
+	const [settingsMounted, setSettingsMounted] = useState(false);
+	const [changelogMounted, setChangelogMounted] = useState(false);
+	const openSettings = () => {
+		setSettingsMounted(true);
+		setSettingsOpen(true);
+	};
+	const openChangelog = () => {
+		setChangelogMounted(true);
+		setChangelogOpen(true);
+	};
 	const afterFirstPaint = useAfterFirstPaint();
 	const changelogStatus = useQuery({
 		...rq(getChangelogStatus).queryOptions(),
@@ -133,7 +161,7 @@ export function NavUser({
 		group: "Go to",
 		keywords: "whats new updates releases",
 		icon: SparklesIcon,
-		run: () => setChangelogOpen(true),
+		run: () => openChangelog(),
 	});
 
 	useCommand({
@@ -143,7 +171,7 @@ export function NavUser({
 		group: "General",
 		keywords: "profile appearance account preferences",
 		icon: SettingsIcon,
-		run: () => setSettingsOpen(true),
+		run: () => openSettings(),
 	});
 
 	async function signOut() {
@@ -223,7 +251,7 @@ export function NavUser({
 										<Button
 											variant="ghost"
 											className="h-11 justify-start"
-											onClick={() => setChangelogOpen(true)}
+											onClick={() => openChangelog()}
 										/>
 									}
 								>
@@ -236,7 +264,7 @@ export function NavUser({
 										<Button
 											variant="ghost"
 											className="h-11 justify-start"
-											onClick={() => setSettingsOpen(true)}
+											onClick={() => openSettings()}
 										/>
 									}
 								>
@@ -278,12 +306,12 @@ export function NavUser({
 							<DropdownMenuSeparator />
 							<ThemeModePicker />
 							<DropdownMenuSeparator />
-							<DropdownMenuItem onClick={() => setChangelogOpen(true)}>
+							<DropdownMenuItem onClick={() => openChangelog()}>
 								<SparklesIcon />
 								What’s new
 								{changelogIndicator}
 							</DropdownMenuItem>
-							<DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+							<DropdownMenuItem onClick={() => openSettings()}>
 								<SettingsIcon />
 								Settings
 							</DropdownMenuItem>
@@ -295,12 +323,16 @@ export function NavUser({
 						</DropdownMenuContent>
 					</DropdownMenu>
 				)}
-				<ChangelogDialog
-					open={changelogOpen}
-					onOpenChange={setChangelogOpen}
-					releases={changelogReleases}
-				/>
-				<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+				{changelogMounted ? (
+					<ChangelogDialog
+						open={changelogOpen}
+						onOpenChange={setChangelogOpen}
+						releases={changelogReleases}
+					/>
+				) : null}
+				{settingsMounted ? (
+					<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+				) : null}
 			</SidebarMenuItem>
 		</SidebarMenu>
 	);

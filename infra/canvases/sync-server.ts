@@ -36,6 +36,14 @@ import { prepareCanvasLibraryInsertion } from "./library-insertion";
 import { prepareCanvasHistoryRestoration } from "./history-restoration";
 
 type Socket = Pick<WebSocketMinimal, "send" | "close" | "readyState">;
+/**
+ * Minimum spacing between durable commits of one canvas. A drag produces a
+ * document change per pointer frame; without spacing, every frame rewrote the
+ * whole room (and re-ran the search projection) back to back. The first change
+ * after a quiet period still commits immediately, so acknowledgements wait at
+ * most this long plus one write.
+ */
+export const CANVAS_PERSIST_INTERVAL_MS = 100;
 type Entry = {
 	room: TLSocketRoom<TLRecord>;
 	storage: InMemorySyncStorage<TLRecord>;
@@ -43,6 +51,7 @@ type Entry = {
 	grant: DocumentGrant;
 	revision: number;
 	savedClock: number;
+	committedAt: number;
 	fingerprint: string;
 	flight: Promise<void>;
 	lastUsed: number;
@@ -76,7 +85,10 @@ export function createCanvasSyncServer(options: {
 	previewRenderer?: CanvasPreviewRenderer;
 	structureEditor?: CanvasStructureEditor;
 	onStorageHealth?: (name: string, healthy: boolean) => void;
+	persistIntervalMs?: number;
 }) {
+	const persistIntervalMs =
+		options.persistIntervalMs ?? CANVAS_PERSIST_INTERVAL_MS;
 	const rooms = new Map<string, Promise<Entry>>();
 	const connections = new Set<CanvasConnection>();
 	let stopping = false;
@@ -94,11 +106,29 @@ export function createCanvasSyncServer(options: {
 		entry.actions = result;
 		return result;
 	}
-	function persist(entry: Entry): Promise<void> {
+	/**
+	 * Commit the room when its document changed. Commits are serialized per
+	 * room and, unless `immediate`, spaced by `persistIntervalMs`: callers that
+	 * queue during the spacing share the next commit, which reads the room
+	 * again after the wait so it carries everything received meanwhile.
+	 */
+	function persist(entry: Entry, immediate = false): Promise<void> {
+		// A caller needs the state it observed, not every edit that arrives while
+		// it waits. In particular, already-durable socket messages must not wait
+		// for another interval just because a newer edit arrived during SQL.
+		const targetClock = entry.storage.getSnapshot().documentClock ?? 0;
+		if (entry.deleted || targetClock <= entry.savedClock)
+			return Promise.resolve();
 		const flight = entry.flight
 			.catch(() => {})
 			.then(async () => {
 				if (entry.deleted) return;
+				if (targetClock <= entry.savedClock) return;
+				if (!immediate) {
+					const wait = entry.committedAt + persistIntervalMs - Date.now();
+					if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+					if (entry.deleted) return;
+				}
 				const snapshot = entry.storage.getSnapshot();
 				const clock = snapshot.documentClock ?? 0;
 				if (clock === entry.savedClock) return;
@@ -124,6 +154,7 @@ export function createCanvasSyncServer(options: {
 				});
 				entry.revision = result.revision;
 				entry.savedClock = clock;
+				entry.committedAt = Date.now();
 				entry.fingerprint = fingerprint;
 				for (const connection of connections) {
 					if (connection.entry === entry && !connection.closed)
@@ -191,6 +222,7 @@ export function createCanvasSyncServer(options: {
 					grant,
 					revision: stored.revision,
 					savedClock: snapshot.documentClock ?? 0,
+					committedAt: 0,
 					fingerprint,
 					flight: Promise.resolve(),
 					lastUsed: Date.now(),
@@ -289,7 +321,7 @@ export function createCanvasSyncServer(options: {
 				if (!role || (isCanvasWrite(command) && !canEditContent(role)))
 					throw appError("Forbidden");
 				await authorizeCanvas(ctx, canvas.id, isCanvasWrite(command));
-				await persist(entry);
+				await persist(entry, true);
 				if (entry.deleted) throw appError("CanvasNotFound");
 				if (command.action === "read") {
 					const history = await ctx.ports.canvases.listHistory(
@@ -429,6 +461,7 @@ export function createCanvasSyncServer(options: {
 				});
 				entry.revision = result.revision;
 				entry.savedClock = snapshot.documentClock ?? 0;
+				entry.committedAt = Date.now();
 				entry.fingerprint = fingerprint;
 				apply(entry.storage);
 				for (const connection of connections)
@@ -512,10 +545,14 @@ export function createCanvasSyncServer(options: {
 				send(message) {
 					// Do not deliver even native push acknowledgements until the room state is durable.
 					// Keep per-socket ordering while allowing the SDK to batch record changes normally.
+					// Capture this message's durability requirement before waiting on
+					// earlier messages; later edits belong to later save promises.
+					const durable = persist(prepared.entry);
+					void durable.catch(() => {});
 					connection.outgoing = connection.outgoing
 						.then(async () => {
 							if (connection.closed) return;
-							await persist(prepared.entry);
+							await durable;
 							if (!connection.closed && socket.readyState === 1)
 								socket.send(message);
 						})
@@ -573,7 +610,7 @@ export function createCanvasSyncServer(options: {
 				[...rooms.values()].map(async (promise) => {
 					const entry = await promise;
 					await entry.actions.catch(() => {});
-					await persist(entry);
+					await persist(entry, true);
 				}),
 			);
 		},
@@ -586,7 +623,7 @@ export function createCanvasSyncServer(options: {
 					[...rooms.values()].map(async (promise) => {
 						const entry = await promise;
 						await entry.actions.catch(() => {});
-						await persist(entry);
+						await persist(entry, true);
 					}),
 				);
 			} catch (error) {
