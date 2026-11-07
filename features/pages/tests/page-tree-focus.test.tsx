@@ -61,6 +61,7 @@ mock.module("@/components/app-session-provider", () => ({
 }));
 mock.module("@/features/pages/client/preload-editor", () => ({
 	preloadHaunterEditor: async () => {},
+	preloadCreatedPageDocument: async () => {},
 }));
 
 let PageTree: typeof import("../components/page-tree").PageTree;

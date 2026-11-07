@@ -35,7 +35,13 @@ try {
 		let creates = 0;
 		const write = Promise.withResolvers<void>();
 		const list = Promise.withResolvers<void>();
+		const navigation = Promise.withResolvers<void>();
 		let createdId = "";
+		let sessionOpens = 0;
+		page.on("request", (request) => {
+			if (request.url().endsWith(`/api/pages/${createdId}/document-session`))
+				sessionOpens++;
+		});
 		await page.route("**/api/pages", async (route) => {
 			if (route.request().method() !== "POST") return route.continue();
 			creates++;
@@ -51,6 +57,11 @@ try {
 				await route.continue();
 			},
 		);
+		await page.route(`**/w/${fixture.workspaceId}/p/*`, async (route) => {
+			if (new URL(route.request().url()).searchParams.has("_rsc"))
+				await navigation.promise;
+			await route.continue();
+		});
 		// Same-turn clicks exercise the synchronous guard before React rerenders.
 		await page
 			.getByRole("button", { name: "New page", exact: true })
@@ -72,6 +83,13 @@ try {
 		assert.equal(creates, 1);
 		write.resolve();
 		try {
+			// The authenticated document connection must start before Next's route
+			// response, even on touch devices with no editor hover preload.
+			const sessionResponse = await page.waitForResponse((response) =>
+				response.url().endsWith(`/api/pages/${createdId}/document-session`),
+			);
+			assert.equal(sessionResponse.status(), 200);
+			navigation.resolve();
 			// The title must appear while the sidebar refetch is still held.
 			await page.waitForURL("**/p/*");
 			await page
@@ -79,11 +97,14 @@ try {
 				.waitFor();
 			assert.ok(page.url().endsWith(`/p/${createdId}`));
 			assert.equal(creates, 1);
+			await page.locator('[contenteditable="true"]').first().waitFor();
+			assert.equal(sessionOpens, 1, "the editor reuses the warmed session");
 			if (mobile)
 				await page
 					.getByRole("dialog", { name: "Sidebar", exact: true })
 					.waitFor({ state: "hidden" });
 		} finally {
+			navigation.resolve();
 			list.resolve();
 		}
 		await page.unrouteAll({ behavior: "wait" });
@@ -201,7 +222,7 @@ try {
 			() => !document.body.innerText.includes("Loading pages"),
 		);
 		console.log(
-			`PASS ${mobile ? "mobile" : "desktop"}: one page per repeated click, immediate pending feedback, navigation before list refetch, creation failure recovery, one workspace activation, gated content and explicit retry`,
+			`PASS ${mobile ? "mobile" : "desktop"}: one page per repeated click, immediate pending feedback, document connection before route loading, session reuse, navigation before list refetch, creation failure recovery, one workspace activation, gated content and explicit retry`,
 		);
 		await context.close();
 	}
