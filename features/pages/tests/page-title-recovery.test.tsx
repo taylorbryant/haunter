@@ -166,9 +166,13 @@ afterAll(uninstallTestDom);
 test("stores each title locally before its debounced server save", async () => {
 	const user = userEvent.setup({ document });
 	const view = renderPageEditor();
-	const titleInput = view.getByRole("textbox", { name: "Page title" });
-	await waitFor(() => {
-		expect((titleInput as HTMLTextAreaElement).readOnly).toBe(false);
+	// The editable field loads lazily behind a read-only placeholder.
+	const titleInput = await waitFor(() => {
+		const input = view.getByRole("textbox", {
+			name: "Page title",
+		}) as HTMLTextAreaElement;
+		expect(input.readOnly).toBe(false);
+		return input;
 	});
 	await user.clear(titleInput);
 	await user.type(titleInput, "A sentence worth keeping");
@@ -191,9 +195,13 @@ test("stores each title locally before its debounced server save", async () => {
 test("flushes a title safely when the editor unmounts before the debounce", async () => {
 	const user = userEvent.setup({ document });
 	const first = renderPageEditor();
-	const input = first.getByRole("textbox", { name: "Page title" });
-	await waitFor(() => {
-		expect((input as HTMLTextAreaElement).readOnly).toBe(false);
+	// The editable field loads lazily behind a read-only placeholder.
+	const input = await waitFor(() => {
+		const input = first.getByRole("textbox", {
+			name: "Page title",
+		}) as HTMLTextAreaElement;
+		expect(input.readOnly).toBe(false);
+		return input;
 	});
 	await user.clear(input);
 	await user.type(input, "Survives navigation");
