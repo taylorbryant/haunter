@@ -25,12 +25,9 @@ mock.module("next/navigation", () => ({
 mock.module("@/client/use-draft-safe-router", () => ({
 	useDraftSafeRouter: () => ({ replace() {} }),
 }));
+const currentUser = { id: "user_1", name: "Tester", email: "test@example.com" };
 mock.module("@/components/app-session-provider", () => ({
-	useCurrentUser: () => ({
-		id: "user_1",
-		name: "Tester",
-		email: "test@example.com",
-	}),
+	useCurrentUser: () => currentUser,
 }));
 mock.module("@/components/create-dialog-provider", () => ({
 	useCreateDialog: () => ({ openCreateTask() {} }),
@@ -64,8 +61,12 @@ mock.module("@/components/responsive-dialog", () => ({
 		<div>{children}</div>
 	),
 }));
+let pickerRenders = 0;
 mock.module("@/components/due-date-picker", () => ({
-	DueDatePicker: () => null,
+	DueDatePicker: () => {
+		pickerRenders++;
+		return null;
+	},
 }));
 mock.module("@/features/members/components/assignee-picker", () => ({
 	AssigneePicker: () => null,
@@ -556,4 +557,22 @@ test("clicking away from a task title preserves focus on the clicked control", a
 	expect(document.activeElement).toBe(target);
 	await settle(0);
 	expect(document.activeElement).toBe(target);
+});
+
+test("typing a task title does not rerender other rows or lose their latest actions", async () => {
+	const { view, user, settle, requests } = setup();
+	await user.click(view.getByRole("button", { name: "Task A" }));
+	const before = pickerRenders;
+	await user.type(titleInput(view), " edited");
+	// Only the edited row's picker renders once for each input event.
+	expect(pickerRenders - before).toBe(" edited".length);
+	await user.keyboard("{Enter}");
+	await settle(0);
+	expect(requests[0]).toMatchObject({ id: taskA.id, title: "Task A edited" });
+	await user.click(view.getByRole("button", { name: "Task B" }));
+	expect(titleInput(view).value).toBe("Task B");
+	await user.keyboard("{Escape}");
+	expect(document.activeElement).toBe(
+		view.getByRole("button", { name: "Task B" }),
+	);
 });

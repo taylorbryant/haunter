@@ -55,12 +55,18 @@ export function LiveContextProvider({
 	useEffect(() => {
 		if (!enabled) return;
 		let timer: ReturnType<typeof setTimeout> | undefined;
-		tracker.onChange = () => {
-			if (timer) return;
+		let deadline = 0;
+		tracker.onChange = (delayMs) => {
+			const nextDeadline = Date.now() + delayMs;
+			// Continuous typing must not postpone a report indefinitely. A range
+			// selection or ownership change can bring an existing deadline forward.
+			if (timer && deadline <= nextDeadline) return;
+			if (timer) clearTimeout(timer);
+			deadline = nextDeadline;
 			timer = setTimeout(() => {
 				timer = undefined;
 				void tracker.flush();
-			}, 300);
+			}, delayMs);
 		};
 		const presence = () =>
 			tracker.presence(

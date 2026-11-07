@@ -7,6 +7,9 @@ import {
 	LIVE_CONTEXT_MAX_SHAPES,
 } from "../schemas";
 
+export const CONTEXT_REPORT_DELAY_MS = 300;
+export const CARET_REPORT_DELAY_MS = 1_000;
+
 export type ContextRoute = {
 	workspaceId: string;
 	pageId: string | null;
@@ -48,8 +51,9 @@ export class LiveContextTracker {
 	private focused = false;
 	private pending: PublishContextInput | null = null;
 	private pendingAt = 0;
+	private pendingDelay = CONTEXT_REPORT_DELAY_MS;
 	private flight: Promise<void> | null = null;
-	onChange: (() => void) | undefined;
+	onChange: ((delayMs: number) => void) | undefined;
 	constructor(
 		private readonly userId: string,
 		private readonly send: (input: PublishContextInput) => Promise<unknown>,
@@ -137,10 +141,33 @@ export class LiveContextTracker {
 				),
 			},
 		};
-		if (JSON.stringify(next) === JSON.stringify(this.view)) return;
+		if (JSON.stringify(next) === JSON.stringify(this.view)) {
+			if (activate && this.pending) {
+				this.pendingDelay = CONTEXT_REPORT_DELAY_MS;
+				this.onChange?.(this.pendingDelay);
+			}
+			return;
+		}
+		const previous = this.view?.pageSelection;
+		// Typing and caret motion within a block may coalesce for longer. Keep
+		// complete offsets, and publish activation, block changes and text ranges
+		// on the normal fast path (including clearing a previously selected range).
+		const caretOnly =
+			!activate &&
+			previous &&
+			previous.activeBlockId === selection.activeBlockId &&
+			previous.selectionCount === 0 &&
+			selection.selectionCount === 0 &&
+			previous.selection !== null &&
+			previous.selection.from === previous.selection.to &&
+			selection.selection !== null &&
+			selection.selection.from === selection.selection.to;
 		this.view = next;
 		this.changedAt = this.now();
-		this.queue();
+		this.queue(
+			this.route.workspaceId,
+			caretOnly ? CARET_REPORT_DELAY_MS : CONTEXT_REPORT_DELAY_MS,
+		);
 	}
 	clearPage(pageId?: string) {
 		if (!this.view?.pageSelection || (pageId && this.view.pageId !== pageId))
@@ -175,8 +202,14 @@ export class LiveContextTracker {
 	heartbeat() {
 		this.queue();
 	}
-	private queue(workspaceId = this.route?.workspaceId) {
+	private queue(
+		workspaceId = this.route?.workspaceId,
+		delayMs = CONTEXT_REPORT_DELAY_MS,
+	) {
 		if (!workspaceId) return;
+		this.pendingDelay = this.pending
+			? Math.min(this.pendingDelay, delayMs)
+			: delayMs;
 		this.pendingAt = this.now();
 		this.pending = {
 			workspaceId,
@@ -189,7 +222,7 @@ export class LiveContextTracker {
 			contextAgeMs: Math.max(0, this.now() - this.changedAt),
 			view: this.view ? structuredClone(this.view) : null,
 		};
-		this.onChange?.();
+		this.onChange?.(this.pendingDelay);
 	}
 	/** Serial/coalesced requests bound traffic and cannot publish old selections
 	 * after newer ones. Failed heartbeats retry only on a later change/tick. */
@@ -212,7 +245,7 @@ export class LiveContextTracker {
 			this.flight = null;
 			// Go through the debounce again; a stream of selection updates during
 			// slow requests must not turn into an unthrottled request loop.
-			if (this.pending) this.onChange?.();
+			if (this.pending) this.onChange?.(this.pendingDelay);
 		});
 		return this.flight;
 	}

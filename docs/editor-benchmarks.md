@@ -104,3 +104,46 @@ each other's cursors. Verify native canvas edits converge and survive reload;
 the page timing instrumentation above does not measure canvas readiness. Follow
 the [offline recovery behavior](collaboration.md#offline-edits-and-recovery)
 when testing reloads with unsynced canvas changes.
+
+## Typing and list interactions
+
+Use `scripts/benchmark-interactions.ts` to compare body typing, task renaming,
+and page-tree renaming. It seeds 100 sidebar pages, a 100-paragraph document,
+and 200 tasks with future due dates in the preview's disposable database.
+
+Start separate production previews from isolated copies of the baseline and
+candidate revisions, with the same benchmark fixture helper in both copies:
+
+```sh
+# Baseline checkout, terminal 1
+bun scripts/preview-mcp-editor.ts --production --port-offset=-10
+# Candidate checkout, terminal 2
+bun scripts/preview-mcp-editor.ts --production --port-offset=-9
+# Candidate checkout, terminal 3, after both builds are ready
+BENCH_PROFILE_DIR=/tmp/haunter-interaction-profiles \
+  bun scripts/benchmark-interactions.ts \
+  main=http://127.0.0.1:8787 pr=http://127.0.0.1:8788 \
+  > /tmp/haunter-interactions.jsonl
+```
+
+The runner uses Chromium, a 1280 × 1000 viewport, 4× CPU throttling, and local
+unthrottled requests. Each flow types the same 41 characters with an 80 ms
+inter-key delay. It loads all 200 task rows before timing, excludes setup and
+saving, and measures a fresh browser context after hydration. Restart previews
+before a comparison to reset fixtures. Avoid builds and other tests during the
+timing run.
+
+One warmup per variant/flow is excluded, followed by three samples in alternating
+variant order (`BENCH_SAMPLES` overrides the count). JSON output includes each
+sample and median/range summaries for input-to-frame, main-thread work, script
+time, and live-context POST count/body bytes. Input-to-frame measures
+`beforeinput` through two animation frames; it is a local responsiveness proxy,
+not field INP. Request counts include a 1.2-second drain after typing.
+`BENCH_PROFILE_DIR` optionally records CPU profiles during the excluded warmups.
+
+Each sample also verifies persistence: the edited body's complete paragraph text
+must match exactly before and after a saved reload, and task/page renames are
+read back through the API. Matching only the repeated typing marker would allow
+old warmup edits to hide a lost sample. Timings are diagnostic evidence, not CI
+thresholds. See [the measured interaction pass](interaction-performance.md) for
+an example comparison and its limits.

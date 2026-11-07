@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { contextRoute, LiveContextTracker } from "../client/tracker";
+import {
+	contextRoute,
+	LiveContextTracker,
+	CARET_REPORT_DELAY_MS,
+	CONTEXT_REPORT_DELAY_MS,
+} from "../client/tracker";
 import { textEditingFixture, pageSelectionFixture } from "./helpers";
 import {
 	PublishContextInputSchema,
@@ -264,4 +269,98 @@ test("tabs have distinct identities and route parsing distinguishes pages, canva
 		canvasId: null,
 	});
 	expect(contextRoute("/share/something")).toBeNull();
+});
+
+const caret = (position: number) => ({
+	activeBlockId: "paragraph",
+	selectedBlockIds: [],
+	selectionCount: 0,
+	selection: {
+		coordinateSystem: "prosemirror" as const,
+		kind: "text" as const,
+		anchor: position,
+		head: position,
+		from: position,
+		to: position,
+		selectedText: "",
+		truncated: false,
+	},
+});
+
+test("coalesced caret reports retain exact latest offsets and capture age", async () => {
+	const { tracker, calls, advance } = fixture();
+	const delays: number[] = [];
+	tracker.onChange = (delay) => delays.push(delay);
+	tracker.navigate(route);
+	tracker.page("workspace", pageId, caret(1), true);
+	await tracker.flush();
+	for (let position = 2; position <= 20; position++) {
+		advance(40);
+		tracker.page("workspace", pageId, caret(position), false);
+		expect(delays.at(-1)).toBe(CARET_REPORT_DELAY_MS);
+	}
+	advance(200);
+	await tracker.flush();
+	expect(calls).toHaveLength(2);
+	expect(calls.at(-1)).toMatchObject({
+		contextAgeMs: 200,
+		view: { pageSelection: caret(20) },
+	});
+});
+
+test("ranges, block changes, activation and clearing preempt a queued caret report", async () => {
+	const { tracker } = fixture();
+	const delays: number[] = [];
+	tracker.onChange = (delay) => delays.push(delay);
+	tracker.navigate(route);
+	tracker.page("workspace", pageId, caret(1), true);
+	await tracker.flush();
+	for (const interrupt of [
+		() => tracker.page("workspace", pageId, pageSelectionFixture, false),
+		() =>
+			tracker.page(
+				"workspace",
+				pageId,
+				{ ...caret(3), activeBlockId: "other" },
+				false,
+			),
+		() => tracker.page("workspace", pageId, caret(2), true),
+		() => tracker.clearPage(),
+		() => tracker.withdraw(),
+	]) {
+		tracker.page("workspace", pageId, caret(1), true);
+		await tracker.flush();
+		tracker.page("workspace", pageId, caret(2), false);
+		expect(delays.at(-1)).toBe(CARET_REPORT_DELAY_MS);
+		interrupt();
+		expect(delays.at(-1)).toBe(CONTEXT_REPORT_DELAY_MS);
+		await tracker.flush();
+	}
+	tracker.page("workspace", pageId, pageSelectionFixture, true);
+	await tracker.flush();
+	tracker.page("workspace", pageId, caret(3), false);
+	expect(delays.at(-1)).toBe(CONTEXT_REPORT_DELAY_MS);
+});
+
+test("an in-flight report retains the priority of the next queued selection", async () => {
+	const gate = Promise.withResolvers<void>();
+	const delays: number[] = [];
+	const calls: PublishContextInput[] = [];
+	const tracker = new LiveContextTracker("user", async (input) => {
+		calls.push(input);
+		await gate.promise;
+	});
+	tracker.onChange = (delay) => delays.push(delay);
+	tracker.navigate(route);
+	tracker.page("workspace", pageId, caret(1), true);
+	const first = tracker.flush();
+	tracker.page("workspace", pageId, caret(2), false);
+	expect(delays.at(-1)).toBe(CARET_REPORT_DELAY_MS);
+	tracker.page("workspace", pageId, pageSelectionFixture, false);
+	gate.resolve();
+	await first;
+	expect(delays.at(-1)).toBe(CONTEXT_REPORT_DELAY_MS);
+	await tracker.flush();
+	expect(calls).toHaveLength(2);
+	expect(calls[1].view?.pageSelection).toEqual(pageSelectionFixture);
 });

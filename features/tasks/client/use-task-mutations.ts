@@ -1,5 +1,6 @@
 "use client";
 import { useMutationState, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { createTaskMutations } from "./mutations";
 import {
@@ -21,30 +22,35 @@ export function useTaskMutations(workspaceId?: string) {
 		},
 		select: (mutation) => taskWriteIdentity(mutation),
 	});
-	const mutations = () => {
-		if (!actor) throw new Error("Sign in to save tasks.");
-		return createTaskMutations(queryClient, actor);
-	};
+	const actions = useMemo(() => {
+		const mutations = () => {
+			if (!actor) throw new Error("Sign in to save tasks.");
+			return createTaskMutations(queryClient, actor);
+		};
+		return {
+			isPending: (workspaceId: string, taskId: string) =>
+				!!actor &&
+				hasPendingTaskWrite(queryClient, actor.id, workspaceId, taskId),
+			update: (
+				...args: Parameters<ReturnType<typeof createTaskMutations>["update"]>
+			) => mutations().update(...args),
+			remove: (
+				...args: Parameters<ReturnType<typeof createTaskMutations>["remove"]>
+			) => mutations().remove(...args),
+			create: (
+				...args: Parameters<ReturnType<typeof createTaskMutations>["create"]>
+			) => mutations().create(...args),
+			actOnNotification: (
+				...args: Parameters<
+					ReturnType<typeof createTaskMutations>["actOnNotification"]
+				>
+			) => mutations().actOnNotification(...args),
+		};
+	}, [queryClient, actor]);
 	return {
+		...actions,
 		pendingTaskIds: new Set(
 			pending.flatMap((identity) => (identity ? [identity.taskId] : [])),
 		),
-		isPending: (workspaceId: string, taskId: string) =>
-			!!actor &&
-			hasPendingTaskWrite(queryClient, actor.id, workspaceId, taskId),
-		update: (
-			...args: Parameters<ReturnType<typeof createTaskMutations>["update"]>
-		) => mutations().update(...args),
-		remove: (
-			...args: Parameters<ReturnType<typeof createTaskMutations>["remove"]>
-		) => mutations().remove(...args),
-		create: (
-			...args: Parameters<ReturnType<typeof createTaskMutations>["create"]>
-		) => mutations().create(...args),
-		actOnNotification: (
-			...args: Parameters<
-				ReturnType<typeof createTaskMutations>["actOnNotification"]
-			>
-		) => mutations().actOnNotification(...args),
 	};
 }
