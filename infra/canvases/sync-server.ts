@@ -113,14 +113,17 @@ export function createCanvasSyncServer(options: {
 	 * again after the wait so it carries everything received meanwhile.
 	 */
 	function persist(entry: Entry, immediate = false): Promise<void> {
+		// A caller needs the state it observed, not every edit that arrives while
+		// it waits. In particular, already-durable socket messages must not wait
+		// for another interval just because a newer edit arrived during SQL.
+		const targetClock = entry.storage.getSnapshot().documentClock ?? 0;
+		if (entry.deleted || targetClock <= entry.savedClock)
+			return Promise.resolve();
 		const flight = entry.flight
 			.catch(() => {})
 			.then(async () => {
 				if (entry.deleted) return;
-				if (
-					(entry.storage.getSnapshot().documentClock ?? 0) === entry.savedClock
-				)
-					return;
+				if (targetClock <= entry.savedClock) return;
 				if (!immediate) {
 					const wait = entry.committedAt + persistIntervalMs - Date.now();
 					if (wait > 0) await new Promise((r) => setTimeout(r, wait));
@@ -542,10 +545,14 @@ export function createCanvasSyncServer(options: {
 				send(message) {
 					// Do not deliver even native push acknowledgements until the room state is durable.
 					// Keep per-socket ordering while allowing the SDK to batch record changes normally.
+					// Capture this message's durability requirement before waiting on
+					// earlier messages; later edits belong to later save promises.
+					const durable = persist(prepared.entry);
+					void durable.catch(() => {});
 					connection.outgoing = connection.outgoing
 						.then(async () => {
 							if (connection.closed) return;
-							await persist(prepared.entry);
+							await durable;
 							if (!connection.closed && socket.readyState === 1)
 								socket.send(message);
 						})

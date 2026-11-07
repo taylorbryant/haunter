@@ -3,9 +3,16 @@ import { mkdtemp, rm } from "node:fs/promises";
 
 // Every process uses a disposable database and synthetic account. No app env
 // file credentials, production database, or email delivery are used here.
-const appPort = 3097;
-const hostPort = 8797;
-const collaborationPort = 1397;
+const production = process.argv.includes("--production");
+const portOffset = Number(
+	process.argv.find((arg) => arg.startsWith("--port-offset="))?.split("=")[1] ??
+		0,
+);
+if (!Number.isInteger(portOffset) || portOffset < -1396 || portOffset > 56738)
+	throw new Error("Invalid preview port offset");
+const appPort = 3097 + portOffset;
+const hostPort = 8797 + portOffset;
+const collaborationPort = 1397 + portOffset;
 const appOrigin = `http://127.0.0.1:${appPort}`;
 const storageRoot = await mkdtemp("/private/tmp/haunter-editor-files-");
 const secret = `editor-proof-${crypto.randomUUID()}-${crypto.randomUUID()}`;
@@ -14,7 +21,7 @@ const previewEnv: Record<string, string> = {
 	HOME: process.env.HOME ?? "",
 	TMPDIR: process.env.TMPDIR ?? "/private/tmp",
 	__NEXT_PROCESSED_ENV: "true",
-	NODE_ENV: "development",
+	NODE_ENV: production ? "production" : "development",
 	APP_URL: appOrigin,
 	STORAGE_ROOT: storageRoot,
 	BETTER_AUTH_URL: appOrigin,
@@ -198,7 +205,7 @@ await f.database.db.insert(schema.oauthClient).values({
 	id: "editor-proof-oauth",
 	clientId: "editor-proof-client",
 	name: "Editor proof",
-	redirectUris: ["http://127.0.0.1:8797/callback"],
+	redirectUris: [`http://127.0.0.1:${hostPort}/callback`],
 });
 await f.database.db.insert(schema.oauthConsent).values({
 	id: "editor-proof-consent",
@@ -365,6 +372,25 @@ async function stop() {
 }
 process.once("SIGINT", () => void stop());
 process.once("SIGTERM", () => void stop());
+if (production) {
+	// The build receives the same disposable database and public worker URL as
+	// the runtime. Never inherit the developer's app environment for this proof.
+	for (const command of [
+		["bun", "--no-env-file", "scripts/build-canvas-browser.ts"],
+		["node", "node_modules/next/dist/bin/next", "build"],
+	]) {
+		const child = Bun.spawn(command, {
+			env: childEnv,
+			stdout: "inherit",
+			stderr: "inherit",
+		});
+		children.push(child);
+		if ((await child.exited) !== 0) {
+			console.error("Production preview build failed.");
+			await stop();
+		}
+	}
+}
 children.push(
 	Bun.spawn(["bun", "--no-env-file", "server/workers/collaboration.ts"], {
 		env: childEnv,
@@ -377,7 +403,7 @@ children.push(
 		[
 			"node",
 			"node_modules/next/dist/bin/next",
-			"dev",
+			production ? "start" : "dev",
 			"--hostname",
 			"127.0.0.1",
 			"--port",

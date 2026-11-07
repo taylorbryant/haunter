@@ -144,6 +144,7 @@ export function createDrizzleCanvasRepository(
 				.set({
 					snapshot: input.snapshotJson,
 					searchContent: searchContentFor(JSON.parse(input.snapshotJson)),
+					searchProjectionVersion: sql`${schema.canvases.searchProjectionVersion} + 1`,
 					updatedAt: sql`max(updated_at, ${now})`,
 					snapshotUpdatedAt: now,
 				})
@@ -231,6 +232,7 @@ export function createDrizzleCanvasRepository(
 				title: input.title,
 				snapshot: "{}",
 				searchContent: "[]",
+				searchProjectionVersion: 1,
 				snapshotUpdatedAt: now,
 				createdAt: now,
 				updatedAt: now,

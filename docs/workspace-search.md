@@ -45,6 +45,9 @@ The canvas text projection in `canvases.search_content` is written by the canvas
 repository together with every snapshot save, derived from the same JSON the row
 stores (`features/canvases/lib/search-content.ts`). The column was created and
 backfilled by the checked-in migrations; no separate indexing service is needed.
+The repository advances `search_projection_version` with each projection.
+Compatibility triggers index older workers that do not advance it, preserving
+search during rollout and rollback without re-parsing snapshots from new workers.
 
 Search queries read the text projection; they do not launch Chromium or fetch
 images. The projection contains only visible drawing text and shape IDs,

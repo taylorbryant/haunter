@@ -985,8 +985,12 @@ export const canvases = sqliteTable(
 		}),
 		title: text("title"),
 		snapshot: text("snapshot").notNull().default("{}"),
-		// Maintained by SQLite triggers, including writes from older collab workers.
+		// New writers advance the version with the projection; compatibility
+		// triggers cover older workers that only update the snapshot.
 		searchContent: text("search_content").notNull().default("[]"),
+		searchProjectionVersion: integer("search_projection_version")
+			.notNull()
+			.default(0),
 		snapshotUpdatedAt: text("snapshot_updated_at").notNull(),
 		createdAt: text("created_at").notNull(),
 		updatedAt: text("updated_at").notNull(),

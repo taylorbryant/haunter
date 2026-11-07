@@ -625,6 +625,62 @@ test("canvas restoration syncs document replacement to two editors without resto
 	}
 });
 
+test("durable peer updates are delivered while a newer commit is blocked", async () => {
+	const h = await harness();
+	const transaction = h.ctx.ports.uow.transaction;
+	let releaseFirst = () => {};
+	let releaseSecond = () => {};
+	try {
+		const a = h.client(),
+			b = h.client();
+		await until(() => a.loaded && b.loaded);
+		const prepared = await h.engine.prepare(
+			new Request(
+				`http://localhost/canvas/${h.canvas.id}?token=${h.tokens.issue(h.grant).token}`,
+			),
+		);
+		let writes = 0;
+		const first = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+		const second = new Promise<void>((resolve) => {
+			releaseSecond = resolve;
+		});
+		h.ctx.ports.uow.transaction = async (work) => {
+			writes++;
+			if (writes === 1) await first;
+			if (writes === 2) await second;
+			return transaction(work);
+		};
+		rename(a, "First durable frame");
+		await until(() => writes === 1);
+		rename(a, "Later frame");
+		await until(() => {
+			const record = projectCanvasRoom(prepared.entry.storage.getSnapshot())
+				.store[pageId];
+			return record?.typeName === "page" && record.name === "Later frame";
+		});
+		releaseFirst();
+		await until(() => writes === 2);
+		// The newer frame is not durable yet. It must neither be delivered nor
+		// hold up the already-committed first frame in the outgoing queue.
+		await until(() => b.store.get(pageId)?.name === "First durable frame");
+		const stored = await h.database.repositories.canvases.findSyncRoom(
+			h.scope,
+			h.canvas.id,
+		);
+		expect(
+			projectCanvasRoom(JSON.parse(stored!.roomJson)).store[pageId],
+		).toMatchObject({ name: "First durable frame" });
+		releaseSecond();
+		await until(() => b.store.get(pageId)?.name === "Later frame");
+	} finally {
+		releaseFirst();
+		releaseSecond();
+		await h.stop();
+	}
+}, 15000);
+
 test("rapid browser edits coalesce into spaced commits that still acknowledge the final state", async () => {
 	const h = await harness();
 	try {
