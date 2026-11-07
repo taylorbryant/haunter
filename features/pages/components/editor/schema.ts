@@ -1,4 +1,3 @@
-import { codeBlockOptions } from "@blocknote/code-block";
 import {
 	BlockNoteSchema,
 	createCodeBlockSpec,
@@ -28,16 +27,13 @@ import { mountMermaidCodeBlock } from "./mermaid-code-block";
 import { pageLinkBlockSpec } from "./page-link-block";
 import { taskBlockSpec } from "./task-block";
 
-/**
- * Languages offered in the code-block picker. The shiki bundle ships many
- * more; keep this list tight to bound the highlighter payload.
- */
-const LANGUAGE_IDS = new Set<string>(CODE_BLOCK_LANGUAGES.map(({ id }) => id));
-
+// Importing @blocknote/code-block for labels also pulls in its bundled
+// highlighter. The app already owns the language list and loads Shiki on demand.
 export const supportedLanguages = Object.fromEntries(
-	Object.entries(codeBlockOptions.supportedLanguages).filter(([id]) =>
-		LANGUAGE_IDS.has(id),
-	),
+	CODE_BLOCK_LANGUAGES.map(({ id, label, aliases }) => [
+		id,
+		{ name: label, aliases: [id, ...aliases] },
+	]),
 );
 
 // Haunter's task block replaces the built-in check list so the app has
@@ -104,7 +100,6 @@ const haunterHeadingBlockSpec: typeof headingBlockSpec = {
 };
 
 const baseCodeBlockSpec = createCodeBlockSpec({
-	...codeBlockOptions,
 	defaultLanguage: "sql",
 	supportedLanguages,
 });

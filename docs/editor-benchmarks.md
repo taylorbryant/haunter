@@ -250,3 +250,6 @@ BENCH_UPLOAD_MBPS=5`. Stop previews and proxy with Ctrl+C after testing.
 
 See [the page creation results](page-creation-performance.md) for the measured
 comparison, complete ranges, and limits.
+
+See [the editor body startup results](editor-body-startup-performance.md) for the
+follow-up phase breakdown and lazy-highlighter comparison against merged PR #180.
