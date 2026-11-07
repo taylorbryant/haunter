@@ -29,6 +29,10 @@ import type {
 	PageNavigationOutput,
 } from "@/features/pages/schemas";
 import { refreshAfterTaskWrites } from "@/features/tasks/client/refresh";
+import {
+	preloadCreatedPageDocument,
+	preloadHaunterEditor,
+} from "./preload-editor";
 
 export function listPagesQueryOptions(workspaceId: string) {
 	return {
@@ -202,7 +206,14 @@ export async function syncRecordedPageViewInNavigationCache(
 }
 
 export function createPageMutationOptions() {
-	return rq(createPage).mutationOptions();
+	return rq(createPage).mutationOptions({
+		onMutate: () => {
+			// Load editor code alongside the write, including on touch devices
+			// where no pointer hover has warmed it. Never delay or fail creation.
+			if (typeof window !== "undefined")
+				void preloadHaunterEditor().catch(() => undefined);
+		},
+	});
 }
 
 /** The create response is enough to render the new title and sidebar entry. */
@@ -226,6 +237,9 @@ export function cacheCreatedPage(queryClient: QueryClient, page: PageMeta) {
 /** Opening a created page must not wait for background list reconciliation. */
 export function reconcileCreatedPage(queryClient: QueryClient, page: PageMeta) {
 	cacheCreatedPage(queryClient, page);
+	// Only a successful create can warm a document. Reuse the authenticated
+	// session path, and let the mounted editor own connection errors and retry.
+	void preloadCreatedPageDocument(page).catch(() => undefined);
 	void Promise.all([
 		invalidatePages(queryClient),
 		invalidatePageNavigation(queryClient, page.workspaceId),
