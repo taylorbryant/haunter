@@ -69,7 +69,7 @@
 		"@better-auth/core": "1.7.18",
 		"@better-auth/mcp": "1.7.18",
 		"@better-auth/oauth-provider": "1.7.18",
-		"@blocknote/code-block": "0.55.0",
+		"@blocknote/code-block": "0.57.0",
 		"@blocknote/core": "0.55.0",
 		"@blocknote/react": "0.55.0",
 		"@blocknote/shadcn": "0.55.0",
