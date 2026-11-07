@@ -43,6 +43,25 @@ describe("code highlighting themes", () => {
 		expect(getCodeTheme("solarized").id).toBe("solarized-dark");
 	});
 
+	test("shares first-use loading and keeps the latest requested theme", async () => {
+		const [first, latest] = await Promise.all([
+			getHaunterHighlighter("light"),
+			getHaunterHighlighter("catppuccin"),
+		]);
+
+		expect(first).toBe(latest);
+		expect(first.getLoadedThemes()).toEqual(["catppuccin-mocha"]);
+		await latest.loadLanguage("javascript");
+		expect(
+			latest
+				.codeToTokens("const haunted = true", {
+					lang: "javascript",
+					theme: "catppuccin-mocha",
+				})
+				.tokens.flat().length,
+		).toBeGreaterThan(1);
+	});
+
 	test("loads every palette into one dynamically themed highlighter", async () => {
 		let sharedHighlighter: Awaited<
 			ReturnType<typeof getHaunterHighlighter>
