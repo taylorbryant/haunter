@@ -254,6 +254,55 @@ const host = hostTemplate.replace(
 );
 const children: Bun.Subprocess[] = [];
 const childEnv = { ...previewEnv, SQLITE_DB_URL: `file:${f.database.path}` };
+// Shared by repeatable interaction benchmarks; seeded once per disposable host.
+let interactionFixture:
+	| Promise<{ bodyId: string; treeId: string; taskId: string }>
+	| undefined;
+async function seedInteractionFixture() {
+	const pages = [];
+	for (let index = 0; index < 100; index++) {
+		pages.push(
+			await f.database.repositories.pages.create(f.scope, {
+				userId: f.userId,
+				title: `Interaction page ${index}`,
+				parentPageId: null,
+				position: 10 + index,
+			}),
+		);
+	}
+	const tasks = [];
+	for (let index = 0; index < 200; index++) {
+		tasks.push(
+			await f.database.repositories.tasks.create(f.scope, {
+				userId: f.userId,
+				title: `Interaction task ${index}`,
+				pageId: null,
+				sourceBlockId: null,
+				completed: false,
+				dueDate: "2030-06-15",
+				dueTime: null,
+				assigneeId: f.userId,
+				completedAt: null,
+			}),
+		);
+	}
+	const page = await f.database.repositories.pages.create(f.scope, {
+		userId: f.userId,
+		title: "Interaction body",
+		parentPageId: null,
+		position: 110,
+	});
+	await seedFixtureBody(
+		{ ...f, page },
+		Array.from({ length: 100 }, (_, index) => ({
+			...paragraph(
+				`Paragraph ${index}. Disposable text for interaction measurements.`,
+			),
+			id: `interaction-paragraph-${index}`,
+		})),
+	);
+	return { bodyId: page.id, treeId: pages[0].id, taskId: tasks[0].id };
+}
 const server = Bun.serve({
 	hostname: "127.0.0.1",
 	port: hostPort,
@@ -301,6 +350,13 @@ const server = Bun.serve({
 				await f.ctx.ports.pages.findById(f.scope, f.page.id),
 			);
 		// Verification controls exist only in this disposable local host.
+		if (
+			url.pathname === "/test/interaction-fixture" &&
+			request.method === "POST"
+		) {
+			interactionFixture ??= seedInteractionFixture();
+			return Response.json(await interactionFixture);
+		}
 		if (url.pathname === "/test/scroll-fixture" && request.method === "POST") {
 			const pages = [];
 			for (const name of ["Scroll proof A", "Scroll proof B"]) {
