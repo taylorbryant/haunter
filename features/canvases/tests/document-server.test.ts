@@ -12,7 +12,10 @@ import {
 import { AuthenticatedCanvasSocket } from "../client/authenticated-socket";
 import { documentFixture } from "@/features/documents/tests/helpers";
 import { checkDocumentAccess } from "@/infra/documents/access";
-import { createCanvasSyncServer } from "@/infra/canvases/sync-server";
+import {
+	CANVAS_PERSIST_INTERVAL_MS,
+	createCanvasSyncServer,
+} from "@/infra/canvases/sync-server";
 import { createDocumentServer } from "@/infra/documents/hocuspocus";
 import {
 	listenDocumentServer,
@@ -692,10 +695,12 @@ test("rapid browser edits coalesce into spaced commits that still acknowledge th
 		))!.revision;
 		// Separate puts into distinct pushes, like pointer frames during a drag.
 		const edits = 25;
+		const startedAt = Date.now();
 		for (let i = 0; i < edits; i++) {
 			rename(a, `Drag frame ${i}`);
 			await new Promise((r) => setTimeout(r, 10));
 		}
+		const editingMs = Date.now() - startedAt;
 		await until(async () =>
 			a.receipts.includes(await canvasFingerprint(a.store.getStoreSnapshot())),
 		);
@@ -707,10 +712,12 @@ test("rapid browser edits coalesce into spaced commits that still acknowledge th
 			a.store.getStoreSnapshot(),
 		);
 		expect(a.store.get(pageId)?.name).toBe(`Drag frame ${edits - 1}`);
-		// ~250 ms of edits at a 500 ms spacing: the immediate first commit plus
-		// at most two spaced ones, instead of one commit per push.
+		// The first commit is immediate, then edits share interval-spaced writes
+		// including the final partial batch. Allow for slower test schedulers.
 		expect(stored!.revision - before).toBeGreaterThanOrEqual(1);
-		expect(stored!.revision - before).toBeLessThanOrEqual(3);
+		expect(stored!.revision - before).toBeLessThanOrEqual(
+			1 + Math.ceil(editingMs / CANVAS_PERSIST_INTERVAL_MS),
+		);
 	} finally {
 		await h.stop();
 	}

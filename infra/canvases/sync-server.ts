@@ -43,7 +43,7 @@ type Socket = Pick<WebSocketMinimal, "send" | "close" | "readyState">;
  * after a quiet period still commits immediately, so acknowledgements wait at
  * most this long plus one write.
  */
-export const CANVAS_PERSIST_INTERVAL_MS = 500;
+export const CANVAS_PERSIST_INTERVAL_MS = 100;
 type Entry = {
 	room: TLSocketRoom<TLRecord>;
 	storage: InMemorySyncStorage<TLRecord>;

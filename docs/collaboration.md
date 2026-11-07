@@ -24,9 +24,9 @@ so the binary state and projections stay consistent.
 
 The canvas SDK handles record synchronization, conflict resolution, presence,
 and undo. The worker commits the native room and its readable projection in one
-transaction before releasing protocol acknowledgements. Commits of one canvas
-are spaced at least 500 ms apart (the first change after a quiet period commits
-immediately), so a continuous edit stream coalesces into a few writes and
+transaction before releasing protocol acknowledgements. Browser commits of one
+canvas are spaced at least 100 ms apart (the first change after a quiet period
+commits immediately), so a continuous edit stream coalesces into fewer writes and
 acknowledgements wait for the next commit rather than for a write per change.
 Page save receipts likewise confirm a durable database commit. Seeing a change
 in another tab does not by itself prove that it has been saved to the database.
