@@ -83,3 +83,80 @@ test("parallel tabs have separate recovery keys and storage failures leave a dow
 		b.recovery.dispose();
 	}
 });
+test("a continuous edit stream serializes the recovery copy at most once per max wait, then once when idle", async () => {
+	const rows = new Map<string, LocalDraft<TLStoreSnapshot>>();
+	let writes = 0;
+	const storage: DurableDraftStorage<TLStoreSnapshot> = {
+		load: async (key) => rows.get(key) ?? null,
+		persist: async (row) => {
+			writes++;
+			rows.set(row.key, row);
+		},
+		discard: async (key) => {
+			rows.delete(key);
+		},
+		acknowledge: async () => null,
+	};
+	const store = createTLStore({
+		shapeUtils: defaultShapeUtils,
+		bindingUtils: defaultBindingUtils,
+		snapshot: normalizeCanvasSnapshot({}),
+	});
+	const recovery = new CanvasSyncRecovery(store, identity, storage, () => {}, {
+		captureDebounceMs: 50,
+		captureMaxWaitMs: 200,
+	});
+	try {
+		// ~400 ms of edits 10 ms apart, like pointer frames during a drag.
+		const edits = 40;
+		for (let i = 0; i < edits; i++) {
+			store.put([{ ...store.get(pageId)!, name: `Drag frame ${i}` }]);
+			if (i === 0)
+				// The guard sees the edit immediately, before any serialization.
+				expect(recovery.getSnapshot()).toMatchObject({
+					dirty: true,
+					locallySaved: false,
+				});
+			await new Promise((r) => setTimeout(r, 10));
+		}
+		const duringDrag = writes;
+		expect(duringDrag).toBeGreaterThanOrEqual(1);
+		expect(duringDrag).toBeLessThanOrEqual(3);
+		// Idle past the debounce: the final frame is captured and persisted.
+		await new Promise((r) => setTimeout(r, 150));
+		expect(writes).toBeLessThanOrEqual(duringDrag + 1);
+		expect(
+			rows.get(recovery.identity.key)?.payload.store[pageId],
+		).toMatchObject({ name: `Drag frame ${edits - 1}` });
+		expect(recovery.getSnapshot()).toMatchObject({
+			dirty: true,
+			locallySaved: true,
+			status: "pending",
+		});
+	} finally {
+		recovery.dispose();
+	}
+});
+test("edits that cancel out inside the capture window stay unsaved until a receipt matches", async () => {
+	const f = fixture();
+	try {
+		const original = f.store.get(pageId)!;
+		const fingerprint = await canvasFingerprint(f.store.getStoreSnapshot());
+		f.store.put([{ ...original, name: "Created" }]);
+		f.store.put([original]);
+		await f.recovery.flushLocal();
+		// The intermediate push may have reached the server; keep a copy of the
+		// reverted state until the server confirms it too.
+		expect(f.recovery.getSnapshot()).toMatchObject({
+			dirty: true,
+			locallySaved: true,
+		});
+		expect(f.rows.size).toBe(1);
+		f.recovery.acknowledge(fingerprint);
+		await f.recovery.flushLocal();
+		expect(f.rows.size).toBe(0);
+		expect(f.recovery.getSnapshot().dirty).toBe(false);
+	} finally {
+		f.recovery.dispose();
+	}
+});
