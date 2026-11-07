@@ -123,13 +123,21 @@ async function verify(
 	flow: Flow,
 ) {
 	if (flow === "body") {
+		// The fixture accumulates the same text across samples. Checking only for
+		// that text could accept the warmup even if this sample's edits were lost.
+		const expectedParagraph = await page
+			.locator(".bn-editor .bn-inline-content")
+			.first()
+			.textContent();
+		assert.ok(expectedParagraph?.includes(typed));
 		await page.locator("[data-saved=true]").waitFor({ state: "attached" });
 		await page.reload();
 		await page.locator(".bn-editor[contenteditable=true]").waitFor();
 		await page.waitForFunction(
 			(text) =>
-				document.querySelector(".bn-editor")?.textContent?.includes(text),
-			typed,
+				document.querySelector(".bn-editor .bn-inline-content")?.textContent ===
+				text,
+			expectedParagraph,
 		);
 		return;
 	}

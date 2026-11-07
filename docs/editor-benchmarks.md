@@ -141,7 +141,9 @@ time, and live-context POST count/body bytes. Input-to-frame measures
 not field INP. Request counts include a 1.2-second drain after typing.
 `BENCH_PROFILE_DIR` optionally records CPU profiles during the excluded warmups.
 
-Each sample also verifies persistence: body edits survive a saved reload, and
-task/page renames are read back through the API. Timings are diagnostic evidence,
-not CI thresholds. See [the measured interaction pass](interaction-performance.md)
-for an example comparison and its limits.
+Each sample also verifies persistence: the edited body's complete paragraph text
+must match exactly before and after a saved reload, and task/page renames are
+read back through the API. Matching only the repeated typing marker would allow
+old warmup edits to hide a lost sample. Timings are diagnostic evidence, not CI
+thresholds. See [the measured interaction pass](interaction-performance.md) for
+an example comparison and its limits.
