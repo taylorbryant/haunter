@@ -624,3 +624,38 @@ test("canvas restoration syncs document replacement to two editors without resto
 		await h.stop();
 	}
 });
+
+test("rapid browser edits coalesce into spaced commits that still acknowledge the final state", async () => {
+	const h = await harness();
+	try {
+		const a = h.client();
+		await until(() => a.loaded);
+		const before = (await h.database.repositories.canvases.findSyncRoom(
+			h.scope,
+			h.canvas.id,
+		))!.revision;
+		// Separate puts into distinct pushes, like pointer frames during a drag.
+		const edits = 25;
+		for (let i = 0; i < edits; i++) {
+			rename(a, `Drag frame ${i}`);
+			await new Promise((r) => setTimeout(r, 10));
+		}
+		await until(async () =>
+			a.receipts.includes(await canvasFingerprint(a.store.getStoreSnapshot())),
+		);
+		const stored = await h.database.repositories.canvases.findSyncRoom(
+			h.scope,
+			h.canvas.id,
+		);
+		expect(projectCanvasRoom(JSON.parse(stored!.roomJson))).toEqual(
+			a.store.getStoreSnapshot(),
+		);
+		expect(a.store.get(pageId)?.name).toBe(`Drag frame ${edits - 1}`);
+		// ~250 ms of edits at a 500 ms spacing: the immediate first commit plus
+		// at most two spaced ones, instead of one commit per push.
+		expect(stored!.revision - before).toBeGreaterThanOrEqual(1);
+		expect(stored!.revision - before).toBeLessThanOrEqual(3);
+	} finally {
+		await h.stop();
+	}
+}, 20000);

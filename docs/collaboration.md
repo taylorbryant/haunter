@@ -24,9 +24,12 @@ so the binary state and projections stay consistent.
 
 The canvas SDK handles record synchronization, conflict resolution, presence,
 and undo. The worker commits the native room and its readable projection in one
-transaction before releasing protocol acknowledgements. Page save receipts
-likewise confirm a durable database commit. Seeing a change in another tab does
-not by itself prove that it has been saved to the database.
+transaction before releasing protocol acknowledgements. Commits of one canvas
+are spaced at least 500 ms apart (the first change after a quiet period commits
+immediately), so a continuous edit stream coalesces into a few writes and
+acknowledgements wait for the next commit rather than for a write per change.
+Page save receipts likewise confirm a durable database commit. Seeing a change
+in another tab does not by itself prove that it has been saved to the database.
 
 Optional workspace live updates use a separate event stream to refresh lists
 and metadata. They do not carry page bodies or canvas edits.
