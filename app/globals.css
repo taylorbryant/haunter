@@ -872,6 +872,15 @@
 	margin-block: 1px;
 }
 
+/* Reuse the app's next/font Inter instead of downloading BlockNote's static faces. */
+:root .bn-root {
+	--bn-font-family: var(--font-sans);
+}
+
+.bn-root .bn-default-styles {
+	font-family: var(--bn-font-family);
+}
+
 /* Separate paragraphs more clearly than lines within a paragraph or list.
    Match only the block's own content so a nested paragraph cannot add space
    around its parent list item. Adjacent paragraph margins collapse. */

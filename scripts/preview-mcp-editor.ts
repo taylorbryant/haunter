@@ -4,6 +4,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 // Every process uses a disposable database and synthetic account. No app env
 // file credentials, production database, or email delivery are used here.
 const production = process.argv.includes("--production");
+const https = process.argv.includes("--https");
+const tlsCa = process.argv
+	.find((arg) => arg.startsWith("--tls-ca="))
+	?.slice("--tls-ca=".length);
 const portOffset = Number(
 	process.argv.find((arg) => arg.startsWith("--port-offset="))?.split("=")[1] ??
 		0,
@@ -13,7 +17,8 @@ if (!Number.isInteger(portOffset) || portOffset < -1396 || portOffset > 56738)
 const appPort = 3097 + portOffset;
 const hostPort = 8797 + portOffset;
 const collaborationPort = 1397 + portOffset;
-const appOrigin = `http://127.0.0.1:${appPort}`;
+// Optional TLS proxies keep HTTP/2 benchmark traffic on the same synthetic app.
+const appOrigin = `${https ? "https" : "http"}://127.0.0.1:${appPort + (https ? 20 : 0)}`;
 const storageRoot = await mkdtemp("/private/tmp/haunter-editor-files-");
 const secret = `editor-proof-${crypto.randomUUID()}-${crypto.randomUUID()}`;
 const previewEnv: Record<string, string> = {
@@ -28,7 +33,8 @@ const previewEnv: Record<string, string> = {
 	BETTER_AUTH_SECRET: secret,
 	MCP_RESOURCE_URL: `${appOrigin}/mcp`,
 	MCP_EMBED_ALLOWED_ORIGINS: `http://127.0.0.1:${hostPort},http://localhost:${hostPort}`,
-	NEXT_PUBLIC_COLLABORATION_URL: `ws://127.0.0.1:${collaborationPort}`,
+	NEXT_PUBLIC_COLLABORATION_URL: `${https ? "wss" : "ws"}://127.0.0.1:${collaborationPort + (https ? 30 : 0)}`,
+	...(tlsCa ? { NODE_EXTRA_CA_CERTS: tlsCa } : {}),
 	COLLABORATION_PORT: String(collaborationPort),
 	SQLITE_DB_AUTH_TOKEN: "",
 	SQLITE_DB_URL: `file:/private/tmp/haunter-editor-bootstrap-${crypto.randomUUID()}.db`,

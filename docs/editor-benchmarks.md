@@ -147,3 +147,106 @@ read back through the API. Matching only the repeated typing marker would allow
 old warmup edits to hide a lost sample. Timings are diagnostic evidence, not CI
 thresholds. See [the measured interaction pass](interaction-performance.md) for
 an example comparison and its limits.
+
+## New page and /page creation
+
+Run `scripts/benchmark-page-creation.ts` against two disposable
+`preview:mcp-editor --production` hosts, using separate checkouts and port offsets
+as in the interaction benchmark above. Start both hosts with fresh fixtures before
+a comparison. The runner creates pages, verifies their contents, then trashes its
+created pages so the visible sidebar stays the same size.
+
+```sh
+# Baseline checkout, terminal 1
+bun scripts/preview-mcp-editor.ts --production --port-offset=10
+# Candidate checkout, terminal 2
+bun scripts/preview-mcp-editor.ts --production --port-offset=11
+# Candidate checkout, terminal 3, once both builds are ready
+BENCH_PROFILE_DIR=/tmp/haunter-page-creation-profiles \
+  bun scripts/benchmark-page-creation.ts \
+  main=http://127.0.0.1:8807 candidate=http://127.0.0.1:8808 \
+  > /tmp/haunter-page-creation.jsonl
+```
+
+Defaults: Chromium, 4× CPU throttling, 150 ms HTTP latency, 1.6 Mbps download,
+750 Kbps upload, desktop 1280×1000 and mobile 390×844. These emulate a constrained
+browser against a local database and worker over HTTP/1.1. Production HTTP/2
+request scheduling, Turso latency, and remote WebSocket latency can differ.
+Request interception is deliberately avoided because
+[Playwright routing disables HTTP caching](https://playwright.dev/docs/api/class-page#page-route).
+
+Each scenario gets a fresh browser context. Cold starts at Home for **New page**,
+or loads the parent editor for **/page**. Warm first visits an existing editor,
+then navigates to the source page in the same context, retaining the HTTP cache.
+The new document itself has no local Yjs cache in either case. `/page` necessarily
+has its editor code loaded before the timed click in both cases.
+
+The runner excludes one warmup per revision/scenario and collects three samples,
+alternating revision order. It records click-to-visible title, writable title,
+and editable body, plus elapsed time after an actual character is typed and
+confirmed in each field. The input checks include automation overhead; they are
+local workflow measurements, not field INP. Each sample then saves a unique body
+marker and full title, checks API readback and the subpage link where applicable,
+and requires exact title and body equality after reload.
+
+`BENCH_PROFILE_DIR` saves CPU profiles during excluded warmups. JSON samples
+include resource timings and transfer sizes for download diagnosis. Override
+`BENCH_SAMPLES`, `BENCH_CPU`, `BENCH_LATENCY`, `BENCH_DOWNLOAD_MBPS`,
+`BENCH_UPLOAD_MBPS`, `BENCH_CACHE=cold|warm`,
+`BENCH_FLOW=new|slash`, or `BENCH_VIEWPORT=desktop` for focused diagnosis. Do not
+run builds, full test suites, or other benchmarks during a measured comparison.
+
+### HTTP/2 verification
+
+The optional local TLS proxy allows a real browser HTTP/2 comparison while the
+app and collaboration worker continue using disposable data. It requires Node
+and OpenSSL. Generate a short-lived local certificate:
+
+```sh
+mkdir -p /tmp/haunter-creation-tls
+cat > /tmp/haunter-creation-tls/cert.conf <<'EOF'
+[req]
+distinguished_name=dn
+x509_extensions=ext
+prompt=no
+[dn]
+CN=127.0.0.1
+[ext]
+subjectAltName=IP:127.0.0.1,DNS:localhost
+EOF
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+  -config /tmp/haunter-creation-tls/cert.conf \
+  -keyout /tmp/haunter-creation-tls/key.pem \
+  -out /tmp/haunter-creation-tls/cert.pem
+```
+
+Start the proxy in its own terminal, then start both previews with HTTPS URLs.
+The `--https` option advertises app-port + 20 and worker-port + 30; the proxy maps
+those ports to the actual local listeners. Both revisions must use the same
+preview helper when comparing an older baseline.
+
+```sh
+node scripts/benchmark-http2-proxy.mjs \
+  /tmp/haunter-creation-tls/cert.pem /tmp/haunter-creation-tls/key.pem \
+  3127:3107 1437:1407 3128:3108 1438:1408
+# Baseline checkout, separate terminal
+bun scripts/preview-mcp-editor.ts --production --port-offset=10 --https \
+  --tls-ca=/tmp/haunter-creation-tls/cert.pem
+# Candidate checkout, separate terminal
+bun scripts/preview-mcp-editor.ts --production --port-offset=11 --https \
+  --tls-ca=/tmp/haunter-creation-tls/cert.pem
+# Once both builds are ready
+BENCH_ALLOW_SELF_SIGNED=1 BENCH_VIEWPORT=desktop BENCH_FLOW=new \
+  bun scripts/benchmark-page-creation.ts \
+  main=http://127.0.0.1:8807 candidate=http://127.0.0.1:8808
+```
+
+The helper hosts remain HTTP; their fixtures advertise the HTTPS app origins.
+The benchmark mirrors the helper's synthetic login into the HTTPS session cookie.
+Resource entries record `protocol`; verify uncached app requests report `h2`.
+`BENCH_ALLOW_SELF_SIGNED=1` is only for these local test certificates. A faster
+connection check can add `BENCH_CPU=1 BENCH_LATENCY=20 BENCH_DOWNLOAD_MBPS=10
+BENCH_UPLOAD_MBPS=5`. Stop previews and proxy with Ctrl+C after testing.
+
+See [the page creation results](page-creation-performance.md) for the measured
+comparison, complete ranges, and limits.
