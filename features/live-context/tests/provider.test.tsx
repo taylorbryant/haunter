@@ -199,3 +199,64 @@ test("the first report waits for the parent session effect instead of disappeari
 	render(<Parent />);
 	await waitFor(() => expect(calls.at(-1)?.view?.pageId).toBe(pageId));
 });
+
+test("continuous caret motion is bounded and a range selection advances its deadline", async () => {
+	render(
+		<LiveContextProvider userId="user" activeWorkspaceId="workspace">
+			<Probe />
+		</LiveContextProvider>,
+	);
+	await waitFor(() => expect(calls.length).toBeGreaterThan(0));
+	const caret = (position: number) => ({
+		activeBlockId: "paragraph",
+		selectedBlockIds: [],
+		selectionCount: 0,
+		selection: {
+			coordinateSystem: "prosemirror" as const,
+			kind: "text" as const,
+			anchor: position,
+			head: position,
+			from: position,
+			to: position,
+			selectedText: "",
+			truncated: false,
+		},
+	});
+	tracker!.page("workspace", pageId, caret(1), true);
+	await waitFor(() =>
+		expect(calls.at(-1)?.view?.pageSelection).toEqual(caret(1)),
+	);
+	const before = calls.length;
+	tracker!.page("workspace", pageId, caret(2), false);
+	await new Promise((resolve) => setTimeout(resolve, 350));
+	expect(calls).toHaveLength(before);
+	// Changing every 40 ms cannot keep pushing the deadline into the future.
+	let position = 2;
+	const stream = setInterval(
+		() => tracker!.page("workspace", pageId, caret(++position), false),
+		40,
+	);
+	try {
+		await waitFor(() => expect(calls.length).toBe(before + 1), {
+			timeout: 1_200,
+		});
+		expect(calls.at(-1)?.view?.pageSelection?.selection?.head).toBeGreaterThan(
+			2,
+		);
+	} finally {
+		clearInterval(stream);
+	}
+	tracker!.page("workspace", pageId, caret(++position), false);
+	tracker!.page("workspace", pageId, pageSelectionFixture, false);
+	// A text range should not wait for the slower caret deadline.
+	await waitFor(
+		() =>
+			expect(calls.at(-1)?.view?.pageSelection).toEqual(pageSelectionFixture),
+		{ timeout: 700 },
+	);
+	tracker!.page("workspace", pageId, caret(++position), false);
+	tracker!.withdraw();
+	await tracker!.flush();
+	await new Promise((resolve) => setTimeout(resolve, 1_050));
+	expect(calls.at(-1)?.view).toBeNull();
+}, 6_000);

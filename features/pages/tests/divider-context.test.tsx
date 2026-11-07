@@ -19,6 +19,7 @@ import {
 	PublishContextInputSchema,
 	type PublishContextInput,
 } from "@/features/live-context/schemas";
+import { CARET_REPORT_DELAY_MS } from "@/features/live-context/client/tracker";
 import { observePageContext } from "../client/live-context";
 
 const pageId = crypto.randomUUID();
@@ -165,12 +166,14 @@ test("clicking a divider reports its node selection and continues reporting care
 	act(() => {
 		editor.prosemirrorView.dispatch(editor.prosemirrorState.tr.insertText("q"));
 	});
-	await waitFor(() =>
-		expect(calls.at(-1)?.view?.pageSelection?.selection).toMatchObject({
-			from: afterPos + 1,
-			to: afterPos + 1,
-			selectedText: "",
-		}),
+	await waitFor(
+		() =>
+			expect(calls.at(-1)?.view?.pageSelection?.selection).toMatchObject({
+				from: afterPos + 1,
+				to: afterPos + 1,
+				selectedText: "",
+			}),
+		{ timeout: CARET_REPORT_DELAY_MS + 500 },
 	);
 	expect(document.activeElement).toBe(root);
 	expect(editor.getBlock("after")?.content).toEqual([
