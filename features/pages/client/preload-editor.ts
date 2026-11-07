@@ -1,7 +1,12 @@
 import type { PageMeta } from "@/features/pages/schemas";
 
 export function preloadHaunterEditor() {
-	return import("@/features/pages/components/editor/haunter-editor");
+	// Prioritize document setup before the bulk editor download competes with
+	// the create response and route/title chunks on slow connections. This only
+	// loads code; opening a session still requires a confirmed page and auth.
+	return import("@/features/documents/client/session").then(
+		() => import("@/features/pages/components/editor/haunter-editor"),
+	);
 }
 
 /** Connect a confirmed new page while its Next route is still loading. */
