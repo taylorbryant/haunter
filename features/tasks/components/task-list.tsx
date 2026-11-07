@@ -2,29 +2,25 @@
 
 import { contractErrorMessage } from "@beignet/core/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellIcon, CalendarIcon, FileTextIcon, Trash2Icon } from "lucide-react";
 import {
 	WorkspaceLink as Link,
 	useReplaceWorkspaceSearchParams,
 	useWorkspacePathname as usePathname,
 	useWorkspaceSearchParams as useSearchParams,
 } from "@/client/workspace-navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { reportUserError } from "@/client/error-feedback";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { useCreateDialog } from "@/components/create-dialog-provider";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import { useDeviceTime } from "@/components/device-time-provider";
-import { DueDatePicker } from "@/components/due-date-picker";
 import { Button } from "@/components/ui/button";
 import { QueryError } from "@/components/query-error";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
-import { AssigneePicker } from "@/features/members/components/assignee-picker";
 import type { TaskCreationInput } from "@/features/tasks/client/mutations";
 import {
 	invalidateTasksWhenIdle,
-	isOptimisticTaskId,
 	listTasksQueryOptions,
 } from "@/features/tasks/client/queries";
 import { useTaskMutations } from "@/features/tasks/client/use-task-mutations";
@@ -48,19 +44,13 @@ import {
 	type TaskScope,
 	type TaskWithPage,
 } from "@/features/tasks/schemas";
-import {
-	formatDueDateTimeLabel,
-	isDueOverdue,
-	parseIsoDate,
-} from "@/lib/due-date";
-import { useInlineEditFocus } from "@/hooks/use-inline-edit-focus";
+import { isDueOverdue } from "@/lib/due-date";
 import { cn } from "@/lib/utils";
 import { TaskListSkeleton } from "./task-list-skeleton";
+import { TaskRow, type TaskTitleDraft as TitleDraft } from "./task-row";
 
 const TASK_PAGE_SIZE = 50;
 const TODAY_PAGE_SIZE = 200;
-
-type TitleDraft = { title: string; error?: string };
 
 const FILTERS: { value: TaskFilter; label: string }[] = [
 	{ value: "open", label: "Open" },
@@ -134,7 +124,6 @@ export function TaskList({
 				? UPCOMING_TASK_SUMMARY_LIMIT
 				: TASK_PAGE_SIZE,
 	);
-	const renameFocus = useInlineEditFocus();
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [titleDrafts, setTitleDrafts] = useState<Record<string, TitleDraft>>(
 		{},
@@ -144,7 +133,7 @@ export function TaskList({
 	const [taskToDelete, setTaskToDelete] = useState<TaskWithPage | null>(null);
 	const deleteSession = useRef(0);
 	const mutations = useTaskMutations(workspaceId);
-	const { pendingTaskIds } = mutations;
+	const { pendingTaskIds, update, isPending } = mutations;
 
 	const tasksQuery = useQuery({
 		...listTasksQueryOptions(
@@ -226,43 +215,58 @@ export function TaskList({
 		});
 	}, [searchParams, router, pathname, canEdit, isHomeView, openCreateTask]);
 
-	async function setTaskCompletion(task: TaskWithPage, completed: boolean) {
-		try {
-			await mutations.update(task, { completed });
-		} catch (error) {
-			reportUserError(error, "Task could not be updated. Try again.");
-		}
-	}
+	const setTaskCompletion = useCallback(
+		async (task: TaskWithPage, completed: boolean) => {
+			try {
+				await update(task, { completed });
+			} catch (error) {
+				reportUserError(error, "Task could not be updated. Try again.");
+			}
+		},
+		[update],
+	);
 
-	async function setTaskSchedule(
-		task: TaskWithPage,
-		schedule: Pick<
-			TaskWithPage,
-			"dueDate" | "dueTime" | "reminderOffsetMinutes"
-		>,
-	) {
-		try {
-			await mutations.update(task, schedule);
-		} catch (error) {
-			reportUserError(error, "Task schedule could not be updated. Try again.");
-		}
-	}
+	const setTaskSchedule = useCallback(
+		async (
+			task: TaskWithPage,
+			schedule: Pick<
+				TaskWithPage,
+				"dueDate" | "dueTime" | "reminderOffsetMinutes"
+			>,
+		) => {
+			try {
+				await update(task, schedule);
+			} catch (error) {
+				reportUserError(
+					error,
+					"Task schedule could not be updated. Try again.",
+				);
+			}
+		},
+		[update],
+	);
 
-	async function setTaskAssignee(
-		task: TaskWithPage,
-		assigneeId: string | null,
-		assigneeName: string | null,
-	) {
-		try {
-			await mutations.update(task, { assigneeId }, assigneeName);
-		} catch (error) {
-			reportUserError(error, "Task assignee could not be updated. Try again.");
-		}
-	}
+	const setTaskAssignee = useCallback(
+		async (
+			task: TaskWithPage,
+			assigneeId: string | null,
+			assigneeName: string | null,
+		) => {
+			try {
+				await update(task, { assigneeId }, assigneeName);
+			} catch (error) {
+				reportUserError(
+					error,
+					"Task assignee could not be updated. Try again.",
+				);
+			}
+		},
+		[update],
+	);
 
 	// Standalone tasks are renamed here; page-sourced titles live in the page
 	// document and are edited in the editor.
-	function discardTitle(taskId: string) {
+	const discardTitle = useCallback((taskId: string) => {
 		editSession.current++;
 		setEditingId((current) => (current === taskId ? null : current));
 		setTitleDrafts((current) => {
@@ -270,50 +274,73 @@ export function TaskList({
 			delete next[taskId];
 			return next;
 		});
-	}
+	}, []);
 
-	async function commitTitle(task: TaskWithPage) {
-		if (mutations.isPending(workspaceId, task.id)) return;
-		const draft = titleDrafts[task.id];
-		if (!draft) return;
-		const trimmed = draft.title.trim();
-		if (!trimmed || trimmed === task.title) {
-			discardTitle(task.id);
-			return;
-		}
-		if (trimmed.length > TASK_TITLE_MAX_LENGTH) {
+	const commitTitle = useCallback(
+		async (task: TaskWithPage, draft: TitleDraft | undefined) => {
+			if (isPending(workspaceId, task.id)) return;
+			if (!draft) return;
+			const trimmed = draft.title.trim();
+			if (!trimmed || trimmed === task.title) {
+				discardTitle(task.id);
+				return;
+			}
+			if (trimmed.length > TASK_TITLE_MAX_LENGTH) {
+				setTitleDrafts((current) => ({
+					...current,
+					[task.id]: { ...draft, error: TASK_TITLE_TOO_LONG_MESSAGE },
+				}));
+				return;
+			}
+			const session = editSession.current;
+			const submittedDraft: TitleDraft = { title: trimmed };
+			setTitleDrafts((current) => ({ ...current, [task.id]: submittedDraft }));
+			setEditingId((current) => (current === task.id ? null : current));
+			try {
+				await update(task, { title: trimmed });
+				setTitleDrafts((current) => {
+					if (current[task.id] !== submittedDraft) return current;
+					const next = { ...current };
+					delete next[task.id];
+					return next;
+				});
+			} catch (error) {
+				const message = contractErrorMessage(
+					error,
+					"Task could not be renamed. Try again.",
+				);
+				setTitleDrafts((current) =>
+					current[task.id] === submittedDraft
+						? { ...current, [task.id]: { ...submittedDraft, error: message } }
+						: current,
+				);
+				// Reopen a failed submission only if no later editing interaction owns focus.
+				if (editSession.current === session) setEditingId(task.id);
+			}
+		},
+		[isPending, workspaceId, discardTitle, update],
+	);
+
+	const startTitle = useCallback(
+		(task: TaskWithPage) => {
+			if (isPending(workspaceId, task.id)) return;
+			editSession.current++;
 			setTitleDrafts((current) => ({
 				...current,
-				[task.id]: { ...draft, error: TASK_TITLE_TOO_LONG_MESSAGE },
+				[task.id]: current[task.id] ?? { title: task.title },
 			}));
-			return;
-		}
-		const session = editSession.current;
-		const submittedDraft: TitleDraft = { title: trimmed };
-		setTitleDrafts((current) => ({ ...current, [task.id]: submittedDraft }));
-		setEditingId((current) => (current === task.id ? null : current));
-		try {
-			await mutations.update(task, { title: trimmed });
-			setTitleDrafts((current) => {
-				if (current[task.id] !== submittedDraft) return current;
-				const next = { ...current };
-				delete next[task.id];
-				return next;
-			});
-		} catch (error) {
-			const message = contractErrorMessage(
-				error,
-				"Task could not be renamed. Try again.",
-			);
-			setTitleDrafts((current) =>
-				current[task.id] === submittedDraft
-					? { ...current, [task.id]: { ...submittedDraft, error: message } }
-					: current,
-			);
-			// Reopen a failed submission only if no later editing interaction owns focus.
-			if (editSession.current === session) setEditingId(task.id);
-		}
-	}
+			setEditingId(task.id);
+		},
+		[isPending, workspaceId],
+	);
+	const changeTitle = useCallback((id: string, title: string) => {
+		setTitleDrafts((current) => ({ ...current, [id]: { title } }));
+	}, []);
+	const startDeleteTask = useCallback((task: TaskWithPage) => {
+		deleteSession.current++;
+		setDeleteError(null);
+		setTaskToDelete(task);
+	}, []);
 
 	async function createTask(
 		input: TaskCreationInput,
@@ -382,210 +409,31 @@ export function TaskList({
 		return (
 			<ul className="flex flex-col divide-y">
 				{visibleTasks.map((task) => (
-					<li
+					<TaskRow
 						key={task.id}
-						ref={task.id === focusedTaskId ? focusedRow : undefined}
-						data-task-id={task.id}
-						aria-current={
-							observer?.selectedTaskId === task.id ? true : undefined
-						}
-						tabIndex={observer || task.id === focusedTaskId ? 0 : undefined}
-						onFocusCapture={() => observer?.select(task.id)}
-						onPointerDown={() => observer?.select(task.id)}
-						className={cn(
-							"group flex items-start gap-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring [contain-intrinsic-size:0_52px] [content-visibility:auto]",
-							observer?.selectedTaskId === task.id && "rounded-md bg-accent/40",
-						)}
-					>
-						<input
-							type="checkbox"
-							checked={task.completed}
-							disabled={
-								!canEdit ||
-								isOptimisticTaskId(task.id) ||
-								pendingTaskIds.has(task.id)
-							}
-							className={cn(
-								"mt-0.5 size-4 shrink-0 accent-primary",
-								canEdit &&
-									!isOptimisticTaskId(task.id) &&
-									!pendingTaskIds.has(task.id) &&
-									"cursor-pointer",
-							)}
-							aria-label={task.completed ? "Mark task open" : "Mark task done"}
-							onChange={(event) =>
-								void setTaskCompletion(task, event.target.checked)
-							}
-						/>
-						{/* Stacks title over the chips on mobile; sm+ lays them out
-					    side by side on one line. */}
-						<div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
-							<div className="min-w-0 flex-1">
-								{editingId === task.id ? (
-									<input
-										// biome-ignore lint/a11y/noAutofocus: opened by an explicit tap on the title
-										autoFocus
-										value={titleDrafts[task.id]?.title ?? task.title}
-										aria-label="Task name"
-										maxLength={TASK_TITLE_MAX_LENGTH}
-										className="keyboard-focus-ring w-full rounded-sm bg-transparent text-base leading-tight outline-none [--keyboard-focus-ring-size:2px] sm:text-sm"
-										onChange={(event) => {
-											const title = event.target.value;
-											setTitleDrafts((current) => ({
-												...current,
-												[task.id]: { title },
-											}));
-										}}
-										onKeyDown={(event) => {
-											if (event.key === "Enter" || event.key === "Escape") {
-												event.preventDefault();
-												renameFocus.requestReturn(event.currentTarget);
-											}
-											if (event.key === "Enter") void commitTitle(task);
-											if (event.key === "Escape") {
-												discardTitle(task.id);
-											}
-										}}
-										onBlur={() => void commitTitle(task)}
-									/>
-								) : task.sourceBlockId === null &&
-									canEdit &&
-									!isOptimisticTaskId(task.id) ? (
-									<button
-										type="button"
-										className={cn(
-											"keyboard-focus-ring block max-w-full cursor-text rounded-sm text-left text-base leading-6 [overflow-wrap:anywhere] [--keyboard-focus-ring-size:2px] sm:text-sm",
-											task.completed && "text-muted-foreground line-through",
-										)}
-										ref={renameFocus.returnTargetRef}
-										aria-disabled={pendingTaskIds.has(task.id)}
-										onClick={() => {
-											if (pendingTaskIds.has(task.id)) return;
-											editSession.current++;
-											setTitleDrafts((current) => ({
-												...current,
-												[task.id]: current[task.id] ?? { title: task.title },
-											}));
-											setEditingId(task.id);
-										}}
-									>
-										{task.title || "Untitled task"}
-									</button>
-								) : (
-									<p
-										className={cn(
-											"text-base leading-6 [overflow-wrap:anywhere] sm:text-sm",
-											task.completed && "text-muted-foreground line-through",
-										)}
-									>
-										{task.title || "Untitled task"}
-									</p>
-								)}
-								{titleDrafts[task.id]?.error ? (
-									<p role="alert" className="mt-1 text-destructive text-xs">
-										{titleDrafts[task.id].error}
-									</p>
-								) : null}
-								{task.pageId ? (
-									<Link
-										href={`/w/${workspaceId}/p/${task.pageId}`}
-										className="keyboard-focus-ring flex w-fit items-center gap-1 rounded-sm text-muted-foreground text-xs hover:text-foreground [--keyboard-focus-ring-size:2px]"
-									>
-										<FileTextIcon className="size-3" />
-										{task.pageTitle || "Untitled"}
-									</Link>
-								) : null}
-							</div>
-							<div className="flex items-center gap-1 sm:shrink-0">
-								{isHomeView ? null : (
-									<AssigneePicker
-										value={task.assigneeId}
-										label={
-											task.assigneeName ?? (task.assigneeId ? "Assigned" : null)
-										}
-										disabled={
-											!canEdit ||
-											isOptimisticTaskId(task.id) ||
-											pendingTaskIds.has(task.id)
-										}
-										onChange={(next, label) =>
-											void setTaskAssignee(task, next, label ?? null)
-										}
-									/>
-								)}
-								{canEdit ? (
-									<DueDatePicker
-										value={task.dueDate}
-										time={task.dueTime}
-										reminderOffsetMinutes={task.reminderOffsetMinutes}
-										disabled={
-											isOptimisticTaskId(task.id) || pendingTaskIds.has(task.id)
-										}
-										onChange={(next) =>
-											void setTaskSchedule(task, {
-												dueDate: next.date,
-												dueTime: next.time,
-												reminderOffsetMinutes: next.reminderOffsetMinutes,
-											})
-										}
-										className={cn(
-											"flex shrink-0 cursor-pointer items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs",
-											task.dueDate === null
-												? "text-muted-foreground/70 hover:bg-muted focus-visible:bg-muted aria-expanded:bg-muted"
-												: isOverdue(
-															task,
-															resolvedTodayDate,
-															resolvedCurrentTime,
-														)
-													? "bg-destructive/10 text-destructive"
-													: "bg-muted text-muted-foreground",
-										)}
-									/>
-								) : task.dueDate !== null ? (
-									<span
-										className={cn(
-											"flex shrink-0 items-center gap-1 rounded-md py-0.5 pr-1.5 pl-1 text-xs",
-											isOverdue(task, resolvedTodayDate, resolvedCurrentTime)
-												? "bg-destructive/10 text-destructive"
-												: "bg-muted text-muted-foreground",
-										)}
-									>
-										<CalendarIcon className="size-4 shrink-0" />
-										{formatDueDateTimeLabel(
-											task.dueDate,
-											task.dueTime,
-											parseIsoDate(resolvedTodayDate),
-										)}
-										{task.reminderOffsetMinutes !== null ? (
-											<BellIcon
-												className="size-3 shrink-0"
-												aria-hidden="true"
-											/>
-										) : null}
-									</span>
-								) : null}
-								{task.sourceBlockId === null && canEdit ? (
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										className="size-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
-										aria-label="Delete task"
-										disabled={
-											isOptimisticTaskId(task.id) || pendingTaskIds.has(task.id)
-										}
-										onClick={() => {
-											deleteSession.current += 1;
-											setDeleteError(null);
-											setTaskToDelete(task);
-										}}
-									>
-										<Trash2Icon className="size-3.5" />
-									</Button>
-								) : null}
-							</div>
-						</div>
-					</li>
+						task={task}
+						workspaceId={workspaceId}
+						canEdit={canEdit}
+						compact={isHomeView}
+						pending={pendingTaskIds.has(task.id)}
+						editing={editingId === task.id}
+						draft={titleDrafts[task.id]}
+						selected={observer?.selectedTaskId === task.id}
+						observed={!!observer}
+						focused={task.id === focusedTaskId}
+						rowRef={task.id === focusedTaskId ? focusedRow : undefined}
+						today={resolvedTodayDate}
+						overdue={isOverdue(task, resolvedTodayDate, resolvedCurrentTime)}
+						onSelect={observer?.select}
+						onCompletion={setTaskCompletion}
+						onSchedule={setTaskSchedule}
+						onAssignee={setTaskAssignee}
+						onStartTitle={startTitle}
+						onChangeTitle={changeTitle}
+						onCommitTitle={commitTitle}
+						onDiscardTitle={discardTitle}
+						onDelete={startDeleteTask}
+					/>
 				))}
 			</ul>
 		);
