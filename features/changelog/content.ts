@@ -100,7 +100,7 @@ export function parseChangelogRelease(
 	};
 }
 
-export async function loadChangelogReleases(): Promise<ChangelogRelease[]> {
+async function readChangelogReleases(): Promise<ChangelogRelease[]> {
 	return Promise.all(
 		CHANGELOG_RELEASES.map(async (release) => {
 			const source = await readFile(
@@ -110,4 +110,20 @@ export async function loadChangelogReleases(): Promise<ChangelogRelease[]> {
 			return parseChangelogRelease(source, release);
 		}),
 	);
+}
+
+let releases: Promise<ChangelogRelease[]> | undefined;
+
+/**
+ * The release files ship with the build, so a production process reads and
+ * parses them once instead of on every authenticated layout render. Other
+ * environments re-read so edits show up without a restart.
+ */
+export function loadChangelogReleases(): Promise<ChangelogRelease[]> {
+	if (process.env.NODE_ENV !== "production") return readChangelogReleases();
+	releases ??= readChangelogReleases().catch((error: unknown) => {
+		releases = undefined;
+		throw error;
+	});
+	return releases;
 }
