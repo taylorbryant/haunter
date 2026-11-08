@@ -13,7 +13,6 @@ const previews = [
 		width: 2400,
 		height: 1440,
 		alt: "Haunter workspace with connected pages, a weekly plan, and tasks beside the notes.",
-		caption: "A thought becomes a page. A page becomes a plan.",
 	},
 	{
 		id: "tasks",
@@ -22,7 +21,6 @@ const previews = [
 		width: 1540,
 		height: 770,
 		alt: "Haunter task list bringing together workshop tasks, their source pages, assignees, and due dates.",
-		caption: "All your next steps, without losing where they came from.",
 	},
 	{
 		id: "canvases",
@@ -31,7 +29,6 @@ const previews = [
 		width: 1540,
 		height: 972,
 		alt: "A canvas inside a Haunter page, sketching the flow of a community workshop.",
-		caption: "Some ideas make more sense when you draw them.",
 	},
 ] as const;
 
@@ -41,8 +38,7 @@ export function ProductPreview() {
 
 	return (
 		<div className="flex flex-col gap-5">
-			<div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 text-base sm:text-sm">
-				<p className="text-muted-foreground">A look inside Haunter</p>
+			<div className="flex justify-center text-base sm:text-sm">
 				<fieldset className="flex gap-1">
 					<legend className="sr-only">Choose a product preview</legend>
 					{previews.map((item, index) => (
@@ -80,9 +76,8 @@ export function ProductPreview() {
 				</a>
 				<figcaption
 					aria-live="polite"
-					className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-pretty text-base text-muted-foreground sm:text-sm"
+					className="flex justify-center text-base text-muted-foreground sm:text-sm"
 				>
-					<span>{preview.caption}</span>
 					<Link
 						href={`/guides/${preview.id}`}
 						className="inline-flex min-h-11 items-center gap-2 rounded-lg font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"

@@ -97,10 +97,7 @@ export function PublicPageFooter() {
 					"flex flex-wrap items-center justify-between gap-x-10 gap-y-6 text-base sm:text-sm",
 				)}
 			>
-				<div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-					<PublicBrand />
-					<p className="text-muted-foreground">A home for your ideas.</p>
-				</div>
+				<PublicBrand />
 				<nav
 					aria-label="Footer"
 					className="flex flex-wrap items-center gap-6 text-muted-foreground"

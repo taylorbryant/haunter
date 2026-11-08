@@ -280,7 +280,9 @@ try {
 	assert.equal((await staticPage.goto(origin))?.status(), 200);
 	await staticPage.getByRole("heading", { level: 1 }).waitFor();
 	await staticPage
-		.getByRole("link", { name: "Read the Handbook", exact: true })
+		.getByRole("banner")
+		.getByRole("navigation", { name: "Site", exact: true })
+		.getByRole("link", { name: "Handbook", exact: true })
 		.click();
 	assert.equal(new URL(staticPage.url()).pathname, "/guides");
 	await staticPage
