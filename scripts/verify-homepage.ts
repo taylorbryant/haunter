@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium } from "playwright";
+import { HELP_GUIDES } from "../features/help/guides";
 import { THEME_STORAGE_KEYS } from "../lib/themes";
 
 // Use preview:mcp-editor's disposable account, never a production login.
@@ -56,21 +57,144 @@ try {
 				await (element as HTMLImageElement).decode();
 			});
 		}
-		if (width < 1024) {
-			const menu = page.locator("summary");
-			await menu.focus();
-			await page.keyboard.press("Enter");
-			assert.equal(
-				await page.getByRole("navigation", { name: "Mobile" }).isVisible(),
-				true,
-			);
+		// Each product example leads directly to its Handbook chapter.
+		await page.getByRole("link", { name: "Pages in the Handbook" }).click();
+		await page.waitForURL("**/guides/pages");
+		for (const [path, active] of [
+			["/", "Overview"],
+			["/guides", "Handbook"],
+			["/guides/pages", "Handbook"],
+			["/changelog", "Changelog"],
+		]) {
+			await page.goto(`${origin}${path}`);
+			await page.getByRole("heading", { level: 1 }).waitFor();
 			await page
-				.getByRole("navigation", { name: "Mobile" })
-				.getByRole("link", { name: "Made for AI, too" })
-				.click();
-			await page.waitForURL("**/#ai");
-			assert.equal(new URL(page.url()).hash, "#ai");
+				.getByRole("link", { name: "Skip to content", exact: true })
+				.focus();
+			await page.keyboard.press("Enter");
+			const headingBox = await page
+				.getByRole("heading", { level: 1 })
+				.boundingBox();
+			assert.ok(
+				headingBox && headingBox.y >= 80,
+				"Skip link must keep the heading below the sticky header",
+			);
+			await page.goto(`${origin}${path}`);
+			assert.equal(
+				await page.evaluate(
+					() => document.documentElement.scrollWidth > innerWidth,
+				),
+				false,
+				`Horizontal overflow on ${path} at ${width}px`,
+			);
+			const siteNavigation = page.getByRole("navigation", {
+				name: width < 1024 ? "Mobile" : "Site",
+				exact: true,
+			});
+			if (width < 1024) {
+				const menu = page.getByRole("banner").locator("summary");
+				await menu.focus();
+				await page.keyboard.press("Enter");
+				await siteNavigation.waitFor({ state: "visible" });
+				const link = siteNavigation.getByRole("link", {
+					name: active,
+					exact: true,
+				});
+				assert.equal(await link.getAttribute("aria-current"), "page");
+				await link.focus();
+				await page.keyboard.press("Escape");
+				assert.equal(await siteNavigation.isVisible(), false);
+				assert.equal(
+					await menu.evaluate((element) => element === document.activeElement),
+					true,
+				);
+				await page.keyboard.press("Enter");
+				await siteNavigation
+					.getByRole("link", { name: "Handbook", exact: true })
+					.click();
+				await page.waitForURL("**/guides");
+				await siteNavigation.waitFor({ state: "hidden" });
+				await page.goto(`${origin}${path}`);
+			} else {
+				assert.equal(
+					await siteNavigation
+						.getByRole("link", { name: active, exact: true })
+						.getAttribute("aria-current"),
+					"page",
+				);
+			}
+			assert.equal(
+				await page
+					.getByRole("navigation", { name: "Footer", exact: true })
+					.getByRole("link", { name: "Handbook", exact: true })
+					.getAttribute("href"),
+				"/guides",
+			);
+			if (
+				path === "/guides" &&
+				screenshotDirectory &&
+				(width === 390 || width === 1440)
+			) {
+				await page.evaluate(() => document.fonts.ready);
+				await page.screenshot({
+					path: join(
+						screenshotDirectory,
+						`handbook-${width === 390 ? "mobile" : "desktop"}.jpg`,
+					),
+					fullPage: true,
+					type: "jpeg",
+					quality: 85,
+				});
+			}
 		}
+		await page.goto(`${origin}/guides`);
+		await page
+			.getByRole("link", { name: /Start here Your first few minutes/ })
+			.click();
+		await page.waitForURL("**/guides/getting-started");
+		if (width < 640)
+			await page
+				.getByRole("navigation", { name: "On this page", exact: true })
+				.locator("summary")
+				.click();
+		const firstSection = page
+			.getByRole("navigation", { name: "On this page", exact: true })
+			.getByRole("link")
+			.filter({ visible: true })
+			.first();
+		const sectionId = await firstSection.getAttribute("href");
+		assert.ok(sectionId);
+		await firstSection.click();
+		await page.waitForURL((url) => url.hash === sectionId);
+		const section = page.locator(sectionId);
+		const sectionBox = await section.boundingBox();
+		assert.ok(
+			sectionBox && sectionBox.y >= 80,
+			"Sticky header must not obscure chapter anchors",
+		);
+		await page
+			.getByRole("navigation", { name: "Continue reading" })
+			.getByRole("link")
+			.click();
+		await page.waitForURL("**/guides/pages");
+		if (width < 1024) {
+			await page.getByText("Browse the Handbook", { exact: true }).click();
+			await page
+				.getByRole("navigation", {
+					name: "Mobile Handbook chapters",
+					exact: true,
+				})
+				.getByRole("link", { name: "Tasks", exact: true })
+				.click();
+			await page.waitForURL("**/guides/tasks");
+			await page
+				.getByRole("navigation", {
+					name: "Mobile Handbook chapters",
+					exact: true,
+				})
+				.waitFor({ state: "hidden" });
+		}
+		await page.goto(origin);
 		await page
 			.getByRole("link", { name: "Request access", exact: true })
 			.click();
@@ -80,7 +204,7 @@ try {
 		assert.deepEqual(errors, []);
 		await context.close();
 		console.log(
-			`Homepage: ${width}px layout, preview controls, navigation, and request-access handoff passed.`,
+			`Public website: ${width}px layout, preview controls, site/Handbook navigation, anchors, and request-access handoff passed.`,
 		);
 	}
 
@@ -101,7 +225,10 @@ try {
 		.evaluateAll((links) => [
 			...new Set(links.map((link) => link.getAttribute("href") as string)),
 		]);
-	for (const path of destinations.filter((path) => path !== "/app")) {
+	for (const path of new Set([
+		...destinations.filter((path) => path !== "/app"),
+		...HELP_GUIDES.map((guide) => `/guides/${guide.slug}`),
+	])) {
 		assert.equal(
 			(await context.request.get(`${origin}${path}`)).status(),
 			200,
@@ -153,12 +280,21 @@ try {
 	assert.equal((await staticPage.goto(origin))?.status(), 200);
 	await staticPage.getByRole("heading", { level: 1 }).waitFor();
 	await staticPage
+		.getByRole("link", { name: "Read the Handbook", exact: true })
+		.click();
+	assert.equal(new URL(staticPage.url()).pathname, "/guides");
+	await staticPage
+		.getByRole("link", { name: /Start here Your first few minutes/ })
+		.click();
+	assert.equal(new URL(staticPage.url()).pathname, "/guides/getting-started");
+	await staticPage.goto(origin);
+	await staticPage
 		.getByRole("link", { name: "Request access", exact: true })
 		.click();
 	assert.equal(new URL(staticPage.url()).pathname, "/sign-up");
 	await noScript.close();
 	console.log(
-		"Homepage content and request-access link work without JavaScript.",
+		"Homepage, Handbook, and request-access links work without JavaScript.",
 	);
 } finally {
 	await browser.close();

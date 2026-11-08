@@ -7,31 +7,31 @@ export const HELP_GUIDES = [
 	},
 	{
 		slug: "pages",
-		title: "Writing and organizing",
+		title: "Pages and notes",
 		description:
 			"Build connected notes with blocks, links, files, and workspace search.",
 	},
 	{
 		slug: "tasks",
-		title: "Managing tasks",
+		title: "Tasks",
 		description:
 			"Keep tasks beside your notes and bring them together in one list.",
 	},
 	{
 		slug: "canvases",
-		title: "Working with canvases",
+		title: "Canvases",
 		description:
 			"Sketch inside a page or start a drawing of its own, with editable templates.",
 	},
 	{
 		slug: "ai",
-		title: "Using Haunter with AI",
+		title: "AI connections",
 		description:
 			"Connect an AI agent, choose its access, and work together in Haunter.",
 	},
 	{
 		slug: "sharing-and-exporting",
-		title: "Sharing and exporting",
+		title: "Sharing and export",
 		description:
 			"Work with other people, publish a page, and export your notes.",
 	},

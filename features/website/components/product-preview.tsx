@@ -1,6 +1,8 @@
 "use client";
 
+import { ArrowRightIcon } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 
 const previews = [
@@ -78,9 +80,16 @@ export function ProductPreview() {
 				</a>
 				<figcaption
 					aria-live="polite"
-					className="text-pretty text-base text-muted-foreground sm:text-sm"
+					className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-pretty text-base text-muted-foreground sm:text-sm"
 				>
-					{preview.caption}
+					<span>{preview.caption}</span>
+					<Link
+						href={`/guides/${preview.id}`}
+						className="inline-flex min-h-11 items-center gap-2 rounded-lg font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						{preview.label} in the Handbook{" "}
+						<ArrowRightIcon aria-hidden className="size-4" />
+					</Link>
 				</figcaption>
 			</figure>
 		</div>

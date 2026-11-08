@@ -53,10 +53,10 @@ export default async function HelpGuidePage({
 						href="/guides"
 						className="rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 					>
-						All guides
+						Handbook
 					</Link>
 				</p>
-				<h1 className="max-w-[25ch] text-pretty font-semibold text-3xl tracking-tight sm:text-4xl">
+				<h1 className="max-w-[25ch] text-pretty font-medium text-4xl tracking-tight sm:text-5xl">
 					{guide.title}
 				</h1>
 				<p className="max-w-[65ch] text-pretty text-base/7 text-muted-foreground">
@@ -65,7 +65,7 @@ export default async function HelpGuidePage({
 			</header>
 			<nav
 				aria-label="On this page"
-				className="max-w-[70ch] border-border/70 border-y py-5"
+				className="max-w-[70ch] border-foreground/10 border-y py-5"
 			>
 				<details className="sm:hidden">
 					<summary className="cursor-pointer rounded-sm py-1 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -81,7 +81,7 @@ export default async function HelpGuidePage({
 			<HelpMarkdown>{guide.content}</HelpMarkdown>
 			<nav
 				aria-label="Continue reading"
-				className="max-w-[70ch] border-border/70 border-t pt-6 text-base"
+				className="max-w-[70ch] border-foreground/10 border-t pt-6 text-base"
 			>
 				<Link
 					href={next ? `/guides/${next.slug}` : "/guides"}
@@ -90,7 +90,7 @@ export default async function HelpGuidePage({
 					<p className="text-muted-foreground">
 						{next ? "Up next" : "Keep exploring"}
 					</p>
-					<p className="font-medium">{next?.title ?? "Browse all guides"} →</p>
+					<p className="font-medium">{next?.title ?? "Back to Handbook"} →</p>
 				</Link>
 			</nav>
 		</article>

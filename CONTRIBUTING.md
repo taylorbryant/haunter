@@ -121,7 +121,7 @@ second terminal. The browser checks use only the preview's disposable account
 and long-document fixtures to verify anchors and history restoration at desktop
 and mobile widths, plus sidebar sizing with JavaScript disabled.
 
-To verify the public homepage and app entry point, start `bun run preview:mcp-editor`,
+To verify the public website, Handbook, and app entry point, start `bun run preview:mcp-editor`,
 then run `bun run verify:homepage`. It checks phone, tablet, and desktop layouts,
 keyboard controls, public links, and signed-in and signed-out routing against the
 disposable account. Use `--production` on the preview for a production build.
@@ -135,7 +135,7 @@ disposable account. Use `--production` on the preview for a production build.
 - `components/` and `client/` contain shared browser code.
 - `infra/db/schema/` defines the database; `drizzle/` contains migrations.
 - `docs/` contains maintainer references for architecture, operations, and verification.
-- `content/guides/` contains user guides published at `/guides`.
+- `content/guides/` contains the Haunter Handbook published at `/guides`.
 - `content/changelog/` contains release notes published at `/changelog`.
 
 See [AGENTS.md](AGENTS.md) for generators, registration requirements, and coding
