@@ -2,44 +2,37 @@ export const HELP_GUIDES = [
 	{
 		slug: "getting-started",
 		title: "Getting started",
-		description:
-			"Find your way around and make a home for your notes, tasks, and drawings.",
+		description: "Set up a workspace and create your first page.",
 	},
 	{
 		slug: "pages",
-		title: "Writing and organizing",
-		description:
-			"Build connected notes with blocks, links, files, and workspace search.",
+		title: "Pages and notes",
+		description: "Write, organize, and find your notes.",
 	},
 	{
 		slug: "tasks",
-		title: "Managing tasks",
-		description:
-			"Keep tasks beside your notes and bring them together in one list.",
+		title: "Tasks",
+		description: "Create, assign, and schedule tasks.",
 	},
 	{
 		slug: "canvases",
-		title: "Working with canvases",
-		description:
-			"Sketch inside a page or start a drawing of its own, with editable templates.",
+		title: "Canvases",
+		description: "Draw inside a page or on a canvas of its own.",
 	},
 	{
 		slug: "ai",
-		title: "Using Haunter with AI",
-		description:
-			"Connect an AI agent, choose its access, and work together in Haunter.",
+		title: "AI connections",
+		description: "Connect an AI agent and choose what it can do.",
 	},
 	{
 		slug: "sharing-and-exporting",
-		title: "Sharing and exporting",
-		description:
-			"Work with other people, publish a page, and export your notes.",
+		title: "Sharing and export",
+		description: "Invite people, share a page, or export a copy.",
 	},
 	{
 		slug: "saving-and-recovery",
 		title: "Saving and recovery",
-		description:
-			"Check save status, restore earlier versions, and recover pages and drafts.",
+		description: "Check saves and recover earlier or deleted work.",
 	},
 ] as const;
 

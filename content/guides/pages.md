@@ -1,14 +1,13 @@
-A page can hold text, tasks, tables, code, files, and drawings. Start with one page for a topic, then organize related pages beneath it or link them together.
+Pages hold text, tasks, tables, code, files, and drawings. Nest related pages or connect them with links.
 
 ## Write with blocks
 
-Each paragraph, heading, list item, or drawing is a **block**. You can add blocks as you write and move them around later.
+Paragraphs, headings, list items, and drawings are **blocks**. Add them as you write, then move them as needed.
 
 1. Open a page and click or tap in its body.
 2. Type `/` on a new line to open the insert menu. Search for a block by name or choose one from the list.
-3. Start with headings and paragraphs. Add lists, a quote, or a callout when they help organize your thinking.
 
-![The slash menu open inside a page, showing block types you can insert into your notes.](/guides/images/block-menu.webp "Type / on a new line to choose a block, or keep typing to search the menu.")
+![The slash menu open inside a page, showing block types you can insert into your notes.](/guides/images/block-menu.webp "Type / to insert a block. Keep typing to search.")
 
 Select text to make it bold or italic, or turn it into a link. On mobile, formatting controls appear above the keyboard while you edit. Highlighted controls show which formatting is applied to the selected text.
 
@@ -20,7 +19,7 @@ Choose **Table** from the `/` menu to organize information into rows and columns
 
 Choose **Code Block** for source code, then select its language for syntax highlighting. Use **Expand code** to edit in a larger view. To remove the block, open its options menu and choose **Delete**.
 
-Choose **Image** or **File** from the insert menu and use the block's upload controls. This keeps a reference image or document alongside your notes.
+Choose **Image** or **File** from the insert menu, then use the block's upload controls.
 
 For work you want to track or draw, insert a [task](/guides/tasks#add-a-task-inside-a-page) or [canvas](/guides/canvases#draw-inside-a-page).
 

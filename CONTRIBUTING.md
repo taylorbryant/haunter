@@ -121,6 +121,11 @@ second terminal. The browser checks use only the preview's disposable account
 and long-document fixtures to verify anchors and history restoration at desktop
 and mobile widths, plus sidebar sizing with JavaScript disabled.
 
+To verify the Handbook and changelog, start `bun run preview:mcp-editor`, then
+run `bun run verify:docs`. It checks phone, tablet, and desktop layouts, keyboard
+navigation, section anchors, release disclosures, public links, and navigation
+without JavaScript. Use `--production` on the preview for a production build.
+
 ## Project structure
 
 - `app/` contains Next.js routes and layouts.
@@ -130,7 +135,7 @@ and mobile widths, plus sidebar sizing with JavaScript disabled.
 - `components/` and `client/` contain shared browser code.
 - `infra/db/schema/` defines the database; `drizzle/` contains migrations.
 - `docs/` contains maintainer references for architecture, operations, and verification.
-- `content/guides/` contains user guides published at `/guides`.
+- `content/guides/` contains the Handbook published at `/guides`.
 - `content/changelog/` contains release notes published at `/changelog`.
 
 See [AGENTS.md](AGENTS.md) for generators, registration requirements, and coding

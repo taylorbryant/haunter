@@ -1,4 +1,4 @@
-Use a canvas for a diagram, wireframe, sketch, or collection of ideas. Put it inside a page when the drawing belongs with your notes, or create a standalone canvas for work that needs its own space.
+Use a canvas for diagrams, wireframes, or sketches. Draw inside a page or create a standalone canvas.
 
 ## Draw inside a page
 
@@ -7,9 +7,9 @@ Use a canvas for a diagram, wireframe, sketch, or collection of ideas. Put it in
 3. Use the drawing tools inside the canvas to add shapes, arrows, text, or freehand strokes.
 4. Choose **Expand canvas** when you need more room.
 
-![An inline canvas on the Workshop plan page, with Welcome, Plant together, and Share & learn connected by arrows. The expand control sits at the top right.](/guides/images/inline-canvas.webp "Sketch a flow alongside your notes, then use the expand control for more room.")
+![An inline canvas on the Workshop plan page, with Welcome, Plant together, and Share & learn connected by arrows. The expand control sits at the top right.](/guides/images/inline-canvas.webp "An inline canvas. Choose Expand canvas for more room.")
 
-A drawing inside a page is called an **inline canvas**. It stays with that page, so you can keep writing around it. It does not appear in the Canvases list, but workspace search can find its title and drawing text.
+An **inline canvas** stays inside its page. It does not appear in the Canvases list, but workspace search finds its title and drawing text.
 
 ## Create a standalone canvas
 
@@ -27,7 +27,7 @@ Use the star in the Canvases list to add a drawing to your favorites. In the web
 3. Search for the kind of drawing you need and select an item to insert it.
 4. Select its text and shapes to adapt it to your work.
 
-Library items are editable drawing elements. You can change their labels, colors, layout, and connections after inserting them.
+Edit library shapes, including their labels, colors, layout, and connections.
 
 ## Arrange your drawing
 

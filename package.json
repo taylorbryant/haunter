@@ -20,6 +20,7 @@
 		"verify:mcp-tasks": "bun scripts/verify-mcp-tasks.ts",
 		"verify:cli-compatibility": "bun scripts/verify-cli-compatibility.ts",
 		"verify:workspace-scroll": "bun scripts/verify-workspace-scroll.ts",
+		"verify:docs": "bun --no-env-file scripts/verify-docs.ts",
 		"start": "next start",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
