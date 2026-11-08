@@ -1,6 +1,6 @@
-# Handbook authoring
+# Guides authoring
 
-The Handbook appears at `/guides` and can be read without signing in. To add or update a
+Guides appear at `/guides` and can be read without signing in. To add or update a
 guide, edit its Markdown file here and register its title and description in
 [`features/help/guides.ts`](../../features/help/guides.ts).
 Use plain-text `##` headings for the table of contents and root-relative `/guides/...`

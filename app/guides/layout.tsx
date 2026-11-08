@@ -10,11 +10,11 @@ import "./help.css";
 
 export const viewport = publicPageViewport;
 export const metadata: Metadata = {
-	title: { default: "Handbook · Haunter", template: "%s · Haunter Handbook" },
+	title: { default: "Guides · Haunter", template: "%s · Haunter Guides" },
 	description:
 		"How to use pages, tasks, canvases, and AI connections in Haunter.",
 };
-// Handbook pages never read session or workspace data.
+// Guides pages never read session or workspace data.
 export const dynamic = "force-static";
 
 export default function GuidesLayout({ children }: { children: ReactNode }) {

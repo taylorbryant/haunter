@@ -91,7 +91,7 @@ export default async function HelpGuidePage({
 								{next ? "Up next" : "Keep exploring"}
 							</p>
 							<p className="flex items-center gap-2 font-medium">
-								{next?.title ?? "Back to Handbook"}
+								{next?.title ?? "Back to Guides"}
 								<ArrowRightIcon aria-hidden className="size-4" />
 							</p>
 						</Link>

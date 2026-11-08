@@ -6,10 +6,10 @@ import { HELP_GUIDES } from "@/features/help/guides";
 export default function GuidesPage() {
 	return (
 		<div className="mx-auto max-w-3xl">
-			<PublicPageIntro title="Handbook">
+			<PublicPageIntro title="Guides">
 				How to write, plan, and draw in Haunter.
 			</PublicPageIntro>
-			<nav aria-label="Handbook topics" className="mt-10">
+			<nav aria-label="Guide topics" className="mt-10">
 				<ul
 					// biome-ignore lint/a11y/noRedundantRoles: Preserve list semantics in Safari when Tailwind removes markers.
 					role="list"

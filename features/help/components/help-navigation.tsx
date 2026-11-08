@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 export function HelpNavigation({ mobile = false }: { mobile?: boolean }) {
 	const pathname = usePathname();
 	const links = (
-		<nav aria-label={mobile ? "Mobile Handbook topics" : "Handbook topics"}>
+		<nav aria-label={mobile ? "Mobile guide topics" : "Guide topics"}>
 			{/* biome-ignore lint/a11y/noRedundantRoles: Preserve list semantics in Safari when Tailwind removes list markers. */}
 			<ul role="list" className="flex flex-col gap-1">
 				{[{ slug: "", title: "Overview" }, ...HELP_GUIDES].map((guide) => {

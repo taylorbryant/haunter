@@ -22,8 +22,8 @@ try {
 		const errors: string[] = [];
 		page.on("pageerror", (error) => errors.push(error.message));
 		for (const [path, section, imageName] of [
-			["/guides", "Handbook", "handbook"],
-			["/guides/pages", "Handbook", "handbook-article"],
+			["/guides", "Guides", "guides"],
+			["/guides/pages", "Guides", "guides-article"],
 			["/changelog", "Changelog", "changelog"],
 		]) {
 			assert.equal((await page.goto(`${origin}${path}`))?.status(), 200);
@@ -86,12 +86,12 @@ try {
 		assert.equal(await older.locator("li").first().isVisible(), false);
 		await page
 			.getByRole("banner")
-			.getByRole("link", { name: "Handbook", exact: true })
+			.getByRole("link", { name: "Guides", exact: true })
 			.click();
 		await page.waitForURL("**/guides");
 		assert.equal(
 			await page
-				.getByRole("navigation", { name: "Handbook topics", exact: true })
+				.getByRole("navigation", { name: "Guide topics", exact: true })
 				.getByRole("link")
 				.count(),
 			HELP_GUIDES.length,
@@ -124,7 +124,7 @@ try {
 			await page.getByText("All topics", { exact: true }).click();
 			await page
 				.getByRole("navigation", {
-					name: "Mobile Handbook topics",
+					name: "Mobile guide topics",
 					exact: true,
 				})
 				.getByRole("link", { name: "Tasks", exact: true })
@@ -132,7 +132,7 @@ try {
 			await page.waitForURL("**/guides/tasks");
 			await page
 				.getByRole("navigation", {
-					name: "Mobile Handbook topics",
+					name: "Mobile guide topics",
 					exact: true,
 				})
 				.waitFor({ state: "hidden" });
@@ -140,7 +140,7 @@ try {
 		assert.deepEqual(errors, []);
 		await context.close();
 		console.log(
-			`Handbook and changelog: ${width}px layout, keyboard navigation, anchors, and release disclosures passed.`,
+			`Guides and changelog: ${width}px layout, keyboard navigation, anchors, and release disclosures passed.`,
 		);
 	}
 	const context = await browser.newContext({ javaScriptEnabled: false });

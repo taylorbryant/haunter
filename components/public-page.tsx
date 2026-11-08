@@ -48,7 +48,7 @@ export function PublicPageHeader({
 						className="col-span-2 row-start-2 flex gap-6 text-base sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:text-sm"
 					>
 						{[
-							{ href: "/guides", label: "Handbook", id: "guides" },
+							{ href: "/guides", label: "Guides", id: "guides" },
 							{ href: "/changelog", label: "Changelog", id: "changelog" },
 						].map((link) => (
 							<Link
