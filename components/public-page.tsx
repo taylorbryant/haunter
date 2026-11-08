@@ -55,7 +55,7 @@ export function PublicPageHeader({
 								key={link.id}
 								href={link.href}
 								aria-current={section === link.id ? "page" : undefined}
-								className="flex min-h-12 items-center border-transparent border-b-2 text-muted-foreground outline-none hover:text-foreground focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:border-primary aria-[current=page]:text-foreground sm:min-h-16"
+								className="flex min-h-12 items-center border-transparent border-b-2 text-muted-foreground outline-none hover:text-foreground focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:border-primary aria-[current=page]:text-foreground sm:min-h-16 sm:border-b-0"
 							>
 								{link.label}
 							</Link>
