@@ -20,7 +20,7 @@ test("guides index and every guide bypass the session proxy", () => {
 
 test("the guides exception does not bypass protection for other app paths", () => {
 	for (const path of [
-		"/",
+		"/app",
 		"/help",
 		"/help/pages",
 		"/helpful",

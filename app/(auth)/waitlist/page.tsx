@@ -19,7 +19,7 @@ export default async function WaitlistPage() {
 		redirect("/sign-in?next=/waitlist");
 	}
 	if (await hasAppAccess(ctx)) {
-		redirect("/");
+		redirect("/app");
 	}
 
 	return (

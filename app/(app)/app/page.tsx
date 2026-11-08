@@ -12,7 +12,7 @@ import { auth } from "@/lib/better-auth";
  * leaving a workspace) instead of bouncing into a workspace the user can no
  * longer access.
  */
-export default async function HomePage() {
+export default async function AppEntryPage() {
 	const headerList = await headers();
 	const session = await auth.api.getSession({ headers: headerList });
 	// The (app) layout already redirects signed-out visitors to /sign-in.

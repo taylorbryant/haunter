@@ -320,10 +320,10 @@ export function WorkspaceSwitcher({
 						"The workspace was deleted, but the next workspace could not be opened.",
 					),
 				);
-				router.push("/");
+				router.push("/app");
 			}
 		} else {
-			router.push("/");
+			router.push("/app");
 		}
 		setBusy(false);
 		router.refresh();

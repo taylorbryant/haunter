@@ -157,7 +157,7 @@ export default function AcceptInvitePage({
 			const { error: rejectError } =
 				await authClient.organization.rejectInvitation({ invitationId: id });
 			if (rejectError) throw rejectError;
-			router.replace("/");
+			router.replace("/app");
 		} catch (rejectError) {
 			const authError = rejectError as { code?: string; message?: string };
 			showActionError(
@@ -222,7 +222,7 @@ export default function AcceptInvitePage({
 					{status === "error" ? (
 						<Button
 							variant="ghost"
-							render={<Link href="/" />}
+							render={<Link href="/app" />}
 							nativeButton={false}
 						>
 							Go home

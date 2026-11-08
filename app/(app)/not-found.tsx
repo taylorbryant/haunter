@@ -13,7 +13,7 @@ export default function AppNotFound() {
 					workspace.
 				</p>
 			</div>
-			<Link href="/" className={buttonVariants({ variant: "secondary" })}>
+			<Link href="/app" className={buttonVariants({ variant: "secondary" })}>
 				Go home
 			</Link>
 		</div>

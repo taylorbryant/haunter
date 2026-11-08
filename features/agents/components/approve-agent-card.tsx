@@ -202,7 +202,7 @@ export function ApproveAgentCard({
 					</Button>
 					<Button
 						variant="ghost"
-						render={<Link href="/" />}
+						render={<Link href="/app" />}
 						nativeButton={false}
 					>
 						Back to Haunter
@@ -248,7 +248,7 @@ export function ApproveAgentCard({
 				<CardFooter>
 					<Button
 						variant="outline"
-						render={<Link href="/" />}
+						render={<Link href="/app" />}
 						nativeButton={false}
 					>
 						Back to Haunter
@@ -280,7 +280,7 @@ export function ApproveAgentCard({
 					</Button>
 					<Button
 						variant="outline"
-						render={<Link href="/" />}
+						render={<Link href="/app" />}
 						nativeButton={false}
 					>
 						Back to Haunter

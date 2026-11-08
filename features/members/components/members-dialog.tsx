@@ -163,7 +163,7 @@ export function MembersDialog({
 			await organizationsQuery.refetch?.();
 			setLeaveOpen(false);
 			onOpenChange(false);
-			router.push("/");
+			router.push("/app");
 			router.refresh();
 		} catch (leaveError) {
 			setError(authErrorMessage(leaveError, "Could not leave the workspace."));

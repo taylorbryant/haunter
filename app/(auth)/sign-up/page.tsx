@@ -4,5 +4,5 @@ import { publicPageViewport } from "@/components/public-page";
 export const viewport = publicPageViewport;
 
 export default function SignUpPage() {
-	return <OtpAuthForm />;
+	return <OtpAuthForm intent="request-access" />;
 }

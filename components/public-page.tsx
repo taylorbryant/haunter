@@ -60,7 +60,7 @@ export function PublicPageHeader({
 						size="sm"
 						variant="outline"
 						nativeButton={false}
-						render={<Link href="/" />}
+						render={<Link href="/app" />}
 					>
 						Open Haunter
 					</Button>

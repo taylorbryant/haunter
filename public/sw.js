@@ -27,7 +27,7 @@ self.addEventListener("push", (event) => {
 	const url =
 		typeof payload.url === "string" && payload.url.startsWith("/")
 			? payload.url
-			: "/";
+			: "/app";
 	const tag = typeof payload.tag === "string" ? payload.tag : "haunter";
 	const unreadCount =
 		typeof payload.unreadCount === "number" ? payload.unreadCount : undefined;
@@ -62,7 +62,7 @@ self.addEventListener("notificationclick", (event) => {
 		typeof event.notification.data?.url === "string" &&
 		event.notification.data.url.startsWith("/")
 			? event.notification.data.url
-			: "/";
+			: "/app";
 	const destination = new URL(path, self.location.origin).href;
 	event.waitUntil(
 		self.clients

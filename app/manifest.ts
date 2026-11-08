@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
 		id: "/",
 		short_name: "Haunter",
 		description: "Personal notes: pages, tasks, code, and canvases.",
-		start_url: "/",
+		start_url: "/app",
 		display: "standalone",
 		background_color: "#ffffff",
 		theme_color: "#ffffff",

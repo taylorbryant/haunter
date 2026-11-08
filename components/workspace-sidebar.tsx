@@ -125,7 +125,7 @@ function WorkspaceNavItem({
 			<SidebarMenuButton
 				render={
 					<WorkspaceLink
-						href={root ? `${root}/${section}` : "/"}
+						href={root ? `${root}/${section}` : "/app"}
 						onClick={() => {
 							if (isMobile) setOpenMobile(false);
 						}}

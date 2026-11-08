@@ -30,7 +30,11 @@ import { gravatarUrl } from "@/lib/gravatar";
  * Passwordless sign-in. Unknown emails still receive the same OTP flow, then
  * land on a waitlist-only account after verification.
  */
-export function OtpAuthForm() {
+export function OtpAuthForm({
+	intent = "sign-in",
+}: {
+	intent?: "sign-in" | "request-access";
+}) {
 	const router = useRouter();
 	const [step, setStep] = useState<"email" | "code" | "name" | "setup">(
 		"email",
@@ -180,7 +184,9 @@ export function OtpAuthForm() {
 				<GhostLogo className="mb-1 size-9" />
 				<CardTitle>
 					{step === "email"
-						? "Sign in"
+						? intent === "request-access"
+							? "Request access"
+							: "Sign in"
 						: step === "code"
 							? "Enter your code"
 							: step === "name"
@@ -189,7 +195,9 @@ export function OtpAuthForm() {
 				</CardTitle>
 				<CardDescription aria-live="polite">
 					{step === "email"
-						? "We'll email you a 6-digit code — no password needed."
+						? intent === "request-access"
+							? "Verify your email to join the Haunter waitlist. We'll send you a 6-digit code."
+							: "We'll email you a 6-digit code — no password needed."
 						: step === "code"
 							? `We sent a code to ${email}.`
 							: step === "name"

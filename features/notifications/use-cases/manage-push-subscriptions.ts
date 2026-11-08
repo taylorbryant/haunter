@@ -83,7 +83,7 @@ export const testPushUseCase = useCase
 		const result = await ctx.ports.webPush.send(subscription, {
 			title: "Haunter notifications are on",
 			body: "You'll be notified when assigned tasks become overdue.",
-			url: "/",
+			url: "/app",
 			tag: `notifications-test:${user.id}`,
 			unreadCount: await ctx.ports.notificationInbox.countUnread(user.id),
 		});

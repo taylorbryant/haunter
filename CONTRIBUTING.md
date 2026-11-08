@@ -121,6 +121,11 @@ second terminal. The browser checks use only the preview's disposable account
 and long-document fixtures to verify anchors and history restoration at desktop
 and mobile widths, plus sidebar sizing with JavaScript disabled.
 
+To verify the public homepage and app entry point, start `bun run preview:mcp-editor`,
+then run `bun run verify:homepage`. It checks phone, tablet, and desktop layouts,
+keyboard controls, public links, and signed-in and signed-out routing against the
+disposable account. Use `--production` on the preview for a production build.
+
 ## Project structure
 
 - `app/` contains Next.js routes and layouts.

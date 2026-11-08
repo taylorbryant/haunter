@@ -184,8 +184,7 @@ export function NavUser({
 			}
 			const result = await authClient.signOut();
 			if (result.error) throw result.error;
-			// Hard navigation: forces the server to re-evaluate the now-cleared
-			// session and redirect to sign-in, and drops all client state.
+			// Return to the public homepage and drop all signed-in client state.
 			window.location.href = "/";
 		} catch (error) {
 			reportUserError(authErrorMessage(error, "You could not be signed out."));

@@ -178,6 +178,7 @@ export function ThemeProvider({
 	const pathname = usePathname();
 	// Public and sign-in pages use a fixed palette without replacing preferences.
 	const publicPageTheme =
+		pathname === "/" ||
 		pathname === "/guides" ||
 		pathname.startsWith("/guides/") ||
 		pathname === "/changelog" ||
