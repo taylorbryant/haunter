@@ -1,4 +1,4 @@
-Connect Haunter to your AI app so your **AI agent** can find information, create content, and edit your work through conversation. The connection uses **MCP** (Model Context Protocol) and the access you approve.
+**MCP** (Model Context Protocol) connects Haunter to your AI app. Your **AI agent** can read or edit work using the access you approve.
 
 ## Connect Haunter
 
@@ -33,7 +33,7 @@ Wait for edits to save before closing the panel. If your AI app does not support
 
 ## Give your agent context
 
-Name the page, canvas, or task you want to work on. Include the workspace name if you have similarly named items, or paste a Haunter link. Ask the agent to find and read the item before editing it.
+Name the page, canvas, or task, or paste its Haunter link. Include the workspace if names overlap. Ask the agent to read the item before editing it.
 
 For a specific passage, quote the text or name its heading: “In the Launch plan page, shorten the paragraph under Goals.” For a drawing, identify the canvas and the shapes by their labels: “In the Checkout flow canvas, group the Cart, Payment, and Confirmation steps.”
 
@@ -49,10 +49,8 @@ Wait for your edits to save before asking the agent to change the same content.
 - “Find the notes about onboarding in the Product workspace.”
 - “Add a task to review the Launch plan page next Friday and assign it to me.”
 - “Create a canvas showing the checkout flow in the Product workspace.”
-- “Add the Launch plan and Meeting notes pages to my favorites.”
-- “Show the saved versions of the Launch plan page before restoring anything.”
 
-The agent's changes are saved in Haunter. Review the result in your browser or the Haunter panel before continuing.
+Review the agent's saved changes in your browser or the Haunter panel.
 
 ## Follow activity in a canvas
 

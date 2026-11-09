@@ -1,4 +1,4 @@
-Use page history for earlier content, Trash for deleted pages, and recovery copies for edits that may not have finished saving.
+Use page history for earlier versions, Trash for deleted pages, and recovery copies for unfinished saves.
 
 ## Check that your work is saved
 
@@ -18,7 +18,7 @@ You need editing access to use page history. Wait for your current edits to save
 2. Under **Saved versions**, choose a version and review the preview.
 3. Choose **Restore this version** to replace the page's current content with that version.
 
-Haunter keeps the current content in history before restoring. To undo a restore, return to Page history and restore that saved copy.
+Restoring keeps a copy of the current content in Page history. Restore that copy to undo the change.
 
 Saved versions are checkpoints rather than a record of every keystroke. Restoring a page can also change its task blocks and page links. Drawings inside the page have their own [canvas history](/guides/saving-and-recovery#recover-a-canvas-version).
 
@@ -28,7 +28,7 @@ If you see **Earlier edits are saved on this device**, choose **Review copy**. Y
 
 Select a copy to preview it, then choose **Open as a new page** to work with it separately or **Download copy** to keep a recovery file. Both actions leave your current page unchanged. Choosing **Dismiss** on the notice hides the notice; the copy stays available in Page history.
 
-These copies are kept in the browser where you made the edits. Use that browser to review or download them before clearing its data.
+Review or download these copies in the browser where you made the edits, before clearing its data.
 
 ## Restore a page from Trash
 

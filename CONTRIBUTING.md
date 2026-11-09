@@ -121,6 +121,11 @@ second terminal. The browser checks use only the preview's disposable account
 and long-document fixtures to verify anchors and history restoration at desktop
 and mobile widths, plus sidebar sizing with JavaScript disabled.
 
+To verify Guides and the changelog, start `bun run preview:mcp-editor`, then
+run `bun run verify:docs`. It checks phone, tablet, and desktop layouts, keyboard
+navigation, section anchors, release disclosures, public links, and navigation
+without JavaScript. Use `--production` on the preview for a production build.
+
 ## Project structure
 
 - `app/` contains Next.js routes and layouts.

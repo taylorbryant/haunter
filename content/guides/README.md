@@ -1,4 +1,4 @@
-# Guide authoring
+# Guides authoring
 
 Guides appear at `/guides` and can be read without signing in. To add or update a
 guide, edit its Markdown file here and register its title and description in

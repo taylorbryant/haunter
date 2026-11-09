@@ -9,8 +9,12 @@ Release notes appear at `/changelog`. To publish a release:
 
 Explain what people can do or what behavior changed. Keep implementation and
 deployment details in [`docs/`](../../docs/), and update the
-[user guides](../guides/README.md) when a release changes an existing workflow.
+[Guides](../guides/README.md) when a release changes an existing workflow.
 
 The first manifest entry drives the in-app unread indicator. The parser rejects
 frontmatter that differs from the manifest so the public page and unread state
 cannot silently drift apart.
+
+The public changelog shows the latest release in full and lets readers expand
+earlier releases. Keep the version, date, and title aligned with the manifest;
+copy edits do not create a new release or reset the unread indicator.

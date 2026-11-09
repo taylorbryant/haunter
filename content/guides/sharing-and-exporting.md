@@ -1,4 +1,4 @@
-Invite people into a workspace when you want to work together. Publish a page when someone only needs to read it, or export a copy to use outside Haunter.
+Invite people to collaborate, publish a read-only page, or export a copy.
 
 ## Collaborate in a workspace
 
@@ -8,7 +8,7 @@ Select the workspace name at the top of the sidebar, then choose **Members**. Ow
 2. Choose **Viewer** for read-only access, **Member** for editing access, or **Admin** for editing and member management.
 3. Choose **Invite**.
 
-An invitation gives access to the workspace. If someone only needs to read one page, use a public page link instead. People with editing access can work in the same page or canvas at the same time, with each other's cursors visible while connected.
+Invitations grant workspace access. To share only one page, use a public link. Members with editing access can write or draw together and see each other's cursors.
 
 ## Publish a read-only page
 

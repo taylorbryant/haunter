@@ -1,6 +1,8 @@
+import { ArrowRightIcon, ChevronDownIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { HelpNavigation } from "@/features/help/components/help-navigation";
 import { HelpMarkdown } from "@/features/help/components/help-markdown";
 import { loadHelpGuide } from "@/features/help/content";
 import { findHelpGuide, HELP_GUIDES } from "@/features/help/guides";
@@ -46,53 +48,56 @@ export default async function HelpGuidePage({
 		</ul>
 	);
 	return (
-		<article className="flex flex-col gap-10">
-			<header className="flex flex-col gap-4">
-				<p className="text-base text-muted-foreground sm:text-sm">
-					<Link
-						href="/guides"
-						className="rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+		<div className="grid gap-8 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-12">
+			<aside className="self-start lg:sticky lg:top-24 max-lg:hidden">
+				<HelpNavigation />
+			</aside>
+			<div className="min-w-0">
+				<HelpNavigation mobile />
+				<article className="flex max-w-[70ch] flex-col gap-8 max-lg:pt-8">
+					<header className="flex flex-col gap-4">
+						<h1 className="max-w-[25ch] text-pretty font-medium text-3xl tracking-tight sm:text-4xl">
+							{guide.title}
+						</h1>
+						<p className="max-w-[65ch] text-pretty text-base/7 text-muted-foreground">
+							{guide.description}
+						</p>
+					</header>
+					<nav
+						aria-label="On this page"
+						className="border-foreground/10 border-y"
 					>
-						All guides
-					</Link>
-				</p>
-				<h1 className="max-w-[25ch] text-pretty font-semibold text-3xl tracking-tight sm:text-4xl">
-					{guide.title}
-				</h1>
-				<p className="max-w-[65ch] text-pretty text-base/7 text-muted-foreground">
-					{guide.description}
-				</p>
-			</header>
-			<nav
-				aria-label="On this page"
-				className="max-w-[70ch] border-border/70 border-y py-5"
-			>
-				<details className="sm:hidden">
-					<summary className="cursor-pointer rounded-sm py-1 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
-						On this page
-					</summary>
-					<div className="pt-3">{contents}</div>
-				</details>
-				<div className="max-sm:hidden">
-					<p className="pb-3 font-medium">On this page</p>
-					{contents}
-				</div>
-			</nav>
-			<HelpMarkdown>{guide.content}</HelpMarkdown>
-			<nav
-				aria-label="Continue reading"
-				className="max-w-[70ch] border-border/70 border-t pt-6 text-base"
-			>
-				<Link
-					href={next ? `/guides/${next.slug}` : "/guides"}
-					className="flex flex-col gap-2 rounded-sm py-2 underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-				>
-					<p className="text-muted-foreground">
-						{next ? "Up next" : "Keep exploring"}
-					</p>
-					<p className="font-medium">{next?.title ?? "Browse all guides"} →</p>
-				</Link>
-			</nav>
-		</article>
+						<details className="group">
+							<summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 rounded-md py-3 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+								On this page{" "}
+								<ChevronDownIcon
+									aria-hidden
+									className="size-4 text-muted-foreground group-open:rotate-180"
+								/>
+							</summary>
+							<div className="pb-4">{contents}</div>
+						</details>
+					</nav>
+					<HelpMarkdown>{guide.content}</HelpMarkdown>
+					<nav
+						aria-label="Continue reading"
+						className="max-w-[70ch] border-foreground/10 border-t pt-6 text-base"
+					>
+						<Link
+							href={next ? `/guides/${next.slug}` : "/guides"}
+							className="flex flex-col gap-2 rounded-sm py-2 underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+						>
+							<p className="text-muted-foreground">
+								{next ? "Up next" : "Keep exploring"}
+							</p>
+							<p className="flex items-center gap-2 font-medium">
+								{next?.title ?? "Back to Guides"}
+								<ArrowRightIcon aria-hidden className="size-4" />
+							</p>
+						</Link>
+					</nav>
+				</article>
+			</div>
+		</div>
 	);
 }
