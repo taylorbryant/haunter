@@ -3,8 +3,9 @@
 ## BlockNote: native mobile input
 
 [`package.json`](../package.json) registers the patch for the installed
-`@blocknote/core` version. It fixes the node-view mutation filter in the source,
-ESM bundle, and CommonJS bundle. Update all three when rebasing the patch.
+`@blocknote/core` version. BlockNote 0.57 is ESM-only and no longer ships its
+TypeScript source. The patch fixes the node-view mutation filter in the shipped
+`getDefaultSlashMenuItems-*.js` bundle. Rebase it when upgrading BlockNote.
 
 Safari can split an editable paragraph or code block into a sibling element,
 or replace the editable element itself. BlockNote ignored these changes because
@@ -19,9 +20,10 @@ custom filters still handle mutations inside `contentDOM`. React moving the
 existing editable element within its node view is also excluded.
 
 The [mutation regression tests](../features/pages/tests/editor-native-mutations.test.ts)
-test the patched package source directly because the filter is not a public
-export. Browser verification must also exercise the distributed bundle when
-updating or removing this patch.
+extract and exercise the mutation filter from the patched bundle because it is
+not a public export. Keep the bundle filename and private function name in the
+tests aligned when rebasing. Browser verification must also exercise the full
+distributed bundle when updating or removing this patch.
 
 Validation:
 

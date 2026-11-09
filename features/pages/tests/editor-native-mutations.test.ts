@@ -1,9 +1,25 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import type { NodeView, ViewMutationRecord } from "@tiptap/pm/view";
-// This is a regression test for our version-pinned dependency patch. BlockNote
-// does not expose its node-view mutation filter through the public package API.
-import { ignoreDarkReaderMutations } from "../../../node_modules/@blocknote/core/src/schema/nodeViewMutations";
 import { installTestDom, uninstallTestDom } from "@/tests/setup-dom";
+
+// BlockNote 0.57 ships only ESM bundles. Exercise the version-pinned mutation
+// filter from the distributed bundle; it has no public export or shipped source.
+const bundle = readFileSync(
+	new URL(
+		"getDefaultSlashMenuItems-DfDOr807.js",
+		import.meta.resolve("@blocknote/core"),
+	),
+	"utf8",
+);
+const mutationFilter = bundle.match(
+	/\/\/ src\/schema\/nodeViewMutations\.ts\n([\s\S]*?)\/\/ src\/util\/string\.ts/,
+);
+if (!mutationFilter) throw new Error("BlockNote mutation filter was not found");
+const ignoreDarkReaderMutations = runInNewContext(
+	`${mutationFilter[1]}\nGe;`,
+) as (nodeView: NodeView) => void;
 
 beforeEach(installTestDom);
 afterEach(async () => {
@@ -11,13 +27,9 @@ afterEach(async () => {
 	await uninstallTestDom();
 });
 
-test("both patched BlockNote bundles remain valid JavaScript", async () => {
-	const entry = import.meta.resolve("@blocknote/core");
+test("the patched BlockNote bundle remains valid JavaScript", () => {
 	const transpiler = new Bun.Transpiler({ loader: "js" });
-	for (const filename of ["blocks-DaEUT0O1.js", "blocks-DLgTreVu.cjs"]) {
-		const source = await Bun.file(new URL(filename, entry)).text();
-		expect(() => transpiler.transformSync(source)).not.toThrow();
-	}
+	expect(() => transpiler.transformSync(bundle)).not.toThrow();
 });
 
 function fixture(originalIgnoreMutation?: NodeView["ignoreMutation"]) {

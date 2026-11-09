@@ -5,8 +5,8 @@ import {
 	createHeadingBlockSpec,
 	defaultBlockSpecs,
 	defaultInlineContentSpecs,
-	SyntaxHighlightingExtension,
 } from "@blocknote/core";
+import { SyntaxHighlightingExtension } from "@blocknote/core/extensions";
 import {
 	CODE_BLOCK_LANGUAGES,
 	normalizeCodeBlockLanguage,
@@ -81,12 +81,15 @@ function getHeadingLevel(level: unknown): HeadingLevel {
 	return 1;
 }
 
+const renderHeading = headingBlockSpec.implementation.render;
+if (!renderHeading) throw new Error("BlockNote heading renderer is missing");
+
 const haunterHeadingBlockSpec: typeof headingBlockSpec = {
 	...headingBlockSpec,
 	implementation: {
 		...headingBlockSpec.implementation,
-		render(...args: Parameters<typeof headingBlockSpec.implementation.render>) {
-			const rendered = headingBlockSpec.implementation.render.apply(this, args);
+		render(...args: Parameters<typeof renderHeading>) {
+			const rendered = renderHeading.apply(this, args);
 			const level = getHeadingLevel(args[0].props.level);
 			applyHeadingStyles(
 				rendered.dom instanceof HTMLElement ? rendered.dom : undefined,
@@ -180,6 +183,10 @@ const codeBlockUnindentExtension = createExtension({
 // blocks unless the DOM opts out, and BlockNote sets no input hints. They
 // must be set inside the node view's render — ProseMirror treats that DOM
 // as canonical, whereas attributes added from outside get reverted.
+const renderCodeBlock = baseCodeBlockSpec.implementation.render;
+if (!renderCodeBlock)
+	throw new Error("BlockNote code block renderer is missing");
+
 const codeBlockSpec: typeof baseCodeBlockSpec = {
 	...baseCodeBlockSpec,
 	extensions: [
@@ -193,9 +200,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 			...baseCodeBlockSpec.implementation.meta,
 			highlight: (block) => normalizeCodeBlockLanguage(block.props.language),
 		},
-		render(
-			...args: Parameters<typeof baseCodeBlockSpec.implementation.render>
-		) {
+		render(...args: Parameters<typeof renderCodeBlock>) {
 			const [block, ...renderArgs] = args;
 			// Yjs updates and old saved documents bypass initialContent cleanup.
 			// Sanitize the render input before the upstream picker can throw,
@@ -207,7 +212,7 @@ const codeBlockSpec: typeof baseCodeBlockSpec = {
 					language: normalizeCodeBlockLanguage(block.props.language),
 				},
 			};
-			const rendered = baseCodeBlockSpec.implementation.render.apply(this, [
+			const rendered = renderCodeBlock.apply(this, [
 				normalizedBlock,
 				...renderArgs,
 			]);
