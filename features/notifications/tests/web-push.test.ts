@@ -5,7 +5,7 @@ import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
 import https, { type request, type RequestOptions } from "node:https";
 import { Readable } from "node:stream";
-import webPush from "web-push";
+import * as webPush from "web-push";
 import { documentFixture } from "@/features/documents/tests/helpers";
 import { createWebPushPort } from "@/infra/notifications/web-push";
 import type { StoredPushSubscription, WebPushMessage } from "../ports";

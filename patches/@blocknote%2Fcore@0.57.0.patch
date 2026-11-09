@@ -1,0 +1,44 @@
+diff --git a/dist/getDefaultSlashMenuItems-DfDOr807.js b/dist/getDefaultSlashMenuItems-DfDOr807.js
+index 155c6bbb08de58120ad67f82784dede1b47f5673..4b8f75898d34c22abcfeaf356e4af63153aa3008 100644
+--- a/dist/getDefaultSlashMenuItems-DfDOr807.js
++++ b/dist/getDefaultSlashMenuItems-DfDOr807.js
+@@ -615,9 +615,37 @@ function Ue(e, t = "<br>") {
+ function We(e) {
+ 	return e.type !== "attributes" || !e.attributeName ? !1 : e.attributeName.startsWith("data-darkreader") ? !0 : e.attributeName === "style" ? (e.target.getAttribute("style") ?? "").includes("--darkreader") || (e.oldValue ?? "").includes("--darkreader") : !1;
+ }
++// Safari may split or replace the editable element itself during native input.
++// These mutations happen outside contentDOM, but are still document edits.
++function isContentBoundaryMutation(mutation, contentDOM, dom) {
++  if (
++    !contentDOM || mutation.type !== "childList" ||
++    contentDOM.contains(mutation.target)
++  ) return false;
++
++  // React can reparent the existing content DOM while rendering. Read a
++  // removal only when the editable element was actually lost from this view.
++  if (
++    !dom.contains(contentDOM) &&
++    Array.from(mutation.removedNodes).some(node => node.contains(contentDOM))
++  ) return true;
++
++  if (!mutation.target.contains(contentDOM)) return false;
++  const focus = contentDOM.ownerDocument.getSelection()?.focusNode;
++  if (!focus || contentDOM.contains(focus)) return false;
++  const element = focus.nodeType === 1 ? focus : focus.parentElement;
++  if (
++    !element?.isContentEditable ||
++    element.closest("button, input, select, textarea, [contenteditable='false']")
++  ) return false;
++
++  // A native split moves the caret into the inserted sibling. Toolbar and
++  // browser-extension updates do not, and must not trigger a re-render loop.
++  return Array.from(mutation.addedNodes).some(node => node.contains(focus));
++}
+ function Ge(e) {
+-	let t = e.ignoreMutation?.bind(e), n = e.contentDOM;
+-	e.ignoreMutation = (e) => We(e) ? !0 : t ? t(e) : !n && e.type !== "selection";
++	let t = e.ignoreMutation?.bind(e), n = e.contentDOM, dom = e.dom;
++	e.ignoreMutation = (e) => isContentBoundaryMutation(e,n,dom) ? false : e.type !== "selection" && (!n || e.type === "attributes" || !n.contains(e.target)) ? true : We(e) ? true : t ? t(e) : !n && e.type !== "selection";
+ }
+ // src/util/string.ts
+ function I(e) {

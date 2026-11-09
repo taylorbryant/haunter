@@ -1,5 +1,7 @@
 "use client";
 
+import type { BlockNoteEditor } from "@blocknote/core";
+import { ReadOnlyExtension } from "@blocknote/core/extensions";
 import { EllipsisIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useRef, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
@@ -15,7 +17,7 @@ type CodeBlockMenuEditor = {
 	getBlock(id: string): { type: string } | undefined;
 	removeBlocks(ids: string[]): unknown;
 	focus(): void;
-	onChange(callback: () => void): () => void;
+	getExtension: BlockNoteEditor["getExtension"];
 };
 
 function CodeBlockMenu({
@@ -26,7 +28,9 @@ function CodeBlockMenu({
 	blockId: string;
 }) {
 	const subscribe = useCallback(
-		(callback: () => void) => editor.onChange(callback),
+		(callback: () => void) =>
+			editor.getExtension(ReadOnlyExtension)?.store.subscribe(callback) ??
+			(() => {}),
 		[editor],
 	);
 	const editable = useSyncExternalStore(subscribe, () => editor.isEditable);
