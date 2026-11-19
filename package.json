@@ -129,7 +129,7 @@
 	"devDependencies": {
 		"@beignet/cli": "0.0.65",
 		"@beignet/web": "0.0.65",
-		"@biomejs/biome": "2.6.7",
+		"@biomejs/biome": "2.6.8",
 		"@happy-dom/global-registrator": "21.0.4",
 		"@tailwindcss/postcss": "4.3.5",
 		"@testing-library/react": "16.3.3",
