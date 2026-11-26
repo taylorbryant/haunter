@@ -1,14 +1,32 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
 version: 2
 updates:
-  - package-ecosystem: "bun" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "bun"
+    directories:
+      - "/"
+      - "/packages/cli"
     schedule:
       interval: "weekly"
+    groups:
+      beignet:
+        patterns: ["@beignet/*"]
+      better-auth:
+        patterns: ["better-auth", "@better-auth/*", "better-call"]
+      blocknote:
+        patterns: ["@blocknote/*"]
+      hocuspocus:
+        patterns: ["@hocuspocus/*"]
+      tldraw:
+        patterns: ["tldraw", "@tldraw/*"]
+      shiki:
+        patterns: ["@shikijs/*"]
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+      tailwind:
+        patterns: ["tailwindcss", "@tailwindcss/*"]
+    ignore:
+      # @openai/mcp-extensions currently requires MCP Apps 1.x.
+      - dependency-name: "@modelcontextprotocol/ext-apps"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
