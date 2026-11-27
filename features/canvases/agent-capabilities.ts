@@ -5,7 +5,10 @@ import {
 	ReadCanvasImageInputSchema,
 	CanvasImageOutputSchema,
 } from "./editing";
-import { defineAgentCapability } from "@/lib/agent-capabilities";
+import {
+	defineAgentCapability,
+	defineAgentCapabilityRegistry,
+} from "@/lib/agent-capabilities";
 import { AGENT_CAPABILITY_DESCRIPTIONS } from "@/features/agents/capability-catalog";
 import {
 	PageEditOutputSchema,
@@ -43,6 +46,27 @@ const CanvasInput = z.object({ ...workspace, canvasId: z.uuid() });
 function canvasMetadata({ id, userId: _, ...canvas }: CanvasListItem) {
 	return CanvasMetadata.parse({ ...canvas, canvasId: id });
 }
+
+// Opening the editor needs only the destination. Use the same read grant and
+// execution hooks as read_canvas while keeping its public drawing contract intact.
+export const canvasEditorReadRegistry = defineAgentCapabilityRegistry([
+	defineAgentCapability("read_canvas", {
+		description: "Resolve the canvas editor destination.",
+		input: CanvasInput,
+		output: CanvasMetadata,
+		async handle({ ctx, input }) {
+			const { getCanvasMetadataUseCase } = await import(
+				"./use-cases/get-canvas-metadata"
+			);
+			return canvasMetadata(
+				await getCanvasMetadataUseCase.run({
+					ctx,
+					input: { id: input.canvasId },
+				}),
+			);
+		},
+	}),
+] as const);
 
 export const canvasAgentCapabilities = [
 	defineAgentCapability("insert_canvas_image", {

@@ -11,7 +11,7 @@ export const openCanvasSessionUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const user = requireUser(ctx);
 		const scope = requireActiveWorkspaceScope(ctx);
-		const canvas = await ctx.ports.canvases.findById(scope, input.id);
+		const canvas = await ctx.ports.canvases.findMetaById(scope, input.id);
 		if (!canvas) throw appError("CanvasNotFound");
 		await ctx.gate.authorize("canvases.read", canvas);
 		if (canvas.pageId) {
@@ -25,7 +25,7 @@ export const openCanvasSessionUseCase = useCase
 			throw appError("Forbidden");
 		const sessionId = ctx.embeddedEditor?.connectionId ?? ctx.auth?.session?.id;
 		if (!sessionId) throw appError("Unauthorized");
-		if (!(await ctx.ports.canvases.findSyncRoom(scope, canvas.id)))
+		if (!(await ctx.ports.canvases.hasSyncRoom(scope, canvas.id)))
 			throw appError("InvalidPageContent", {
 				message:
 					"This canvas is missing its collaborative data. Contact the workspace administrator.",

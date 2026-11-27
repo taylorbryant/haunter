@@ -114,9 +114,15 @@ test("opening a document stays loading while real and recovered edits remain pen
 		// Typing before the first server acknowledgement must immediately exit loading.
 		const gate =
 			Promise.withResolvers<Awaited<ReturnType<typeof requestSession>>>();
-		const early = new PageDocumentSession(options, () => gate.promise);
+		let grantRequests = 0;
+		const early = new PageDocumentSession(options, () => {
+			grantRequests++;
+			return gate.promise;
+		});
 		sessions.push(early);
-		await early.start();
+		const starting = early.start();
+		expect(grantRequests).toBe(1);
+		await starting;
 		expect(early.getSnapshot()).toMatchObject({
 			ready: true,
 			initializing: true,
@@ -131,19 +137,29 @@ test("opening a document stays loading while real and recovered edits remain pen
 		gate.resolve(await requestSession());
 		await until(() => early.provider?.synced === true);
 		expect(await early.flushServer()).toBe(true);
+		expect(grantRequests).toBe(1);
 		await early.destroy(() => true);
 
 		// Offline edits remain visibly pending after a reload, before connecting.
-		const offline = new PageDocumentSession(options, requestSession);
+		let offlineRequests = 0;
+		const offline = new PageDocumentSession(options, () => {
+			offlineRequests++;
+			return requestSession();
+		});
 		sessions.push(offline);
 		offline.pause();
 		await offline.start();
+		expect(offlineRequests).toBe(0);
 		firstText(offline.doc).insert(0, "Offline edit. ");
 		await offline.flushLocal();
 		await offline.destroy(() => true);
 		const reconnect =
 			Promise.withResolvers<Awaited<ReturnType<typeof requestSession>>>();
-		const recovered = new PageDocumentSession(options, () => reconnect.promise);
+		let reconnectRequests = 0;
+		const recovered = new PageDocumentSession(options, async () => {
+			if (++reconnectRequests === 1) throw new Error("Offline during startup");
+			return reconnect.promise;
+		});
 		sessions.push(recovered);
 		await recovered.start();
 		expect(draft(recovered)).toMatchObject({
@@ -155,6 +171,7 @@ test("opening a document stays loading while real and recovered edits remain pen
 		reconnect.resolve(await requestSession());
 		await until(() => recovered.provider?.synced === true);
 		expect(await recovered.flushServer()).toBe(true);
+		expect(reconnectRequests).toBe(2);
 		expect(draft(recovered).status).toBe("saved");
 	} finally {
 		for (const session of sessions) await session.destroy(() => true);

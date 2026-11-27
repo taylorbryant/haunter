@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { isCanvasAgentActivity } from "../canvas-activity";
 import { canvasActivityFixture } from "./canvas-activity-fixture";
 import { createHaunterAgentCapabilityExecutor } from "@/server/agent-capabilities";
@@ -121,10 +121,13 @@ test("a timed-out preparation never publishes later or blocks the canvas action"
 	const f = await canvasActivityFixture();
 	const blocked = Promise.withResolvers<void>();
 	const find = f.ports.canvases.findMetaById;
-	f.ports.canvases.findMetaById = async (...args) => {
-		await blocked.promise;
-		return find(...args);
-	};
+	// Stall presence preparation. The action must still perform its own resource lookup.
+	const lookup = spyOn(f.ports.canvases, "findMetaById").mockImplementationOnce(
+		async (...args) => {
+			await blocked.promise;
+			return find(...args);
+		},
+	);
 	const timeout = setTimeout(() => blocked.resolve(), 2500);
 	try {
 		const start = performance.now();
@@ -132,6 +135,7 @@ test("a timed-out preparation never publishes later or blocks the canvas action"
 		expect(performance.now() - start).toBeLessThan(2000);
 	} finally {
 		clearTimeout(timeout);
+		lookup.mockRestore();
 		blocked.resolve();
 		await Bun.sleep(0);
 	}

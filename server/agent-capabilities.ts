@@ -1,6 +1,7 @@
 import "@beignet/core/server-only";
 import {
 	AgentCapabilityError,
+	type CreateAgentCapabilityExecutorOptions,
 	createAgentCapabilityExecutor,
 } from "@beignet/core/agent-capabilities";
 import { APIError } from "better-auth/api";
@@ -15,6 +16,7 @@ import {
 	recordAgentActivity,
 	recordMcpConnectionActivity,
 } from "@/features/agents/use-cases/record-agent-activity";
+import type { canvasEditorReadRegistry } from "@/features/canvases/agent-capabilities";
 import type { TaskAgentCapabilityDependencies } from "@/features/tasks/agent-capabilities";
 import type { AgentPrincipal } from "@/lib/agent-capabilities";
 import {
@@ -51,15 +53,20 @@ export async function createHaunterAgentCapabilityExecutor(
 		dependencies.getTimezone || dependencies.now
 			? createHaunterAgentCapabilityRegistry(dependencies)
 			: agentCapabilityRegistry;
-	const server = await dependencies.getServer();
+	return createAgentCapabilityExecutor<typeof registry.definitions>({
+		registry,
+		...capabilityExecutionOptions(await dependencies.getServer()),
+	});
+}
+
+function capabilityExecutionOptions(server: AgentCapabilityServer) {
 	const pageActivity = new WeakMap<
 		AppContext,
 		(phase: "completed" | "failed") => Promise<void>
 	>();
 	const canvasActivity = new WeakMap<AppContext, FinishCanvasActivity>();
 
-	const executor = createAgentCapabilityExecutor({
-		registry,
+	return {
 		instrumentation: server.ports,
 		hooks: [
 			async (event) => {
@@ -154,9 +161,15 @@ export async function createHaunterAgentCapabilityExecutor(
 			if (finishCanvas) canvasActivity.set(ctx, finishCanvas);
 			return ctx;
 		},
-	});
-
-	return executor;
+	} satisfies Pick<
+		CreateAgentCapabilityExecutorOptions<
+			AppContext,
+			AgentPrincipal,
+			| typeof agentCapabilityRegistry.definitions
+			| typeof canvasEditorReadRegistry.definitions
+		>,
+		"instrumentation" | "hooks" | "createContext"
+	>;
 }
 
 export async function getRemoteMcpConnection(
@@ -229,13 +242,18 @@ export async function executeRemoteMcpCapability(
 		clientId: string;
 	},
 	dependencies: AgentCapabilityDependencies,
+	editorRegistry?: typeof canvasEditorReadRegistry,
 ): Promise<unknown> {
 	const principal = await resolveRemoteMcpPrincipal(input, dependencies);
 
 	try {
-		return await (
-			await createHaunterAgentCapabilityExecutor(dependencies)
-		).executeDynamic({
+		const executor = editorRegistry
+			? createAgentCapabilityExecutor<typeof editorRegistry.definitions>({
+					registry: editorRegistry,
+					...capabilityExecutionOptions(await dependencies.getServer()),
+				})
+			: await createHaunterAgentCapabilityExecutor(dependencies);
+		return await executor.executeDynamic({
 			name: input.capability,
 			principal,
 			input: input.arguments ?? {},

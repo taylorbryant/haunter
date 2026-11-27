@@ -36,6 +36,7 @@ export interface CanvasRepository {
 		canvasId: string,
 		id: string,
 	): Promise<{ snapshotJson: string; revision: number } | null>;
+	hasSyncRoom(scope: TenantScope, id: string): Promise<boolean>;
 	findSyncRoom(
 		scope: TenantScope,
 		id: string,

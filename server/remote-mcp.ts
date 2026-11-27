@@ -29,6 +29,7 @@ import {
 	createMcpAgentCapabilityAdapter,
 	type McpAgentCapabilityTools,
 } from "@beignet/mcp";
+import { canvasEditorReadRegistry } from "@/features/canvases/agent-capabilities";
 import { CanvasPreviewMetadataSchema } from "@/features/canvases/editing";
 import { capabilitiesForAgentPermissionProfile } from "@/features/agents/permission-profiles";
 import type { McpConnectionRow } from "@/features/agents/ports";
@@ -364,7 +365,10 @@ export function registerRemoteMcpTools(
 			execute: (capability, args) =>
 				executeRemoteMcpCapability(
 					{ capability, arguments: args, ...input.identity },
-					{ getServer: input.getServer },
+					{
+						getServer: input.getServer,
+					},
+					capability === "read_canvas" ? canvasEditorReadRegistry : undefined,
 				),
 			errorMessage: safeToolErrorMessage,
 		});

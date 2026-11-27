@@ -9,11 +9,11 @@ export async function authorizeCanvas(
 ) {
 	requireUser(ctx);
 	const scope = requireActiveWorkspaceScope(ctx);
-	const canvas = await ctx.ports.canvases.findById(scope, canvasId);
+	const canvas = await ctx.ports.canvases.findMetaById(scope, canvasId);
 	if (!canvas) throw appError("CanvasNotFound");
 	await ctx.gate.authorize(write ? "canvases.update" : "canvases.read", canvas);
 	if (canvas.pageId) {
-		const page = await ctx.ports.pages.findById(scope, canvas.pageId);
+		const page = await ctx.ports.pages.findMetaById(scope, canvas.pageId);
 		if (!page || page.deletedAt) throw appError("CanvasNotFound");
 		await ctx.gate.authorize(write ? "pages.update" : "pages.read", page);
 	}

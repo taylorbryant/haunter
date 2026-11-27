@@ -1,8 +1,8 @@
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { makeQueryClient } from "@/client";
-import { getCanvasQueryOptions } from "@/features/canvases/client/queries";
+import { getCanvasMetadataQueryOptions } from "@/features/canvases/client/queries";
 import { StandaloneCanvas } from "@/features/canvases/components/standalone-canvas";
-import { getCanvasUseCase } from "@/features/canvases/use-cases";
+import { getCanvasMetadataUseCase } from "@/features/canvases/use-cases";
 import {
 	getAppRequestContext,
 	serverUseCaseQueryOptions,
@@ -21,8 +21,8 @@ export default async function StandaloneCanvasPage({
 
 	await queryClient.prefetchQuery(
 		serverUseCaseQueryOptions(
-			getCanvasQueryOptions(canvasId),
-			getCanvasUseCase,
+			getCanvasMetadataQueryOptions(canvasId),
+			getCanvasMetadataUseCase,
 			ctx,
 			{ id: canvasId },
 		),

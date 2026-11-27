@@ -24,7 +24,7 @@ import { WorkspaceEventSubscriber } from "@/features/collab/client/workspace-eve
 import { CanvasList } from "@/features/canvases/components/canvas-list";
 import {
 	createCanvasMutationOptions,
-	getCanvasQueryOptions,
+	getCanvasMetadataQueryOptions,
 	invalidateCanvases,
 } from "@/features/canvases/client/queries";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
@@ -339,7 +339,10 @@ function CanvasParentLink({
 	workspaceId: string;
 }) {
 	const enabled = useProtectedRequestsEnabled();
-	const canvas = useQuery({ ...getCanvasQueryOptions(canvasId), enabled });
+	const canvas = useQuery({
+		...getCanvasMetadataQueryOptions(canvasId),
+		enabled,
+	});
 	if (!canvas.data?.pageId) return null;
 	return (
 		<Button
@@ -375,7 +378,7 @@ function WorkspaceDocument({
 		enabled: enabled && !!pageId,
 	});
 	const canvas = useQuery({
-		...getCanvasQueryOptions(canvasId ?? ""),
+		...getCanvasMetadataQueryOptions(canvasId ?? ""),
 		enabled: enabled && !!canvasId,
 	});
 	const createPage = useMutation(createPageMutationOptions());

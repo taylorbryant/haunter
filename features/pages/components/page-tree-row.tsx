@@ -189,6 +189,7 @@ export function PageTreeRow({
 						<Link
 							ref={renameFocus.returnTargetRef}
 							href={`/w/${workspaceId}/p/${page.id}`}
+							prefetch={false}
 							onFocus={() => onPrefetch()}
 							onPointerDown={() => onPrefetch()}
 							onPointerEnter={() => onPrefetch()}

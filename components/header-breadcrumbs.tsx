@@ -19,7 +19,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getCanvasQueryOptions } from "@/features/canvases/client/queries";
+import { getCanvasMetadataQueryOptions } from "@/features/canvases/client/queries";
 import { listPagesQueryOptions } from "@/features/pages/client/queries";
 import type { PageMeta } from "@/features/pages/schemas";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
@@ -51,7 +51,7 @@ export function HeaderBreadcrumbs() {
 		enabled: workspaceId !== null && synced,
 	});
 	const canvasQuery = useQuery({
-		...getCanvasQueryOptions(canvasId ?? ""),
+		...getCanvasMetadataQueryOptions(canvasId ?? ""),
 		enabled: canvasId !== null && synced,
 	});
 

@@ -2,6 +2,7 @@ export { createCanvasUseCase } from "./create-canvas";
 export { createCanvasBlockUseCase } from "./create-canvas-block";
 export { canvasCommandUseCase } from "./edit-canvas";
 export { deleteCanvasUseCase } from "./delete-canvas";
+export { getCanvasMetadataUseCase } from "./get-canvas-metadata";
 export { getCanvasUseCase } from "./get-canvas";
 export { getCanvasNavigationUseCase } from "./get-canvas-navigation";
 export { listCanvasesUseCase } from "./list-canvases";

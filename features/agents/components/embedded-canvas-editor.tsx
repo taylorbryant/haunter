@@ -9,7 +9,7 @@ import { useProtectedRequestsEnabled } from "@/components/session-recovery-provi
 import { GhostLogo } from "@/components/ghost-logo";
 import { Button } from "@/components/ui/button";
 import { QueryError } from "@/components/query-error";
-import { getCanvasQueryOptions } from "@/features/canvases/client/queries";
+import { getCanvasMetadataQueryOptions } from "@/features/canvases/client/queries";
 import { useWorkspaceRouteSync } from "@/features/workspaces/client/use-workspace-route-sync";
 import { EmbeddedEditorFrame, readBridge, send } from "./embedded-editor-frame";
 
@@ -29,7 +29,7 @@ export function EmbeddedCanvasEditor({
 		syncActive: true,
 	});
 	const requestsEnabled = useProtectedRequestsEnabled();
-	const canvas = useQuery(getCanvasQueryOptions(canvasId));
+	const canvas = useQuery(getCanvasMetadataQueryOptions(canvasId));
 	const [editor, setEditor] = useState<Editor | null>(null);
 	const registry = useDraftRegistry();
 	const drafts = registry

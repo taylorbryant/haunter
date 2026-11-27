@@ -15,6 +15,7 @@ import { workspaceCanvasActivity, workspaceFavorites } from "../channels";
 import type { WorkspaceEventClock } from "../client/event-clock";
 import {
 	getCanvasQueryOptions,
+	getCanvasMetadataQueryOptions,
 	getCanvasNavigationQueryOptions,
 	listCanvasesQueryOptions,
 } from "@/features/canvases/client/queries";
@@ -453,6 +454,7 @@ describe("workspace broadcast cache", () => {
 			tasks: listTasksQueryOptions("workspace_1", "open").queryKey,
 			notifications: listNotificationsQueryOptions().queryKey,
 			canvas: getCanvasQueryOptions("canvas_1").queryKey,
+			canvasMetadata: getCanvasMetadataQueryOptions("canvas_1").queryKey,
 			canvases: listCanvasesQueryOptions("workspace_1").queryKey,
 			other: listCanvasesQueryOptions("workspace_2").queryKey,
 		};
