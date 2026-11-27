@@ -46,6 +46,70 @@ async function until(condition: () => boolean | Promise<boolean>) {
 	}
 }
 
+test.each([
+	{ localGeneration: 0, warmGeneration: 1 },
+	{ localGeneration: 1, warmGeneration: 0 },
+])(
+	"opens restored pages with local generation $localGeneration and warm grant generation $warmGeneration",
+	async ({ localGeneration, warmGeneration }) => {
+		const f = await documentFixture();
+		const tokens = createDocumentSessionTokens(
+			"restoration-session-test-secret-32-characters",
+		);
+		const engine = createDocumentServer({
+			origin: "http://localhost:3000",
+			verify: tokens.verify,
+			authorize: async (grant) => ({
+				ctx: f.ctx,
+				role: await checkDocumentAccess(grant, f.database.db),
+			}),
+		});
+		const transport = listenDocumentServer(engine, {
+			origin: "http://localhost:3000",
+			hostname: "127.0.0.1",
+			port: 0,
+		});
+		const requestedAtGeneration: number[] = [];
+		const session: PageDocumentSession = new PageDocumentSession(
+			{
+				pageId: f.page.id,
+				workspaceId: f.workspaceId,
+				userId: f.userId,
+				url: `ws://127.0.0.1:${transport.port}`,
+			},
+			async () => {
+				requestedAtGeneration.push(session.getSnapshot().generation);
+				const generation =
+					requestedAtGeneration.length === 1 ? warmGeneration : 1;
+				return { ...tokens.issue({ ...f.grant, generation }), generation };
+			},
+		);
+		try {
+			await f.ctx.ports.documents.restoreBody(f.scope, f.page.id, [
+				paragraph("Restored body"),
+			]);
+			if (localGeneration > 0)
+				await advanceDocumentGeneration(
+					session.identity.key,
+					0,
+					localGeneration,
+					null,
+				);
+			await session.start();
+			await until(() => session.getSnapshot().saved);
+			expect(firstText(session.doc).toString()).toBe("Restored body");
+			expect(session.getSnapshot().generation).toBe(1);
+			// The first request overlaps recovery. The next authenticates generation 1.
+			expect(requestedAtGeneration).toEqual([0, 1]);
+		} finally {
+			await session.destroy(() => true);
+			await stopDocumentServer(engine);
+			await transport.stop(true);
+			await f.database.close();
+		}
+	},
+);
+
 test("active and offline browser sessions switch generations, keep recoverable edits, and survive worker restart", async () => {
 	const f = await documentFixture();
 	await seedFixtureBody(

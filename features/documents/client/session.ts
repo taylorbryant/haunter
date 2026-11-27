@@ -275,7 +275,9 @@ export class PageDocumentSession {
 						? await initial.result
 						: null;
 				const result =
-					warm?.generation === generation ? warm : await this.requestSession();
+					warm && warm.generation >= generation
+						? warm
+						: await this.requestSession();
 				if (!current()) throw new Error("Document session changed");
 				if (result.generation !== generation) {
 					await this.adoptGeneration(result.generation);
