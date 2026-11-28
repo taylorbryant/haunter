@@ -126,6 +126,83 @@ function useExpandedState(workspaceId: string) {
 	return { expanded, toggle };
 }
 
+// A long sibling list can mount hundreds of menus before the editor paints.
+// Keep the existing list order and append another group as the user approaches it.
+const PAGE_TREE_BATCH_SIZE = 48;
+
+function PageTreeLevel({
+	nodes,
+	activeChild,
+	renderNode,
+}: {
+	nodes: PageTreeNode[];
+	activeChild?: PageTreeNode;
+	renderNode: (node: PageTreeNode) => React.ReactNode;
+}) {
+	const [limit, setLimit] = useState(PAGE_TREE_BATCH_SIZE);
+	const more = useRef<HTMLButtonElement>(null);
+	const nextFocus = useRef<{ list: Element; href: string } | null>(null);
+	const hasMore = limit < nodes.length;
+	useEffect(() => {
+		const button = more.current;
+		if (!hasMore || !button || typeof IntersectionObserver === "undefined")
+			return;
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (
+					entry?.isIntersecting &&
+					button !== button.ownerDocument.activeElement
+				) {
+					observer.disconnect();
+					setLimit(limit + PAGE_TREE_BATCH_SIZE);
+				}
+			},
+			{
+				root: button.closest('[data-sidebar="content"]'),
+				rootMargin: "160px 0px",
+			},
+		);
+		observer.observe(button);
+		return () => observer.disconnect();
+	}, [hasMore, limit]);
+
+	useEffect(() => {
+		const target = nextFocus.current;
+		if (target) {
+			nextFocus.current = null;
+			target.list
+				.querySelector<HTMLElement>(`a[href$="/p/${target.href}"]`)
+				?.focus();
+		}
+	});
+
+	const visible = nodes.slice(0, limit);
+	if (activeChild && !visible.includes(activeChild)) visible.push(activeChild);
+	return (
+		<>
+			{visible.map(renderNode)}
+			{hasMore ? (
+				<li>
+					<Button
+						ref={more}
+						type="button"
+						size="sm"
+						variant="ghost"
+						onClick={() => {
+							const list = more.current?.closest("ul");
+							const next = nodes[limit];
+							if (list && next) nextFocus.current = { list, href: next.id };
+							setLimit(limit + PAGE_TREE_BATCH_SIZE);
+						}}
+					>
+						Show more pages
+					</Button>
+				</li>
+			) : null}
+		</>
+	);
+}
+
 export function PageTree({
 	workspaceId,
 	allowImports = true,
@@ -214,6 +291,20 @@ export function PageTree({
 		onError: setActionError,
 	});
 	const activePageId = pathname.match(/\/p\/([^/]+)/)?.[1] ?? null;
+	const activeBranch = useMemo(() => {
+		const children = new Map<string | null, PageTreeNode>();
+		let node = activePageId ? nodesById.get(activePageId) : undefined;
+		while (node) {
+			const parent = node.parentPageId
+				? nodesById.get(node.parentPageId)
+				: undefined;
+			const parentId = parent?.id ?? null;
+			if (children.has(parentId)) break;
+			children.set(parentId, node);
+			node = parent;
+		}
+		return children;
+	}, [activePageId, nodesById]);
 
 	function createPage(parentPageId: string | null) {
 		if (creatingPage.current || isCreatingPage || !synced) return;
@@ -362,7 +453,11 @@ export function PageTree({
 				{isExpanded && node.children.length > 0 ? (
 					<li>
 						<SidebarMenuSub className="mr-0 pr-0">
-							{node.children.map((child) => renderNode(child))}
+							<PageTreeLevel
+								activeChild={activeBranch.get(node.id)}
+								nodes={node.children}
+								renderNode={renderNode}
+							/>
 						</SidebarMenuSub>
 					</li>
 				) : null}
@@ -451,7 +546,14 @@ export function PageTree({
 						<p className="text-sidebar-foreground/50 text-xs">No pages yet.</p>
 					</div>
 				) : (
-					<SidebarMenu>{tree.map((node) => renderNode(node))}</SidebarMenu>
+					<SidebarMenu>
+						<PageTreeLevel
+							key={workspaceId}
+							activeChild={activeBranch.get(null)}
+							nodes={tree}
+							renderNode={renderNode}
+						/>
+					</SidebarMenu>
 				)}
 			</SidebarGroupContent>
 			{isCreatingPage ? (
@@ -473,7 +575,7 @@ export function PageTree({
 			    inside the sidebar sheet, so it gets a proper drawer instead. */}
 			{isMobile ? (
 				<PageRenameDialog
-					open={rename.pageId !== null}
+					pageId={rename.pageId}
 					value={rename.value}
 					error={
 						rename.error?.pageId === rename.pageId ? rename.error.message : null

@@ -25,6 +25,7 @@ const tables = [
 	"pages",
 	"user",
 	"idempotency_records",
+	"recovery_parts",
 	"__drizzle_migrations",
 ] as const;
 

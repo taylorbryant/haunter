@@ -27,7 +27,8 @@ export function usePageTreeRename({
 		meta: { errorMode: "inline" },
 	});
 	const [pageId, setPageId] = useState<string | null>(null);
-	const [value, setValue] = useState("");
+	// The input owns its keystrokes. Keep the latest draft for blur, submit, and retry.
+	const draft = useRef("");
 	const [error, setError] = useState<{
 		pageId: string;
 		message: string;
@@ -38,7 +39,7 @@ export function usePageTreeRename({
 		if (mutation.isPending || pendingPageIds.current.has(id)) return;
 		const node = nodesById.get(id);
 		if (!node) return;
-		const title = value.trim();
+		const title = draft.current.trim();
 		if (!title) {
 			setPageId((current) => (current === id ? null : current));
 			setError(null);
@@ -108,7 +109,7 @@ export function usePageTreeRename({
 
 	return {
 		pageId,
-		value,
+		value: draft.current,
 		error,
 		isPending: mutation.isPending,
 		commit,
@@ -116,11 +117,11 @@ export function usePageTreeRename({
 			if (mutation.isPending) return;
 			setError(null);
 			setPageId(node.id);
-			setValue(node.title);
+			draft.current = node.title;
 		},
 		change(next: string) {
-			setValue(next);
-			setError(null);
+			draft.current = next;
+			if (error) setError(null);
 		},
 		cancel() {
 			setPageId(null);

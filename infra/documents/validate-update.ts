@@ -8,12 +8,10 @@ import {
 } from "./move-conflicts";
 
 const contentSchema = CreatePageInputSchema.shape.initialContent.unwrap();
-export function validateDocumentState(document: Y.Doc) {
-	return encodeValidatedDocument(document).content;
-}
-
-export function encodeValidatedDocument(document: Y.Doc) {
-	const state = Y.encodeStateAsUpdate(document);
+export function validateDocumentState(
+	document: Y.Doc,
+	state = Y.encodeStateAsUpdate(document),
+) {
 	if (state.length > 8 * 1024 * 1024)
 		throw new Error("Document exceeds the 8 MiB limit");
 	const content = contentSchema.parse(projectPageBody(document));
@@ -26,7 +24,7 @@ export function encodeValidatedDocument(document: Y.Doc) {
 		}
 	};
 	visit(content);
-	return { state, content };
+	return content;
 }
 
 /** Validate a candidate before mutating or broadcasting the shared document. */

@@ -166,6 +166,23 @@ function setup(
 	);
 }
 
+test("keeps a distant active page visible and moves keyboard focus to the next batch", async () => {
+	const pages = Array.from({ length: 100 }, (_, i) => ({
+		...page,
+		id: crypto.randomUUID(),
+		title: `Page ${i}`,
+	}));
+	const view = setup(1024, [...pages, page]);
+	const more = await view.findByRole("button", { name: "Show more pages" });
+	expect(view.getByRole("link", { name: /Test page$/ })).toBeTruthy();
+	expect(view.queryByRole("link", { name: /Page 48$/ })).toBeNull();
+	more.focus();
+	await userEvent.setup({ document }).keyboard("{Enter}");
+	expect(document.activeElement).toBe(
+		view.getByRole("link", { name: /Page 48$/ }),
+	);
+});
+
 for (const width of [1024, 390]) {
 	for (const action of ["Move to trash", "Change icon"] as const) {
 		test(`${action} keeps Tab inside the dialog and returns focus on close (${width}px)`, async () => {

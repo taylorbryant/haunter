@@ -102,6 +102,9 @@ Vercel registers the production schedules in [`vercel.json`](../vercel.json):
   every five minutes.
 - `/api/cron/agents/cleanup-oauth-clients` removes up to 500 unused dynamic
   OAuth client registrations older than 24 hours daily at 03:00 UTC.
+- `/api/cron/documents/cleanup-recovery-parts` deletes abandoned recovery uploads
+  daily at 04:00 UTC. Parts expire after one hour. Successful imports delete
+  their parts in the transaction that creates the recovered documents.
 
 Use a hosting plan or external scheduler that supports the five-minute reminder
 schedule. Less frequent invocation delays reminders.

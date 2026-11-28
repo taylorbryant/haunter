@@ -4,6 +4,7 @@ import {
 	canDropPage,
 	getPageDropPlacement,
 	getPageDropZone,
+	pageSubtreeIds,
 } from "@/features/pages/client/page-tree-controller";
 import type { PageMeta } from "@/features/pages/schemas";
 
@@ -43,9 +44,7 @@ describe("page tree controller", () => {
 	test("builds hierarchy and subtree membership together", () => {
 		expect(index.tree.map((node) => node.id)).toEqual([ids.root, ids.sibling]);
 		expect(index.nodesById.get(ids.root)?.children[0]?.id).toBe(ids.child);
-		expect(index.subtreeIdsById.get(ids.root)).toEqual(
-			new Set([ids.root, ids.child]),
-		);
+		expect(pageSubtreeIds(index, ids.root)).toEqual([ids.root, ids.child]);
 	});
 
 	test("rejects self-drops and drops into descendants", () => {
@@ -73,6 +72,16 @@ describe("page tree controller", () => {
 				zone: "before",
 			}),
 		).toEqual({ parentPageId: null, position: 2 });
+	});
+
+	test("indexes deeply nested unordered pages without recursive traversal", () => {
+		const pages = Array.from({ length: 12_000 }, (_, i) =>
+			page(String(i), 1, i ? String(i - 1) : null),
+		);
+		const deep = buildPageTreeIndex(pages.reverse());
+		expect(pageSubtreeIds(deep, "11998")).toEqual(["11998", "11999"]);
+		expect(canDropPage(deep, "0", "11999")).toBe(false);
+		expect(canDropPage(deep, "11999", "0")).toBe(true);
 	});
 
 	test("maps pointer thirds to before, inside, and after", () => {

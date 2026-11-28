@@ -167,7 +167,7 @@ export function PageTreeRow({
 					aria-label="Page name"
 					autoFocus
 					className="h-8"
-					value={rename.value}
+					defaultValue={rename.value}
 					maxLength={PAGE_TITLE_MAX_LENGTH}
 					aria-invalid={rename.invalid || undefined}
 					onChange={(event) => {

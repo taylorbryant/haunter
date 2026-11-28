@@ -108,11 +108,39 @@ export function parseRecoveryFile(
 	return result.data;
 }
 
-export const ImportRecoveryInputSchema = z.object({
+// Base64-encoded parts fit the 1 MiB JSON request limit with room for the envelope.
+export const RECOVERY_PART_BYTES = 480_000;
+export const MAX_RECOVERY_PARTS = Math.ceil(
+	MAX_RECOVERY_FILE_BYTES / RECOVERY_PART_BYTES,
+);
+const digest = z.string().regex(/^[a-f0-9]{64}$/);
+export const StageRecoveryPartInputSchema = z.object({
+	workspaceId: z.string().min(1),
+	uploadId: digest,
+	part: z
+		.number()
+		.int()
+		.min(0)
+		.max(MAX_RECOVERY_PARTS - 1),
+	data: z
+		.string()
+		.min(4)
+		.max((4 * RECOVERY_PART_BYTES) / 3)
+		.regex(/^[A-Za-z0-9+/]+={0,2}$/)
+		.refine((data) => data.length % 4 === 0),
+});
+const importFields = z.object({
 	workspaceId: z.string().min(1),
 	filename: z.string().max(300),
-	file: z.string().max(MAX_RECOVERY_FILE_BYTES),
 });
+export const ImportRecoveryInputSchema = z.union([
+	importFields.extend({ file: z.string().max(MAX_RECOVERY_FILE_BYTES) }),
+	importFields.extend({
+		uploadId: digest,
+		parts: z.number().int().min(1).max(MAX_RECOVERY_PARTS),
+		digest,
+	}),
+]);
 export const ImportRecoveryOutputSchema = z.object({
 	pages: z.array(z.object({ id: z.uuid(), title: z.string() })),
 	canvasIds: z.array(z.uuid()),

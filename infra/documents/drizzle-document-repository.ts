@@ -1,6 +1,6 @@
 import { tenantScopeId } from "@beignet/core/ports";
 import type { DrizzleSqliteDatabase } from "@beignet/provider-db-drizzle/sqlite";
-import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, eq, gt, lte, isNull, or, sql } from "drizzle-orm";
 import * as Y from "yjs";
 import type { DocumentRepository } from "@/features/documents/ports";
 import {
@@ -16,7 +16,52 @@ import { assertDocumentRevision } from "@/features/documents/revision";
 export function createDrizzleDocumentRepository(
 	db: DrizzleSqliteDatabase<typeof schema>,
 ): DocumentRepository {
+	const parts = schema.recoveryParts;
+	const forUpload = (workspaceId: string, userId: string, uploadId: string) =>
+		and(
+			eq(parts.workspaceId, workspaceId),
+			eq(parts.userId, userId),
+			eq(parts.uploadId, uploadId),
+		);
 	const repository: DocumentRepository = {
+		async stageRecoveryPart(scope, userId, uploadId, part, data) {
+			const expiresAt = Date.now() + 60 * 60 * 1000;
+			const bytes = Buffer.from(data);
+			await db
+				.insert(parts)
+				.values({
+					workspaceId: tenantScopeId(scope),
+					userId,
+					uploadId,
+					part,
+					data: bytes,
+					expiresAt,
+				})
+				.onConflictDoUpdate({
+					target: [parts.workspaceId, parts.userId, parts.uploadId, parts.part],
+					set: { data: bytes, expiresAt },
+				});
+		},
+		async readRecoveryParts(scope, userId, uploadId) {
+			return db
+				.select({ part: parts.part, data: parts.data })
+				.from(parts)
+				.where(
+					and(
+						forUpload(tenantScopeId(scope), userId, uploadId),
+						gt(parts.expiresAt, Date.now()),
+					),
+				)
+				.orderBy(parts.part);
+		},
+		async clearRecoveryParts(scope, userId, uploadId) {
+			await db
+				.delete(parts)
+				.where(forUpload(tenantScopeId(scope), userId, uploadId));
+		},
+		async purgeExpiredRecoveryParts(now) {
+			await db.delete(parts).where(lte(parts.expiresAt, now));
+		},
 		async assertWorkerLease(ownerId) {
 			const [lease] = await db
 				.select()

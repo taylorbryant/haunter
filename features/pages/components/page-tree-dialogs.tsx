@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
 import { DestructiveConfirmationDialog } from "@/components/destructive-confirmation-dialog";
 import {
 	ResponsiveDialog,
@@ -27,28 +28,27 @@ const PageIconPanel = dynamic(
 	},
 );
 
-export function PageRenameDialog({
-	open,
-	value,
-	error,
-	pending,
-	onChange,
-	onCancel,
-	onSubmit,
-	className,
-}: {
-	open: boolean;
+type RenameFormProps = {
 	value: string;
 	error: string | null;
 	pending: boolean;
 	onChange: (value: string) => void;
-	onCancel: () => void;
 	onSubmit: () => void;
+};
+
+export function PageRenameDialog({
+	pageId,
+	onCancel,
+	className,
+	...form
+}: RenameFormProps & {
+	pageId: string | null;
+	onCancel: () => void;
 	className?: string;
 }) {
 	return (
 		<ResponsiveDialog
-			open={open}
+			open={pageId !== null}
 			onOpenChange={(open) => {
 				if (!open) onCancel();
 			}}
@@ -56,33 +56,49 @@ export function PageRenameDialog({
 			description="Choose a new name for this page."
 			className={className}
 		>
-			<form
-				className="flex flex-col gap-4"
-				onSubmit={(event) => {
-					event.preventDefault();
-					onSubmit();
-				}}
-			>
-				<Input
-					autoFocus
-					value={value}
-					aria-label="Page title"
-					aria-invalid={error ? true : undefined}
-					maxLength={PAGE_TITLE_MAX_LENGTH}
-					onChange={(event) => onChange(event.target.value)}
-				/>
-				{error ? (
-					<p role="alert" className="text-destructive text-sm">
-						{error}
-					</p>
-				) : null}
-				<ResponsiveDialogFooter>
-					<Button type="submit" disabled={!value.trim() || pending}>
-						Rename
-					</Button>
-				</ResponsiveDialogFooter>
-			</form>
+			<PageRenameForm key={pageId} {...form} />
 		</ResponsiveDialog>
+	);
+}
+
+function PageRenameForm({
+	value,
+	error,
+	pending,
+	onChange,
+	onSubmit,
+}: RenameFormProps) {
+	const [draft, setDraft] = useState(value);
+	return (
+		<form
+			className="flex flex-col gap-4"
+			onSubmit={(event) => {
+				event.preventDefault();
+				onSubmit();
+			}}
+		>
+			<Input
+				autoFocus
+				value={draft}
+				aria-label="Page title"
+				aria-invalid={error ? true : undefined}
+				maxLength={PAGE_TITLE_MAX_LENGTH}
+				onChange={(event) => {
+					setDraft(event.target.value);
+					onChange(event.target.value);
+				}}
+			/>
+			{error ? (
+				<p role="alert" className="text-destructive text-sm">
+					{error}
+				</p>
+			) : null}
+			<ResponsiveDialogFooter>
+				<Button type="submit" disabled={!draft.trim() || pending}>
+					Rename
+				</Button>
+			</ResponsiveDialogFooter>
+		</form>
 	);
 }
 

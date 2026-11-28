@@ -8,9 +8,10 @@ import { checkpointPageBeforeWrite } from "@/features/pages/lib/checkpoint-page"
 import {
 	assertMovePreservesBlocks,
 	documentBlockIds,
+	hasBlockMoves,
 	reconcileBlockMoves,
 } from "./move-conflicts";
-import { encodeValidatedDocument } from "./validate-update";
+import { validateDocumentState } from "./validate-update";
 import { createPersistenceReceipt } from "@/features/documents/receipt";
 import { DocumentRestoredError } from "@/features/documents/restoration";
 import type { AssignmentChange } from "./assignment-attribution";
@@ -58,11 +59,15 @@ export async function persistPageBody(
 			const [newer] = await tx.documents.findChanged(scope, [
 				{ pageId: input.pageId, revision: input.baseRevision },
 			]);
-			const previousIds = documentBlockIds(merged);
-			if (newer) Y.applyUpdate(merged, newer.state);
-			if (reconcileBlockMoves(merged))
-				assertMovePreservesBlocks(previousIds, merged);
-			const { content, state } = encodeValidatedDocument(merged);
+			let state = captured;
+			if (newer || hasBlockMoves(merged)) {
+				const previousIds = documentBlockIds(merged);
+				if (newer) Y.applyUpdate(merged, newer.state);
+				const repaired = reconcileBlockMoves(merged);
+				if (repaired) assertMovePreservesBlocks(previousIds, merged);
+				if (newer || repaired) state = Y.encodeStateAsUpdate(merged);
+			}
+			const content = validateDocumentState(merged, state);
 			const receipt = createPersistenceReceipt(merged);
 			const externalChanges = !!newer;
 			const page = await tx.pages.findMetaById(scope, input.pageId);

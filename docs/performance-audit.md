@@ -2,6 +2,8 @@
 
 November 26, 2026 · baseline revision `302022b`
 
+The November 27 follow-up measures the merged changes on larger workspaces, documents and drawings. [Performance at workspace and document scale](performance-at-scale.md)
+
 ## Verified improvements
 
 The following measurements compare the baseline with the updated local production build. Browser timings are medians of three cold navigations with the same Chromium, CPU and network settings. The sidebar counts come from one 10.5-second idle trace per route and build. Document timings are medians of nine edits per fixture.

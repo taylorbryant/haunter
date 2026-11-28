@@ -11,6 +11,24 @@ export type StoredDocument = {
 };
 
 export interface DocumentRepository {
+	stageRecoveryPart(
+		scope: TenantScope,
+		userId: string,
+		uploadId: string,
+		part: number,
+		data: Uint8Array,
+	): Promise<void>;
+	readRecoveryParts(
+		scope: TenantScope,
+		userId: string,
+		uploadId: string,
+	): Promise<{ part: number; data: Uint8Array }[]>;
+	clearRecoveryParts(
+		scope: TenantScope,
+		userId: string,
+		uploadId: string,
+	): Promise<void>;
+	purgeExpiredRecoveryParts(now: number): Promise<void>;
 	/** Checked in the same transaction as a worker commit. */
 	assertWorkerLease(ownerId: string): Promise<void>;
 	getGeneration(scope: TenantScope, pageId: string): Promise<number | null>;
