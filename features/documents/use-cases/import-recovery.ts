@@ -1,4 +1,5 @@
 import "@beignet/core/server-only";
+import { createHash } from "node:crypto";
 import {
 	scheduleWorkspacePageEvent,
 	scheduleWorkspaceCanvasEvent,
@@ -13,6 +14,7 @@ import {
 	ImportRecoveryInputSchema,
 	ImportRecoveryOutputSchema,
 	parseRecoveryFile,
+	MAX_RECOVERY_FILE_BYTES,
 } from "../recovery";
 
 export const importRecoveryUseCase = useCase
@@ -23,9 +25,34 @@ export const importRecoveryUseCase = useCase
 		const user = requireUser(ctx);
 		const scope = requireActiveWorkspaceScope(ctx, input.workspaceId);
 		await ctx.gate.authorize("pages.create");
+		let file: string;
+		if ("file" in input) {
+			file = input.file;
+		} else {
+			const parts = await ctx.ports.documents.readRecoveryParts(
+				scope,
+				user.id,
+				input.uploadId,
+			);
+			if (
+				parts.length !== input.parts ||
+				parts.some((part, index) => part.part !== index) ||
+				parts.reduce((size, part) => size + part.data.byteLength, 0) >
+					MAX_RECOVERY_FILE_BYTES
+			)
+				throw appError("InvalidPageContent", {
+					message: "The recovery upload is incomplete. Please retry.",
+				});
+			const bytes = Buffer.concat(parts.map((part) => part.data));
+			if (createHash("sha256").update(bytes).digest("hex") !== input.digest)
+				throw appError("InvalidPageContent", {
+					message: "The recovery upload changed. Please retry.",
+				});
+			file = bytes.toString("utf8");
+		}
 		let bundle: ReturnType<typeof parseRecoveryFile>;
 		try {
-			bundle = parseRecoveryFile(input.file, input.filename);
+			bundle = parseRecoveryFile(file, input.filename);
 		} catch (error) {
 			throw appError("InvalidPageContent", {
 				message:
@@ -146,6 +173,8 @@ export const importRecoveryUseCase = useCase
 					defaultTaskAssigneeId: user.id,
 				});
 			}
+			if ("uploadId" in input)
+				await tx.documents.clearRecoveryParts(scope, user.id, input.uploadId);
 			return { pages, canvases };
 		});
 		for (const page of result.pages)

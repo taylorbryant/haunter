@@ -11,6 +11,10 @@ export function createTestDocumentRepository(
 		throw new Error("Use a real document fixture for this document operation.");
 	};
 	const repository: DocumentRepository = {
+		stageRecoveryPart: unsupported,
+		readRecoveryParts: unsupported,
+		clearRecoveryParts: unsupported,
+		purgeExpiredRecoveryParts: unsupported,
 		async find(scope, pageId) {
 			const page = await pages.findById(scope, pageId);
 			return page

@@ -4,6 +4,7 @@ import { errors } from "@/features/shared/errors";
 import {
 	ImportRecoveryInputSchema,
 	ImportRecoveryOutputSchema,
+	StageRecoveryPartInputSchema,
 } from "./recovery";
 
 export const importRecovery = defineContractGroup()
@@ -21,6 +22,21 @@ export const importRecovery = defineContractGroup()
 		InvalidPageContent: errors.InvalidPageContent,
 	})
 	.responses({ 200: ImportRecoveryOutputSchema });
+
+export const stageRecoveryPart = defineContractGroup()
+	.namespace("documents")
+	.meta({
+		auth: "required",
+		rateLimit: { max: 30, windowSec: 60, scope: "user" },
+	})
+	.post("/api/document-recovery-parts")
+	.body(StageRecoveryPartInputSchema)
+	.errors({
+		Unauthorized: errors.Unauthorized,
+		Forbidden: errors.Forbidden,
+		InvalidPageContent: errors.InvalidPageContent,
+	})
+	.responses({ 200: z.object({ staged: z.literal(true) }) });
 
 export const openDocumentSession = defineContractGroup()
 	.namespace("documents")

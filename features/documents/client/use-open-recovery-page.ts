@@ -2,9 +2,8 @@
 
 import { useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { rq } from "@/client";
+import { importRecoveryFile } from "@/features/documents/client/import-recovery-file";
 import { useDraftSafeRouter } from "@/client/use-draft-safe-router";
-import { importRecovery } from "../contracts";
 import { invalidateRecoveryImport } from "./queries";
 import type { PageDocumentSession } from "./session";
 
@@ -18,9 +17,10 @@ export function useOpenRecoveryPage(
 	workspaceId: string,
 	session: Pick<PageDocumentSession, "recoveryDownload">,
 ) {
-	const mutation = useMutation(
-		rq(importRecovery).mutationOptions({ meta: { errorMode: "inline" } }),
-	);
+	const mutation = useMutation({
+		mutationFn: importRecoveryFile,
+		meta: { errorMode: "inline" },
+	});
 	const queryClient = useQueryClient();
 	const router = useDraftSafeRouter();
 	const attempts = useRef(new Map<number, RecoveryAttempt>());

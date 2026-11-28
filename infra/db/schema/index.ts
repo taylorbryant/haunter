@@ -1115,3 +1115,25 @@ export const pageVersions = sqliteTable(
 		),
 	}),
 );
+
+export const recoveryParts = sqliteTable(
+	"recovery_parts",
+	{
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		uploadId: text("upload_id").notNull(),
+		part: integer("part").notNull(),
+		data: blob("data", { mode: "buffer" }).notNull(),
+		expiresAt: integer("expires_at").notNull(),
+	},
+	(table) => [
+		primaryKey({
+			columns: [table.workspaceId, table.userId, table.uploadId, table.part],
+		}),
+		index("recovery_parts_expiry_idx").on(table.expiresAt),
+	],
+);

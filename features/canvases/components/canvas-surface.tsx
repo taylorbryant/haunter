@@ -44,10 +44,8 @@ import { canvasFingerprint } from "../lib/document";
 import { TLDRAW_LICENSE_KEY } from "../lib/tldraw-license";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { useSharedPageToken } from "@/features/shares/components/shared-page-context";
-import {
-	openCanvasSession,
-	importRecovery,
-} from "@/features/documents/contracts";
+import { openCanvasSession } from "@/features/documents/contracts";
+import { importRecoveryFile } from "@/features/documents/client/import-recovery-file";
 import { useDraftSafeRouter as useRouter } from "@/client/use-draft-safe-router";
 import {
 	WorkspaceNavigationContext,
@@ -540,7 +538,7 @@ function CanvasRecoveryCopies({
 					setBusy(true);
 					setError(null);
 					try {
-						const result = await apiClient.endpoint(importRecovery).call({
+						const result = await importRecoveryFile({
 							idempotencyKey: `${requestId}:${await canvasFingerprint(copy.payload)}`,
 							body: { workspaceId, filename: "canvas-recovery.json", file },
 						});

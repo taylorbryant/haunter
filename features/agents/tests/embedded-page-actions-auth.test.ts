@@ -139,6 +139,23 @@ test.each(["edit", "view"] as const)(
 					(await app.fetch(`http://beignet.test/api/shared/${token}`)).status,
 				).toBe(404);
 			} else expect((await request(share, "DELETE")).status).toBe(403);
+			const part = {
+				workspaceId: f.workspaceId,
+				uploadId: "f".repeat(64),
+				part: 0,
+				data: "e30=",
+			};
+			expect(
+				(await request("/api/document-recovery-parts", "POST", part)).status,
+			).toBe(access === "edit" ? 200 : 403);
+			expect(
+				(
+					await request("/api/document-recovery-parts", "POST", {
+						...part,
+						workspaceId: "other",
+					})
+				).status,
+			).toBe(403);
 			const beforeRecovery = await f.ctx.ports.pages.findById(
 				f.scope,
 				f.page.id,
@@ -168,23 +185,19 @@ test.each(["edit", "view"] as const)(
 			).toBe(403);
 
 			// Being a member elsewhere does not authorize that workspace through this grant.
-			await f.database.db
-				.insert(schema.organization)
-				.values({
-					id: "other",
-					name: "Other",
-					slug: "other",
-					createdAt: new Date(),
-				});
-			await f.database.db
-				.insert(schema.member)
-				.values({
-					id: "other-member",
-					organizationId: "other",
-					userId: f.userId,
-					role: "owner",
-					createdAt: new Date(),
-				});
+			await f.database.db.insert(schema.organization).values({
+				id: "other",
+				name: "Other",
+				slug: "other",
+				createdAt: new Date(),
+			});
+			await f.database.db.insert(schema.member).values({
+				id: "other-member",
+				organizationId: "other",
+				userId: f.userId,
+				role: "owner",
+				createdAt: new Date(),
+			});
 			const foreignScope = createTenantScope({ id: "other" });
 			const foreign = await f.ctx.ports.pages.create(foreignScope, {
 				userId: f.userId,
@@ -224,6 +237,7 @@ test.each(["edit", "view"] as const)(
 				[share, "POST", {}],
 				[share, "DELETE"],
 				["/api/document-recoveries", "POST", recovery],
+				["/api/document-recovery-parts", "POST", part],
 			] as const)
 				expect((await request(path, method, body, legacy.token)).status).toBe(
 					403,
@@ -236,6 +250,7 @@ test.each(["edit", "view"] as const)(
 				[`${version}/restore`, {}],
 				[share, {}],
 				["/api/document-recoveries", recovery],
+				["/api/document-recovery-parts", part],
 			] as const)
 				expect((await request(path, "POST", body)).status).toBe(403);
 			await f.database.db

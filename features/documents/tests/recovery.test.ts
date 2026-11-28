@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { DOCUMENT_META, DOCUMENT_SCHEMA_VERSION } from "../model";
 import {
 	normalizeCanvasSnapshot,
@@ -324,6 +325,75 @@ test("legacy Yjs canvas recovery imports into a separate native room", async () 
 		).toEqual(original);
 	} finally {
 		binary.destroy();
+		await f.database.close();
+	}
+});
+
+test("reassembles a staged UTF-8 recovery only for its author and clears it on commit", async () => {
+	const f = await documentFixture();
+	try {
+		const { stageRecoveryPartUseCase } = await import(
+			"../use-cases/stage-recovery-part"
+		);
+		const file = Buffer.from(
+			JSON.stringify({
+				format: "haunter-draft-recovery",
+				version: 1,
+				pages: [{ id: "one", title: "👻", content: [] }],
+				canvases: [],
+			}),
+		);
+		const split = file.indexOf(Buffer.from("👻")) + 1;
+		const digest = createHash("sha256").update(file).digest("hex");
+		const input = {
+			workspaceId: f.workspaceId,
+			filename: "draft.json",
+			uploadId: digest,
+			parts: 2,
+			digest,
+		};
+		const stage = (part: number, data: Buffer) =>
+			stageRecoveryPartUseCase.run({
+				ctx: f.ctx,
+				input: {
+					workspaceId: f.workspaceId,
+					uploadId: digest,
+					part,
+					data: data.toString("base64"),
+				},
+			});
+		await stage(1, file.subarray(split));
+		await expect(
+			importRecoveryUseCase.run({ ctx: f.ctx, input }),
+		).rejects.toThrow();
+		await stage(0, file.subarray(0, split));
+		await stage(0, file.subarray(0, split));
+		expect(
+			await f.ctx.ports.documents.readRecoveryParts(
+				f.scope,
+				"another-user",
+				digest,
+			),
+		).toEqual([]);
+		await expect(
+			importRecoveryUseCase.run({
+				ctx: f.ctx,
+				input: { ...input, digest: "0".repeat(64) },
+			}),
+		).rejects.toThrow();
+		const result = await importRecoveryUseCase.run({ ctx: f.ctx, input });
+		expect(result.pages[0]?.title).toContain("👻");
+		expect(
+			await f.ctx.ports.documents.readRecoveryParts(f.scope, f.userId, digest),
+		).toEqual([]);
+		await stage(0, file);
+		await f.ctx.ports.documents.purgeExpiredRecoveryParts(
+			Date.now() + 3_600_001,
+		);
+		expect(
+			await f.ctx.ports.documents.readRecoveryParts(f.scope, f.userId, digest),
+		).toEqual([]);
+	} finally {
 		await f.database.close();
 	}
 });

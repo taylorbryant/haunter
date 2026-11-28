@@ -32,6 +32,7 @@ import {
 	openCanvasSession,
 	openDocumentSession,
 	importRecovery,
+	stageRecoveryPart,
 } from "@/features/documents/contracts";
 import {
 	getPageShare,
@@ -118,6 +119,7 @@ export const embeddedEditorAuthHooks: ServerHook<AppContext> = {
 				restorePage,
 				restorePageVersion,
 				importRecovery,
+				stageRecoveryPart,
 				createPageShare,
 				revokePageShare,
 				setPageFavorite,
