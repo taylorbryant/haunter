@@ -53,6 +53,7 @@ export function recordBlockMove(doc: Y.Doc, root: Y.XmlElement) {
  */
 export function reconcileBlockMoves(doc: Y.Doc): boolean {
 	const moves = doc.getMap<string>(MOVES);
+	if (moves.size === 0) return false;
 	const byId = new Map<string, Y.XmlElement[]>();
 	for (const node of containers(doc.getXmlFragment(PAGE_BODY_FRAGMENT))) {
 		const id = node.getAttribute("id");

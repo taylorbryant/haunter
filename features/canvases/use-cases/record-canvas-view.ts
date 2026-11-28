@@ -11,7 +11,7 @@ export const recordCanvasViewUseCase = useCase
 	.run(async ({ ctx, input }) => {
 		const scope = requireActiveWorkspaceScope(ctx);
 		const user = requireUser(ctx);
-		const canvas = await ctx.ports.canvases.findById(scope, input.id);
+		const canvas = await ctx.ports.canvases.findMetaById(scope, input.id);
 		if (!canvas) {
 			throw appError("CanvasNotFound", { details: { id: input.id } });
 		}

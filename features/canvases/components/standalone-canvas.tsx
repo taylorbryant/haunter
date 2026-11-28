@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef } from "react";
 import {
-	getCanvasQueryOptions,
+	getCanvasMetadataQueryOptions,
 	recordCanvasViewMutationOptions,
 	syncRecordedCanvasViewInNavigationCache,
 } from "@/features/canvases/client/queries";
@@ -27,7 +27,7 @@ const CanvasSurface = dynamic(
 
 export function StandaloneCanvas({ canvasId }: { canvasId: string }) {
 	const queryClient = useQueryClient();
-	const canvasQuery = useQuery(getCanvasQueryOptions(canvasId));
+	const canvasQuery = useQuery(getCanvasMetadataQueryOptions(canvasId));
 	const recordViewMutation = useMutation({
 		...recordCanvasViewMutationOptions(),
 		meta: { errorMode: "silent" },

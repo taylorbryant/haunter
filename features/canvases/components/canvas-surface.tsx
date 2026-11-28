@@ -25,7 +25,7 @@ import { useDurableDraftStorage } from "@/client/durable-draft-storage-provider"
 import { listLocalCanvasDrafts, type LocalDraft } from "@/client/local-drafts";
 import { downloadRecoveryDrafts } from "@/client/draft-export";
 import {
-	getCanvasQueryOptions,
+	getCanvasMetadataQueryOptions,
 	invalidateCanvases,
 	invalidateCanvasNavigation,
 } from "../client/queries";
@@ -82,7 +82,7 @@ export default function CanvasSurface(props: Props) {
 }
 function MemberCanvasSurface(props: Props) {
 	const [retryKey, setRetryKey] = useState(0);
-	const canvasQuery = useQuery(getCanvasQueryOptions(props.canvasId));
+	const canvasQuery = useQuery(getCanvasMetadataQueryOptions(props.canvasId));
 	const currentUser = useCurrentUser();
 	const canEdit = useCanEditWorkspace();
 	if (canvasQuery.isPending) return <CanvasLoading />;

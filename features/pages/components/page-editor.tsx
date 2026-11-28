@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCurrentUser } from "@/components/app-session-provider";
 import { Button } from "@/components/ui/button";
+import { acquirePageDocument } from "@/features/documents/client/session";
 import { useCanEditWorkspace } from "@/features/members/client/use-workspace-role";
 import { beginEditorMeasurement } from "@/features/pages/client/editor-performance";
 import {
@@ -23,7 +24,8 @@ import { PageTitleField } from "./page-title-field";
 const EMPTY_CONTENT: import("@/features/pages/schemas").BlockJson[] = [];
 
 const HaunterEditor = dynamic(() => import("./editor/haunter-editor"), {
-	ssr: false,
+	// Let the route advertise these chunks before hydration. HaunterEditor mounts its editable body on the client.
+	ssr: true,
 	loading: () => (
 		<div className="py-2">
 			<EditorBodySkeleton />
@@ -60,24 +62,7 @@ export function PageEditor({
 	useEffect(() => {
 		const url = process.env.NEXT_PUBLIC_COLLABORATION_URL;
 		if (!url || !userId || !workspaceId) return;
-		let active = true;
-		let release: (() => void) | undefined;
-		// Start IndexedDB and the authenticated connection alongside the editor bundle.
-		void import("@/features/documents/client/session")
-			.then(({ acquirePageDocument }) => {
-				if (active)
-					release = acquirePageDocument({
-						userId,
-						workspaceId,
-						pageId,
-						url,
-					}).release;
-			})
-			.catch(() => undefined); // The editor owns visible loading/retry errors.
-		return () => {
-			active = false;
-			release?.();
-		};
+		return acquirePageDocument({ userId, workspaceId, pageId, url }).release;
 	}, [userId, workspaceId, pageId]);
 	const [editorFocusRequest, setEditorFocusRequest] = useState(0);
 	const recordedViewPageIdRef = useRef<string | null>(null);

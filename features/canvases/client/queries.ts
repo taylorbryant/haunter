@@ -7,6 +7,7 @@ import {
 	createCanvas,
 	deleteCanvas,
 	getCanvas,
+	getCanvasMetadata,
 	getCanvasNavigation,
 	listCanvases,
 	recordCanvasView,
@@ -22,7 +23,14 @@ import type {
 export function getCanvasQueryOptions(id: string) {
 	return {
 		...rq(getCanvas).queryOptions({ path: { id } }),
-		// Refresh metadata and read-only projections; drawing edits arrive through Yjs.
+		refetchInterval: protectedRefetchInterval,
+	};
+}
+
+export function getCanvasMetadataQueryOptions(id: string) {
+	return {
+		...rq(getCanvasMetadata).queryOptions({ path: { id } }),
+		staleTime: 30_000,
 		refetchInterval: protectedRefetchInterval,
 	};
 }
@@ -185,7 +193,10 @@ export function cancelCanvasQuery(queryClient: QueryClient, id: string) {
 }
 
 export function invalidateCanvas(queryClient: QueryClient, id: string) {
-	return rq(getCanvas).invalidate(queryClient, { path: { id } });
+	return Promise.all([
+		rq(getCanvas).invalidate(queryClient, { path: { id } }),
+		rq(getCanvasMetadata).invalidate(queryClient, { path: { id } }),
+	]).then(() => {});
 }
 
 export function invalidateCanvasList(
@@ -205,6 +216,7 @@ export function invalidateCanvases(queryClient: QueryClient) {
 	return Promise.all([
 		invalidateWorkspaceSearch(queryClient),
 		rq(getCanvas).invalidate(queryClient),
+		rq(getCanvasMetadata).invalidate(queryClient),
 		rq(listCanvases).invalidate(queryClient),
 		rq(getCanvasNavigation).invalidate(queryClient),
 	]);
@@ -216,9 +228,13 @@ export function setCanvasTitleInCache(
 	title: string,
 	updatedAt?: string,
 ) {
-	queryClient.setQueryData<Canvas>(canvasQueryKey(id), (current) =>
+	const update = <T extends CanvasListItem>(current: T | undefined) =>
 		current
 			? { ...current, title, ...(updatedAt ? { updatedAt } : {}) }
-			: current,
+			: current;
+	queryClient.setQueryData<Canvas>(canvasQueryKey(id), update);
+	queryClient.setQueryData<CanvasListItem>(
+		rq(getCanvasMetadata).key({ path: { id } }),
+		update,
 	);
 }

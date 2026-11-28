@@ -10,7 +10,7 @@ import {
 	documentBlockIds,
 	reconcileBlockMoves,
 } from "./move-conflicts";
-import { validateDocumentState } from "./validate-update";
+import { encodeValidatedDocument } from "./validate-update";
 import { createPersistenceReceipt } from "@/features/documents/receipt";
 import { DocumentRestoredError } from "@/features/documents/restoration";
 import type { AssignmentChange } from "./assignment-attribution";
@@ -62,11 +62,10 @@ export async function persistPageBody(
 			if (newer) Y.applyUpdate(merged, newer.state);
 			if (reconcileBlockMoves(merged))
 				assertMovePreservesBlocks(previousIds, merged);
-			const content = validateDocumentState(merged);
-			const state = Y.encodeStateAsUpdate(merged);
+			const { content, state } = encodeValidatedDocument(merged);
 			const receipt = createPersistenceReceipt(merged);
 			const externalChanges = !!newer;
-			const page = await tx.pages.findById(scope, input.pageId);
+			const page = await tx.pages.findMetaById(scope, input.pageId);
 			if (!page) throw appError("PageNotFound");
 			await checkpointPageBeforeWrite(tx, scope, page.id, null);
 			const saved = await tx.documents.commit(scope, {

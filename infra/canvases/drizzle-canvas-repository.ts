@@ -1,4 +1,5 @@
 import {
+	CANVAS_SYNC_VERSION,
 	createCanvasRoom,
 	projectCanvasRoom,
 } from "@/features/canvases/lib/document";
@@ -13,6 +14,11 @@ import * as schema from "@/infra/db/schema";
 import { assertPageInScope } from "@/infra/db/tenant-scope";
 
 type CanvasRow = typeof schema.canvases.$inferSelect;
+
+function assertSupportedRoom(room: { schemaVersion: number } | undefined) {
+	if (room && room.schemaVersion !== CANVAS_SYNC_VERSION)
+		throw new Error("Unsupported canvas sync schema");
+}
 
 function toCanvas(row: CanvasRow): Canvas {
 	return {
@@ -102,6 +108,19 @@ export function createDrizzleCanvasRepository(
 				);
 			return row ?? null;
 		},
+		async hasSyncRoom(scope, id) {
+			const [room] = await db
+				.select({ schemaVersion: schema.canvasSyncRooms.schemaVersion })
+				.from(schema.canvasSyncRooms)
+				.where(
+					and(
+						eq(schema.canvasSyncRooms.canvasId, id),
+						eq(schema.canvasSyncRooms.workspaceId, tenantScopeId(scope)),
+					),
+				);
+			assertSupportedRoom(room);
+			return !!room;
+		},
 		async findSyncRoom(scope, id) {
 			const [row] = await db
 				.select()
@@ -112,8 +131,7 @@ export function createDrizzleCanvasRepository(
 						eq(schema.canvasSyncRooms.workspaceId, tenantScopeId(scope)),
 					),
 				);
-			if (row && row.schemaVersion !== 1)
-				throw new Error("Unsupported canvas sync schema");
+			assertSupportedRoom(row);
 			return row
 				? {
 						roomJson: row.snapshot,
@@ -137,7 +155,7 @@ export function createDrizzleCanvasRepository(
 						eq(schema.canvasSyncRooms.revision, input.baseRevision),
 					),
 				)
-				.returning();
+				.returning({ revision: schema.canvasSyncRooms.revision });
 			if (!row) throw new Error("Canvas changed or was deleted");
 			const [canvas] = await db
 				.update(schema.canvases)
@@ -154,7 +172,7 @@ export function createDrizzleCanvasRepository(
 						eq(schema.canvases.workspaceId, tenantScopeId(scope)),
 					),
 				)
-				.returning();
+				.returning({ updatedAt: schema.canvases.updatedAt });
 			if (!canvas) throw new Error("Canvas deleted");
 			return {
 				revision: row.revision,

@@ -3,6 +3,7 @@ import { rq } from "@/client";
 import { isPageAgentActivity } from "@/features/agents/page-activity";
 import {
 	getCanvas,
+	getCanvasMetadata,
 	getCanvasNavigation,
 	listCanvases,
 } from "@/features/canvases/contracts";
@@ -80,6 +81,7 @@ export function workspaceReconciliationQueries(
 		rq(getPage).filter(),
 		rq(getPageMetadata).filter(),
 		rq(getCanvas).filter(),
+		rq(getCanvasMetadata).filter(),
 		rq(listPageVersions).filter(),
 	];
 }
@@ -94,6 +96,7 @@ export function workspaceEventQueries(
 		return [
 			...canvasQueries(workspaceId),
 			rq(getCanvas).filter({ path: { id: event.canvasId } }),
+			rq(getCanvasMetadata).filter({ path: { id: event.canvasId } }),
 		];
 	return [
 		...pageQueries(workspaceId),

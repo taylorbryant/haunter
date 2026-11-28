@@ -121,6 +121,9 @@ const storage: DurableDraftStorage<string> = {
 mock.module("../components/editor/haunter-editor", () => ({
 	default: () => null,
 }));
+mock.module("@/features/documents/client/session", () => ({
+	acquirePageDocument: () => ({ release() {} }),
+}));
 mock.module("../components/backlinks", () => ({ Backlinks: () => null }));
 mock.module("../components/page-icon-picker", () => ({
 	PageIconButton: () => null,

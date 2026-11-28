@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import {
 	getCanvasNavigationQueryOptions,
-	getCanvasQueryOptions,
+	getCanvasMetadataQueryOptions,
 	invalidateCanvasList,
 	invalidateCanvasNavigation,
 	setCanvasTitleInCache,
@@ -61,7 +61,7 @@ export function HeaderCanvasActions() {
 	const isMobile = useIsMobile();
 	const saveState = useCanvasSaveState(canvasId);
 	const canvasQuery = useQuery({
-		...getCanvasQueryOptions(canvasId ?? ""),
+		...getCanvasMetadataQueryOptions(canvasId ?? ""),
 		enabled: canvasId !== null && synced,
 	});
 	const navigationQuery = useQuery({

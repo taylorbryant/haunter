@@ -30,7 +30,10 @@ export const authorizeEmbeddedEditorUseCase = useCase
 		if (!role) throw appError("Forbidden");
 		const scope = createTenantScope({ id: input.workspaceId });
 		if (input.canvasId) {
-			const canvas = await ctx.ports.canvases.findById(scope, input.canvasId);
+			const canvas = await ctx.ports.canvases.findMetaById(
+				scope,
+				input.canvasId,
+			);
 			if (!canvas) throw appError("Forbidden");
 			await ctx.gate.authorize("canvases.read", canvas);
 			if (canvas.pageId) {

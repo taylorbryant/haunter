@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { defineRoutes } from "@beignet/core/server";
 import { createTestApp } from "@beignet/web/testing";
 import { eq } from "drizzle-orm";
@@ -72,10 +72,22 @@ test.each(["view", "edit"] as const)(
 					...(method === "POST" ? { body: "{}" } : {}),
 				});
 			expect((await request(f.canvas.id)).status).toBe(200);
+			const fullCanvas = spyOn(f.ctx.ports.canvases, "findById");
+			const fullRoom = spyOn(f.ctx.ports.canvases, "findSyncRoom");
+			const metadata = await request(f.canvas.id, "/metadata");
+			expect(metadata.status).toBe(200);
+			const summary = await metadata.json();
+			expect(summary.id).toBe(f.canvas.id);
+			expect(summary).not.toHaveProperty("snapshot");
 			expect((await request(f.canvas.id, "/sync-session", "POST")).status).toBe(
 				200,
 			);
+			expect(fullCanvas).not.toHaveBeenCalled();
+			expect(fullRoom).not.toHaveBeenCalled();
+			fullCanvas.mockRestore();
+			fullRoom.mockRestore();
 			for (const id of [f.standalone.id, otherCanvas.id, crypto.randomUUID()]) {
+				expect((await request(id, "/metadata")).status).toBe(403);
 				expect((await request(id)).status).toBe(403);
 				expect((await request(id, "/sync-session", "POST")).status).toBe(403);
 			}
@@ -147,7 +159,10 @@ test("canvas credentials authorize exactly one resource, including standalone ca
 	});
 	try {
 		for (const canvas of [f.canvas, f.standalone]) {
+			const fullCanvas = spyOn(f.ctx.ports.canvases, "findById");
 			const session = await f.login({ canvasId: canvas.id });
+			expect(fullCanvas).not.toHaveBeenCalled();
+			fullCanvas.mockRestore();
 			expect(session.identity).toMatchObject({
 				canvasId: canvas.id,
 				pageId: null,
@@ -163,6 +178,13 @@ test("canvas credentials authorize exactly one resource, including standalone ca
 					...(body ? { body: JSON.stringify(body) } : {}),
 				});
 			expect((await request(`/api/canvases/${canvas.id}`)).status).toBe(200);
+			expect(
+				(await request(`/api/canvases/${canvas.id}/metadata`)).status,
+			).toBe(200);
+			const otherId = canvas.id === f.canvas.id ? f.standalone.id : f.canvas.id;
+			expect((await request(`/api/canvases/${otherId}/metadata`)).status).toBe(
+				403,
+			);
 			expect(
 				(await request(`/api/canvases/${crypto.randomUUID()}`)).status,
 			).toBe(403);

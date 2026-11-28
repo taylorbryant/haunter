@@ -20,6 +20,7 @@ import {
 } from "@/features/pages/contracts";
 import {
 	getCanvas,
+	getCanvasMetadata,
 	listCanvases,
 	getCanvasNavigation,
 	createCanvas,
@@ -98,6 +99,7 @@ export const embeddedEditorAuthHooks: ServerHook<AppContext> = {
 				getPageVersion,
 				getPageShare,
 				getCanvas,
+				getCanvasMetadata,
 				listCanvases,
 				getCanvasNavigation,
 				listTrash,
@@ -139,15 +141,18 @@ export const embeddedEditorAuthHooks: ServerHook<AppContext> = {
 				throw appError("Forbidden");
 			return;
 		}
+		const readsCanvas = [getCanvas, getCanvasMetadata, openCanvasSession].some(
+			(entry) => entry.name === contract.name,
+		);
 		if (grant.canvasId) {
 			if (
-				![getCanvas.name, openCanvasSession.name].includes(contract.name) ||
+				!readsCanvas ||
 				(path as { id?: string } | undefined)?.id !== grant.canvasId
 			)
 				throw appError("Forbidden");
 			return;
 		}
-		if ([getCanvas.name, openCanvasSession.name].includes(contract.name)) {
+		if (readsCanvas) {
 			const id = (path as { id?: string } | undefined)?.id;
 			const canvas = id
 				? await ctx.ports.canvases.findMetaById(

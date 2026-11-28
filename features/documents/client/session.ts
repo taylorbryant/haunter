@@ -75,6 +75,10 @@ export class PageDocumentSession {
 	private started = performance.now();
 	private disposed = false;
 	private loaded = false;
+	private initialGrant?: {
+		startedAt: number;
+		result: Promise<{ token: string; generation: number } | null>;
+	};
 	private flushOnSync = false;
 	private generationFlight: Promise<void> | null = null;
 	private refreshFlight: Promise<void> | null = null;
@@ -170,6 +174,13 @@ export class PageDocumentSession {
 	}
 	async start() {
 		try {
+			// Fetch permission alongside local recovery and the socket handshake.
+			if (!this.snapshot.paused && globalThis.navigator?.onLine !== false) {
+				this.initialGrant = {
+					startedAt: Date.now(),
+					result: this.requestSession().catch(() => null),
+				};
+			}
 			const head = await loadDocumentHead(this.identity.key);
 			if (this.disposed) return;
 			this.local.destroy();
@@ -256,7 +267,17 @@ export class PageDocumentSession {
 			),
 			document: this.doc,
 			token: async () => {
-				const result = await this.requestSession();
+				const initial = this.initialGrant;
+				this.initialGrant = undefined;
+				// A sleeping tab or a delayed socket should request a fresh grant.
+				const warm =
+					initial && Date.now() - initial.startedAt < 30_000
+						? await initial.result
+						: null;
+				const result =
+					warm && warm.generation >= generation
+						? warm
+						: await this.requestSession();
 				if (!current()) throw new Error("Document session changed");
 				if (result.generation !== generation) {
 					await this.adoptGeneration(result.generation);
@@ -352,6 +373,7 @@ export class PageDocumentSession {
 	}
 	/** Only the authenticated HTTP response may select a new document generation. */
 	refreshGeneration = (): Promise<void> => {
+		this.initialGrant = undefined;
 		if (this.refreshFlight) return this.refreshFlight;
 		this.refreshFlight = (async () => {
 			try {
@@ -449,6 +471,7 @@ export class PageDocumentSession {
 	}
 
 	pause = () => {
+		this.initialGrant = undefined;
 		this.publish({ paused: true, connected: false });
 		this.provider?.disconnect();
 	};
@@ -551,6 +574,7 @@ export class PageDocumentSession {
 		)
 			return false;
 		this.disposed = true;
+		this.initialGrant = undefined;
 		clearInterval(this.tokenTimer);
 		clearTimeout(this.loadingTimer);
 		this.unregister?.();

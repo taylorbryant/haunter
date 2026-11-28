@@ -2,6 +2,7 @@ import { defineContractGroup } from "@beignet/core/contracts";
 import { z } from "zod";
 import {
 	CanvasIdInputSchema,
+	CanvasListItemSchema,
 	CanvasNavigationOutputSchema,
 	CanvasSchema,
 	CreateCanvasInputSchema,
@@ -96,6 +97,15 @@ export const getCanvas = canvases
 	.responses({
 		200: CanvasSchema,
 	});
+
+export const getCanvasMetadata = canvases
+	.get("/api/canvases/:id/metadata")
+	.pathParams(CanvasIdInputSchema)
+	.errors({
+		Forbidden: errors.Forbidden,
+		CanvasNotFound: errors.CanvasNotFound,
+	})
+	.responses({ 200: CanvasListItemSchema });
 
 export const saveCanvasSnapshot = canvases
 	.put("/api/canvases/:id/snapshot")

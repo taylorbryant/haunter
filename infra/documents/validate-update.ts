@@ -9,7 +9,12 @@ import {
 
 const contentSchema = CreatePageInputSchema.shape.initialContent.unwrap();
 export function validateDocumentState(document: Y.Doc) {
-	if (Y.encodeStateAsUpdate(document).length > 8 * 1024 * 1024)
+	return encodeValidatedDocument(document).content;
+}
+
+export function encodeValidatedDocument(document: Y.Doc) {
+	const state = Y.encodeStateAsUpdate(document);
+	if (state.length > 8 * 1024 * 1024)
 		throw new Error("Document exceeds the 8 MiB limit");
 	const content = contentSchema.parse(projectPageBody(document));
 	const ids = new Set<string>();
@@ -21,7 +26,7 @@ export function validateDocumentState(document: Y.Doc) {
 		}
 	};
 	visit(content);
-	return content;
+	return { state, content };
 }
 
 /** Validate a candidate before mutating or broadcasting the shared document. */

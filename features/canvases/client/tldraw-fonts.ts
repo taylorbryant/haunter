@@ -8,10 +8,20 @@ type SnapshotLike = {
 	store?: Record<string, unknown>;
 };
 
+type RichTextNode = {
+	text?: string;
+	content?: RichTextNode[];
+	marks?: { type: string }[];
+};
+
 type ShapeRecordLike = {
+	type?: string;
 	typeName?: unknown;
 	props?: {
-		font?: unknown;
+		font?: string;
+		text?: string;
+		richText?: RichTextNode;
+		textLastEditedBy?: string;
 	};
 };
 
@@ -30,26 +40,43 @@ const DEFAULT_FONT_FACE_DESCRIPTORS = {
 export function requiredTldrawFontFaces(
 	snapshot: SnapshotLike | undefined,
 ): TLFontFace[] {
-	const fontNames = new Set<string>();
+	const faces = new Set<TLFontFace>();
 	for (const value of Object.values(snapshot?.store ?? {})) {
-		const record = value as ShapeRecordLike;
-		if (record.typeName !== "shape") continue;
-		if (typeof record.props?.font === "string") {
-			fontNames.add(record.props.font);
+		const shape = value as ShapeRecordLike | null;
+		if (shape?.typeName !== "shape" || !shape.props) continue;
+		const { richText, text, font = "draw", textLastEditedBy } = shape.props;
+		// Older snapshots store plain text. Current geo and arrow records carry a
+		// font even when their label is empty.
+		const root = richText ?? (text ? { text } : undefined);
+		if (!root) continue;
+		const nodes: RichTextNode[] = [root];
+		while (nodes.length) {
+			const node = nodes.pop();
+			if (!node) continue;
+			if (Array.isArray(node.content)) {
+				for (const child of node.content) nodes.push(child);
+			}
+			if (typeof node.text !== "string" || !node.text) continue;
+			const marks = Array.isArray(node.marks) ? node.marks : [];
+			const familyName = marks.some((mark) => mark?.type === "code")
+				? "mono"
+				: font;
+			const family =
+				DefaultFontFaces[
+					`tldraw_${familyName}` as keyof typeof DefaultFontFaces
+				];
+			const style = marks.some((mark) => mark?.type === "italic")
+				? "italic"
+				: "normal";
+			const weight = marks.some((mark) => mark?.type === "bold")
+				? "bold"
+				: "normal";
+			if (family) faces.add(family[style][weight]);
+			if (shape.type === "note" && textLastEditedBy)
+				faces.add(DefaultFontFaces.tldraw_sans.normal.normal);
 		}
 	}
-	if (fontNames.size === 0) fontNames.add("draw");
-
-	const faces: TLFontFace[] = [];
-	for (const fontName of [...fontNames].sort()) {
-		const family =
-			DefaultFontFaces[`tldraw_${fontName}` as keyof typeof DefaultFontFaces];
-		if (!family) continue;
-		for (const style of Object.values(family)) {
-			faces.push(...(Object.values(style) as TLFontFace[]));
-		}
-	}
-	return faces;
+	return [...faces];
 }
 
 export function tldrawFontFaceKey(face: TLFontFace): string {

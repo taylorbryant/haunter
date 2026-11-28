@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import {
 	CLIENT_CAPABILITIES_META_KEY,
 	CLIENT_INFO_META_KEY,
@@ -396,20 +396,11 @@ test("revocation and removed membership invalidate existing mention resources", 
 });
 
 test("the canvas opener returns a scoped destination for view connections and rejects inaccessible canvases", async () => {
-	const { createCanvasSyncServer } = await import(
-		"@/infra/canvases/sync-server"
-	);
 	const { validateEditorOutput } = await import("../mcp-app/editor-schema");
 	const f = await fixture();
-	const engine = createCanvasSyncServer({
-		verify() {
-			throw new Error("No socket in this test");
-		},
-		authorize: async () => ({ ctx: f.ctx, role: "viewer" }),
-	});
-	f.ctx.ports.canvasEditing = {
-		execute: ({ command }) => engine.execute(f.ctx, command),
-	};
+	const drawingRead = spyOn(f.ctx.ports.canvases, "findById");
+	const worker = spyOn(f.ctx.ports.canvasEditing, "execute");
+	const roomRead = spyOn(f.ctx.ports.canvases, "findSyncRoom");
 	try {
 		const canvas = await f.ctx.ports.canvases.create(f.scope, {
 			userId: f.userId,
@@ -428,6 +419,26 @@ test("the canvas opener returns a scoped destination for view connections and re
 			pageId: null,
 			title: "System design",
 		});
+		const inline = await f.ctx.ports.canvases.create(f.scope, {
+			userId: f.userId,
+			pageId: f.page.id,
+			title: null,
+		});
+		const inlineArgs = { workspaceId: f.workspaceId, canvasId: inline.id };
+		expect(
+			(await f.call("open_haunter_canvas", inlineArgs)).result
+				?.structuredContent,
+		).toMatchObject({
+			canvasId: inline.id,
+			pageId: f.page.id,
+		});
+		await f.database.db
+			.update(schema.pages)
+			.set({ deletedAt: new Date().toISOString() })
+			.where(eq(schema.pages.id, f.page.id));
+		expect(
+			(await f.call("open_haunter_canvas", inlineArgs)).result?.isError,
+		).toBeTrue();
 		const inaccessible = await f.call("open_haunter_canvas", {
 			workspaceId: f.workspaceId,
 			canvasId: crypto.randomUUID(),
@@ -439,8 +450,13 @@ test("the canvas opener returns a scoped destination for view connections and re
 			canvasId: canvas.id,
 		});
 		expect(removed.result?.isError).toBeTrue();
+		expect(worker).not.toHaveBeenCalled();
+		expect(drawingRead).not.toHaveBeenCalled();
+		expect(roomRead).not.toHaveBeenCalled();
 	} finally {
-		await engine.stop();
+		worker.mockRestore();
+		drawingRead.mockRestore();
+		roomRead.mockRestore();
 		await f.database.close();
 	}
 });

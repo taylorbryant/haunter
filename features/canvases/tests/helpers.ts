@@ -19,6 +19,9 @@ export function createTestCanvasRepository(): CanvasRepository {
 		async findHistory() {
 			return null;
 		},
+		async hasSyncRoom(scope, id) {
+			return canvases.get(id)?.workspaceId === tenantScopeId(scope);
+		},
 		async findSyncRoom(scope, id) {
 			return canvases.get(id)?.workspaceId === tenantScopeId(scope)
 				? { roomJson: "{}", revision: 0 }

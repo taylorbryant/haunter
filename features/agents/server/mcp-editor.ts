@@ -19,6 +19,12 @@ import {
 } from "@/features/agents/mcp-app/editor-schema";
 import { CompanionPageSchema } from "@/features/agents/mcp-app/schemas";
 
+const CanvasDestination = CanvasReadOutputSchema.pick({
+	canvasId: true,
+	pageId: true,
+	title: true,
+});
+
 export function registerMcpEditor(
 	server: McpServer,
 	input: {
@@ -184,7 +190,7 @@ export function registerMcpEditor(
 		},
 		async ({ workspaceId, canvasId }) => {
 			try {
-				const canvas = CanvasReadOutputSchema.parse(
+				const canvas = CanvasDestination.parse(
 					await input.execute("read_canvas", { workspaceId, canvasId }),
 				);
 				if (canvas.canvasId !== canvasId)
