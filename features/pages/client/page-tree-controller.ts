@@ -6,7 +6,8 @@ export type PageDropZone = "before" | "after" | "inside";
 export type PageTreeIndex = {
 	tree: PageTreeNode[];
 	nodesById: Map<string, PageTreeNode>;
-	subtreeIdsById: Map<string, Set<string>>;
+	orderedIds: string[];
+	ranges: Map<string, { start: number; end: number }>;
 };
 
 export function buildPageTreeIndex(pages: PageMeta[]): PageTreeIndex {
@@ -21,18 +22,32 @@ export function buildPageTreeIndex(pages: PageMeta[]): PageTreeIndex {
 		else tree.push(node);
 	}
 
-	const subtreeIdsById = new Map<string, Set<string>>();
-	function visit(node: PageTreeNode): Set<string> {
-		const ids = new Set<string>([node.id]);
-		for (const child of node.children) {
-			for (const id of visit(child)) ids.add(id);
+	// Descendants occupy one contiguous interval in preorder, even for a
+	// collapsed branch. Record each page once regardless of nesting depth.
+	const orderedIds: string[] = [];
+	const ranges: PageTreeIndex["ranges"] = new Map();
+	const pending = [...tree].reverse();
+	while (pending.length) {
+		const node = pending.pop()!;
+		const start = orderedIds.length;
+		orderedIds.push(node.id);
+		ranges.set(node.id, { start, end: start + 1 });
+		for (let i = node.children.length - 1; i >= 0; i--) {
+			pending.push(node.children[i]!);
 		}
-		subtreeIdsById.set(node.id, ids);
-		return ids;
 	}
-	for (const node of tree) visit(node);
+	for (let i = orderedIds.length - 1; i >= 0; i--) {
+		const id = orderedIds[i]!;
+		const lastChild = nodes.get(id)!.children.at(-1);
+		if (lastChild) ranges.get(id)!.end = ranges.get(lastChild.id)!.end;
+	}
 
-	return { tree, nodesById: nodes, subtreeIdsById };
+	return { tree, nodesById: nodes, orderedIds, ranges };
+}
+
+export function pageSubtreeIds(index: PageTreeIndex, id: string): string[] {
+	const range = index.ranges.get(id);
+	return range ? index.orderedIds.slice(range.start, range.end) : [id];
 }
 
 export function canDropPage(
@@ -41,10 +56,13 @@ export function canDropPage(
 	targetId: string,
 ): boolean {
 	if (!draggedId || draggedId === targetId) return false;
-	if (!index.nodesById.has(draggedId) || !index.nodesById.has(targetId)) {
-		return false;
-	}
-	return !index.subtreeIdsById.get(draggedId)?.has(targetId);
+	const dragged = index.ranges.get(draggedId);
+	const target = index.ranges.get(targetId);
+	return (
+		!!dragged &&
+		!!target &&
+		(target.start < dragged.start || target.start >= dragged.end)
+	);
 }
 
 export function getPageDropPlacement({

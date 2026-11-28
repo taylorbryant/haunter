@@ -9,6 +9,9 @@ import {
 	type CollaborationOriginOptions,
 } from "@/lib/collaboration-origins";
 
+// Skip compression setup for small edits, awareness messages and receipts.
+const COMPRESS_AFTER = 4096;
+
 /** Hocuspocus v4's Server wrapper is Node-only; Bun hosts its protocol engine directly. */
 export function listenDocumentServer(
 	hocuspocus: Hocuspocus,
@@ -77,15 +80,9 @@ export function listenDocumentServer(
 			return new Response("Upgrade failed", { status: 400 });
 		},
 		websocket: {
+			perMessageDeflate: { compress: "shared", decompress: "shared" },
 			maxPayloadLength: 8 * 1024 * 1024,
 			open(socket) {
-				if (socket.data.canvasPrepared && options.canvases) {
-					socket.data.canvas = options.canvases.open(
-						socket.data.canvasPrepared,
-						socket,
-					);
-					return;
-				}
 				const transport: WebSocketLike = {
 					get readyState() {
 						return socket.readyState;
@@ -94,7 +91,7 @@ export function listenDocumentServer(
 					send(data) {
 						if (data instanceof Blob)
 							throw new Error("Unexpected binary message type");
-						socket.send(
+						const payload =
 							typeof data === "string"
 								? data
 								: ArrayBuffer.isView(data)
@@ -103,10 +100,17 @@ export function listenDocumentServer(
 											data.byteOffset,
 											data.byteLength,
 										)
-									: new Uint8Array(data),
-						);
+									: new Uint8Array(data);
+						socket.send(payload, payload.length >= COMPRESS_AFTER);
 					},
 				};
+				if (socket.data.canvasPrepared && options.canvases) {
+					socket.data.canvas = options.canvases.open(
+						socket.data.canvasPrepared,
+						transport,
+					);
+					return;
+				}
 				socket.data.connection = hocuspocus.handleConnection(
 					transport,
 					socket.data.request,

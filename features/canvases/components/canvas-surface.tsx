@@ -369,7 +369,7 @@ function CollaborativeCanvasSurface({
 					user={embeddedUser}
 					overlayUtils={AGENT_HIGHLIGHT_OVERLAYS}
 					components={editable ? CANVAS_LIBRARY_COMPONENTS : undefined}
-					documentSnapshot={store.getStoreSnapshot()}
+					getDocumentSnapshot={() => store.getStoreSnapshot()}
 					layoutKey={layoutKey}
 					licenseKey={TLDRAW_LICENSE_KEY}
 					shapeUtils={haunterShapeUtils}

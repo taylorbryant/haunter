@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { draftRegistry } from "@/client/draft-registry";
 import { userErrorMessage } from "@/client/error-feedback";
 import { invalidateTasks } from "@/features/tasks/client/queries";
-import { buildPageTreeIndex } from "./page-tree-controller";
+import { buildPageTreeIndex, pageSubtreeIds } from "./page-tree-controller";
 import {
 	deletePageMutationOptions,
 	invalidatePageNavigation,
@@ -76,10 +76,7 @@ export function usePageTrash() {
 					staleTime: 0,
 					meta: { errorMode: "inline" },
 				});
-				const subtree = buildPageTreeIndex(pages.items).subtreeIdsById.get(
-					pageId,
-				);
-				const pageIds = [...(subtree ?? [pageId])];
+				const pageIds = pageSubtreeIds(buildPageTreeIndex(pages.items), pageId);
 				// Embedded hosts also prepare canvases and host-owned draft state.
 				try {
 					if (beforeRemove && !(await beforeRemove()))

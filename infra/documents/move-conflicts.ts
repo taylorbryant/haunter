@@ -12,6 +12,10 @@ function containers(root: Y.XmlFragment) {
 	);
 }
 
+export function hasBlockMoves(doc: Y.Doc) {
+	return doc.getMap(MOVES).size > 0;
+}
+
 export function documentBlockIds(doc: Y.Doc) {
 	return new Set(
 		containers(doc.getXmlFragment(PAGE_BODY_FRAGMENT))

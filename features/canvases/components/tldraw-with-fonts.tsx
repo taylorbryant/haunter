@@ -18,9 +18,11 @@ import {
 const FONT_PRELOAD_TIMEOUT_MS = 4_000;
 
 type Props = ComponentProps<typeof Tldraw> & {
-	documentSnapshot?: {
-		store?: Record<string, unknown>;
-	};
+	getDocumentSnapshot: () =>
+		| {
+				store?: Record<string, unknown>;
+		  }
+		| undefined;
 	/**
 	 * Changes whenever the surrounding shell changes size without remounting
 	 * tldraw, such as entering or leaving fullscreen.
@@ -29,7 +31,7 @@ type Props = ComponentProps<typeof Tldraw> & {
 };
 
 export function TldrawWithFonts({
-	documentSnapshot,
+	getDocumentSnapshot,
 	layoutKey,
 	onMount,
 	...props
@@ -37,7 +39,9 @@ export function TldrawWithFonts({
 	// The gate is only for the editor's first measurement pass. Later snapshot
 	// updates come from this mounted editor; reacting to them here would
 	// temporarily unmount tldraw in the middle of an autosave.
-	const [faces] = useState(() => requiredTldrawFontFaces(documentSnapshot));
+	const [faces] = useState(() =>
+		requiredTldrawFontFaces(getDocumentSnapshot()),
+	);
 	const fontKey = faces.map(tldrawFontFaceKey).join("|");
 	const [loadedFontKey, setLoadedFontKey] = useState<string | null>(
 		faces.length === 0 ? fontKey : null,
